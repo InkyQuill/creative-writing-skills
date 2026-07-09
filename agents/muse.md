@@ -1,10 +1,10 @@
 ---
 name: muse
 description: Author-facing creative partner for all story work, from planning through production handoff.
-model: opus
+model: opus46
 model-policies:
   - match:
-      alias: opus
+      alias: opus46
     override: {}
   - match:
       alias: deepseek

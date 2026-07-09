@@ -9,9 +9,6 @@ model-policies:
     override:
       effort: low
   - match:
-      alias: opus
-    override: {}
-  - match:
       alias: gpt
     override: {}
   - match:

@@ -9,9 +9,6 @@ model-policies:
     override:
       effort: high
   - match:
-      alias: opus
-    override: {}
-  - match:
       alias: sonnet
     override: {}
   - match:

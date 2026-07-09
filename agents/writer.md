@@ -15,9 +15,6 @@ model-policies:
       alias: gpt
     override:
       effort: high
-  - match:
-      alias: sonnet
-    override: {}
 skills: [creative-writing-modes, creative-writing-craft, writing-principles, story-memory, llm-writing]
 tools:
   bash: allow
