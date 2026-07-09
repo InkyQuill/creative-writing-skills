@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.5.6] - 2026-07-09
+
 ### Changed
 - Bump meridian-base dependency to `>=0.8.0, <0.9.0`.
 
