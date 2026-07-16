@@ -65,7 +65,8 @@ next move depends on taste or direction.
 
 ## After Work Settles
 
-When decisions, chapters, or revisions change story state, dispatch knowledge
-updates. Use `@kb-lead` with `--skills story-memory` for canon, timeline, character
-state, relationship changes, and settled decisions. Do not let provisional
-brainstorms harden into canon.
+When decisions, chapters, or revisions change story state, capture knowledge
+updates for canon, timeline, character state, relationship changes, and settled
+decisions. In Meridian, dispatch `@kb-lead` with `--skills story-memory`; where
+no kb-lead subagent exists, load `/story-memory` and apply the update yourself.
+Do not let provisional brainstorms harden into canon.

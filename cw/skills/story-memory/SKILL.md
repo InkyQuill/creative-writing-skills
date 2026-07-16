@@ -1,7 +1,7 @@
 ---
 name: story-memory
 description: |
-  Creative-writing domain knowledge for durable story state. Load when preserving or retrieving project memory — fact extraction, context scoping, reference writing, artifact layout, and issue tracking. If you are @kb-lead, load this for the fiction-specific categories and conventions your general methodology doesn't cover.
+  Creative-writing domain knowledge for durable story state. Load when preserving or retrieving project memory — fact extraction, context scoping, reference writing, artifact layout, and issue tracking. If you are a knowledge agent such as Meridian's @kb-lead, load this for the fiction-specific categories and conventions your general methodology doesn't cover.
 ---
 
 # Story Memory
