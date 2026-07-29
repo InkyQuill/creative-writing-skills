@@ -1,21 +1,26 @@
 ---
 name: character-sim
 description: In-character conversation for voice discovery and relationship testing.
-model: deepseek
+model: opus46
 model-policies:
-  - match:
-      alias: deepseek
+  - match: {alias: opus46}
     override: {}
-  - match:
-      alias: sonnet
+  - match: {alias: "opus46[1m]"}
     override: {}
-  - match:
-      alias: gpt55
-    override:
-      effort: low
-  - match:
-      alias: gpt
+  - match: {alias: fable}
     override: {}
+  - match: {alias: opus}
+    override: {}
+  - match: {alias: opus48}
+    override: {}
+  - match: {alias: sonnet5}
+    override: {}
+  - match: {alias: sonnet}
+    override: {}
+  - match: {alias: sol}
+    override: {}
+  - match: {alias: deepseek}
+    override: {effort: low}
 skills:
   load: [character-sim, writing-principles, llm-writing]
   available: [story-memory]

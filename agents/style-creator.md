@@ -1,19 +1,27 @@
 ---
 name: style-creator
 description: Analyzes prose samples to produce style reference files for the project's voice.
-model: deepseek
+model: opus46
 effort: high
 model-policies:
-  - match:
-      alias: deepseek
-    override:
-      effort: low
-  - match:
-      alias: gpt
+  - match: {alias: opus46}
+    override: {effort: high}
+  - match: {alias: "opus46[1m]"}
+    override: {effort: high}
+  - match: {alias: fable}
+    override: {effort: high}
+  - match: {alias: opus}
+    override: {effort: high}
+  - match: {alias: opus48}
     override: {}
-  - match:
-      alias: sonnet
+  - match: {alias: sonnet5}
     override: {}
+  - match: {alias: sonnet}
+    override: {}
+  - match: {alias: sol}
+    override: {}
+  - match: {alias: deepseek}
+    override: {effort: low}
 skills:
   load: [creative-writing-craft, writing-principles, llm-writing]
   available: [story-memory]

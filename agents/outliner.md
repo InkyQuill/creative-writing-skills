@@ -1,21 +1,22 @@
 ---
 name: outliner
 description: Sequences confirmed direction into arc, chapter, and beat-level outlines.
-model: deepseek
+model: sonnet5
 model-policies:
-  - match:
-      alias: deepseek
+  - match: {alias: sonnet5}
     override: {}
-  - match:
-      alias: sonnet
+  - match: {alias: sonnet}
     override: {}
-  - match:
-      alias: gpt55
-    override:
-      effort: low
-  - match:
-      alias: gpt
+  - match: {alias: opus46}
     override: {}
+  - match: {alias: "opus46[1m]"}
+    override: {}
+  - match: {alias: opus}
+    override: {}
+  - match: {alias: sol}
+    override: {}
+  - match: {alias: deepseek}
+    override: {effort: low}
 skills: [story-planning, story-memory, md-validation]
 tools:
   bash: allow

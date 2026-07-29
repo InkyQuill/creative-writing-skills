@@ -1,16 +1,23 @@
 ---
 name: continuity-checker
 description: Cross-references content against established canon for contradictions.
-model: gpt
+model: sonnet5
 effort: high
 model-policies:
-  - match:
-      alias: gpt55
-    override:
-      effort: low
-  - match:
-      alias: opus
+  - match: {alias: sonnet5}
+    override: {effort: high}
+  - match: {alias: sonnet}
     override: {}
+  - match: {alias: opus46}
+    override: {}
+  - match: {alias: "opus46[1m]"}
+    override: {}
+  - match: {alias: opus}
+    override: {}
+  - match: {alias: sol}
+    override: {}
+  - match: {alias: deepseek}
+    override: {effort: low}
 skills: [story-review, md-validation, shared-dao, story-memory]
 tools:
   'bash(meridian spawn show *)': allow

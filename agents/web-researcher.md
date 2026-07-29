@@ -5,23 +5,16 @@ mode: subagent
 model: gptmini
 effort: medium
 model-policies:
-  - match:
-      alias: gptmini
+  - match: {alias: gptmini}
     override: {}
-  - match:
-      alias: sonnet
+  - match: {alias: sonnet5}
     override: {}
-  - match:
-      alias: gpt
+  - match: {alias: sonnet}
     override: {}
-  - match:
-      alias: gpt55
-    override:
-      effort: medium
-  - match:
-      alias: deepseek
-    override:
-      effort: high
+  - match: {alias: sol}
+    override: {}
+  - match: {alias: deepseek}
+    override: {}
 skills:
   load: [creative-research]
 tools:

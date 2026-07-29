@@ -1,18 +1,26 @@
 ---
 name: reader-sim
 description: Experiential reader response from a caller-specified reader persona; pass the persona, draft, and knowledge boundary.
-model: deepseek
+model: opus46
 model-policies:
-  - match:
-      alias: deepseek
-    override:
-      effort: low
-  - match:
-      alias: gpt
+  - match: {alias: opus46}
     override: {}
-  - match:
-      alias: sonnet
+  - match: {alias: "opus46[1m]"}
     override: {}
+  - match: {alias: fable}
+    override: {}
+  - match: {alias: opus}
+    override: {}
+  - match: {alias: opus48}
+    override: {}
+  - match: {alias: sonnet5}
+    override: {}
+  - match: {alias: sonnet}
+    override: {}
+  - match: {alias: sol}
+    override: {}
+  - match: {alias: deepseek}
+    override: {effort: low}
 skills:
   load: [reader-sim, writing-principles, llm-writing]
 tools:

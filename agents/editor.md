@@ -1,19 +1,27 @@
 ---
 name: editor
 description: Holistic third-party book editor pass across narrative structure, voice, line quality, copy consistency, and proofreading priority.
-model: gpt
+model: opus46
 effort: high
 model-policies:
-  - match:
-      alias: gpt
-    override:
-      effort: high
-  - match:
-      alias: sonnet
+  - match: {alias: opus46}
+    override: {effort: high}
+  - match: {alias: "opus46[1m]"}
+    override: {effort: high}
+  - match: {alias: fable}
+    override: {effort: high}
+  - match: {alias: opus}
+    override: {effort: high}
+  - match: {alias: opus48}
     override: {}
-  - match:
-      alias: deepseek
+  - match: {alias: sonnet5}
     override: {}
+  - match: {alias: sonnet}
+    override: {}
+  - match: {alias: sol}
+    override: {}
+  - match: {alias: deepseek}
+    override: {effort: low}
 skills: [story-review, writing-principles, creative-writing-craft, llm-writing, story-memory]
 tools:
   'bash(meridian spawn show *)': allow

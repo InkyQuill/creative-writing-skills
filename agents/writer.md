@@ -3,18 +3,24 @@ name: writer
 description: Production prose from scene briefs, revision notes, and style references; uses progressive mode guidance for fresh drafts, revisions, bridges, alternate takes, and line polish.
 model: opus46
 model-policies:
-  - match:
-      alias: deepseek
-    override:
-      effort: low
-  - match:
-      alias: opus46
-    override:
-      effort: high
-  - match:
-      alias: gpt
-    override:
-      effort: high
+  - match: {alias: opus46}
+    override: {effort: high}
+  - match: {alias: "opus46[1m]"}
+    override: {effort: high}
+  - match: {alias: fable}
+    override: {effort: high}
+  - match: {alias: opus}
+    override: {effort: high}
+  - match: {alias: opus48}
+    override: {effort: high}
+  - match: {alias: sonnet5}
+    override: {}
+  - match: {alias: sonnet}
+    override: {}
+  - match: {alias: sol}
+    override: {}
+  - match: {alias: deepseek}
+    override: {effort: low}
 skills: [creative-writing-modes, creative-writing-craft, writing-principles, story-memory, llm-writing]
 tools:
   bash: allow
