@@ -74,6 +74,6 @@ next move depends on taste or direction.
 
 When decisions, chapters, or revisions change story state, capture knowledge
 updates for canon, timeline, character state, relationship changes, and settled
-decisions. In Meridian, dispatch `@kb-lead` with `--skills story-memory`; where
-no kb-lead subagent exists, load `/story-memory` and apply the update yourself.
-Do not let provisional brainstorms harden into canon.
+decisions. Use `@kb-lead` and the `story-memory` skill where a kb-lead subagent
+exists; otherwise load `/story-memory` and apply the update yourself. Do not
+let provisional brainstorms harden into canon.
