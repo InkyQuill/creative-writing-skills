@@ -1,5 +1,10 @@
 #!/usr/bin/env bash
 
+# DEPRECATED: prefer `meridian mars version patch --push`. This script only
+# bumps mars.toml — cw/.claude-plugin/plugin.json and marketplace.json must be
+# re-synced separately — and its macOS-style `sed -i ''` fails with GNU sed
+# (Linux, Git Bash on Windows).
+#
 # Release script: bump version in mars.toml, commit, tag, optionally push.
 # Usage:
 #   ./scripts/release.sh              # patch bump (0.0.6 -> 0.0.7)

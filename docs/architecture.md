@@ -23,7 +23,7 @@ graph TD
     M -->|felt response| R[reader-sim]
     M -->|canon pass| CC[continuity-checker]
 
-    M -->|knowledge updates| CH[chronicler]
+    M -->|knowledge updates| KL["kb-lead (meridian-base)"]
 
     classDef lead fill:#4a6fa5,color:#fff
     classDef create fill:#6b9080,color:#fff
@@ -33,7 +33,7 @@ graph TD
     class M lead
     class B,CS,O,S,W create
     class C,E,R,CC review
-    class CH knowledge
+    class KL knowledge
 ```
 
 ## Roles
@@ -50,7 +50,7 @@ graph TD
 | outliner | Arc/chapter/beat structure after direction is chosen |
 | character-sim | In-character simulation and relationship exploration |
 | style-creator | Style reference extraction from prose samples |
-| chronicler | Story fact, timeline, canon, and terminology extraction into `kb/` |
+| kb-lead (meridian-base) | Story fact, timeline, canon, and terminology extraction into `kb/`, guided by the `story-memory` skill; muse applies the skill directly in harnesses without kb-lead |
 
 ## Draft Loop
 
@@ -117,10 +117,10 @@ graph TD
     KS --> W
     KS --> C
 
-    CH[chronicler] --> KC[kb/characters]
-    CH --> KW[kb/world]
-    CH --> KT[kb/timeline]
-    CH --> KCN[kb/canon]
+    KL["kb-lead (meridian-base)"] --> KC[kb/characters]
+    KL --> KW[kb/world]
+    KL --> KT[kb/timeline]
+    KL --> KCN[kb/canon]
 
     classDef work fill:#dda15e,color:#000
     classDef kb fill:#6b9080,color:#fff
@@ -128,5 +128,5 @@ graph TD
 
     class WB,WO,WD,WC work
     class KS,KC,KW,KT,KCN kb
-    class M,W,C,E,R,CC,S,CH agent
+    class M,W,C,E,R,CC,S,KL agent
 ```

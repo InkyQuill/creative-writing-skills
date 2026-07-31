@@ -98,7 +98,7 @@ flowchart TB
 
     subgraph Maintain ["Knowledge"]
         direction LR
-        CH[chronicler]
+        KL[kb-lead]
         SC[style-creator]
     end
 
@@ -111,7 +111,7 @@ flowchart TB
 
 **Draft & Revise:** Muse routes prose work to writer: fresh drafts, revisions, bridges, alternate takes, and polish. Critics evaluate focused craft dimensions; editor gives holistic book-editor priority across structure, voice, line quality, copy consistency, and proofing. Reader-sim gives experiential signal on pivotal scenes.
 
-**Knowledge:** Chronicler extracts facts from completed chapters into the kb. Style-creator captures voice patterns from prose samples. The kb grows as the project evolves, giving every future agent accurate context.
+**Knowledge:** Fact extraction into the kb flows through the `story-memory` skill — muse dispatches meridian-base's `kb-lead` agent with it, or applies it directly in harnesses without kb-lead. Style-creator captures voice patterns from prose samples. The kb grows as the project evolves, giving every future agent accurate context.
 
 ## Agents
 
@@ -127,7 +127,8 @@ flowchart TB
 | **brainstormer** | Creative option generation for a scoped question or angle |
 | **outliner** | Sequences confirmed direction into arc, chapter, and beat-level outlines |
 | **style-creator** | Analyzes prose samples to produce style reference files for the project's voice |
-| **chronicler** | Extracts factual state changes from written chapters into the kb |
+
+Knowledge extraction into the kb is not a bundled agent: muse routes it to meridian-base's `kb-lead` loaded with the `story-memory` skill, or performs it directly where no kb-lead subagent exists.
 
 ## Skills
 
@@ -176,7 +177,7 @@ my-story/
 | Multi-agent orchestration | Via muse | Via muse | Via muse → focused workers | No |
 | Project setup | Yes | Yes | Yes | No |
 
-Claude Code, Cowork, and Meridian use muse as the main coordinator over a compact worker set: writer, critic, reader-sim, brainstormer, outliner, character-sim, style-creator, chronicler, and continuity-checker. You can add the marketplace to the Claude desktop app from GitHub; Cowork runs the agents, but plain claude.ai chat runs skills only (agents grayed out) — there the `creative-writing-muse` skill provides single-agent muse mode in one conversation, backed by the craft skills.
+Claude Code, Cowork, and Meridian use muse as the main coordinator over a compact worker set: writer, critic, reader-sim, brainstormer, outliner, character-sim, style-creator, and continuity-checker. You can add the marketplace to the Claude desktop app from GitHub; Cowork runs the agents, but plain claude.ai chat runs skills only (agents grayed out) — there the `creative-writing-muse` skill provides single-agent muse mode in one conversation, backed by the craft skills.
 
 ## Current Experiments
 

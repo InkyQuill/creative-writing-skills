@@ -6,7 +6,7 @@ description: >
   prompt and passing voice/state files with -f if they exist. Stays in
   character for freeform, unscripted conversation. Works with full character
   profiles or just a sketch in the prompt. Doesn't write files: the
-  conversation itself is the output, mined later by the chronicler.
+  conversation itself is the output, mined later into the kb.
 model: sonnet
 skills: [writing-principles]
 tools:
