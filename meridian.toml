@@ -51,3 +51,7 @@ agent = "prompt-dev"
 # show = ["lifecycle", "sub-run", "error", "system"]
 # Output verbosity preset (str; valid: quiet, normal, verbose, debug).
 # verbosity = "normal"  # example override; default is unset
+
+# managed by meridian — do not edit
+[project]
+id = "distant-shrub-foothill"

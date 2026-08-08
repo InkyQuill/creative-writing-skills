@@ -9,6 +9,15 @@
           }
         ],
         "matcher": "Bash"
+      },
+      {
+        "hooks": [
+          {
+            "command": "bash \"/Users/jimmyyao/repos/prompts/creative-writing-skills/.codex/hooks/deny-interactive-prompts/run.sh\"",
+            "type": "command"
+          }
+        ],
+        "matcher": "Bash"
       }
     ]
   }
