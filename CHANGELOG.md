@@ -2,6 +2,11 @@
 
 ## [Unreleased]
 
+### Changed
+- Aligned agent model policies by cognitive role: `sol` for creative judgment, `terra` for structured synthesis, and `luna` for mechanical research; removed active `gptmini` usage and retained `deepseekflash` only for cheap information gathering.
+- Distinguished same-prompt, cross-model fan-out from parallel focus lanes in writing staffing and critique guidance.
+- Refreshed the generated `cw/` distribution against the current Mars dependency output.
+
 ## [0.5.8] - 2026-07-29
 
 ## [0.5.7] - 2026-07-28

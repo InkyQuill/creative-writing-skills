@@ -1,6 +1,7 @@
 ---
 name: outliner
 description: Sequences confirmed direction into arc, chapter, and beat-level outlines.
+model: claude-sonnet-5
 skills:
 - story-planning
 - story-memory
@@ -41,4 +42,3 @@ Use `/story-planning` for methodology on arc structure, pacing, and beat framewo
 ## Output
 
 Write outlines to the outline directory. Include mermaid diagrams inline where they clarify structure: arc flow, timeline, character relationship maps.
-

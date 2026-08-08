@@ -4,7 +4,7 @@ type: reference
 description: >
   Dispatch reference for composing writing teams. Teaches which extra skills
   to attach via --skills, which resources to reference in spawn prompts, and
-  when to fan out. Load when staffing a workflow.
+  when to fan out versus run parallel lanes. Load when staffing a workflow.
 model-invocable: false
 ---
 
@@ -12,6 +12,27 @@ model-invocable: false
 
 Each agent loads its core skills from its YAML. This skill teaches what
 *extra* to attach and reference when spawning.
+
+## Model Selection
+
+Agent defaults are usually correct. When overriding or selecting models for
+additional lanes, match the model to the work:
+
+- `sol`: taste, judgment, creative generation, and high-stakes critique
+- `terra`: structured synthesis, outlining, and cross-document checking
+- `luna`: mechanical information gathering and exploration
+- `deepseekflash`: the cheapest acceptable lane for bulk gathering or
+  mechanical checks where misses can be caught during synthesis
+
+For model-diverse fan-out, choose one available Claude-family model and one
+available Codex-family model. Check `meridian mars models list` at dispatch
+time rather than assuming which concrete model an alias currently resolves to.
+
+**Fan-out** means giving the same question and files to different model
+families for independent judgment. Reserve it for high-stakes calls where
+model diversity can reveal different blind spots. **Parallel lanes** use
+different prompts or focus areas; use each agent's default model unless a lane
+needs a capability it lacks.
 
 ## Dispatch Reference
 
@@ -37,9 +58,12 @@ Extra `--skills`: `creative-writing-craft` for prose/voice focus,
 Reference in prompt: assign a focus area (structure, character, voice, prose,
 or continuity). Attach style files via `-f` for voice critique.
 
-Fan out with different focus areas simultaneously. Scale to stakes:
+Run different focus areas as parallel lanes. Scale to stakes:
 1–2 for low-stakes, 3 for standard chapters, 4–5 for pivotal scenes with
 duplicated coverage on the critical dimension.
+
+For a pivotal scene or disputed judgment, fan out the same critical dimension
+once across a Claude-family model and `sol`, then synthesize the disagreement.
 
 ### `@editor`
 
@@ -63,7 +87,7 @@ continuity-checker for deep cross-project validation.
 Extra `--skills`: `character-sim` for character arcs, `creative-research`
 for real-world grounding.
 
-Fan out on different *angles*, not the same angle. Three perspectives
+Run parallel lanes on different *angles*, not the same angle. Three perspectives
 beats five instances of one.
 
 ### `@outliner`
@@ -90,7 +114,9 @@ author. A scene can be technically clean and leave a reader cold.
 ### `@character-sim`
 
 Attach character state and voice/style files via `-f`. Specify the scenario
-or relationship to explore. Fan out for multi-character scenes.
+or relationship to explore. Use one parallel lane per character or perspective
+for independent exploration; use one shared simulation when testing their
+interaction.
 
 ### `@web-researcher`
 

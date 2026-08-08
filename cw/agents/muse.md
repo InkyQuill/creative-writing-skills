@@ -1,6 +1,7 @@
 ---
 name: muse
 description: Author-facing creative partner for all story work, from planning through production handoff.
+model: claude-opus-4-6
 skills:
 - story-planning
 - writing-principles

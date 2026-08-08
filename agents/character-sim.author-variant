@@ -7,7 +7,14 @@ description: >
   character for freeform, unscripted conversation. Works with full character
   profiles or just a sketch in the prompt. Doesn't write files: the
   conversation itself is the output, mined later into the kb.
-model: sonnet
+model: sonnet5
+model-policies:
+  - match: {alias: sonnet5}
+    override: {}
+  - match: {alias: sonnet}
+    override: {}
+  - match: {alias: sol}
+    override: {}
 skills: [writing-principles]
 tools:
   'bash(meridian spawn show *)': allow
@@ -61,4 +68,3 @@ Let conversations be messy. Real people meander, avoid hard topics, circle
 back. Characters with unresolved tension don't immediately process and
 articulate. When there's no clear response, improvise from who they are.
 Strong personalities have strong reactions, even inconvenient ones.
-

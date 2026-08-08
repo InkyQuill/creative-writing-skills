@@ -13,7 +13,7 @@ model-policies:
     override: {}
   - match: {alias: opus}
     override: {}
-  - match: {alias: sol}
+  - match: {alias: terra}
     override: {}
   - match: {alias: deepseek}
     override: {effort: low}
@@ -54,4 +54,3 @@ Use `/story-planning` for methodology on arc structure, pacing, and beat framewo
 ## Output
 
 Write outlines to the outline directory. Include mermaid diagrams inline where they clarify structure: arc flow, timeline, character relationship maps.
-

@@ -14,7 +14,7 @@ model-policies:
     override: {}
   - match: {alias: opus}
     override: {}
-  - match: {alias: sol}
+  - match: {alias: terra}
     override: {}
   - match: {alias: deepseek}
     override: {effort: low}

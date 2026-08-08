@@ -76,7 +76,7 @@ Don't spend time on prose-level polish of a scene that has structural problems. 
 
 Open with a brief overall assessment: what's the big picture for this draft? Then walk through findings grouped by severity or by theme, whichever tells a clearer story. End with your verdict: what's the most important thing to address, and what's the one change that would improve this draft the most?
 
-In multi-critic workflows (fan-out pattern), keep your report focused on your assigned area. The orchestrator synthesizes across critics: you go deep, not broad.
+In multi-critic parallel lanes, keep your report focused on your assigned area. The orchestrator synthesizes across critics: you go deep, not broad.
 
 ## Optional: Mechanical Analysis
 

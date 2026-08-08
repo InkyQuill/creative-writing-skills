@@ -1,6 +1,7 @@
 ---
 name: editor
 description: Holistic third-party book editor pass across narrative structure, voice, line quality, copy consistency, and proofreading priority.
+model: claude-opus-4-6
 skills:
 - story-review
 - writing-principles

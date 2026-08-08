@@ -2,14 +2,19 @@
 name: writing-staffing
 description: >
   Dispatch reference for composing writing teams. Teaches which skills to
-  load for each subagent, which resources to reference, and when to fan out.
-  Load when staffing a workflow.
+  load for each subagent, which resources to reference, and when to fan out
+  versus run parallel lanes. Load when staffing a workflow.
 ---
 
 # Writing Staffing
 
 Each subagent has its own skill set. This skill teaches what *extra* skills
 to load and reference when dispatching work.
+
+**Fan-out** gives the same question and files to different model families for
+independent judgment. Reserve it for high-stakes calls where model diversity
+can reveal different blind spots. **Parallel lanes** use different prompts or
+focus areas; use them when the work divides cleanly.
 
 ## Dispatch Reference
 
@@ -35,9 +40,12 @@ for vocabulary checks.
 Assign a focus area: structure, character, voice, prose, or continuity.
 Include style files for voice critique.
 
-Fan out with different focus areas simultaneously. Scale to stakes:
+Run different focus areas as parallel lanes. Scale to stakes:
 1–2 for low-stakes, 3 for standard chapters, 4–5 for pivotal scenes with
 duplicated coverage on the critical dimension.
+
+For a pivotal scene or disputed judgment, fan out the same critical dimension
+once across two strong model families, then synthesize the disagreement.
 
 ### `@editor`
 
@@ -59,7 +67,7 @@ critic for routine checks, the continuity-checker for deep validation.
 Extra skills: `/character-sim` for character arcs, `/creative-research` for
 real-world grounding.
 
-Fan out on different *angles*, not the same angle. Three perspectives
+Run parallel lanes on different *angles*, not the same angle. Three perspectives
 beats five instances of one.
 
 ### `@outliner`
@@ -86,7 +94,9 @@ author. A scene can be technically clean and leave a reader cold.
 ### `@character-sim`
 
 Include character state and voice/style files. Specify the scenario or
-relationship to explore. Fan out for multi-character scenes.
+relationship to explore. Use one parallel lane per character or perspective
+for independent exploration; use one shared simulation when testing their
+interaction.
 
 ### `@web-researcher`
 
