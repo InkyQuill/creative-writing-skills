@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.5.9] - 2026-08-08
+
 ### Changed
 - Aligned agent model policies by cognitive role: `sol` for creative judgment, `terra` for structured synthesis, and `luna` for mechanical research; removed active `gptmini` usage and retained `deepseekflash` only for cheap information gathering.
 - Distinguished same-prompt, cross-model fan-out from parallel focus lanes in writing staffing and critique guidance.
