@@ -4,10 +4,16 @@ import os
 import shutil
 import tempfile
 import unittest
+import zipfile
 from contextlib import redirect_stdout
 from pathlib import Path
 from unittest.mock import patch
 
+from scripts.create_skill_zips import (
+    build_archives,
+    create_skill_zip,
+    validate_skill_set,
+)
 from scripts.distribution import split_frontmatter
 from scripts.sync_claude_distribution import (
     UnsupportedTransformError,
@@ -59,6 +65,97 @@ EXPECTED_WORKERS = {
     "web-researcher",
     "writer",
 }
+
+
+class ArchiveContractTests(unittest.TestCase):
+    def test_archive_validation_rejects_missing_skill(self):
+        with self.assertRaisesRegex(ValueError, "missing: world-creation"):
+            validate_skill_set(
+                [Path("character-sim")],
+                {"character-sim", "world-creation"},
+            )
+
+    def test_archive_validation_reports_sorted_missing_and_extra_skills(self):
+        with self.assertRaisesRegex(
+            ValueError,
+            r"missing: alpha, world-creation; extra: obsolete, surprise",
+        ):
+            validate_skill_set(
+                [Path("surprise"), Path("character-sim"), Path("obsolete")],
+                {"world-creation", "character-sim", "alpha"},
+            )
+
+    def test_inventory_mismatch_is_rejected_before_existing_archives_are_touched(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            repo_root = Path(temporary)
+            (repo_root / "config").mkdir()
+            (repo_root / "config/distribution.json").write_text(
+                json.dumps(
+                    {"canonical_skills": ["character-sim", "world-creation"]}
+                )
+            )
+            skill = repo_root / "cw/skills/character-sim"
+            skill.mkdir(parents=True)
+            (skill / "SKILL.md").write_text("# Character simulation\n")
+            output = repo_root / "zips"
+            output.mkdir()
+            sentinel = output / "existing.skill"
+            sentinel.write_bytes(b"existing archive")
+
+            with self.assertRaisesRegex(ValueError, "missing: world-creation"):
+                build_archives(repo_root)
+
+            self.assertEqual(b"existing archive", sentinel.read_bytes())
+
+    def test_archives_are_deterministic_and_include_all_runtime_files(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            skill = root / "world-creation"
+            (skill / "references").mkdir(parents=True)
+            (skill / "agents").mkdir()
+            (skill / "SKILL.md").write_text("# World creation\n")
+            reference = skill / "references/world-file-format.md"
+            reference.write_text("# World file format\n")
+            (skill / "agents/openai.yaml").write_text("excluded: true\n")
+            output = root / "output"
+            output.mkdir()
+
+            create_skill_zip(skill, output)
+            first = (output / "world-creation.skill").read_bytes()
+            os.utime(reference, (2_000_000_000, 2_000_000_000))
+            create_skill_zip(skill, output)
+            second = (output / "world-creation.skill").read_bytes()
+
+            self.assertEqual(first, second)
+            with zipfile.ZipFile(io.BytesIO(second)) as archive:
+                self.assertEqual(
+                    [
+                        "world-creation/SKILL.md",
+                        "world-creation/references/world-file-format.md",
+                    ],
+                    archive.namelist(),
+                )
+                self.assertEqual(
+                    {(1980, 1, 1, 0, 0, 0)},
+                    {item.date_time for item in archive.infolist()},
+                )
+
+    def test_archive_rejects_symlinks_before_writing(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            skill = root / "demo"
+            skill.mkdir()
+            (skill / "SKILL.md").write_text("# Demo\n")
+            outside = root / "outside.md"
+            outside.write_text("outside\n")
+            (skill / "leak.md").symlink_to(outside)
+            output = root / "output"
+            output.mkdir()
+
+            with self.assertRaisesRegex(ValueError, "symlink"):
+                create_skill_zip(skill, output)
+
+            self.assertFalse((output / "demo.skill").exists())
 
 
 class ClaudeTransformTests(unittest.TestCase):
@@ -207,8 +304,13 @@ class ClaudeDistributionRenderTests(unittest.TestCase):
             manifest = json.loads(
                 (output_root / ".claude-plugin/plugin.json").read_text()
             )
+            canonical_manifest = json.loads(
+                Path(
+                    "plugins/creative-writing-skills/.codex-plugin/plugin.json"
+                ).read_text()
+            )
             self.assertEqual("creative-writing-skills", manifest["name"])
-            self.assertEqual("0.5.9", manifest["version"])
+            self.assertEqual(canonical_manifest["version"], manifest["version"])
             self.assertEqual({"name": "InkyQuill"}, manifest["author"])
             self.assertEqual(
                 "https://github.com/InkyQuill/creative-writing-skills",
@@ -635,9 +737,17 @@ class ClaudeDistributionCliTests(unittest.TestCase):
             self.assertEqual(25, apply_output.getvalue().count("synced skill "))
             self.assertEqual(11, apply_output.getvalue().count("synced agent "))
             marketplace = json.loads(marketplace_path.read_text())
+            canonical_manifest = json.loads(
+                (
+                    repo_root
+                    / "plugins/creative-writing-skills/.codex-plugin/plugin.json"
+                ).read_text()
+            )
             self.assertEqual("creative-writing-skills", marketplace["name"])
             self.assertEqual({"name": "InkyQuill"}, marketplace["owner"])
-            self.assertEqual("0.5.9", marketplace["metadata"]["version"])
+            self.assertEqual(
+                canonical_manifest["version"], marketplace["metadata"]["version"]
+            )
             self.assertEqual("./cw", marketplace["plugins"][0]["source"])
 
             changed = repo_root / "cw/skills/story-memory/SKILL.md"

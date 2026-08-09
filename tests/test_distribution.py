@@ -173,7 +173,7 @@ class DistributionScaffoldTests(unittest.TestCase):
         manifest = load_json(PLUGIN_ROOT / ".codex-plugin" / "plugin.json")
         marketplace = load_json(REPO_ROOT / ".agents" / "plugins" / "marketplace.json")
         self.assertEqual(manifest["name"], "creative-writing-skills")
-        self.assertEqual(manifest["version"], "0.5.9")
+        self.assertRegex(manifest["version"], r"^[0-9]+\.[0-9]+\.[0-9]+$")
         self.assertEqual(manifest["repository"], "https://github.com/InkyQuill/creative-writing-skills")
         self.assertEqual(manifest["skills"], "./skills/")
         self.assertEqual(marketplace["plugins"][0]["source"]["path"], "./plugins/creative-writing-skills")
@@ -586,7 +586,11 @@ class ValidatorTests(unittest.TestCase):
     def test_validator_rejects_manifest_version_mismatch(self):
         self.claude_manifest["version"] = "0.0.0"
         self.write_claude_manifest()
-        self.assertIn("cw plugin version 0.0.0 != canonical version 0.5.9", validate(self.root))
+        self.assertIn(
+            "cw plugin version 0.0.0 != canonical version "
+            f"{self.manifest['version']}",
+            validate(self.root),
+        )
 
     def test_validator_rejects_claude_style_reference_in_codex(self):
         skill = self.skills / "demo" / "SKILL.md"
