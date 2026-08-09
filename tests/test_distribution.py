@@ -249,6 +249,45 @@ class DistributionScaffoldTests(unittest.TestCase):
             folded_metadata["description"],
         )
 
+    def test_frontmatter_parser_preserves_blanks_around_more_indented_folded_blocks(self):
+        into_block, _ = split_frontmatter(
+            "---\n"
+            "name: demo\n"
+            "description: >\n"
+            "  a\n"
+            "\n"
+            "    b\n"
+            "---\n"
+        )
+        out_of_block, _ = split_frontmatter(
+            "---\n"
+            "name: demo\n"
+            "description: >\n"
+            "  a\n"
+            "    b\n"
+            "\n"
+            "  c\n"
+            "---\n"
+        )
+        out_of_block_after_two_blanks, _ = split_frontmatter(
+            "---\n"
+            "name: demo\n"
+            "description: >\n"
+            "  a\n"
+            "    b\n"
+            "\n"
+            "\n"
+            "  c\n"
+            "---\n"
+        )
+
+        self.assertEqual("a\n\n  b\n", into_block["description"])
+        self.assertEqual("a\n  b\n\nc\n", out_of_block["description"])
+        self.assertEqual(
+            "a\n  b\n\n\nc\n",
+            out_of_block_after_two_blanks["description"],
+        )
+
     def test_frontmatter_parser_rejects_malformed_double_quoted_scalars(self):
         for value in ('"unterminated', '"complete" trailing'):
             with self.subTest(value=value), self.assertRaises(ValueError):

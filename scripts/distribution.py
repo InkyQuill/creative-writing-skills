@@ -123,13 +123,17 @@ def _parse_block_scalar(style: str, value: str) -> str:
         return "\n".join(lines).rstrip("\n") + "\n"
 
     folded: list[str] = []
+    previous_nonempty = ""
     for index, line in enumerate(lines):
         folded.append(line)
         if index == len(lines) - 1:
             continue
         following = lines[index + 1]
         if not line:
-            separator = "\n" if not following else ""
+            adjacent_to_more_indented = (
+                previous_nonempty[:1].isspace() or following[:1].isspace()
+            )
+            separator = "\n" if not following or adjacent_to_more_indented else ""
         elif not following:
             separator = "\n"
         elif line[:1].isspace() or following[:1].isspace():
@@ -137,6 +141,8 @@ def _parse_block_scalar(style: str, value: str) -> str:
         else:
             separator = " "
         folded.append(separator)
+        if line:
+            previous_nonempty = line
     return "".join(folded).rstrip("\n") + "\n"
 
 
