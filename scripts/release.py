@@ -17,9 +17,23 @@ MANIFEST_RELATIVE = Path(
 )
 CLAUDE_MANIFEST_RELATIVE = Path("cw/.claude-plugin/plugin.json")
 CLAUDE_MARKETPLACE_RELATIVE = Path(".claude-plugin/marketplace.json")
+STAGED_RELEASE_PATHS = (
+    MANIFEST_RELATIVE.as_posix(),
+    CLAUDE_MANIFEST_RELATIVE.as_posix(),
+    CLAUDE_MARKETPLACE_RELATIVE.as_posix(),
+)
+RESTORED_RELEASE_PATHS = (
+    MANIFEST_RELATIVE.as_posix(),
+    "cw",
+    CLAUDE_MARKETPLACE_RELATIVE.as_posix(),
+)
 
 
 class ReleaseError(ValueError):
+    pass
+
+
+class ReleaseRecoveryError(ReleaseError):
     pass
 
 
@@ -64,6 +78,111 @@ def _write_manifest(path: Path, manifest: dict[str, object]) -> None:
     path.write_text(json.dumps(manifest, indent=2, ensure_ascii=False) + "\n")
 
 
+def _stdout(runner: Runner, command: Sequence[str], repo_root: Path) -> str:
+    return runner(
+        command,
+        cwd=repo_root,
+        capture_output=True,
+    ).stdout.strip()
+
+
+def _release_commit_at_head(
+    runner: Runner,
+    repo_root: Path,
+    original_head: str,
+    tag: str,
+) -> str | None:
+    current_head = _stdout(
+        runner,
+        ["git", "rev-parse", "--verify", "HEAD"],
+        repo_root,
+    )
+    if current_head == original_head:
+        return None
+
+    parent = _stdout(
+        runner,
+        ["git", "rev-parse", "--verify", f"{current_head}^"],
+        repo_root,
+    )
+    subject = _stdout(
+        runner,
+        ["git", "show", "-s", "--format=%s", current_head],
+        repo_root,
+    )
+    changed_paths = set(
+        _stdout(
+            runner,
+            [
+                "git",
+                "diff-tree",
+                "--no-commit-id",
+                "--name-only",
+                "-r",
+                current_head,
+            ],
+            repo_root,
+        ).splitlines()
+    )
+    if (
+        parent != original_head
+        or subject != f"Release {tag}"
+        or not changed_paths
+        or not changed_paths.issubset(set(STAGED_RELEASE_PATHS))
+    ):
+        raise ReleaseRecoveryError(
+            "release failed after HEAD moved, but the new commit could not be "
+            "proved to belong to this release; repository left untouched"
+        )
+    return current_head
+
+
+def _recover_release(
+    runner: Runner,
+    repo_root: Path,
+    original_head: str,
+    tag: str,
+) -> None:
+    release_commit = _release_commit_at_head(
+        runner,
+        repo_root,
+        original_head,
+        tag,
+    )
+    if release_commit is not None:
+        if _stdout(runner, ["git", "tag", "--list", tag], repo_root):
+            tag_commit = _stdout(
+                runner,
+                ["git", "rev-parse", "--verify", f"refs/tags/{tag}^{{commit}}"],
+                repo_root,
+            )
+            if tag_commit == release_commit:
+                runner(["git", "tag", "--delete", tag], cwd=repo_root)
+        runner(
+            [
+                "git",
+                "update-ref",
+                "refs/heads/main",
+                original_head,
+                release_commit,
+            ],
+            cwd=repo_root,
+        )
+
+    runner(
+        [
+            "git",
+            "restore",
+            f"--source={original_head}",
+            "--staged",
+            "--worktree",
+            "--",
+            *RESTORED_RELEASE_PATHS,
+        ],
+        cwd=repo_root,
+    )
+
+
 def run_release(
     repo_root: Path,
     part: str,
@@ -92,8 +211,12 @@ def run_release(
     if branch != "main":
         raise ReleaseError(f"release branch must be main, found {branch or 'detached HEAD'}")
 
-    original_manifest = manifest_path.read_bytes()
-    manifest = json.loads(original_manifest)
+    original_head = _stdout(
+        runner,
+        ["git", "rev-parse", "--verify", "HEAD"],
+        repo_root,
+    )
+    manifest = json.loads(manifest_path.read_bytes())
     if not isinstance(manifest, dict):
         raise ReleaseError("canonical manifest must contain a JSON object")
     current_version = manifest.get("version")
@@ -111,8 +234,6 @@ def run_release(
         raise ReleaseError(f"tag {tag} already exists")
 
     manifest["version"] = next_version
-    staged = False
-    committed = False
     try:
         _write_manifest(manifest_path, manifest)
         commands = [
@@ -138,47 +259,22 @@ def run_release(
                 "git",
                 "add",
                 "--",
-                MANIFEST_RELATIVE.as_posix(),
-                CLAUDE_MANIFEST_RELATIVE.as_posix(),
-                CLAUDE_MARKETPLACE_RELATIVE.as_posix(),
+                *STAGED_RELEASE_PATHS,
             ],
             cwd=repo_root,
         )
-        staged = True
         runner(["git", "commit", "-m", f"Release {tag}"], cwd=repo_root)
-        committed = True
-    except BaseException:
-        if not committed:
-            manifest_path.write_bytes(original_manifest)
-            if staged:
-                runner(
-                    [
-                        "git",
-                        "restore",
-                        "--staged",
-                        "--worktree",
-                        "--",
-                        MANIFEST_RELATIVE.as_posix(),
-                        "cw",
-                        CLAUDE_MARKETPLACE_RELATIVE.as_posix(),
-                    ],
-                    cwd=repo_root,
-                )
-            else:
-                runner(
-                    [
-                        "git",
-                        "restore",
-                        "--worktree",
-                        "--",
-                        "cw",
-                        CLAUDE_MARKETPLACE_RELATIVE.as_posix(),
-                    ],
-                    cwd=repo_root,
-                )
+        runner(["git", "tag", tag], cwd=repo_root)
+    except BaseException as release_error:
+        try:
+            _recover_release(runner, repo_root, original_head, tag)
+        except BaseException as recovery_error:
+            raise ReleaseRecoveryError(
+                f"release failed ({release_error}); recovery also failed: "
+                f"{recovery_error}"
+            ) from release_error
         raise
 
-    runner(["git", "tag", tag], cwd=repo_root)
     if push:
         runner(
             ["git", "push", "--atomic", "origin", "main", tag],
@@ -204,7 +300,10 @@ def main(argv: Sequence[str] | None = None, *, repo_root: Path | None = None) ->
         return 1
     print(f"Created Release v{version}")
     if not args.push:
-        print("Release commit and tag are local; rerun with --push to publish them.")
+        print(
+            "Publish it with: "
+            f"git push --atomic origin main v{version}"
+        )
     return 0
 
 

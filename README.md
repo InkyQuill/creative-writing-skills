@@ -14,7 +14,7 @@ source:
 
 ```bash
 codex plugin marketplace add InkyQuill/creative-writing-skills
-codex plugin install creative-writing-skills@creative-writing-skills
+codex plugin add creative-writing-skills@creative-writing-skills
 ```
 
 Start naturally with a story request such as “Help me plan the next chapter.”
