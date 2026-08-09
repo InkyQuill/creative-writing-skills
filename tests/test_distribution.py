@@ -1,3 +1,4 @@
+import hashlib
 import json
 import re
 import unittest
@@ -41,14 +42,19 @@ EXPECTED_WORKER_CONFIG = {
     "writer": ("workspace-write", {"creative-writing-modes", "creative-writing-craft", "writing-principles", "story-memory", "llm-writing"}),
 }
 
+PRESSURE_RESULTS = REPO_ROOT / "tests" / "fixtures" / "muse-pressure" / "results.md"
+
 
 class DistributionScaffoldTests(unittest.TestCase):
     def test_worker_registry_is_complete_and_resolvable(self):
         registry_path = PLUGIN_ROOT / "skills" / "creative-writing-muse" / "resources" / "workers" / "registry.json"
         registry = load_json(registry_path)
-        self.assertEqual({item["name"] for item in registry["workers"]}, EXPECTED_WORKERS)
+        workers = registry["workers"]
+        self.assertEqual(len(workers), len(EXPECTED_WORKERS))
+        self.assertEqual({item["name"] for item in workers}, EXPECTED_WORKERS)
+        self.assertEqual(len({item["prompt"] for item in workers}), len(workers))
         canonical = set(load_json(REPO_ROOT / "config" / "distribution.json")["canonical_skills"])
-        for item in registry["workers"]:
+        for item in workers:
             self.assertEqual(set(item), {"name", "description", "prompt", "skills", "access", "claude"})
             self.assertIn(item["access"], {"read-only", "workspace-write"})
             self.assertTrue((registry_path.parent / item["prompt"]).is_file())
@@ -61,11 +67,85 @@ class DistributionScaffoldTests(unittest.TestCase):
                 "background": item["name"] == "web-researcher",
             })
 
+    def test_worker_prompts_have_required_contract_and_access_language(self):
+        registry_path = PLUGIN_ROOT / "skills" / "creative-writing-muse" / "resources" / "workers" / "registry.json"
+        for item in load_json(registry_path)["workers"]:
+            text = (registry_path.parent / item["prompt"]).read_text()
+            self.assertTrue(text.startswith("# Function\n"), item["name"])
+            for heading in {"## Required inputs", "## Return shape", "## Access boundary"}:
+                self.assertEqual(text.count(heading), 1, (item["name"], heading))
+            if item["access"] == "read-only":
+                self.assertIn("Read-only.", text, item["name"])
+                self.assertIn("never patch", text, item["name"])
+                self.assertNotIn("Workspace-write.", text, item["name"])
+            else:
+                self.assertIn("Workspace-write.", text, item["name"])
+                self.assertIn("caller-assigned paths", text, item["name"])
+                self.assertIn("do not revert", text, item["name"])
+
+    def test_muse_pressure_evidence_is_complete_and_reproducible(self):
+        text = PRESSURE_RESULTS.read_text()
+        self.assertTrue(text.startswith("# Muse Pressure Verification\n"))
+        muse_path = PLUGIN_ROOT / "skills" / "creative-writing-muse" / "SKILL.md"
+        muse_text = muse_path.read_text()
+        skill_match = re.search(
+            r"<!-- revised-skill:start -->\n```text\n(.*?)```\n<!-- revised-skill:end -->",
+            text,
+            re.DOTALL,
+        )
+        self.assertIsNotNone(skill_match)
+        self.assertEqual(skill_match.group(1), muse_text)
+        expected_hash = hashlib.sha256(muse_text.encode()).hexdigest()
+        self.assertIn(f"Revised skill SHA-256: `{expected_hash}`", text)
+
+        families = {"parallel-sequential", "fallback-disclosure", "memory-intent"}
+        for family in families:
+            self.assertEqual(text.count(f"## Family: {family}"), 1)
+            self.assertIn(f"<!-- prompt:{family}/control -->", text)
+            self.assertIn(f"<!-- prompt:{family}/revised -->", text)
+            for variant in {"control", "revised"}:
+                markers = re.findall(
+                    rf"<!-- sample:{family}/{variant}/(\d+) compliant=(true|false) -->",
+                    text,
+                )
+                self.assertEqual({int(index) for index, _ in markers}, set(range(1, 6)))
+                self.assertEqual(len(markers), 5)
+            self.assertIn(f"### Variance: {family}", text)
+            self.assertIn(f"<!-- final:{family} compliant=true -->", text)
+
+        sample_sections = re.findall(
+            r"<!-- sample:[^>]+ -->\n(.*?)(?=<!-- (?:sample|final):)",
+            text,
+            re.DOTALL,
+        )
+        self.assertEqual(len(sample_sections), 30)
+        for section in sample_sections:
+            self.assertRegex(section, r"(?s)### Output\n\n```text\n.+?```")
+            self.assertRegex(section, r"(?s)### Manual score\n\n\S.+")
+
+        final_sections = re.findall(
+            r"<!-- final:[^>]+ -->\n(.*?)(?=\n## Family:|\Z)",
+            text,
+            re.DOTALL,
+        )
+        self.assertEqual(len(final_sections), 3)
+        for section in final_sections:
+            self.assertRegex(section, r"(?s)#### Full prompt\n\n(?:```|~~~~)text\n.+?(?:```|~~~~)")
+            self.assertRegex(section, r"(?s)#### Raw output\n\n(?:```|~~~~)text\n.+?(?:```|~~~~)")
+            self.assertRegex(section, r"(?s)#### Manual score\n\nPASS — .+")
+
     def test_review_workers_are_read_only(self):
         registry = load_json(PLUGIN_ROOT / "skills" / "creative-writing-muse" / "resources" / "workers" / "registry.json")
         access = {item["name"]: item["access"] for item in registry["workers"]}
         for name in {"character-sim", "continuity-checker", "critic", "editor", "reader-sim"}:
             self.assertEqual(access[name], "read-only")
+
+    def test_continuity_worker_preserves_evidence_only_decision_boundary(self):
+        path = PLUGIN_ROOT / "skills" / "creative-writing-muse" / "resources" / "workers" / "continuity-checker.md"
+        text = path.read_text()
+        self.assertIn("middle passages extra attention", text)
+        self.assertIn("Report evidence without proposing repairs", text)
+        self.assertIn("Leave fix selection and canon resolution to muse and the author", text)
 
     def test_all_non_world_skills_exist_with_minimal_frontmatter(self):
         config = load_json(REPO_ROOT / "config" / "distribution.json")

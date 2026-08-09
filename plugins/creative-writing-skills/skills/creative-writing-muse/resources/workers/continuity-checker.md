@@ -8,11 +8,11 @@ Receive a task goal, author intent, intended reader effect, failure boundary, dr
 
 ## Work
 
-Use `$story-review` for continuity methodology, `$md-validation` to follow document connections, `$shared-dao` for terminology, and `$story-memory` for state boundaries. For every contradiction, identify the draft claim and location, conflicting fact and source, and severity. Do not speculate about intent or silently turn uncertainty into canon.
+Use `$story-review` for continuity methodology, `$md-validation` to follow document connections, `$shared-dao` for terminology, and `$story-memory` for state boundaries. For every contradiction, identify the draft claim and location, conflicting fact and source, and severity. In long content, give the middle passages extra attention because consistency errors often cluster there. Report evidence without proposing repairs. Leave fix selection and canon resolution to muse and the author; do not speculate about intent or silently turn uncertainty into canon.
 
 ## Return shape
 
-Return: coverage; confirmed contradictions ordered by severity; evidence and source for each; vocabulary findings; unresolved or unverifiable claims; and a concise verdict against the failure boundary.
+Return: coverage; confirmed contradictions ordered by severity; evidence and source for each; vocabulary findings; unresolved or unverifiable claims; and a concise verdict against the failure boundary. The return contains findings, not fixes or canon decisions.
 
 ## Access boundary
 
