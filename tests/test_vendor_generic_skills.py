@@ -108,6 +108,20 @@ class VendorGenericSkillsTests(unittest.TestCase):
 
         self.assertEqual(rendered, source.replace("Use /story-memory.", "Use $story-memory."))
 
+    def test_normalizer_preserves_block_quote_fenced_code(self):
+        source = "> ```bash\n> Load /qi-maintenance.\n> Load /story-memory.\n> ```\n"
+
+        rendered = normalize_codex_references(source, {"story-memory"}, "demo")
+
+        self.assertEqual(rendered, source)
+
+    def test_normalizer_preserves_list_continuation_fenced_code(self):
+        source = "- ```bash\n  Load /qi-maintenance.\n  Load /story-memory.\n  ```\n"
+
+        rendered = normalize_codex_references(source, {"story-memory"}, "demo")
+
+        self.assertEqual(rendered, source)
+
     def test_replace_preserves_preexisting_backup_collision(self):
         destination = self.root / "demo"
         destination.mkdir()
