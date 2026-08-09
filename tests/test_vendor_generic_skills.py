@@ -68,6 +68,54 @@ class VendorGenericSkillsTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "qi-layer: unbundled skill reference /qi-maintenance"):
             normalize_codex_references("Load /qi-maintenance.\n", {"qi-layer"}, "qi-layer")
 
+    def test_render_adapts_qi_layer_mirror_command_without_losing_behavior(self):
+        source = self.checkout / "cw" / "skills" / "qi-layer"
+        source.mkdir(parents=True)
+        (source / "SKILL.md").write_text(
+            "---\nname: qi-layer\n---\n"
+            "`/qi-maintenance` owns when colocated knowledge must move with source changes.\n"
+            "Run `meridian qi claude-md-fix <target-root>` on the containing tree\n"
+            "after creating or moving AGENTS.md files: it creates missing mirrors, skips\n"
+            "exact ones, and reports anything else as a conflict.\n\n"
+            "Never write shared instructions into CLAUDE.md. Claude-only knowledge is\n"
+            "rare; when it exists, put it below the `@AGENTS.md` import and expect\n"
+            "`claude-md-fix` to keep flagging the file, so the divergence stays visible.\n"
+        )
+        with patch(
+            "scripts.vendor_generic_skills.vendored_skills", return_value=("qi-layer",)
+        ), patch(
+            "scripts.vendor_generic_skills.canonical_skills", return_value={"qi-layer"}
+        ):
+            render_from_checkout(self.checkout, self.output)
+        rendered = (self.output / "qi-layer" / "SKILL.md").read_text()
+        self.assertNotIn("meridian", rendered.lower())
+        self.assertNotIn("claude-md-fix", rendered)
+        self.assertIn("create missing mirrors", rendered)
+        self.assertIn("leave exact mirrors unchanged", rendered)
+        self.assertIn("report divergent files as conflicts", rendered)
+
+    def test_render_adapts_mermaid_validation_command(self):
+        source = self.checkout / "cw" / "skills" / "structured-artifact"
+        (source / "resources").mkdir(parents=True)
+        (source / "SKILL.md").write_text("---\nname: structured-artifact\n---\nBody.\n")
+        (source / "resources" / "diagrams.md").write_text(
+            "Validate with `meridian mermaid check`.\n"
+        )
+        with patch(
+            "scripts.vendor_generic_skills.vendored_skills",
+            return_value=("structured-artifact",),
+        ), patch(
+            "scripts.vendor_generic_skills.canonical_skills",
+            return_value={"structured-artifact"},
+        ):
+            render_from_checkout(self.checkout, self.output)
+        rendered = (
+            self.output / "structured-artifact" / "resources" / "diagrams.md"
+        ).read_text()
+        self.assertNotIn("meridian", rendered.lower())
+        self.assertIn("available Mermaid parser or renderer", rendered)
+        self.assertIn("report syntax errors before delivery", rendered)
+
     def test_invalid_vendored_names_do_not_mutate_output_or_escape_it(self):
         outside = self.root / "escape"
         outside.mkdir()

@@ -101,13 +101,9 @@ Specific failure modes:
 
 Claude harnesses read CLAUDE.md, not AGENTS.md. Give every AGENTS.md a
 sibling CLAUDE.md whose first line is `@AGENTS.md` — normally the whole
-file. Run `meridian qi claude-md-fix <target-root>` on the containing tree
-after creating or moving AGENTS.md files: it creates missing mirrors, skips
-exact ones, and reports anything else as a conflict.
+file. After creating or moving AGENTS.md files, inspect the containing tree: create missing mirrors, leave exact mirrors unchanged, and report divergent files as conflicts.
 
-Never write shared instructions into CLAUDE.md. Claude-only knowledge is
-rare; when it exists, put it below the `@AGENTS.md` import and expect
-`claude-md-fix` to keep flagging the file, so the divergence stays visible.
+Never write shared instructions into CLAUDE.md. Claude-only knowledge is rare; when it exists, put it below the `@AGENTS.md` import and expect manual mirror verification to keep flagging the file, so the divergence stays visible.
 
 Loading differs by level. At the root, each harness auto-loads its own
 file every session: Claude reads CLAUDE.md, others read AGENTS.md. In

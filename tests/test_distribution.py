@@ -1,12 +1,16 @@
 import hashlib
+import io
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
 import tempfile
 import unittest
+from contextlib import redirect_stdout
 from pathlib import Path
+from unittest import mock
 
 from scripts.distribution import (
     PLUGIN_ROOT,
@@ -16,6 +20,7 @@ from scripts.distribution import (
     map_outside_fences,
     split_frontmatter,
 )
+from scripts.validate_distribution import main as validate_main
 from scripts.validate_distribution import validate
 
 
@@ -235,6 +240,18 @@ class DistributionScaffoldTests(unittest.TestCase):
             with self.subTest(label=label):
                 self.assertEqual(extract_skill_references(text, "/"), expected)
 
+    def test_reference_parser_obeys_commonmark_fence_boundaries(self):
+        cases = {
+            "mixed marker": "~~~~text\n```\n/story-memory $story-memory\n~~~~\n",
+            "shorter closer": "````text\n```\n/story-memory $story-memory\n````\n",
+            "unclosed fence": "```text\n/story-memory $story-memory\n",
+            "indented mixed marker": "   ~~~~text\n```\n/story-memory $story-memory\n   ~~~~\n",
+        }
+        for label, text in cases.items():
+            with self.subTest(label=label):
+                self.assertEqual(extract_skill_references(text, "/"), set())
+                self.assertEqual(extract_skill_references(text, "$"), set())
+
 
 class ValidatorTests(unittest.TestCase):
     def setUp(self):
@@ -382,6 +399,14 @@ class ValidatorTests(unittest.TestCase):
         skill.write_text("---\nname: demo\ndescription: Demo.\n---\nRead [guide](references/guide.md).\n")
         self.assertIn("demo: missing relative resource references/guide.md", validate(self.root))
 
+    def test_validator_reports_whitespace_only_resource_target(self):
+        skill = self.skills / "story-memory" / "SKILL.md"
+        skill.write_text(
+            "---\nname: story-memory\ndescription: Demo.\n---\n"
+            "Read [blank](   ).\n"
+        )
+        self.assertIn("story-memory: missing relative resource <empty>", validate(self.root))
+
     def test_validator_rejects_manifest_version_mismatch(self):
         self.claude_manifest["version"] = "0.0.0"
         self.write_claude_manifest()
@@ -434,6 +459,30 @@ class ValidatorTests(unittest.TestCase):
             "story-memory: missing relative resource kb/<domain>/vocab.md",
             problems,
         )
+
+    def test_validator_keeps_mixed_and_shorter_fences_open(self):
+        skill = self.skills / "story-memory" / "SKILL.md"
+        skill.write_text(
+            "---\nname: story-memory\ndescription: Demo.\n---\n"
+            "~~~~markdown\n"
+            "```\n"
+            "[placeholder](kb/{domain}/vocab.md)\n"
+            "$chapter\n"
+            "~~~~\n"
+            "````markdown\n"
+            "```\n"
+            "[other](kb/<domain>/vocab.md)\n"
+            "$scene\n"
+            "````\n"
+        )
+        problems = validate(self.root)
+        for unexpected in (
+            "story-memory: missing relative resource kb/{domain}/vocab.md",
+            "story-memory: missing relative resource kb/<domain>/vocab.md",
+            "story-memory: dangling skill reference $chapter",
+            "story-memory: dangling skill reference $scene",
+        ):
+            self.assertNotIn(unexpected, problems)
 
     def test_validator_rejects_placeholder_links_outside_fences(self):
         skill = self.skills / "story-memory" / "SKILL.md"
@@ -512,6 +561,19 @@ class ValidatorTests(unittest.TestCase):
         )
         self.assertIn("story-memory: forbidden canonical runtime vocabulary meridian mars", validate(self.root))
 
+    def test_validator_scans_fences_and_non_markdown_runtime_vocabulary(self):
+        skill_root = self.skills / "story-memory"
+        (skill_root / "SKILL.md").write_text(
+            "---\nname: story-memory\ndescription: Demo.\n---\n"
+            "```bash\nmArS add package\n```\n"
+        )
+        (skill_root / "tool.py").write_text("root = 'MERIDIAN_TASK_DIR'\n")
+        (skill_root / "run.sh").write_text("meridian publish\n")
+        problems = validate(self.root)
+        self.assertIn("story-memory: forbidden canonical runtime vocabulary mArS", problems)
+        self.assertIn("story-memory: forbidden canonical runtime vocabulary MERIDIAN_TASK_DIR", problems)
+        self.assertIn("story-memory: forbidden canonical runtime vocabulary meridian", problems)
+
     def test_validator_rejects_codex_vocabulary_in_claude_runtime(self):
         skill = self.root / "cw" / "skills" / "story-memory" / "SKILL.md"
         skill.write_text(
@@ -522,6 +584,179 @@ class ValidatorTests(unittest.TestCase):
         self.assertIn("cw/skills/story-memory/SKILL.md: Codex-only vocabulary AGENTS.md", problems)
         self.assertIn("cw/skills/story-memory/SKILL.md: Codex-only vocabulary spawn_agent", problems)
         self.assertIn("cw/skills/story-memory/SKILL.md: Codex-only skill reference $story-review", problems)
+
+    def test_validator_scans_claude_fences_and_scripts_for_platform_vocabulary(self):
+        skill_root = self.root / "cw" / "skills" / "story-memory"
+        (skill_root / "SKILL.md").write_text(
+            "---\nname: story-memory\ndescription: Demo.\n---\n"
+            "```bash\nMars sync\n```\n"
+        )
+        (skill_root / "tool.py").write_text("value = 'meridian.toml'\n")
+        problems = validate(self.root)
+        self.assertIn(
+            "cw/skills/story-memory/SKILL.md: forbidden runtime vocabulary Mars",
+            problems,
+        )
+        self.assertIn(
+            "cw/skills/story-memory/tool.py: forbidden runtime vocabulary meridian",
+            problems,
+        )
+
+    def test_validator_reports_invalid_utf8_once_per_canonical_file(self):
+        skill_file = self.skills / "story-memory" / "SKILL.md"
+        skill_file.write_bytes(b"\xff")
+        resource = self.skills / "story-review" / "bad.md"
+        resource.write_bytes(b"\xff")
+        worker_prompt = (
+            self.skills / "creative-writing-muse" / "resources" / "workers" / "critic.md"
+        )
+        worker_prompt.write_bytes(b"\xff")
+        problems = validate(self.root)
+        for name in ("story-memory", "story-review", "creative-writing-muse"):
+            matches = [problem for problem in problems if problem.startswith(f"{name}: cannot read")]
+            self.assertEqual(len(matches), 1, (name, problems))
+
+    def test_validator_reports_invalid_utf8_once_for_claude_runtime(self):
+        path = self.root / "cw" / "skills" / "story-memory" / "bad.md"
+        path.write_bytes(b"\xff")
+        problems = validate(self.root)
+        matches = [
+            problem for problem in problems
+            if problem.startswith("cw/skills/story-memory/bad.md: cannot read")
+        ]
+        self.assertEqual(len(matches), 1, problems)
+
+    def test_validator_reports_invalid_worker_registry_once(self):
+        path = (
+            self.skills / "creative-writing-muse" / "resources" / "workers" / "registry.json"
+        )
+        path.write_bytes(b"\xff")
+        problems = validate(self.root)
+        matches = [
+            problem for problem in problems
+            if problem.startswith("invalid worker registry:")
+            or problem.startswith("creative-writing-muse: cannot read resources/workers/registry.json")
+        ]
+        self.assertEqual(len(matches), 1, problems)
+
+    def test_validator_reports_invalid_claude_manifest_once(self):
+        path = self.root / "cw" / ".claude-plugin" / "plugin.json"
+        path.write_bytes(b"\xff")
+        problems = validate(self.root)
+        matches = [
+            problem for problem in problems
+            if problem.startswith("invalid cw plugin manifest:")
+            or problem.startswith("cw/.claude-plugin/plugin.json: cannot read")
+        ]
+        self.assertEqual(len(matches), 1, problems)
+
+    def test_validator_reports_runtime_oserror_without_crashing(self):
+        target = self.skills / "story-memory" / "bad.md"
+        target.write_text("Unreadable in test.\n")
+        original = Path.read_text
+
+        def fail_selected(path, *args, **kwargs):
+            if path == target:
+                raise OSError("simulated read failure")
+            return original(path, *args, **kwargs)
+
+        with mock.patch.object(Path, "read_text", fail_selected):
+            problems = validate(self.root)
+        matches = [problem for problem in problems if "simulated read failure" in problem]
+        self.assertEqual(len(matches), 1, problems)
+
+    def test_validator_rejects_external_canonical_skill_symlink(self):
+        skill = self.skills / "zoom-out"
+        shutil.rmtree(skill)
+        external = self.root / "external-skill"
+        external.mkdir()
+        (external / "SKILL.md").write_text(
+            "---\nname: zoom-out\ndescription: Demo.\n---\nExternal.\n"
+        )
+        skill.symlink_to(external, target_is_directory=True)
+        self.assertIn("zoom-out: skill directory must not be a symlink", validate(self.root))
+
+    def test_validator_does_not_traverse_symlinked_canonical_skills_root(self):
+        external = self.root / "external-skills"
+        self.skills.rename(external)
+        self.skills.symlink_to(external, target_is_directory=True)
+        self.assertIn("canonical skills root must not be a symlink", validate(self.root))
+
+    def test_validator_rejects_external_canonical_runtime_symlink(self):
+        external = self.root / "external.py"
+        external.write_text("safe = True\n")
+        link = self.skills / "story-memory" / "external.py"
+        link.symlink_to(external)
+        self.assertIn("story-memory: runtime resource external.py must not be a symlink", validate(self.root))
+
+    def test_validator_rejects_internal_runtime_symlink_by_policy(self):
+        skill = self.skills / "story-memory"
+        target = skill / "guide.md"
+        target.write_text("Guide.\n")
+        (skill / "alias.md").symlink_to(target.name)
+        self.assertIn("story-memory: runtime resource alias.md must not be a symlink", validate(self.root))
+
+    def test_validator_rejects_external_claude_skill_symlink(self):
+        skill = self.root / "cw" / "skills" / "zoom-out"
+        shutil.rmtree(skill)
+        external = self.root / "external-claude-skill"
+        external.mkdir()
+        (external / "SKILL.md").write_text(
+            "---\nname: zoom-out\ndescription: Demo.\n---\nExternal.\n"
+        )
+        skill.symlink_to(external, target_is_directory=True)
+        problems = validate(self.root)
+        symlink_problems = [problem for problem in problems if "zoom-out" in problem and "symlink" in problem]
+        self.assertEqual(
+            symlink_problems,
+            ["cw skill zoom-out: directory must not be a symlink"],
+        )
+
+    def test_validator_does_not_traverse_symlinked_claude_skills_root(self):
+        skills = self.root / "cw" / "skills"
+        external = self.root / "external-claude-skills"
+        skills.rename(external)
+        skills.symlink_to(external, target_is_directory=True)
+        self.assertIn("cw skills root must not be a symlink", validate(self.root))
+
+    def test_validator_does_not_traverse_symlinked_claude_root(self):
+        claude = self.root / "cw"
+        external = self.root / "external-claude"
+        claude.rename(external)
+        claude.symlink_to(external, target_is_directory=True)
+        self.assertIn("cw root must not be a symlink", validate(self.root))
+
+    def test_validator_does_not_traverse_symlinked_claude_agents_root(self):
+        agents = self.root / "cw" / "agents"
+        external = self.root / "external-claude-agents"
+        agents.rename(external)
+        agents.symlink_to(external, target_is_directory=True)
+        self.assertIn("cw agents root must not be a symlink", validate(self.root))
+
+    def test_validator_rejects_external_claude_runtime_symlink(self):
+        external = self.root / "external-claude.py"
+        external.write_text("safe = True\n")
+        link = self.root / "cw" / "skills" / "story-memory" / "external.py"
+        link.symlink_to(external)
+        self.assertIn(
+            "cw/skills/story-memory/external.py: runtime resource must not be a symlink",
+            validate(self.root),
+        )
+
+    def test_validator_distinguishes_worker_mentions_from_other_at_tokens(self):
+        skill = self.skills / "story-memory" / "SKILL.md"
+        skill.write_text(
+            "---\nname: story-memory\ndescription: Demo.\n---\n"
+            "Delegate to @ghost and @missing-worker, but keep @writer.\n"
+            "Email author@example.com. Install @xyflow/react.\n"
+            "Use @theme { --color: red; } and @media screen.\n"
+            "Open https://example.com/@url-worker.\n"
+        )
+        problems = validate(self.root)
+        self.assertIn("story-memory: dangling worker reference @ghost", problems)
+        self.assertIn("story-memory: dangling worker reference @missing-worker", problems)
+        for token in ("writer", "example", "xyflow", "theme", "media", "url-worker"):
+            self.assertNotIn(f"story-memory: dangling worker reference @{token}", problems)
 
     def test_canonical_only_skips_stale_claude_output(self):
         self.claude_manifest["version"] = "0.0.0"
@@ -542,3 +777,34 @@ class ValidatorCliTests(unittest.TestCase):
         )
         self.assertEqual(completed.returncode, 0, completed.stdout + completed.stderr)
         self.assertEqual(completed.stdout, "Distribution validation passed\n")
+
+    def test_failure_output_is_bulleted_deterministic_and_has_no_success_message(self):
+        fixture = ValidatorTests(methodName="test_validator_accepts_complete_fixture")
+        fixture.setUp()
+        self.addCleanup(fixture.doCleanups)
+        marketplace_path = fixture.root / ".agents" / "plugins" / "marketplace.json"
+        marketplace = json.loads(marketplace_path.read_text())
+        marketplace["plugins"][0]["policy"]["authentication"] = "NONE"
+        fixture._write_json(marketplace_path, marketplace)
+        skill = fixture.skills / "story-memory" / "SKILL.md"
+        skill.write_text(
+            "---\nname: story-memory\ndescription: Demo.\n---\nUse $missing-skill.\n"
+        )
+
+        outputs = []
+        for _ in range(2):
+            stdout = io.StringIO()
+            with redirect_stdout(stdout):
+                result = validate_main([], repo_root=fixture.root)
+            self.assertEqual(result, 1)
+            outputs.append(stdout.getvalue())
+
+        self.assertEqual(outputs[0], outputs[1])
+        self.assertEqual(
+            outputs[0].splitlines(),
+            [
+                "- marketplace authentication policy NONE != ON_INSTALL",
+                "- story-memory: dangling skill reference $missing-skill",
+            ],
+        )
+        self.assertNotIn("Distribution validation passed", outputs[0])

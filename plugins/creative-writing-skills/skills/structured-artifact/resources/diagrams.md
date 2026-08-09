@@ -1,7 +1,7 @@
 # Diagrams
 
 Use when information has relationships, dependencies, or flow — after the prose
-it illustrates, never instead of it. Validate with `meridian mermaid check`.
+it illustrates, never instead of it. Validate with an available Mermaid parser or renderer, and report syntax errors before delivery.
 
 ## Mermaid (default)
 

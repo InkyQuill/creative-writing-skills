@@ -16,7 +16,9 @@ _FRONTMATTER_KEYS = {
     "disable-model-invocation",
     "argument-hint",
 }
-_FENCE_RE = re.compile(r"^ {0,3}(?:`{3,}|~{3,})")
+_FENCE_RE = re.compile(
+    r"^ {0,3}(?P<marker>`{3,}|~{3,})(?P<tail>[^\r\n]*)(?:\r?\n)?$"
+)
 _CODEX_SKILL_RE = re.compile(r"\$([a-z][a-z0-9-]*)")
 _CLAUDE_SKILL_RE = re.compile(
     r"(?<![A-Za-z0-9_.</%-])/([a-z][a-z0-9-]*)(?![A-Za-z0-9/-])"
@@ -103,25 +105,46 @@ def skill_directories(root: Path) -> dict[str, Path]:
     }
 
 
+def iter_fenced_lines(text: str):
+    marker_character: str | None = None
+    marker_length = 0
+    for line in text.splitlines(keepends=True):
+        match = _FENCE_RE.match(line)
+        if marker_character is None:
+            if match is None:
+                yield line, False
+                continue
+            marker = match.group("marker")
+            marker_character = marker[0]
+            marker_length = len(marker)
+            yield line, True
+            continue
+
+        yield line, True
+        if match is None:
+            continue
+        marker = match.group("marker")
+        if (
+            marker[0] == marker_character
+            and len(marker) >= marker_length
+            and not match.group("tail").strip()
+        ):
+            marker_character = None
+            marker_length = 0
+
+
 def map_outside_fences(text: str, transform: Callable[[str], str]) -> str:
     result: list[str] = []
     segment: list[str] = []
-    fenced = False
-    for line in text.splitlines(keepends=True):
-        if _FENCE_RE.match(line):
-            if not fenced:
+    for line, fenced in iter_fenced_lines(text):
+        if fenced:
+            if segment:
                 result.append(transform("".join(segment)))
                 segment = []
-            else:
-                result.extend(segment)
-                segment = []
             result.append(line)
-            fenced = not fenced
         else:
             segment.append(line)
-    if fenced:
-        result.extend(segment)
-    else:
+    if segment:
         result.append(transform("".join(segment)))
     return "".join(result)
 

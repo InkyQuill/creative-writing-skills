@@ -26,6 +26,27 @@ _QI_ADAPTATION = (
     "When colocated knowledge changes, keep its AGENTS.md and .context "
     "documentation synchronized with the source in the same change."
 )
+_QI_MIRROR_COMMAND = (
+    "Run `meridian qi claude-md-fix <target-root>` on the containing tree\n"
+    "after creating or moving AGENTS.md files: it creates missing mirrors, skips\n"
+    "exact ones, and reports anything else as a conflict.\n\n"
+    "Never write shared instructions into CLAUDE.md. Claude-only knowledge is\n"
+    "rare; when it exists, put it below the `@AGENTS.md` import and expect\n"
+    "`claude-md-fix` to keep flagging the file, so the divergence stays visible."
+)
+_QI_MIRROR_ADAPTATION = (
+    "After creating or moving AGENTS.md files, inspect the containing tree: create "
+    "missing mirrors, leave exact mirrors unchanged, and report divergent files as "
+    "conflicts.\n\n"
+    "Never write shared instructions into CLAUDE.md. Claude-only knowledge is rare; "
+    "when it exists, put it below the `@AGENTS.md` import and expect manual mirror "
+    "verification to keep flagging the file, so the divergence stays visible."
+)
+_MERMAID_COMMAND = "Validate with `meridian mermaid check`."
+_MERMAID_ADAPTATION = (
+    "Validate with an available Mermaid parser or renderer, and report syntax errors "
+    "before delivery."
+)
 
 
 @dataclass(frozen=True)
@@ -209,11 +230,24 @@ def normalize_codex_references(text: str, canonical_skills: set[str], skill_name
     return "".join(rendered)
 
 
-def _adapt_markdown(text: str, skill_name: str, known_skills: set[str], is_skill_document: bool) -> str:
+def _adapt_markdown(
+    text: str,
+    skill_name: str,
+    known_skills: set[str],
+    relative_path: Path,
+) -> str:
+    is_skill_document = relative_path == Path("SKILL.md")
     if skill_name == "qi-layer" and is_skill_document:
         if _QI_OWNERSHIP not in text:
             raise ValueError("qi-layer: expected licensed ownership sentence was not found")
         text = text.replace(_QI_OWNERSHIP, _QI_ADAPTATION, 1)
+        if _QI_MIRROR_COMMAND not in text:
+            raise ValueError("qi-layer: expected licensed mirror command was not found")
+        text = text.replace(_QI_MIRROR_COMMAND, _QI_MIRROR_ADAPTATION, 1)
+    if skill_name == "structured-artifact" and relative_path == Path("resources/diagrams.md"):
+        if _MERMAID_COMMAND not in text:
+            raise ValueError("structured-artifact: expected licensed Mermaid command was not found")
+        text = text.replace(_MERMAID_COMMAND, _MERMAID_ADAPTATION, 1)
     return normalize_codex_references(text, known_skills, skill_name)
 
 
@@ -227,7 +261,7 @@ def _copy_skill(source: Path, destination: Path, skill_name: str, known_skills: 
                 markdown.read_text(),
                 skill_name,
                 known_skills,
-                markdown == destination / "SKILL.md",
+                markdown.relative_to(destination),
             )
         )
 

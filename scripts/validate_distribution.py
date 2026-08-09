@@ -10,6 +10,7 @@ if __package__:
     from scripts.distribution import (
         REPO_ROOT,
         extract_skill_references,
+        iter_fenced_lines,
         map_outside_fences,
         split_frontmatter,
     )
@@ -17,6 +18,7 @@ else:
     from distribution import (
         REPO_ROOT,
         extract_skill_references,
+        iter_fenced_lines,
         map_outside_fences,
         split_frontmatter,
     )
@@ -77,24 +79,45 @@ MARKDOWN_LINK_RE = re.compile(
     r"\[[^]]+\]\((?!https?://|#|mailto:)([^)]+)\)",
     re.IGNORECASE,
 )
-FENCE_RE = re.compile(r"^ {0,3}(?:`{3,}|~{3,})")
 URL_RE = re.compile(r"\b[a-z][a-z0-9+.-]*://[^\s<>]+", re.IGNORECASE)
-CANONICAL_VOCABULARY_RE = re.compile(
-    r"\b(?:Mars|Meridian)\b|meridian\s+(?:spawn|mars|context|work)|MERIDIAN_[A-Z_]+"
+PLATFORM_VOCABULARY_RE = re.compile(
+    r"\bmeridian_[a-z0-9_]+\b|\bmeridian\s+mars\b|\b(?:mars|meridian)\b",
+    re.IGNORECASE,
 )
 WORKER_REFERENCE_RE = re.compile(
-    r"(?<![A-Za-z0-9_.%+-])@([a-z][a-z0-9]*-[a-z0-9-]+)(?![A-Za-z0-9/-])"
+    r"(?<![A-Za-z0-9_.%+-])@([a-z][a-z0-9]*(?:-[a-z0-9-]+)?)(?![A-Za-z0-9/-])"
 )
-RUNTIME_SUFFIXES = {".md", ".json", ".yaml", ".yml"}
+CSS_AT_RULES = {
+    "apply", "charset", "container", "document", "font-face", "import",
+    "keyframes", "layer", "media", "namespace", "page", "property",
+    "scope", "starting-style", "supports", "tailwind", "theme",
+}
+TEXT_RUNTIME_SUFFIXES = {
+    "", ".bash", ".c", ".cfg", ".cjs", ".conf", ".cpp", ".css", ".fish",
+    ".h", ".html", ".htm", ".ini", ".java", ".js", ".json", ".jsx",
+    ".less", ".lua", ".md", ".mjs", ".php", ".pl", ".ps1", ".py", ".rb",
+    ".rs", ".rst", ".sass", ".scss", ".sh", ".sql", ".svg", ".toml",
+    ".ts", ".tsx", ".txt", ".xml", ".yaml", ".yml", ".zsh",
+}
 
 
-def _load_object(path: Path, label: str, problems: list[str]) -> dict[str, object] | None:
+def _load_object(
+    path: Path,
+    label: str,
+    problems: list[str],
+    unreadable_paths: set[Path] | None = None,
+) -> dict[str, object] | None:
     if not path.is_file():
         problems.append(f"missing {label}: {path}")
         return None
     try:
         value = json.loads(path.read_text())
-    except (OSError, UnicodeError, json.JSONDecodeError) as error:
+    except (OSError, UnicodeError) as error:
+        if unreadable_paths is not None:
+            unreadable_paths.add(path)
+        problems.append(f"invalid {label}: {error}")
+        return None
+    except json.JSONDecodeError as error:
         problems.append(f"invalid {label}: {error}")
         return None
     if not isinstance(value, dict):
@@ -145,6 +168,14 @@ def _resolve_relative(base: Path, value: object, boundary: Path) -> Path | None:
     return candidate
 
 
+def _is_within(path: Path, boundary: Path) -> bool:
+    try:
+        path.resolve().relative_to(boundary.resolve())
+    except (OSError, ValueError):
+        return False
+    return True
+
+
 def _outside_fences(text: str) -> str:
     segments: list[str] = []
 
@@ -161,11 +192,7 @@ def _without_urls_outside_fences(text: str) -> str:
 
 
 def _iter_relative_links(text: str):
-    fenced = False
-    for line in text.splitlines():
-        if FENCE_RE.match(line):
-            fenced = not fenced
-            continue
+    for line, fenced in iter_fenced_lines(text):
         for match in MARKDOWN_LINK_RE.finditer(line):
             target = match.group(1).strip()
             if fenced and ("{" in target or "<" in target):
@@ -174,12 +201,35 @@ def _iter_relative_links(text: str):
 
 
 def _link_path(target: str) -> str:
+    target = target.strip()
+    if not target:
+        return ""
     if target.startswith("<") and ">" in target:
         target = target[1:target.index(">")]
     else:
-        target = target.split(maxsplit=1)[0]
+        fields = target.split(maxsplit=1)
+        if not fields:
+            return ""
+        target = fields[0]
     target = target.split("#", 1)[0].split("?", 1)[0]
     return unquote(target)
+
+
+def _worker_references(text: str) -> set[str]:
+    references = set()
+    for match in WORKER_REFERENCE_RE.finditer(text):
+        name = match.group(1)
+        if name in CSS_AT_RULES:
+            continue
+        references.add(name)
+    return references
+
+
+def _runtime_label(path: Path, root: Path) -> str:
+    try:
+        return path.relative_to(root).as_posix()
+    except ValueError:
+        return path.as_posix()
 
 
 def _validate_manifest(repo_root: Path, problems: list[str]) -> tuple[dict[str, object] | None, Path]:
@@ -331,10 +381,10 @@ def _validate_config(repo_root: Path, problems: list[str]) -> dict[str, object] 
     return config
 
 
-def _validate_frontmatter(skill_name: str, path: Path, problems: list[str]) -> None:
+def _validate_frontmatter(skill_name: str, text: str, problems: list[str]) -> None:
     try:
-        metadata, body = split_frontmatter(path.read_text())
-    except (OSError, UnicodeError, ValueError) as error:
+        metadata, body = split_frontmatter(text)
+    except ValueError as error:
         problems.append(f"{skill_name}: invalid frontmatter: {error}")
         return
     extra = sorted(set(metadata) - ALLOWED_FRONTMATTER_KEYS)
@@ -356,17 +406,20 @@ def _validate_frontmatter(skill_name: str, path: Path, problems: list[str]) -> N
         problems.append(f"{skill_name}: skill body must be nonempty")
 
 
-def _validate_markdown(skill_name: str, path: Path, skill_root: Path, problems: list[str]) -> None:
-    try:
-        text = path.read_text()
-    except (OSError, UnicodeError) as error:
-        problems.append(f"{skill_name}: cannot read {path.relative_to(skill_root)}: {error}")
-        return
+def _validate_markdown(
+    skill_name: str,
+    path: Path,
+    skill_root: Path,
+    text: str,
+    worker_names: set[str],
+    problems: list[str],
+) -> None:
     for target in _iter_relative_links(text):
         relative = _link_path(target)
         resolved = _resolve_relative(path.parent, relative, skill_root)
         if not relative or resolved is None or not resolved.exists():
-            problems.append(f"{skill_name}: missing relative resource {target}")
+            display_target = target or "<empty>"
+            problems.append(f"{skill_name}: missing relative resource {display_target}")
 
     reference_text = _without_urls_outside_fences(text)
     for reference in sorted(extract_skill_references(reference_text, "/")):
@@ -377,45 +430,89 @@ def _validate_markdown(skill_name: str, path: Path, skill_root: Path, problems: 
         if reference not in EXPECTED_SKILLS:
             problems.append(f"{skill_name}: dangling skill reference ${reference}")
 
-    visible = _outside_fences(text)
-    for match in CANONICAL_VOCABULARY_RE.finditer(visible):
-        problems.append(
-            f"{skill_name}: forbidden canonical runtime vocabulary {match.group(0)}"
-        )
+    visible = _outside_fences(reference_text)
+    for reference in sorted(_worker_references(visible) - worker_names):
+        problems.append(f"{skill_name}: dangling worker reference @{reference}")
 
 
-def _validate_skills(plugin_root: Path, problems: list[str]) -> None:
+def _validate_skills(
+    plugin_root: Path,
+    worker_names: set[str],
+    unreadable_paths: set[Path],
+    problems: list[str],
+) -> None:
     skills_root = plugin_root / "skills"
+    if skills_root.is_symlink():
+        problems.append("canonical skills root must not be a symlink")
+        return
     if not skills_root.is_dir():
         _check_exact_inventory("canonical skill directories", set(), EXPECTED_SKILLS, problems)
         return
-    directories = {path.name: path for path in skills_root.iterdir() if path.is_dir()}
+    if not _is_within(skills_root, plugin_root):
+        problems.append("canonical skills root escapes canonical plugin root")
+        return
+    directories = {
+        path.name: path
+        for path in skills_root.iterdir()
+        if path.is_dir() or path.is_symlink()
+    }
     _check_exact_inventory("canonical skill directories", set(directories), EXPECTED_SKILLS, problems)
     for skill_name, skill_root in sorted(directories.items()):
+        if skill_root.is_symlink():
+            problems.append(f"{skill_name}: skill directory must not be a symlink")
+            continue
+        if not skill_root.is_dir() or not _is_within(skill_root, skills_root):
+            problems.append(f"{skill_name}: skill directory escapes canonical skills root")
+            continue
         skill_file = skill_root / "SKILL.md"
-        if not skill_file.is_file():
+        if not skill_file.is_file() and not skill_file.is_symlink():
             problems.append(f"{skill_name}: missing SKILL.md")
-        else:
-            _validate_frontmatter(skill_name, skill_file, problems)
         for path in sorted(skill_root.rglob("*")):
-            if path.is_file() and path.suffix.lower() in RUNTIME_SUFFIXES:
-                if path.suffix.lower() == ".md":
-                    _validate_markdown(skill_name, path, skill_root, problems)
-                else:
-                    try:
-                        visible = _outside_fences(path.read_text())
-                    except (OSError, UnicodeError) as error:
-                        problems.append(f"{skill_name}: cannot read runtime file: {error}")
-                        continue
-                    for match in CANONICAL_VOCABULARY_RE.finditer(visible):
-                        problems.append(
-                            f"{skill_name}: forbidden canonical runtime vocabulary {match.group(0)}"
-                        )
+            relative = _runtime_label(path, skill_root)
+            if path.is_symlink():
+                problems.append(
+                    f"{skill_name}: runtime resource {relative} must not be a symlink"
+                )
+                continue
+            if path.is_dir():
+                if not _is_within(path, skill_root):
+                    problems.append(
+                        f"{skill_name}: runtime resource {relative} escapes skill root"
+                    )
+                continue
+            if not path.is_file() or path.suffix.lower() not in TEXT_RUNTIME_SUFFIXES:
+                continue
+            if path in unreadable_paths:
+                continue
+            if not _is_within(path, skill_root):
+                problems.append(f"{skill_name}: runtime resource {relative} escapes skill root")
+                continue
+            try:
+                text = path.read_text()
+            except (OSError, UnicodeError) as error:
+                problems.append(f"{skill_name}: cannot read {relative}: {error}")
+                continue
+            if path == skill_file:
+                _validate_frontmatter(skill_name, text, problems)
+            if path.suffix.lower() == ".md":
+                _validate_markdown(
+                    skill_name,
+                    path,
+                    skill_root,
+                    text,
+                    worker_names,
+                    problems,
+                )
+            for match in PLATFORM_VOCABULARY_RE.finditer(text):
+                problems.append(
+                    f"{skill_name}: forbidden canonical runtime vocabulary {match.group(0)}"
+                )
 
 
 def _validate_workers(
     plugin_root: Path,
     config: dict[str, object] | None,
+    unreadable_paths: set[Path],
     problems: list[str],
 ) -> set[str]:
     registry_value = (
@@ -426,7 +523,12 @@ def _validate_workers(
     if registry_path is None:
         problems.append(f"worker registry path {registry_value} is not a safe relative path")
         return set()
-    registry = _load_object(registry_path, "worker registry", problems)
+    registry = _load_object(
+        registry_path,
+        "worker registry",
+        problems,
+        unreadable_paths,
+    )
     if registry is None:
         return set()
     if set(registry) != {"workers"}:
@@ -502,34 +604,15 @@ def _validate_workers(
     return names
 
 
-def _validate_worker_references(
-    plugin_root: Path,
-    worker_names: set[str],
-    problems: list[str],
-) -> None:
-    skills_root = plugin_root / "skills"
-    if not skills_root.is_dir():
-        return
-    for path in sorted(skills_root.rglob("*.md")):
-        text = _without_urls_outside_fences(path.read_text())
-        visible = _outside_fences(text)
-        try:
-            skill_name = path.relative_to(skills_root).parts[0]
-        except (ValueError, IndexError):
-            continue
-        for reference in sorted(set(WORKER_REFERENCE_RE.findall(visible)) - worker_names):
-            problems.append(f"{skill_name}: dangling worker reference @{reference}")
-
-
 def _validate_claude_frontmatter(
-    path: Path,
+    text: str,
     label: str,
     skill_name: str,
     problems: list[str],
 ) -> None:
     try:
-        metadata, body = split_frontmatter(path.read_text())
-    except (OSError, UnicodeError, ValueError) as error:
+        metadata, body = split_frontmatter(text)
+    except ValueError as error:
         problems.append(f"{label}: invalid frontmatter: {error}")
         return
     if metadata.get("name") != skill_name:
@@ -553,8 +636,16 @@ def _validate_claude_distribution(
         claude_config = config["claude"]
         claude_root_value = claude_config.get("root", claude_root_value)
         marketplace_value = claude_config.get("marketplace", marketplace_value)
+    claude_root_candidate = repo_root / Path(str(claude_root_value))
+    if claude_root_candidate.is_symlink():
+        problems.append("cw root must not be a symlink")
+        return
     claude_root = _resolve_relative(repo_root, claude_root_value, repo_root)
-    if claude_root is None or not claude_root.exists():
+    if claude_root is None:
+        if claude_root_candidate.exists():
+            problems.append("cw root escapes repository root")
+        return
+    if not claude_root.exists():
         return
 
     manifest_path = claude_root / ".claude-plugin" / "plugin.json"
@@ -571,23 +662,48 @@ def _validate_claude_distribution(
                 problems.append(f"cw plugin {field} does not match canonical manifest")
 
     skill_root = claude_root / "skills"
+    valid_skill_root = True
+    if skill_root.is_symlink():
+        problems.append("cw skills root must not be a symlink")
+        valid_skill_root = False
+    elif skill_root.exists() and not _is_within(skill_root, claude_root):
+        problems.append("cw skills root escapes Claude root")
+        valid_skill_root = False
     skill_dirs = (
-        {path.name: path for path in skill_root.iterdir() if path.is_dir()}
-        if skill_root.is_dir() else {}
+        {
+            path.name: path
+            for path in skill_root.iterdir()
+            if path.is_dir() or path.is_symlink()
+        }
+        if valid_skill_root and skill_root.is_dir() else {}
     )
     _check_exact_inventory("cw skill directories", set(skill_dirs), EXPECTED_SKILLS, problems)
+    rejected_skill_dirs: set[Path] = set()
     for name, directory in sorted(skill_dirs.items()):
+        if directory.is_symlink():
+            problems.append(f"cw skill {name}: directory must not be a symlink")
+            rejected_skill_dirs.add(directory)
+            continue
+        if not directory.is_dir() or not _is_within(directory, skill_root):
+            problems.append(f"cw skill {name}: directory escapes Claude skills root")
+            rejected_skill_dirs.add(directory)
+            continue
         path = directory / "SKILL.md"
         relative = path.relative_to(repo_root)
-        if not path.is_file():
+        if not path.is_file() and not path.is_symlink():
             problems.append(f"{relative.as_posix()}: missing generated skill")
-        else:
-            _validate_claude_frontmatter(path, relative.as_posix(), name, problems)
 
     agent_root = claude_root / "agents"
+    valid_agent_root = True
+    if agent_root.is_symlink():
+        problems.append("cw agents root must not be a symlink")
+        valid_agent_root = False
+    elif agent_root.exists() and not _is_within(agent_root, claude_root):
+        problems.append("cw agents root escapes Claude root")
+        valid_agent_root = False
     agents = (
         {path.stem for path in agent_root.glob("*.md") if path.is_file()}
-        if agent_root.is_dir() else set()
+        if valid_agent_root and agent_root.is_dir() else set()
     )
     _check_exact_inventory("cw agent files", agents, worker_names | {"muse"}, problems)
 
@@ -618,15 +734,42 @@ def _validate_claude_distribution(
                 if entry.get("description") != canonical_manifest.get("description"):
                     problems.append("Claude marketplace description does not match canonical manifest")
 
-    for path in sorted(claude_root.rglob("*")):
-        if not path.is_file() or path.suffix.lower() not in RUNTIME_SUFFIXES:
+    runtime_paths = set()
+    runtime_roots = []
+    if valid_agent_root:
+        runtime_roots.append(agent_root)
+    if valid_skill_root:
+        runtime_roots.append(skill_root)
+    for runtime_root in runtime_roots:
+        if runtime_root.is_dir():
+            runtime_paths.update(runtime_root.rglob("*"))
+    for path in sorted(runtime_paths):
+        label = _runtime_label(path, repo_root)
+        if path in rejected_skill_dirs:
+            continue
+        if path.is_symlink():
+            problems.append(f"{label}: runtime resource must not be a symlink")
+            continue
+        if path.is_dir():
+            if not _is_within(path, claude_root):
+                problems.append(f"{label}: runtime resource escapes Claude root")
+            continue
+        if not path.is_file() or path.suffix.lower() not in TEXT_RUNTIME_SUFFIXES:
+            continue
+        if not _is_within(path, claude_root):
+            problems.append(f"{label}: runtime resource escapes Claude root")
             continue
         try:
             text = path.read_text()
         except (OSError, UnicodeError) as error:
-            problems.append(f"{path.relative_to(repo_root).as_posix()}: cannot read: {error}")
+            problems.append(f"{label}: cannot read: {error}")
             continue
-        label = path.relative_to(repo_root).as_posix()
+        if (
+            path.name == "SKILL.md"
+            and path.parent.parent == skill_root
+            and path.parent.name in skill_dirs
+        ):
+            _validate_claude_frontmatter(text, label, path.parent.name, problems)
         visible = _outside_fences(_without_urls_outside_fences(text))
         for token in ("AGENTS.md", "spawn_agent", "collaboration."):
             if token in visible:
@@ -636,27 +779,34 @@ def _validate_claude_distribution(
         for reference in sorted(extract_skill_references(text, "/")):
             if reference not in EXPECTED_SKILLS:
                 problems.append(f"{label}: dangling Claude skill reference /{reference}")
-        for reference in sorted(set(WORKER_REFERENCE_RE.findall(visible)) - worker_names):
+        for reference in sorted(_worker_references(visible) - worker_names):
             problems.append(f"{label}: dangling worker reference @{reference}")
-        for match in CANONICAL_VOCABULARY_RE.finditer(visible):
+        for match in PLATFORM_VOCABULARY_RE.finditer(text):
             problems.append(f"{label}: forbidden runtime vocabulary {match.group(0)}")
 
 
 def validate(repo_root: Path, *, canonical_only: bool = False) -> list[str]:
     repo_root = Path(repo_root)
     problems: list[str] = []
+    unreadable_paths: set[Path] = set()
     manifest, plugin_root = _validate_manifest(repo_root, problems)
     _validate_marketplace(repo_root, problems)
     config = _validate_config(repo_root, problems)
-    _validate_skills(plugin_root, problems)
-    workers = _validate_workers(plugin_root, config, problems)
-    _validate_worker_references(plugin_root, workers, problems)
+    workers = _validate_workers(plugin_root, config, unreadable_paths, problems)
+    effective_workers = workers or EXPECTED_WORKERS
+    _validate_skills(plugin_root, effective_workers, unreadable_paths, problems)
     if not canonical_only:
-        _validate_claude_distribution(repo_root, config, manifest, workers, problems)
+        _validate_claude_distribution(
+            repo_root,
+            config,
+            manifest,
+            effective_workers,
+            problems,
+        )
     return list(dict.fromkeys(problems))
 
 
-def main(argv: list[str] | None = None) -> int:
+def main(argv: list[str] | None = None, *, repo_root: Path = REPO_ROOT) -> int:
     parser = argparse.ArgumentParser(description="Validate plugin distributions")
     parser.add_argument(
         "--canonical-only",
@@ -664,7 +814,7 @@ def main(argv: list[str] | None = None) -> int:
         help="skip checks for the generated Claude compatibility distribution",
     )
     args = parser.parse_args(argv)
-    problems = validate(REPO_ROOT, canonical_only=args.canonical_only)
+    problems = validate(repo_root, canonical_only=args.canonical_only)
     if problems:
         for problem in problems:
             print(f"- {problem}")
