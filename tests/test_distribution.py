@@ -23,8 +23,50 @@ EXPECTED_SKILLS = {
     "writing-principles", "writing-staffing", "zoom-out",
 }
 
+EXPECTED_WORKERS = {
+    "brainstormer", "character-sim", "continuity-checker", "critic", "editor",
+    "outliner", "reader-sim", "style-creator", "web-researcher", "writer",
+}
+
+EXPECTED_WORKER_CONFIG = {
+    "brainstormer": ("workspace-write", {"story-planning", "story-memory", "intent-modeling", "llm-writing"}),
+    "character-sim": ("read-only", {"character-sim", "writing-principles", "llm-writing", "story-memory"}),
+    "continuity-checker": ("read-only", {"story-review", "md-validation", "shared-dao", "story-memory"}),
+    "critic": ("read-only", {"story-review", "writing-principles", "llm-writing", "story-memory"}),
+    "editor": ("read-only", {"story-review", "writing-principles", "creative-writing-craft", "llm-writing", "story-memory"}),
+    "outliner": ("workspace-write", {"story-planning", "story-memory", "md-validation"}),
+    "reader-sim": ("read-only", {"reader-sim", "writing-principles", "llm-writing"}),
+    "style-creator": ("workspace-write", {"creative-writing-craft", "writing-principles", "llm-writing", "story-memory"}),
+    "web-researcher": ("workspace-write", {"creative-research"}),
+    "writer": ("workspace-write", {"creative-writing-modes", "creative-writing-craft", "writing-principles", "story-memory", "llm-writing"}),
+}
+
 
 class DistributionScaffoldTests(unittest.TestCase):
+    def test_worker_registry_is_complete_and_resolvable(self):
+        registry_path = PLUGIN_ROOT / "skills" / "creative-writing-muse" / "resources" / "workers" / "registry.json"
+        registry = load_json(registry_path)
+        self.assertEqual({item["name"] for item in registry["workers"]}, EXPECTED_WORKERS)
+        canonical = set(load_json(REPO_ROOT / "config" / "distribution.json")["canonical_skills"])
+        for item in registry["workers"]:
+            self.assertEqual(set(item), {"name", "description", "prompt", "skills", "access", "claude"})
+            self.assertIn(item["access"], {"read-only", "workspace-write"})
+            self.assertTrue((registry_path.parent / item["prompt"]).is_file())
+            self.assertLessEqual(set(item["skills"]), canonical)
+            expected_access, expected_skills = EXPECTED_WORKER_CONFIG[item["name"]]
+            self.assertEqual(item["access"], expected_access)
+            self.assertEqual(set(item["skills"]), expected_skills)
+            self.assertEqual(item["claude"], {
+                "model": "inherit",
+                "background": item["name"] == "web-researcher",
+            })
+
+    def test_review_workers_are_read_only(self):
+        registry = load_json(PLUGIN_ROOT / "skills" / "creative-writing-muse" / "resources" / "workers" / "registry.json")
+        access = {item["name"]: item["access"] for item in registry["workers"]}
+        for name in {"character-sim", "continuity-checker", "critic", "editor", "reader-sim"}:
+            self.assertEqual(access[name], "read-only")
+
     def test_all_non_world_skills_exist_with_minimal_frontmatter(self):
         config = load_json(REPO_ROOT / "config" / "distribution.json")
         for name in set(config["canonical_skills"]) - {"world-creation"}:
