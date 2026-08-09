@@ -27,6 +27,8 @@ RESTORED_RELEASE_PATHS = (
     "cw",
     CLAUDE_MARKETPLACE_RELATIVE.as_posix(),
 )
+STATUS_COMMAND = ("git", "status", "--porcelain", "--untracked-files=normal")
+EXPECTED_RELEASE_STATUS = {f" M {path}" for path in STAGED_RELEASE_PATHS}
 
 
 class ReleaseError(ValueError):
@@ -76,6 +78,38 @@ def run_command(
 
 def _write_manifest(path: Path, manifest: dict[str, object]) -> None:
     path.write_text(json.dumps(manifest, indent=2, ensure_ascii=False) + "\n")
+
+
+def _status(runner: Runner, repo_root: Path) -> set[str]:
+    output = runner(
+        list(STATUS_COMMAND),
+        cwd=repo_root,
+        capture_output=True,
+    ).stdout
+    return set(output.splitlines())
+
+
+def _assert_expected_release_status(
+    runner: Runner,
+    repo_root: Path,
+    stage: str,
+) -> None:
+    actual = _status(runner, repo_root)
+    if actual != EXPECTED_RELEASE_STATUS:
+        expected_text = ", ".join(sorted(EXPECTED_RELEASE_STATUS))
+        actual_text = ", ".join(sorted(actual)) or "<clean>"
+        raise ReleaseError(
+            f"unexpected release changes {stage}: expected [{expected_text}], "
+            f"found [{actual_text}]"
+        )
+
+
+def _assert_clean_status(runner: Runner, repo_root: Path, stage: str) -> None:
+    actual = _status(runner, repo_root)
+    if actual:
+        raise ReleaseError(
+            f"worktree must be clean {stage}:\n" + "\n".join(sorted(actual))
+        )
 
 
 def _stdout(runner: Runner, command: Sequence[str], repo_root: Path) -> str:
@@ -151,13 +185,38 @@ def _recover_release(
     )
     if release_commit is not None:
         if _stdout(runner, ["git", "tag", "--list", tag], repo_root):
-            tag_commit = _stdout(
-                runner,
-                ["git", "rev-parse", "--verify", f"refs/tags/{tag}^{{commit}}"],
-                repo_root,
-            )
-            if tag_commit == release_commit:
-                runner(["git", "tag", "--delete", tag], cwd=repo_root)
+            tag_ref = f"refs/tags/{tag}"
+            try:
+                raw_tag_oid = _stdout(
+                    runner,
+                    ["git", "rev-parse", "--verify", tag_ref],
+                    repo_root,
+                )
+            except subprocess.CalledProcessError:
+                raw_tag_oid = None
+            if raw_tag_oid == release_commit:
+                try:
+                    runner(
+                        [
+                            "git",
+                            "update-ref",
+                            "-d",
+                            tag_ref,
+                            release_commit,
+                        ],
+                        cwd=repo_root,
+                    )
+                except subprocess.CalledProcessError as delete_error:
+                    try:
+                        current_raw_oid = _stdout(
+                            runner,
+                            ["git", "rev-parse", "--verify", tag_ref],
+                            repo_root,
+                        )
+                    except subprocess.CalledProcessError:
+                        current_raw_oid = None
+                    if current_raw_oid == release_commit:
+                        raise delete_error
         runner(
             [
                 "git",
@@ -195,13 +254,12 @@ def run_release(
     if manifest_path.is_symlink() or not manifest_path.is_file():
         raise ReleaseError(f"canonical manifest must be a regular file: {manifest_path}")
 
-    status = runner(
-        ["git", "status", "--porcelain", "--untracked-files=normal"],
-        cwd=repo_root,
-        capture_output=True,
-    ).stdout
-    if status.strip():
-        raise ReleaseError(f"worktree must be clean before release:\n{status.rstrip()}")
+    initial_status = _status(runner, repo_root)
+    if initial_status:
+        raise ReleaseError(
+            "worktree must be clean before release:\n"
+            + "\n".join(sorted(initial_status))
+        )
 
     branch = runner(
         ["git", "branch", "--show-current"],
@@ -233,13 +291,37 @@ def run_release(
     if existing_tag:
         raise ReleaseError(f"tag {tag} already exists")
 
+    runner(
+        [
+            sys.executable,
+            "-B",
+            "scripts/sync_claude_distribution.py",
+            "--check",
+        ],
+        cwd=repo_root,
+    )
+
     manifest["version"] = next_version
     try:
         _write_manifest(manifest_path, manifest)
-        commands = [
-            [sys.executable, "scripts/sync_claude_distribution.py", "--apply"],
+        runner(
             [
                 sys.executable,
+                "-B",
+                "scripts/sync_claude_distribution.py",
+                "--apply",
+            ],
+            cwd=repo_root,
+        )
+        _assert_expected_release_status(
+            runner,
+            repo_root,
+            "after Claude generation",
+        )
+        verification_commands = [
+            [
+                sys.executable,
+                "-B",
                 "-m",
                 "unittest",
                 "discover",
@@ -247,12 +329,23 @@ def run_release(
                 "tests",
                 "-v",
             ],
-            [sys.executable, "scripts/validate_distribution.py"],
-            [sys.executable, "scripts/sync_claude_distribution.py", "--check"],
-            [sys.executable, "scripts/create_skill_zips.py"],
+            [sys.executable, "-B", "scripts/validate_distribution.py"],
+            [
+                sys.executable,
+                "-B",
+                "scripts/sync_claude_distribution.py",
+                "--check",
+            ],
+            [sys.executable, "-B", "scripts/create_skill_zips.py"],
         ]
-        for command in commands:
+        for command in verification_commands:
             runner(command, cwd=repo_root)
+
+        _assert_expected_release_status(
+            runner,
+            repo_root,
+            "before staging",
+        )
 
         runner(
             [
@@ -265,6 +358,7 @@ def run_release(
         )
         runner(["git", "commit", "-m", f"Release {tag}"], cwd=repo_root)
         runner(["git", "tag", tag], cwd=repo_root)
+        _assert_clean_status(runner, repo_root, "after commit and tag")
     except BaseException as release_error:
         try:
             _recover_release(runner, repo_root, original_head, tag)

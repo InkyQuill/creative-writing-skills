@@ -1,8 +1,10 @@
 import io
 import json
+import os
 import subprocess
 import sys
 import tempfile
+import textwrap
 import unittest
 from contextlib import redirect_stdout
 from pathlib import Path
@@ -11,17 +13,25 @@ from unittest.mock import patch
 from scripts.release import ReleaseError, bump_semver, main, run_command, run_release
 
 
+EXPECTED_RELEASE_STATUS = (
+    " M .claude-plugin/marketplace.json\n"
+    " M cw/.claude-plugin/plugin.json\n"
+    " M plugins/creative-writing-skills/.codex-plugin/plugin.json\n"
+)
+
+
 class FakeRunner:
     def __init__(
         self,
         *,
-        status="",
+        status=None,
         branch="main",
         tags="",
         head="1111111111111111111111111111111111111111",
         fail_on=None,
     ):
         self.status = status
+        self.status_calls = 0
         self.branch = branch
         self.tags = tags
         self.head = head
@@ -35,7 +45,13 @@ class FakeRunner:
             raise subprocess.CalledProcessError(1, command)
         stdout = ""
         if command == ["git", "status", "--porcelain", "--untracked-files=normal"]:
-            stdout = self.status
+            if self.status is not None:
+                stdout = self.status
+            else:
+                stdout = ("", EXPECTED_RELEASE_STATUS, EXPECTED_RELEASE_STATUS, "")[
+                    min(self.status_calls, 3)
+                ]
+            self.status_calls += 1
         elif command == ["git", "branch", "--show-current"]:
             stdout = self.branch
         elif command[:3] == ["git", "tag", "--list"]:
@@ -46,17 +62,32 @@ class FakeRunner:
 
 
 class SideEffectFailureRunner:
-    def __init__(self, fail_command, *, foreign_tag_target=None):
+    def __init__(
+        self,
+        fail_command,
+        *,
+        foreign_tag_target=None,
+        move_tag_before_delete_to=None,
+        replace_tag_with_annotated=False,
+        residue=None,
+        residue_stage="apply",
+    ):
         self.fail_command = fail_command
         self.foreign_tag_target = foreign_tag_target
+        self.move_tag_before_delete_to = move_tag_before_delete_to
+        self.replace_tag_with_annotated = replace_tag_with_annotated
+        self.residue = residue
+        self.residue_stage = residue_stage
+        self.release_commit = None
+        self.replacement_raw_oid = None
         self.calls = []
 
     def __call__(self, command, *, cwd, capture_output=False):
         command = list(command)
         cwd = Path(cwd)
         self.calls.append(command)
-        if command and command[0] == sys.executable:
-            if command[1:] == ["scripts/sync_claude_distribution.py", "--apply"]:
+        if command[:2] == [sys.executable, "-B"]:
+            if command[2:] == ["scripts/sync_claude_distribution.py", "--apply"]:
                 version = json.loads(
                     (cwd / "plugins/creative-writing-skills/.codex-plugin/plugin.json")
                     .read_text()
@@ -67,6 +98,11 @@ class SideEffectFailureRunner:
                 marketplace.write_text(
                     json.dumps({"metadata": {"version": version}}) + "\n"
                 )
+                if self.residue_stage == "apply":
+                    self._write_residue(cwd)
+            elif command[2:] == ["scripts/create_skill_zips.py"]:
+                if self.residue_stage == "verification":
+                    self._write_residue(cwd)
             return subprocess.CompletedProcess(command, 0, stdout="", stderr="")
 
         if command == self.fail_command and self.foreign_tag_target is not None:
@@ -76,10 +112,74 @@ class SideEffectFailureRunner:
             )
             raise subprocess.CalledProcessError(97, command)
 
+        tag_ref = "refs/tags/v0.5.10"
+        if (
+            command[:4] == ["git", "update-ref", "-d", tag_ref]
+            and self.move_tag_before_delete_to is not None
+        ):
+            run_command(
+                ["git", "update-ref", tag_ref, self.move_tag_before_delete_to],
+                cwd=cwd,
+            )
+        if (
+            command == ["git", "rev-parse", "--verify", tag_ref]
+            and self.replace_tag_with_annotated
+        ):
+            self.release_commit = run_command(
+                ["git", "rev-parse", "--verify", "HEAD"],
+                cwd=cwd,
+                capture_output=True,
+            ).stdout.strip()
+            run_command(["git", "tag", "--delete", "v0.5.10"], cwd=cwd)
+            run_command(
+                [
+                    "git",
+                    "tag",
+                    "-a",
+                    "-m",
+                    "Replacement tag",
+                    "v0.5.10",
+                    self.release_commit,
+                ],
+                cwd=cwd,
+            )
+            self.replacement_raw_oid = run_command(
+                ["git", "rev-parse", "--verify", tag_ref],
+                cwd=cwd,
+                capture_output=True,
+            ).stdout.strip()
+            self.replace_tag_with_annotated = False
+
         result = run_command(command, cwd=cwd, capture_output=True)
         if command == self.fail_command:
             raise subprocess.CalledProcessError(97, command)
         return result
+
+    def _write_residue(self, cwd):
+        if self.residue == "untracked":
+            (cwd / "release-residue.txt").write_text("unexpected\n")
+        elif self.residue == "tracked":
+            tracked = cwd / "tests/probe_helper.py"
+            tracked.write_text(tracked.read_text() + "# unexpected\n")
+
+
+class RecordingRunner:
+    def __init__(self):
+        self.calls = []
+
+    def __call__(self, command, *, cwd, capture_output=False):
+        command = list(command)
+        self.calls.append(command)
+        environment = os.environ.copy()
+        environment.pop("PYTHONDONTWRITEBYTECODE", None)
+        return subprocess.run(
+            command,
+            cwd=Path(cwd),
+            check=True,
+            text=True,
+            capture_output=capture_output,
+            env=environment,
+        )
 
 
 class ReleaseVersionTests(unittest.TestCase):
@@ -122,6 +222,7 @@ class ReleaseOrchestrationTests(unittest.TestCase):
         def runner(command, *, cwd, capture_output=False):
             if list(command) == [
                 sys.executable,
+                "-B",
                 "-m",
                 "unittest",
                 "discover",
@@ -152,9 +253,22 @@ class ReleaseOrchestrationTests(unittest.TestCase):
                 ["git", "branch", "--show-current"],
                 ["git", "rev-parse", "--verify", "HEAD"],
                 ["git", "tag", "--list", "v0.5.10"],
-                [sys.executable, "scripts/sync_claude_distribution.py", "--apply"],
                 [
                     sys.executable,
+                    "-B",
+                    "scripts/sync_claude_distribution.py",
+                    "--check",
+                ],
+                [
+                    sys.executable,
+                    "-B",
+                    "scripts/sync_claude_distribution.py",
+                    "--apply",
+                ],
+                ["git", "status", "--porcelain", "--untracked-files=normal"],
+                [
+                    sys.executable,
+                    "-B",
                     "-m",
                     "unittest",
                     "discover",
@@ -162,9 +276,15 @@ class ReleaseOrchestrationTests(unittest.TestCase):
                     "tests",
                     "-v",
                 ],
-                [sys.executable, "scripts/validate_distribution.py"],
-                [sys.executable, "scripts/sync_claude_distribution.py", "--check"],
-                [sys.executable, "scripts/create_skill_zips.py"],
+                [sys.executable, "-B", "scripts/validate_distribution.py"],
+                [
+                    sys.executable,
+                    "-B",
+                    "scripts/sync_claude_distribution.py",
+                    "--check",
+                ],
+                [sys.executable, "-B", "scripts/create_skill_zips.py"],
+                ["git", "status", "--porcelain", "--untracked-files=normal"],
                 [
                     "git",
                     "add",
@@ -175,6 +295,7 @@ class ReleaseOrchestrationTests(unittest.TestCase):
                 ],
                 ["git", "commit", "-m", "Release v0.5.10"],
                 ["git", "tag", "v0.5.10"],
+                ["git", "status", "--porcelain", "--untracked-files=normal"],
             ],
             commands,
         )
@@ -223,7 +344,7 @@ class ReleaseOrchestrationTests(unittest.TestCase):
         self.assertEqual(4, len(runner.calls))
 
     def test_failed_check_requests_restoration_and_never_commits_or_tags(self):
-        validation = [sys.executable, "scripts/validate_distribution.py"]
+        validation = [sys.executable, "-B", "scripts/validate_distribution.py"]
         runner = FakeRunner(fail_on=validation)
 
         with self.assertRaises(subprocess.CalledProcessError):
@@ -295,6 +416,64 @@ class ReleaseGitRecoveryTests(unittest.TestCase):
         marketplace.parent.mkdir(parents=True)
         marketplace.write_text(
             json.dumps({"metadata": {"version": "0.5.9"}}) + "\n"
+        )
+        canonical_skill = (
+            root / "plugins/creative-writing-skills/skills/demo/SKILL.md"
+        )
+        canonical_skill.parent.mkdir(parents=True)
+        canonical_skill.write_text("generated skill\n")
+        claude_skill = root / "cw/skills/demo/SKILL.md"
+        claude_skill.parent.mkdir(parents=True)
+        claude_skill.write_text("generated skill\n")
+        scripts = root / "scripts"
+        scripts.mkdir()
+        (scripts / "sync_claude_distribution.py").write_text(
+            textwrap.dedent(
+                """\
+                import json
+                import sys
+                from pathlib import Path
+
+                root = Path.cwd()
+                manifest_path = root / "plugins/creative-writing-skills/.codex-plugin/plugin.json"
+                claude_manifest_path = root / "cw/.claude-plugin/plugin.json"
+                marketplace_path = root / ".claude-plugin/marketplace.json"
+                source_skill = root / "plugins/creative-writing-skills/skills/demo/SKILL.md"
+                claude_skill = root / "cw/skills/demo/SKILL.md"
+                version = json.loads(manifest_path.read_text())["version"]
+                if sys.argv[1] == "--apply":
+                    claude_manifest_path.write_text(json.dumps({"version": version}) + "\\n")
+                    marketplace_path.write_text(json.dumps({"metadata": {"version": version}}) + "\\n")
+                    claude_skill.write_bytes(source_skill.read_bytes())
+                elif sys.argv[1] == "--check":
+                    matches = (
+                        json.loads(claude_manifest_path.read_text())["version"] == version
+                        and json.loads(marketplace_path.read_text())["metadata"]["version"] == version
+                        and claude_skill.read_bytes() == source_skill.read_bytes()
+                    )
+                    if not matches:
+                        raise SystemExit("generated distribution drift")
+                else:
+                    raise SystemExit("unknown mode")
+                """
+            )
+        )
+        (scripts / "validate_distribution.py").write_text("raise SystemExit(0)\n")
+        (scripts / "create_skill_zips.py").write_text("raise SystemExit(0)\n")
+        tests = root / "tests"
+        tests.mkdir()
+        (tests / "probe_helper.py").write_text("VALUE = 1\n")
+        (tests / "test_probe.py").write_text(
+            textwrap.dedent(
+                """\
+                import unittest
+                import probe_helper
+
+                class ProbeTests(unittest.TestCase):
+                    def test_probe(self):
+                        self.assertEqual(1, probe_helper.VALUE)
+                """
+            )
         )
         self._git(root, "add", ".")
         self._git(root, "commit", "-m", "Initial")
@@ -401,6 +580,194 @@ class ReleaseGitRecoveryTests(unittest.TestCase):
             self.assertFalse(
                 any(command[:2] == ["git", "push"] for command in runner.calls)
             )
+
+    def test_compare_and_delete_preserves_tag_moved_after_raw_verification(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            original_head = self._make_repo(root)
+            runner = SideEffectFailureRunner(
+                ["git", "tag", "v0.5.10"],
+                move_tag_before_delete_to=original_head,
+            )
+
+            with self.assertRaises(subprocess.CalledProcessError):
+                run_release(root, "patch", runner=runner)
+
+            self._assert_clean_original_state(
+                root,
+                original_head,
+                tag_target=original_head,
+            )
+
+    def test_annotated_replacement_tag_with_same_peeled_commit_survives(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            original_head = self._make_repo(root)
+            runner = SideEffectFailureRunner(
+                ["git", "tag", "v0.5.10"],
+                replace_tag_with_annotated=True,
+            )
+
+            with self.assertRaises(subprocess.CalledProcessError):
+                run_release(root, "patch", runner=runner)
+
+            self._assert_clean_original_state(
+                root,
+                original_head,
+                tag_target=runner.release_commit,
+            )
+            raw_oid = self._git(
+                root,
+                "rev-parse",
+                "--verify",
+                "refs/tags/v0.5.10",
+            ).stdout.strip()
+            self.assertEqual(runner.replacement_raw_oid, raw_oid)
+            self.assertEqual(
+                "tag",
+                self._git(root, "cat-file", "-t", raw_oid).stdout.strip(),
+            )
+
+    def test_stale_committed_distribution_aborts_before_manifest_mutation(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            self._make_repo(root)
+            (root / "cw/skills/demo/SKILL.md").write_text("stale generated skill\n")
+            self._git(root, "add", "cw/skills/demo/SKILL.md")
+            self._git(root, "commit", "-m", "Commit stale generated output")
+            original_head = self._git(root, "rev-parse", "HEAD").stdout.strip()
+            original_manifest = (
+                root
+                / "plugins/creative-writing-skills/.codex-plugin/plugin.json"
+            ).read_bytes()
+            runner = RecordingRunner()
+
+            with self.assertRaises(subprocess.CalledProcessError):
+                run_release(root, "patch", runner=runner)
+
+            self.assertEqual(
+                original_head,
+                self._git(root, "rev-parse", "HEAD").stdout.strip(),
+            )
+            self.assertEqual(
+                original_manifest,
+                (
+                    root
+                    / "plugins/creative-writing-skills/.codex-plugin/plugin.json"
+                ).read_bytes(),
+            )
+            self.assertEqual("", self._git(root, "status", "--porcelain").stdout)
+            self.assertNotIn(
+                [
+                    sys.executable,
+                    "-B",
+                    "scripts/sync_claude_distribution.py",
+                    "--apply",
+                ],
+                runner.calls,
+            )
+            self.assertEqual("", self._git(root, "tag", "--list", "v0.5.10").stdout)
+
+    def test_successful_real_release_commits_exact_metadata_and_leaves_no_residue(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            original_head = self._make_repo(root)
+            runner = RecordingRunner()
+
+            version = run_release(root, "patch", runner=runner)
+
+            self.assertEqual("0.5.10", version)
+            release_head = self._git(root, "rev-parse", "HEAD").stdout.strip()
+            self.assertNotEqual(original_head, release_head)
+            self.assertEqual(
+                release_head,
+                self._git(
+                    root,
+                    "rev-parse",
+                    "--verify",
+                    "refs/tags/v0.5.10",
+                ).stdout.strip(),
+            )
+            changed_paths = set(
+                self._git(
+                    root,
+                    "diff-tree",
+                    "--no-commit-id",
+                    "--name-only",
+                    "-r",
+                    release_head,
+                ).stdout.splitlines()
+            )
+            self.assertEqual(
+                {
+                    ".claude-plugin/marketplace.json",
+                    "cw/.claude-plugin/plugin.json",
+                    "plugins/creative-writing-skills/.codex-plugin/plugin.json",
+                },
+                changed_paths,
+            )
+            self.assertEqual("", self._git(root, "status", "--porcelain").stdout)
+            self.assertEqual([], list(root.rglob("__pycache__")))
+            for path, keys in (
+                (
+                    "plugins/creative-writing-skills/.codex-plugin/plugin.json",
+                    ("version",),
+                ),
+                ("cw/.claude-plugin/plugin.json", ("version",)),
+                (".claude-plugin/marketplace.json", ("metadata", "version")),
+            ):
+                value = json.loads((root / path).read_text())
+                for key in keys:
+                    value = value[key]
+                self.assertEqual("0.5.10", value)
+
+    def test_unexpected_post_generation_residue_blocks_release_and_is_preserved(self):
+        cases = {
+            ("apply", "tracked"): " M tests/probe_helper.py\n",
+            ("apply", "untracked"): "?? release-residue.txt\n",
+            ("verification", "tracked"): " M tests/probe_helper.py\n",
+            ("verification", "untracked"): "?? release-residue.txt\n",
+        }
+        for (stage, residue), expected_status in cases.items():
+            with (
+                self.subTest(stage=stage, residue=residue),
+                tempfile.TemporaryDirectory() as temporary,
+            ):
+                root = Path(temporary)
+                original_head = self._make_repo(root)
+                runner = SideEffectFailureRunner(
+                    ["never"],
+                    residue=residue,
+                    residue_stage=stage,
+                )
+
+                with self.assertRaisesRegex(ReleaseError, "unexpected release changes"):
+                    run_release(root, "patch", runner=runner)
+
+                self.assertEqual(
+                    original_head,
+                    self._git(root, "rev-parse", "HEAD").stdout.strip(),
+                )
+                self.assertEqual(
+                    expected_status,
+                    self._git(root, "status", "--porcelain").stdout,
+                )
+                self.assertEqual(
+                    "0.5.9",
+                    json.loads(
+                        (
+                            root
+                            / "plugins/creative-writing-skills/.codex-plugin/plugin.json"
+                        ).read_text()
+                    )["version"],
+                )
+                self.assertEqual(
+                    "",
+                    self._git(root, "tag", "--list", "v0.5.10").stdout,
+                )
+                self.assertFalse(
+                    any(command[:2] == ["git", "push"] for command in runner.calls)
+                )
 
 
 if __name__ == "__main__":
