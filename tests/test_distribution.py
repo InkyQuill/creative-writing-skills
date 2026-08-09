@@ -1,6 +1,10 @@
 import hashlib
 import json
+import os
 import re
+import subprocess
+import sys
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -12,6 +16,7 @@ from scripts.distribution import (
     map_outside_fences,
     split_frontmatter,
 )
+from scripts.validate_distribution import validate
 
 
 EXPECTED_SKILLS = {
@@ -229,3 +234,311 @@ class DistributionScaffoldTests(unittest.TestCase):
         for label, (text, expected) in cases.items():
             with self.subTest(label=label):
                 self.assertEqual(extract_skill_references(text, "/"), expected)
+
+
+class ValidatorTests(unittest.TestCase):
+    def setUp(self):
+        self.temporary_directory = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temporary_directory.cleanup)
+        self.root = Path(self.temporary_directory.name)
+        self.plugin = self.root / "plugins" / "creative-writing-skills"
+        self.skills = self.plugin / "skills"
+        self.skills.mkdir(parents=True)
+
+        self.manifest = {
+            "name": "creative-writing-skills",
+            "version": "0.5.9",
+            "description": "Creative writing skills.",
+            "author": {"name": "InkyQuill"},
+            "homepage": "https://github.com/InkyQuill/creative-writing-skills",
+            "repository": "https://github.com/InkyQuill/creative-writing-skills",
+            "license": "Apache-2.0",
+            "skills": "./skills/",
+            "interface": {
+                "displayName": "Creative Writing Skills",
+                "shortDescription": "Plan and write fiction.",
+                "longDescription": "Creative-writing workflows for fiction.",
+                "developerName": "InkyQuill",
+                "category": "Productivity",
+                "capabilities": ["Interactive", "Write"],
+                "websiteURL": "https://github.com/InkyQuill/creative-writing-skills",
+                "defaultPrompt": ["Use $creative-writing-muse."],
+            },
+        }
+        self._write_json(self.plugin / ".codex-plugin" / "plugin.json", self.manifest)
+
+        marketplace = {
+            "name": "creative-writing-skills",
+            "interface": {"displayName": "Creative Writing Skills"},
+            "plugins": [{
+                "name": "creative-writing-skills",
+                "source": {
+                    "source": "local",
+                    "path": "./plugins/creative-writing-skills",
+                },
+                "policy": {
+                    "installation": "AVAILABLE",
+                    "authentication": "ON_INSTALL",
+                },
+                "category": "Productivity",
+            }],
+        }
+        self._write_json(self.root / ".agents" / "plugins" / "marketplace.json", marketplace)
+
+        authored = {
+            "character-sim", "creative-research", "creative-writing-craft",
+            "creative-writing-modes", "creative-writing-muse", "kb-management",
+            "project-setup", "reader-sim", "shared-dao", "story-memory",
+            "story-planning", "story-review", "world-creation",
+            "writing-principles", "writing-staffing",
+        }
+        config = {
+            "canonical_skills": sorted(EXPECTED_SKILLS),
+            "authored_skills": sorted(authored),
+            "vendored_skills": sorted(EXPECTED_SKILLS - authored),
+            "workers": "skills/creative-writing-muse/resources/workers/registry.json",
+            "claude": {
+                "root": "cw",
+                "marketplace": ".claude-plugin/marketplace.json",
+            },
+        }
+        self._write_json(self.root / "config" / "distribution.json", config)
+
+        for name in EXPECTED_SKILLS:
+            skill = self.skills / name / "SKILL.md"
+            skill.parent.mkdir(parents=True)
+            skill.write_text(f"---\nname: {name}\ndescription: Demo.\n---\n{name}\n")
+
+        workers_root = self.skills / "creative-writing-muse" / "resources" / "workers"
+        workers = []
+        for name in sorted(EXPECTED_WORKERS):
+            prompt = workers_root / f"{name}.md"
+            prompt.parent.mkdir(parents=True, exist_ok=True)
+            prompt.write_text(f"# Function\n\n{name}\n")
+            workers.append({
+                "name": name,
+                "description": f"{name} worker.",
+                "prompt": prompt.name,
+                "skills": sorted(EXPECTED_WORKER_CONFIG[name][1]),
+                "access": EXPECTED_WORKER_CONFIG[name][0],
+                "claude": {
+                    "model": "inherit",
+                    "background": name == "web-researcher",
+                },
+            })
+        self._write_json(workers_root / "registry.json", {"workers": workers})
+
+        self.claude_manifest = {
+            key: self.manifest[key]
+            for key in (
+                "name", "version", "description", "author", "homepage",
+                "repository", "license",
+            )
+        }
+        self.write_claude_manifest()
+        for name in EXPECTED_SKILLS:
+            skill = self.root / "cw" / "skills" / name / "SKILL.md"
+            skill.parent.mkdir(parents=True)
+            skill.write_text(f"---\nname: {name}\ndescription: Demo.\n---\n{name}\n")
+        agents = EXPECTED_WORKERS | {"muse"}
+        for name in agents:
+            agent = self.root / "cw" / "agents" / f"{name}.md"
+            agent.parent.mkdir(parents=True, exist_ok=True)
+            agent.write_text(f"---\nname: {name}\ndescription: Demo.\n---\n{name}\n")
+        claude_marketplace = {
+            "name": "cw",
+            "owner": {"name": "InkyQuill"},
+            "metadata": {
+                "description": self.manifest["description"],
+                "version": self.manifest["version"],
+            },
+            "plugins": [{
+                "name": "creative-writing-skills",
+                "description": self.manifest["description"],
+                "source": "./cw",
+            }],
+        }
+        self._write_json(self.root / ".claude-plugin" / "marketplace.json", claude_marketplace)
+
+    def _write_json(self, path, value):
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(value))
+
+    def write_claude_manifest(self):
+        self._write_json(self.root / "cw" / ".claude-plugin" / "plugin.json", self.claude_manifest)
+
+    def test_validator_accepts_complete_fixture(self):
+        self.assertEqual(validate(self.root), [])
+
+    def test_validator_rejects_dangling_skill_reference(self):
+        skill = self.skills / "demo" / "SKILL.md"
+        skill.parent.mkdir()
+        skill.write_text("---\nname: demo\ndescription: Demo.\n---\nUse $missing-skill.\n")
+        self.assertIn("demo: dangling skill reference $missing-skill", validate(self.root))
+
+    def test_validator_rejects_missing_relative_resource(self):
+        skill = self.skills / "demo" / "SKILL.md"
+        skill.parent.mkdir()
+        skill.write_text("---\nname: demo\ndescription: Demo.\n---\nRead [guide](references/guide.md).\n")
+        self.assertIn("demo: missing relative resource references/guide.md", validate(self.root))
+
+    def test_validator_rejects_manifest_version_mismatch(self):
+        self.claude_manifest["version"] = "0.0.0"
+        self.write_claude_manifest()
+        self.assertIn("cw plugin version 0.0.0 != canonical version 0.5.9", validate(self.root))
+
+    def test_validator_rejects_claude_style_reference_in_codex(self):
+        skill = self.skills / "demo" / "SKILL.md"
+        skill.parent.mkdir()
+        skill.write_text("---\nname: demo\ndescription: Demo.\n---\nUse /story-memory.\n")
+        self.assertIn("demo: Claude-style reference /story-memory in canonical Codex skill", validate(self.root))
+
+    def test_validator_ignores_shell_variables_and_urls(self):
+        skill = self.skills / "demo" / "SKILL.md"
+        skill.parent.mkdir()
+        skill.write_text(
+            "---\nname: demo\ndescription: Demo.\n---\n"
+            "```bash\necho $chapter\n```\n"
+            "https://example.com/story-memory/$url_variable?next=/story-memory\n"
+            "Read [remote](https://example.com/$remote).\n"
+        )
+        problems = validate(self.root)
+        self.assertNotIn("demo: dangling skill reference $chapter", problems)
+        self.assertNotIn("demo: dangling skill reference $url", problems)
+        self.assertNotIn("demo: dangling skill reference $remote", problems)
+        self.assertNotIn("demo: Claude-style reference /story-memory in canonical Codex skill", problems)
+
+    def test_validator_checks_real_links_inside_fences(self):
+        skill = self.skills / "story-memory" / "SKILL.md"
+        skill.write_text(
+            "---\nname: story-memory\ndescription: Demo.\n---\n"
+            "```markdown\n[guide](references/missing.md)\n```\n"
+        )
+        self.assertIn(
+            "story-memory: missing relative resource references/missing.md",
+            validate(self.root),
+        )
+
+    def test_validator_ignores_only_fenced_placeholder_links(self):
+        skill = self.skills / "story-memory" / "SKILL.md"
+        skill.write_text(
+            "---\nname: story-memory\ndescription: Demo.\n---\n"
+            "```markdown\n[brace](kb/{domain}/vocab.md)\n[angle](kb/<domain>/vocab.md)\n```\n"
+        )
+        problems = validate(self.root)
+        self.assertNotIn(
+            "story-memory: missing relative resource kb/{domain}/vocab.md",
+            problems,
+        )
+        self.assertNotIn(
+            "story-memory: missing relative resource kb/<domain>/vocab.md",
+            problems,
+        )
+
+    def test_validator_rejects_placeholder_links_outside_fences(self):
+        skill = self.skills / "story-memory" / "SKILL.md"
+        skill.write_text(
+            "---\nname: story-memory\ndescription: Demo.\n---\n"
+            "Read [guide](kb/{domain}/vocab.md).\n"
+        )
+        self.assertIn(
+            "story-memory: missing relative resource kb/{domain}/vocab.md",
+            validate(self.root),
+        )
+
+    def test_validator_accepts_existing_relative_resource_with_fragment(self):
+        skill_root = self.skills / "story-memory"
+        resource = skill_root / "references" / "guide.md"
+        resource.parent.mkdir()
+        resource.write_text("# Guide\n")
+        (skill_root / "SKILL.md").write_text(
+            "---\nname: story-memory\ndescription: Demo.\n---\n"
+            "Read [guide](references/guide.md#details).\n"
+        )
+        self.assertNotIn(
+            "story-memory: missing relative resource references/guide.md#details",
+            validate(self.root),
+        )
+
+    def test_validator_rejects_non_semantic_canonical_version(self):
+        self.manifest["version"] = "v0.5.9"
+        self._write_json(self.plugin / ".codex-plugin" / "plugin.json", self.manifest)
+        self.assertIn("canonical plugin version v0.5.9 is not strict semver", validate(self.root))
+
+    def test_validator_rejects_marketplace_policy_drift(self):
+        path = self.root / ".agents" / "plugins" / "marketplace.json"
+        marketplace = json.loads(path.read_text())
+        marketplace["plugins"][0]["policy"]["authentication"] = "NONE"
+        self._write_json(path, marketplace)
+        self.assertIn("marketplace authentication policy NONE != ON_INSTALL", validate(self.root))
+
+    def test_validator_rejects_frontmatter_name_mismatch(self):
+        skill = self.skills / "story-memory" / "SKILL.md"
+        skill.write_text("---\nname: memories\ndescription: Demo.\n---\nBody.\n")
+        self.assertIn("story-memory: frontmatter name memories != directory name", validate(self.root))
+
+    def test_validator_rejects_unresolved_worker_skill(self):
+        path = self.skills / "creative-writing-muse" / "resources" / "workers" / "registry.json"
+        registry = json.loads(path.read_text())
+        registry["workers"][0]["skills"] = ["missing-skill"]
+        self._write_json(path, registry)
+        name = registry["workers"][0]["name"]
+        self.assertIn(f"worker {name}: dangling skill mapping missing-skill", validate(self.root))
+
+    def test_validator_rejects_wrong_resolved_worker_skill_mapping(self):
+        path = self.skills / "creative-writing-muse" / "resources" / "workers" / "registry.json"
+        registry = json.loads(path.read_text())
+        critic = next(item for item in registry["workers"] if item["name"] == "critic")
+        critic["skills"] = ["creative-research"]
+        self._write_json(path, registry)
+        self.assertIn(
+            "worker critic: skill mapping does not match canonical registry",
+            validate(self.root),
+        )
+
+    def test_validator_rejects_review_worker_with_write_access(self):
+        path = self.skills / "creative-writing-muse" / "resources" / "workers" / "registry.json"
+        registry = json.loads(path.read_text())
+        critic = next(item for item in registry["workers"] if item["name"] == "critic")
+        critic["access"] = "workspace-write"
+        self._write_json(path, registry)
+        self.assertIn("worker critic: review role must be read-only", validate(self.root))
+
+    def test_validator_rejects_meridian_vocabulary_outside_fences(self):
+        skill = self.skills / "story-memory" / "SKILL.md"
+        skill.write_text(
+            "---\nname: story-memory\ndescription: Demo.\n---\n"
+            "Run meridian mars check.\n"
+        )
+        self.assertIn("story-memory: forbidden canonical runtime vocabulary meridian mars", validate(self.root))
+
+    def test_validator_rejects_codex_vocabulary_in_claude_runtime(self):
+        skill = self.root / "cw" / "skills" / "story-memory" / "SKILL.md"
+        skill.write_text(
+            "---\nname: story-memory\ndescription: Demo.\n---\n"
+            "Read AGENTS.md, call spawn_agent, and use $story-review.\n"
+        )
+        problems = validate(self.root)
+        self.assertIn("cw/skills/story-memory/SKILL.md: Codex-only vocabulary AGENTS.md", problems)
+        self.assertIn("cw/skills/story-memory/SKILL.md: Codex-only vocabulary spawn_agent", problems)
+        self.assertIn("cw/skills/story-memory/SKILL.md: Codex-only skill reference $story-review", problems)
+
+    def test_canonical_only_skips_stale_claude_output(self):
+        self.claude_manifest["version"] = "0.0.0"
+        self.write_claude_manifest()
+        self.assertEqual(validate(self.root, canonical_only=True), [])
+
+
+class ValidatorCliTests(unittest.TestCase):
+    def test_canonical_only_cli_runs_as_a_script(self):
+        environment = os.environ.copy()
+        environment["PYTHONDONTWRITEBYTECODE"] = "1"
+        completed = subprocess.run(
+            [sys.executable, "scripts/validate_distribution.py", "--canonical-only"],
+            cwd=REPO_ROOT,
+            env=environment,
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(completed.returncode, 0, completed.stdout + completed.stderr)
+        self.assertEqual(completed.stdout, "Distribution validation passed\n")
