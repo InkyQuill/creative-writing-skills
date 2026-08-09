@@ -21,7 +21,7 @@ from scripts.distribution import (
     split_frontmatter,
 )
 from scripts.validate_distribution import main as validate_main
-from scripts.validate_distribution import validate
+from scripts.validate_distribution import _is_within, validate
 
 
 EXPECTED_SKILLS = {
@@ -251,6 +251,31 @@ class DistributionScaffoldTests(unittest.TestCase):
             with self.subTest(label=label):
                 self.assertEqual(extract_skill_references(text, "/"), set())
                 self.assertEqual(extract_skill_references(text, "$"), set())
+
+    def test_reference_parser_obeys_commonmark_container_fences(self):
+        cases = {
+            "block quote": (
+                "> ```bash\n> /story-memory $story-memory\n> ```\n"
+            ),
+            "list continuation": (
+                "- ```bash\n  /story-memory $story-memory\n  ```\n"
+            ),
+            "nested list": (
+                "1. - ~~~~bash\n     ```\n     /story-memory $story-memory\n     ~~~~\n"
+            ),
+            "composed quote list": (
+                "> - ```bash\n>   /story-memory $story-memory\n>   ```\n"
+            ),
+        }
+        for label, text in cases.items():
+            with self.subTest(label=label):
+                self.assertEqual(extract_skill_references(text, "/"), set())
+                self.assertEqual(extract_skill_references(text, "$"), set())
+
+    def test_backtick_in_info_string_is_not_a_fence_opener(self):
+        text = "```bad`info\n/story-memory $story-memory\n```\n"
+        self.assertEqual(extract_skill_references(text, "/"), {"story-memory"})
+        self.assertEqual(extract_skill_references(text, "$"), {"story-memory"})
 
 
 class ValidatorTests(unittest.TestCase):
@@ -484,6 +509,39 @@ class ValidatorTests(unittest.TestCase):
         ):
             self.assertNotIn(unexpected, problems)
 
+    def test_validator_ignores_placeholders_inside_container_fences(self):
+        skill = self.skills / "story-memory" / "SKILL.md"
+        skill.write_text(
+            "---\nname: story-memory\ndescription: Demo.\n---\n"
+            "> - ````markdown\n"
+            ">   ```\n"
+            ">   [placeholder](kb/{domain}/vocab.md)\n"
+            ">   $chapter\n"
+            ">   ````\n"
+        )
+        problems = validate(self.root)
+        self.assertNotIn(
+            "story-memory: missing relative resource kb/{domain}/vocab.md",
+            problems,
+        )
+        self.assertNotIn("story-memory: dangling skill reference $chapter", problems)
+
+    def test_validator_treats_invalid_backtick_info_as_visible_content(self):
+        skill = self.skills / "story-memory" / "SKILL.md"
+        skill.write_text(
+            "---\nname: story-memory\ndescription: Demo.\n---\n"
+            "```bad`info\n"
+            "[guide](references/missing.md)\n"
+            "$missing-skill\n"
+            "```\n"
+        )
+        problems = validate(self.root)
+        self.assertIn(
+            "story-memory: missing relative resource references/missing.md",
+            problems,
+        )
+        self.assertIn("story-memory: dangling skill reference $missing-skill", problems)
+
     def test_validator_rejects_placeholder_links_outside_fences(self):
         skill = self.skills / "story-memory" / "SKILL.md"
         skill.write_text(
@@ -676,6 +734,59 @@ class ValidatorTests(unittest.TestCase):
         skill.symlink_to(external, target_is_directory=True)
         self.assertIn("zoom-out: skill directory must not be a symlink", validate(self.root))
 
+    def test_validator_rejects_internal_canonical_plugin_root_symlink_before_read(self):
+        target = self.root / "plugins" / "canonical-target"
+        self.plugin.rename(target)
+        self.plugin.symlink_to(target.name, target_is_directory=True)
+        self.assertIn("canonical plugin root must not traverse symlinks", validate(self.root))
+
+    def test_validator_rejects_external_canonical_plugin_root_symlink_before_read(self):
+        target = self.root / "external-canonical-plugin"
+        self.plugin.rename(target)
+        self.plugin.symlink_to(target, target_is_directory=True)
+        self.assertIn("canonical plugin root must not traverse symlinks", validate(self.root))
+
+    def test_validator_rejects_symlinked_canonical_manifest_directory_before_read(self):
+        control = self.plugin / ".codex-plugin"
+        target = self.plugin / "manifest-control"
+        control.rename(target)
+        control.symlink_to(target.name, target_is_directory=True)
+        self.assertIn("canonical manifest must not traverse symlinks", validate(self.root))
+
+    def test_validator_rejects_external_canonical_manifest_file_before_read(self):
+        manifest = self.plugin / ".codex-plugin" / "plugin.json"
+        target = self.root / "external-canonical-manifest.json"
+        manifest.rename(target)
+        manifest.symlink_to(target)
+        self.assertIn("canonical manifest must not traverse symlinks", validate(self.root))
+
+    def test_validator_rejects_symlinked_distribution_control_files_before_read(self):
+        cases = (
+            (
+                self.root / ".agents" / "plugins" / "marketplace.json",
+                "Codex marketplace must not traverse symlinks",
+            ),
+            (
+                self.root / "config" / "distribution.json",
+                "distribution config must not traverse symlinks",
+            ),
+            (
+                self.skills / "creative-writing-muse" / "resources" / "workers" / "registry.json",
+                "worker registry must not traverse symlinks",
+            ),
+        )
+        for index, (path, expected) in enumerate(cases):
+            with self.subTest(path=path):
+                fixture = ValidatorTests(methodName="test_validator_accepts_complete_fixture")
+                fixture.setUp()
+                self.addCleanup(fixture.doCleanups)
+                relative = path.relative_to(self.root)
+                fixture_path = fixture.root / relative
+                target = fixture.root / f"control-{index}.json"
+                fixture_path.rename(target)
+                fixture_path.symlink_to(target)
+                self.assertIn(expected, validate(fixture.root))
+
     def test_validator_does_not_traverse_symlinked_canonical_skills_root(self):
         external = self.root / "external-skills"
         self.skills.rename(external)
@@ -711,6 +822,33 @@ class ValidatorTests(unittest.TestCase):
             symlink_problems,
             ["cw skill zoom-out: directory must not be a symlink"],
         )
+
+    def test_validator_rejects_internal_claude_manifest_symlink_before_read(self):
+        manifest = self.root / "cw" / ".claude-plugin" / "plugin.json"
+        target = manifest.parent / "manifest-target.json"
+        manifest.rename(target)
+        manifest.symlink_to(target.name)
+        self.assertIn("cw plugin manifest must not traverse symlinks", validate(self.root))
+
+    def test_validator_rejects_external_claude_manifest_symlink_before_read(self):
+        manifest = self.root / "cw" / ".claude-plugin" / "plugin.json"
+        target = self.root / "external-claude-manifest.json"
+        manifest.rename(target)
+        manifest.symlink_to(target)
+        self.assertIn("cw plugin manifest must not traverse symlinks", validate(self.root))
+
+    def test_validator_rejects_symlinked_claude_control_paths_before_read(self):
+        control = self.root / "cw" / ".claude-plugin"
+        target = self.root / "cw" / "claude-control"
+        control.rename(target)
+        control.symlink_to(target.name, target_is_directory=True)
+        self.assertIn("cw plugin manifest must not traverse symlinks", validate(self.root))
+
+        marketplace = self.root / ".claude-plugin" / "marketplace.json"
+        marketplace_target = self.root / "external-claude-marketplace.json"
+        marketplace.rename(marketplace_target)
+        marketplace.symlink_to(marketplace_target)
+        self.assertIn("Claude marketplace must not traverse symlinks", validate(self.root))
 
     def test_validator_does_not_traverse_symlinked_claude_skills_root(self):
         skills = self.root / "cw" / "skills"
@@ -749,14 +887,60 @@ class ValidatorTests(unittest.TestCase):
             "---\nname: story-memory\ndescription: Demo.\n---\n"
             "Delegate to @ghost and @missing-worker, but keep @writer.\n"
             "Email author@example.com. Install @xyflow/react.\n"
-            "Use @theme { --color: red; } and @media screen.\n"
+            "Use @theme, @media, @counter-style, @view-transition, @when, "
+            "@else, and @supports-condition.\n"
             "Open https://example.com/@url-worker.\n"
         )
         problems = validate(self.root)
         self.assertIn("story-memory: dangling worker reference @ghost", problems)
         self.assertIn("story-memory: dangling worker reference @missing-worker", problems)
-        for token in ("writer", "example", "xyflow", "theme", "media", "url-worker"):
+        for token in (
+            "writer", "example", "xyflow", "theme", "media", "counter-style",
+            "view-transition", "when", "else", "supports-condition", "url-worker",
+        ):
             self.assertNotIn(f"story-memory: dangling worker reference @{token}", problems)
+
+    def test_validator_reports_symlink_loops_without_crashing(self):
+        skill = self.skills / "story-memory"
+        (skill / "loop").symlink_to("loop")
+        (skill / "SKILL.md").write_text(
+            "---\nname: story-memory\ndescription: Demo.\n---\n"
+            "Read [loop](loop/file.md).\n"
+        )
+        problems = validate(self.root)
+        self.assertIn("story-memory: missing relative resource loop/file.md", problems)
+
+    def test_validator_rejects_registry_path_through_symlink_loop(self):
+        workers = self.skills / "creative-writing-muse" / "resources" / "workers"
+        (workers / "loop").symlink_to("loop")
+        config_path = self.root / "config" / "distribution.json"
+        config = json.loads(config_path.read_text())
+        config["workers"] = (
+            "skills/creative-writing-muse/resources/workers/loop/registry.json"
+        )
+        self._write_json(config_path, config)
+        problems = validate(self.root)
+        self.assertIn(
+            "worker registry must not traverse symlinks",
+            problems,
+        )
+
+    def test_validator_rejects_claude_path_through_symlink_loop(self):
+        (self.root / "loop").symlink_to("loop")
+        config_path = self.root / "config" / "distribution.json"
+        config = json.loads(config_path.read_text())
+        config["claude"]["marketplace"] = "loop/marketplace.json"
+        self._write_json(config_path, config)
+        problems = validate(self.root)
+        self.assertIn(
+            "Claude marketplace must not traverse symlinks",
+            problems,
+        )
+
+    def test_containment_rejects_symlink_loop(self):
+        loop = self.root / "loop"
+        loop.symlink_to("loop")
+        self.assertFalse(_is_within(loop / "child", self.root))
 
     def test_canonical_only_skips_stale_claude_output(self):
         self.claude_manifest["version"] = "0.0.0"

@@ -14,13 +14,17 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterator
 
+if __package__:
+    from scripts.distribution import map_outside_fences
+else:
+    from distribution import map_outside_fences
+
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 CONFIG_PATH = REPO_ROOT / "config" / "distribution.json"
 DEFAULT_OUTPUT_ROOT = REPO_ROOT / "plugins" / "creative-writing-skills" / "skills"
 _SKILL_NAME_RE = re.compile(r"[a-z][a-z0-9-]*\Z")
 _SLASH_SKILL_RE = re.compile(r"(?<![A-Za-z0-9_.</%-])/([a-z][a-z0-9-]*)(?!(?:[A-Za-z0-9/-]|\.[A-Za-z0-9]))")
-_LIST_MARKER_RE = re.compile(r"[-+*]|\d{1,9}[.)]")
 _QI_OWNERSHIP = "`/qi-maintenance` owns when colocated knowledge must move with source changes."
 _QI_ADAPTATION = (
     "When colocated knowledge changes, keep its AGENTS.md and .context "
@@ -103,90 +107,8 @@ def validated_vendored_skills() -> tuple[str, ...]:
     return skills
 
 
-def _advance_column(column: int, character: str) -> int:
-    if character == "\t":
-        return column + 4 - (column % 4)
-    return column + 1
-
-
-def _column_at(line: str, index: int, initial_column: int = 0) -> int:
-    column = initial_column
-    for character in line[:index]:
-        column = _advance_column(column, character)
-    return column
-
-
-def _consume_block_quote(line: str, index: int) -> int | None:
-    end = index
-    while end < len(line) and end - index < 3 and line[end] == " ":
-        end += 1
-    if end == len(line) or line[end] != ">":
-        return None
-    end += 1
-    if end < len(line) and line[end] in " \t":
-        end += 1
-    return end
-
-
-def _consume_list_item(line: str, index: int, initial_column: int = 0) -> tuple[int, int] | None:
-    end = index
-    while end < len(line) and end - index < 3 and line[end] == " ":
-        end += 1
-    marker = _LIST_MARKER_RE.match(line, end)
-    if marker is None:
-        return None
-    end = marker.end()
-    if end == len(line) or line[end] not in " \t":
-        return None
-    while end < len(line) and line[end] in " \t":
-        end += 1
-    return end, _column_at(line, end, initial_column)
-
-
-def _opening_fence_line(
-    line: str, initial_column: int = 0
-) -> tuple[str, tuple[tuple[str, int], ...]]:
-    index = 0
-    containers: list[tuple[str, int]] = []
-    while True:
-        block_quote = _consume_block_quote(line, index)
-        if block_quote is not None:
-            containers.append(("block-quote", 0))
-            index = block_quote
-            continue
-        list_item = _consume_list_item(line, index, initial_column)
-        if list_item is not None:
-            index, content_column = list_item
-            containers.append(("list-item", content_column))
-            continue
-        return line[index:], tuple(containers)
-
-
-def _container_fence_line(
-    line: str, containers: tuple[tuple[str, int], ...]
-) -> tuple[int, int]:
-    index = 0
-    for matched, (kind, content_column) in enumerate(containers):
-        if kind == "block-quote":
-            block_quote = _consume_block_quote(line, index)
-            if block_quote is None:
-                return index, matched
-            index = block_quote
-            continue
-        while _column_at(line, index) < content_column:
-            if index == len(line) or line[index] not in " \t":
-                return index, matched
-            index += 1
-        if _column_at(line, index) != content_column:
-            return index, matched
-    return index, len(containers)
-
-
 def normalize_codex_references(text: str, canonical_skills: set[str], skill_name: str) -> str:
     """Convert Claude slash skill references outside fenced code blocks to Codex syntax."""
-
-    rendered: list[str] = []
-    fence: tuple[str, int, tuple[tuple[str, int], ...]] | None = None
 
     def normalize(segment_text: str) -> str:
         def replace(match: re.Match[str]) -> str:
@@ -197,37 +119,7 @@ def normalize_codex_references(text: str, canonical_skills: set[str], skill_name
 
         return _SLASH_SKILL_RE.sub(replace, segment_text)
 
-    for line in text.splitlines(keepends=True):
-        fence_line = line.rstrip("\r\n")
-        opening_containers: tuple[tuple[str, int], ...] | None = None
-        opening_content: str | None = None
-        if fence is not None:
-            marker, length, containers = fence
-            index, matched = _container_fence_line(fence_line, containers)
-            content = fence_line[index:]
-            if matched != len(containers):
-                fence = None
-                surviving = containers[:matched]
-                opening_content, new_containers = _opening_fence_line(
-                    content, _column_at(fence_line, index)
-                )
-                opening_containers = surviving + new_containers
-            else:
-                closing = re.fullmatch(r" {0,3}" + re.escape(marker) + rf"{{{length},}}[ \t]*", content)
-                rendered.append(line)
-                if closing is not None:
-                    fence = None
-                continue
-
-        if opening_content is None or opening_containers is None:
-            opening_content, opening_containers = _opening_fence_line(fence_line)
-        opening = re.match(r" {0,3}(([`~])\2{2,})(.*)", opening_content)
-        if opening is not None and not (opening.group(2) == "`" and "`" in opening.group(3)):
-            rendered.append(line)
-            fence = (opening.group(2), len(opening.group(1)), opening_containers)
-            continue
-        rendered.append(normalize(line))
-    return "".join(rendered)
+    return map_outside_fences(text, normalize)
 
 
 def _adapt_markdown(

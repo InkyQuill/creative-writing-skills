@@ -88,9 +88,18 @@ WORKER_REFERENCE_RE = re.compile(
     r"(?<![A-Za-z0-9_.%+-])@([a-z][a-z0-9]*(?:-[a-z0-9-]+)?)(?![A-Za-z0-9/-])"
 )
 CSS_AT_RULES = {
-    "apply", "charset", "container", "document", "font-face", "import",
-    "keyframes", "layer", "media", "namespace", "page", "property",
-    "scope", "starting-style", "supports", "tailwind", "theme",
+    "annotation", "apply", "bottom-center", "bottom-left", "bottom-left-corner",
+    "bottom-right", "bottom-right-corner", "character-variant", "charset",
+    "color-profile", "container", "contents", "counter-style", "custom-media",
+    "custom-selector", "document", "else", "font-face", "font-feature-values",
+    "font-palette-values", "function", "import", "keyframes", "layer",
+    "historical-forms", "left-bottom", "left-middle", "left-top", "media",
+    "mixin", "namespace", "nest",
+    "ornaments", "page", "position-try", "property", "return", "right-bottom",
+    "right-middle", "right-top", "scope", "scroll-timeline", "starting-style",
+    "styleset", "stylistic", "supports", "supports-condition", "swash",
+    "tailwind", "theme", "top-center", "top-left", "top-left-corner",
+    "top-right", "top-right-corner", "view-transition", "viewport", "when",
 }
 TEXT_RUNTIME_SUFFIXES = {
     "", ".bash", ".c", ".cfg", ".cjs", ".conf", ".cpp", ".css", ".fish",
@@ -163,7 +172,7 @@ def _resolve_relative(base: Path, value: object, boundary: Path) -> Path | None:
         candidate = base / relative
         resolved = candidate.resolve()
         resolved.relative_to(boundary.resolve())
-    except (OSError, ValueError):
+    except (OSError, RuntimeError, ValueError):
         return None
     return candidate
 
@@ -171,8 +180,36 @@ def _resolve_relative(base: Path, value: object, boundary: Path) -> Path | None:
 def _is_within(path: Path, boundary: Path) -> bool:
     try:
         path.resolve().relative_to(boundary.resolve())
-    except (OSError, ValueError):
+    except (OSError, RuntimeError, ValueError):
         return False
+    return True
+
+
+def _has_symlink_component(path: Path, boundary: Path) -> bool:
+    try:
+        relative = path.absolute().relative_to(boundary.absolute())
+    except ValueError:
+        return True
+    current = boundary
+    for part in relative.parts:
+        current = current / part
+        try:
+            if current.is_symlink():
+                return True
+        except OSError:
+            return True
+    return False
+
+
+def _reject_control_symlink(
+    path: Path,
+    boundary: Path,
+    label: str,
+    problems: list[str],
+) -> bool:
+    if not _has_symlink_component(path, boundary):
+        return False
+    problems.append(f"{label} must not traverse symlinks")
     return True
 
 
@@ -232,12 +269,29 @@ def _runtime_label(path: Path, root: Path) -> str:
         return path.as_posix()
 
 
-def _validate_manifest(repo_root: Path, problems: list[str]) -> tuple[dict[str, object] | None, Path]:
+def _validate_manifest(
+    repo_root: Path,
+    problems: list[str],
+) -> tuple[dict[str, object] | None, Path, bool]:
     plugin_root = repo_root / "plugins" / PLUGIN_NAME
+    if _reject_control_symlink(
+        plugin_root,
+        repo_root,
+        "canonical plugin root",
+        problems,
+    ):
+        return None, plugin_root, False
     manifest_path = plugin_root / ".codex-plugin" / "plugin.json"
+    if _reject_control_symlink(
+        manifest_path,
+        plugin_root,
+        "canonical manifest",
+        problems,
+    ):
+        return None, plugin_root, False
     manifest = _load_object(manifest_path, "canonical plugin manifest", problems)
     if manifest is None:
-        return None, plugin_root
+        return None, plugin_root, False
 
     identity = {
         "name": PLUGIN_NAME,
@@ -304,11 +358,13 @@ def _validate_manifest(repo_root: Path, problems: list[str]) -> tuple[dict[str, 
     skills_path = _resolve_relative(plugin_root, manifest.get("skills"), plugin_root)
     if skills_path is None or not skills_path.is_dir():
         problems.append("canonical plugin skills path ./skills/ does not exist")
-    return manifest, plugin_root
+    return manifest, plugin_root, True
 
 
 def _validate_marketplace(repo_root: Path, problems: list[str]) -> None:
     path = repo_root / ".agents" / "plugins" / "marketplace.json"
+    if _reject_control_symlink(path, repo_root, "Codex marketplace", problems):
+        return
     marketplace = _load_object(path, "Codex marketplace", problems)
     if marketplace is None:
         return
@@ -353,7 +409,10 @@ def _validate_marketplace(repo_root: Path, problems: list[str]) -> None:
 
 
 def _validate_config(repo_root: Path, problems: list[str]) -> dict[str, object] | None:
-    config = _load_object(repo_root / "config" / "distribution.json", "distribution config", problems)
+    path = repo_root / "config" / "distribution.json"
+    if _reject_control_symlink(path, repo_root, "distribution config", problems):
+        return None
+    config = _load_object(path, "distribution config", problems)
     if config is None:
         return None
     expected_keys = {"canonical_skills", "authored_skills", "vendored_skills", "workers", "claude"}
@@ -519,6 +578,14 @@ def _validate_workers(
         config.get("workers") if config is not None
         else "skills/creative-writing-muse/resources/workers/registry.json"
     )
+    registry_candidate = plugin_root / Path(str(registry_value))
+    if _reject_control_symlink(
+        registry_candidate,
+        plugin_root,
+        "worker registry",
+        problems,
+    ):
+        return set()
     registry_path = _resolve_relative(plugin_root, registry_value, plugin_root)
     if registry_path is None:
         problems.append(f"worker registry path {registry_value} is not a safe relative path")
@@ -649,7 +716,15 @@ def _validate_claude_distribution(
         return
 
     manifest_path = claude_root / ".claude-plugin" / "plugin.json"
-    manifest = _load_object(manifest_path, "cw plugin manifest", problems)
+    if _reject_control_symlink(
+        manifest_path,
+        claude_root,
+        "cw plugin manifest",
+        problems,
+    ):
+        manifest = None
+    else:
+        manifest = _load_object(manifest_path, "cw plugin manifest", problems)
     canonical_version = canonical_manifest.get("version") if canonical_manifest else None
     if manifest is not None and canonical_manifest is not None:
         claude_version = manifest.get("version")
@@ -707,10 +782,21 @@ def _validate_claude_distribution(
     )
     _check_exact_inventory("cw agent files", agents, worker_names | {"muse"}, problems)
 
-    marketplace_path = _resolve_relative(repo_root, marketplace_value, repo_root)
-    if marketplace_path is None:
-        problems.append(f"Claude marketplace path {marketplace_value} is not a safe relative path")
+    marketplace_candidate = repo_root / Path(str(marketplace_value))
+    if _reject_control_symlink(
+        marketplace_candidate,
+        repo_root,
+        "Claude marketplace",
+        problems,
+    ):
+        marketplace_path = None
+        marketplace_rejected = True
     else:
+        marketplace_path = _resolve_relative(repo_root, marketplace_value, repo_root)
+        marketplace_rejected = False
+    if marketplace_path is None and not marketplace_rejected:
+        problems.append(f"Claude marketplace path {marketplace_value} is not a safe relative path")
+    elif marketplace_path is not None:
         marketplace = _load_object(marketplace_path, "Claude marketplace", problems)
         if marketplace is not None and canonical_manifest is not None:
             metadata = marketplace.get("metadata")
@@ -789,12 +875,15 @@ def validate(repo_root: Path, *, canonical_only: bool = False) -> list[str]:
     repo_root = Path(repo_root)
     problems: list[str] = []
     unreadable_paths: set[Path] = set()
-    manifest, plugin_root = _validate_manifest(repo_root, problems)
+    manifest, plugin_root, canonical_safe = _validate_manifest(repo_root, problems)
     _validate_marketplace(repo_root, problems)
     config = _validate_config(repo_root, problems)
-    workers = _validate_workers(plugin_root, config, unreadable_paths, problems)
-    effective_workers = workers or EXPECTED_WORKERS
-    _validate_skills(plugin_root, effective_workers, unreadable_paths, problems)
+    if canonical_safe:
+        workers = _validate_workers(plugin_root, config, unreadable_paths, problems)
+        effective_workers = workers if workers == EXPECTED_WORKERS else EXPECTED_WORKERS
+        _validate_skills(plugin_root, effective_workers, unreadable_paths, problems)
+    else:
+        effective_workers = EXPECTED_WORKERS
     if not canonical_only:
         _validate_claude_distribution(
             repo_root,
