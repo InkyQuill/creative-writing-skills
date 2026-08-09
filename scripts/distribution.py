@@ -19,7 +19,17 @@ _FRONTMATTER_KEYS = {
 _FENCE_RE = re.compile(r"^(?:`{3,}|~{3,})")
 _CODEX_SKILL_RE = re.compile(r"\$([a-z][a-z0-9-]*)")
 _CLAUDE_SKILL_RE = re.compile(
-    r"(?<![A-Za-z0-9_.</%-])(?<![>}\]])/([a-z][a-z0-9-]*)(?![A-Za-z0-9/-])"
+    r"(?<![A-Za-z0-9_.</%-])/([a-z][a-z0-9-]*)(?![A-Za-z0-9/-])"
+)
+_URL_RE = re.compile(r"\b[a-z][a-z0-9+.-]*://[^\s<>]+", re.IGNORECASE)
+_HTML_TAG_RE = re.compile(r"</?[A-Za-z][^>\n]*>")
+_MARKDOWN_LINK_OPEN_RE = re.compile(r"\]\(")
+_MARKDOWN_REFERENCE_DESTINATION_RE = re.compile(
+    r"^[ \t]{0,3}\[[^\]\n]+\]:[ \t]*(?P<destination><[^>\n]+>|\S+)",
+    re.MULTILINE,
+)
+_ROOT_FILE_PATH_RE = re.compile(
+    r"^/[A-Za-z0-9._-]+\.[A-Za-z0-9_-]+(?:$|[`'\"),;:!?])"
 )
 
 
@@ -115,6 +125,68 @@ def map_outside_fences(text: str, transform: Callable[[str], str]) -> str:
     return "".join(result)
 
 
+def _mask_span(characters: list[str], start: int, end: int) -> None:
+    for index in range(start, end):
+        if characters[index] not in {"\r", "\n"}:
+            characters[index] = " "
+
+
+def _is_escaped(text: str, index: int) -> bool:
+    backslashes = 0
+    index -= 1
+    while index >= 0 and text[index] == "\\":
+        backslashes += 1
+        index -= 1
+    return backslashes % 2 == 1
+
+
+def _mask_markdown_link_destinations(text: str, characters: list[str]) -> None:
+    for match in _MARKDOWN_LINK_OPEN_RE.finditer(text):
+        if _is_escaped(text, match.start()):
+            continue
+        depth = 1
+        index = match.end()
+        while index < len(text) and depth:
+            if text[index] == "\\":
+                index += 2
+                continue
+            if text[index] == "(":
+                depth += 1
+            elif text[index] == ")":
+                depth -= 1
+            index += 1
+        if depth == 0:
+            _mask_span(characters, match.end(), index - 1)
+
+    for match in _MARKDOWN_REFERENCE_DESTINATION_RE.finditer(text):
+        _mask_span(characters, match.start("destination"), match.end("destination"))
+
+
+def _is_filesystem_path_token(token: str) -> bool:
+    core = token.strip("`*_~'\"(),;:!?")
+    if not core or "</" in core:
+        return False
+    if core.startswith(("~/", "./", "../")):
+        return True
+    if core.startswith("/"):
+        return "/" in core[1:] or _ROOT_FILE_PATH_RE.match(core) is not None
+    return re.search(r"/(?:\{[^/}\s]+\}|\[[^/\]\s]+\])/", core) is not None
+
+
+def _mask_slash_non_call_contexts(text: str) -> str:
+    characters = list(text)
+    _mask_markdown_link_destinations(text, characters)
+    for pattern in (_URL_RE, _HTML_TAG_RE):
+        for match in pattern.finditer(text):
+            _mask_span(characters, match.start(), match.end())
+
+    masked = "".join(characters)
+    for match in re.finditer(r"\S+", masked):
+        if _is_filesystem_path_token(match.group()):
+            _mask_span(characters, match.start(), match.end())
+    return "".join(characters)
+
+
 def extract_skill_references(text: str, sigil: str) -> set[str]:
     if sigil == "$":
         pattern = _CODEX_SKILL_RE
@@ -126,7 +198,8 @@ def extract_skill_references(text: str, sigil: str) -> set[str]:
     references: set[str] = set()
 
     def collect(segment: str) -> str:
-        references.update(match.group(1) for match in pattern.finditer(segment))
+        searchable = _mask_slash_non_call_contexts(segment) if sigil == "/" else segment
+        references.update(match.group(1) for match in pattern.finditer(searchable))
         return segment
 
     map_outside_fences(text, collect)

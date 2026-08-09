@@ -79,6 +79,23 @@ class DistributionScaffoldTests(unittest.TestCase):
         self.assertEqual(extract_skill_references(text, "$"), {"story-memory"})
         self.assertEqual(extract_skill_references(text, "/"), {"story-memory"})
 
-    def test_reference_parser_ignores_templated_filesystem_paths(self):
-        text = "Use /story-memory with `kb/<domain>/vocab.md`, `kb/{domain}/vocab.md`, and `kb/[domain]/vocab.md`.\n"
-        self.assertEqual(extract_skill_references(text, "/"), {"story-memory"})
+    def test_slash_reference_parser_distinguishes_calls_from_non_call_contexts(self):
+        cases = {
+            "standalone call": ("Use /story-memory.\n", {"story-memory"}),
+            "inline-code call": ("Use `/story-memory`.\n", {"story-memory"}),
+            "fenced-code token": ("```text\n/story-memory\n```\n", set()),
+            "visible HTML-wrapped call": ("Use <code>/story-memory</code>.\n", {"story-memory"}),
+            "HTML attribute": ("Read <a href=\"/story-memory\">the guide</a>.\n", set()),
+            "closing HTML tag": ("Close with </story-memory>.\n", set()),
+            "Markdown link destination": ("Read [the guide](/story-memory).\n", set()),
+            "visible Markdown link label": ("Read [/story-memory](/guide.md).\n", {"story-memory"}),
+            "Markdown reference destination": ("[guide]: /story-memory\n", set()),
+            "URL query value": ("Open https://example.com/?next=/story-memory.\n", set()),
+            "absolute Markdown path": ("Read `/vocab.md` first.\n", set()),
+            "angle-template path": ("Read `kb/<domain>/vocab.md`.\n", set()),
+            "brace-template path": ("Read `kb/{domain}/vocab.md`.\n", set()),
+            "bracket-template path": ("Read `kb/[domain]/vocab.md`.\n", set()),
+        }
+        for label, (text, expected) in cases.items():
+            with self.subTest(label=label):
+                self.assertEqual(extract_skill_references(text, "/"), expected)
