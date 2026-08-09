@@ -72,14 +72,26 @@ class VendorGenericSkillsTests(unittest.TestCase):
         source = self.checkout / "cw" / "skills" / "qi-layer"
         source.mkdir(parents=True)
         (source / "SKILL.md").write_text(
-            "---\nname: qi-layer\n---\n"
+            "---\n"
+            "name: qi-layer\n"
+            "description: 'Use when writing or maintaining AGENTS.md, .context/CONTEXT.md, or CLAUDE.md mirrors: keep intent docs minimal and load-bearing.'\n"
+            "---\n"
             "`/qi-maintenance` owns when colocated knowledge must move with source changes.\n"
-            "Run `meridian qi claude-md-fix <target-root>` on the containing tree\n"
+            "## CLAUDE.md Mirrors\n\n"
+            "Claude harnesses read CLAUDE.md, not AGENTS.md. Give every AGENTS.md a\n"
+            "sibling CLAUDE.md whose first line is `@AGENTS.md` — normally the whole\n"
+            "file. Run `meridian qi claude-md-fix <target-root>` on the containing tree\n"
             "after creating or moving AGENTS.md files: it creates missing mirrors, skips\n"
             "exact ones, and reports anything else as a conflict.\n\n"
             "Never write shared instructions into CLAUDE.md. Claude-only knowledge is\n"
             "rare; when it exists, put it below the `@AGENTS.md` import and expect\n"
-            "`claude-md-fix` to keep flagging the file, so the divergence stays visible.\n"
+            "`claude-md-fix` to keep flagging the file, so the divergence stays visible.\n\n"
+            "Loading differs by level. At the root, each harness auto-loads its own\n"
+            "file every session: Claude reads CLAUDE.md, others read AGENTS.md. In\n"
+            "subdirectories, Claude auto-injects CLAUDE.md when it touches files there;\n"
+            "other agents see nested AGENTS.md only by reading it on entry. Don't lean\n"
+            "on Claude's auto-injection: a nested AGENTS.md carries the local additions\n"
+            "an agent needs on entry, with everything else inherited from ancestors.\n"
         )
         with patch(
             "scripts.vendor_generic_skills.vendored_skills", return_value=("qi-layer",)
@@ -93,6 +105,89 @@ class VendorGenericSkillsTests(unittest.TestCase):
         self.assertIn("create missing mirrors", rendered)
         self.assertIn("leave exact mirrors unchanged", rendered)
         self.assertIn("report divergent files as conflicts", rendered)
+        self.assertIn("instruction filename required by the active harness", rendered)
+        self.assertIn("must never import itself", rendered)
+        self.assertNotIn("sibling CLAUDE.md", rendered)
+        self.assertNotIn("@AGENTS.md", rendered)
+        self.assertIn(
+            "description: 'Use when writing or maintaining harness instruction files "
+            "and .context/CONTEXT.md: keep intent docs minimal and load-bearing.'",
+            rendered,
+        )
+
+    def test_render_adapts_knowledge_bootstrap_to_instruction_placeholder(self):
+        source = self.checkout / "cw" / "skills" / "knowledge-layers"
+        (source / "resources").mkdir(parents=True)
+        (source / "SKILL.md").write_text(
+            "---\nname: knowledge-layers\n---\nBody.\n"
+        )
+        (source / "resources/bootstrap.md").write_text(
+            "## Directory Layout\n\n"
+            "```\n"
+            "kb/\n"
+            "  AGENTS.md          # intent: what belongs here, key rules\n"
+            "  .context/\n"
+            "    CONTEXT.md       # governance depth: writing conventions, structure, validation\n"
+            "  index.md           # catalog of pages with one-line summaries\n"
+            "  vocab.md           # project-wide terminology\n"
+            "```\n\n"
+            "## Starter AGENTS.md\n"
+        )
+        with patch(
+            "scripts.vendor_generic_skills.vendored_skills",
+            return_value=("knowledge-layers",),
+        ), patch(
+            "scripts.vendor_generic_skills.canonical_skills",
+            return_value={"knowledge-layers"},
+        ):
+            render_from_checkout(self.checkout, self.output)
+
+        rendered = (
+            self.output / "knowledge-layers/resources/bootstrap.md"
+        ).read_text()
+        self.assertIn(
+            "{instruction-file}  # active harness instructions: intent and key rules",
+            rendered,
+        )
+        self.assertIn("## Starter instruction file", rendered)
+        self.assertNotIn("AGENTS.md", rendered)
+
+    def test_qi_adaptation_rejects_unrecognized_licensed_source(self):
+        source = self.checkout / "cw" / "skills" / "qi-layer"
+        source.mkdir(parents=True)
+        (source / "SKILL.md").write_text(
+            "---\n"
+            "name: qi-layer\n"
+            "description: 'Changed upstream description.'\n"
+            "---\n"
+            "`/qi-maintenance` owns when colocated knowledge must move with source changes.\n"
+        )
+        with patch(
+            "scripts.vendor_generic_skills.vendored_skills", return_value=("qi-layer",)
+        ), patch(
+            "scripts.vendor_generic_skills.canonical_skills", return_value={"qi-layer"}
+        ):
+            with self.assertRaisesRegex(ValueError, "expected licensed description"):
+                render_from_checkout(self.checkout, self.output)
+
+    def test_bootstrap_adaptation_rejects_unrecognized_licensed_source(self):
+        source = self.checkout / "cw" / "skills" / "knowledge-layers"
+        (source / "resources").mkdir(parents=True)
+        (source / "SKILL.md").write_text(
+            "---\nname: knowledge-layers\n---\nBody.\n"
+        )
+        (source / "resources/bootstrap.md").write_text(
+            "## Directory Layout\n\nChanged upstream layout.\n\n## Starter AGENTS.md\n"
+        )
+        with patch(
+            "scripts.vendor_generic_skills.vendored_skills",
+            return_value=("knowledge-layers",),
+        ), patch(
+            "scripts.vendor_generic_skills.canonical_skills",
+            return_value={"knowledge-layers"},
+        ):
+            with self.assertRaisesRegex(ValueError, "expected licensed bootstrap layout"):
+                render_from_checkout(self.checkout, self.output)
 
     def test_render_adapts_mermaid_validation_command(self):
         source = self.checkout / "cw" / "skills" / "structured-artifact"

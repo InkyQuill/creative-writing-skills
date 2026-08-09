@@ -1,6 +1,6 @@
 ---
 name: knowledge-layers
-description: "'Use when deciding where knowledge goes or reading/writing durable docs: CLAUDE.md, .context/, KB, docs/, and work directories.'"
+description: "Use when deciding where knowledge goes or reading/writing durable docs: CLAUDE.md, .context/, KB, docs/, and work directories."
 ---
 
 # Knowledge Layers

@@ -1,6 +1,6 @@
 ---
 name: project-setup
-description: "One-time project setup for creative writing. Interviews you about your project, collects writing samples, proposes kb structure, and creates or updates CLAUDE.md with project conventions after you confirm the workspace plan."
+description: "One-time project setup for creative writing. Interviews you about your project, collects writing samples, proposes kb structure, and creates or updates CLAUDE.md with project conventions after you confirm the workspace plan.\n"
 ---
 
 # Project Setup

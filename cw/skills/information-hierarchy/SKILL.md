@@ -1,6 +1,6 @@
 ---
 name: information-hierarchy
-description: "Load for large human-facing outputs: reports, docs, multi-section\nexplanations, artifacts. Choose the right form for each beat (prose, diagram,\ntable, mockup) and put the answer first, depth behind it. If the medium allows, use progressive disclosure."
+description: "Load for large human-facing outputs: reports, docs, multi-section\nexplanations, artifacts. Choose the right form for each beat (prose, diagram,\ntable, mockup) and put the answer first, depth behind it. If the medium allows, use progressive disclosure.\n"
 ---
 
 # Information Hierarchy

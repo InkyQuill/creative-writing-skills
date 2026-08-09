@@ -1,6 +1,6 @@
 ---
 name: story-memory
-description: "Creative-writing domain knowledge for durable story state. Load when\npreserving or retrieving project memory — fact extraction, context scoping,\nreference writing, artifact layout, and issue tracking. Apply it directly\nfor fiction-specific categories and conventions during knowledge work."
+description: "Creative-writing domain knowledge for durable story state. Load when preserving or retrieving project memory — fact extraction, context scoping, reference writing, artifact layout, and issue tracking. Apply it directly for fiction-specific categories and conventions during knowledge work.\n"
 ---
 
 # Story Memory

@@ -1,6 +1,6 @@
 ---
 name: kb-management
-description: "Maintaining the story knowledge base: creating, updating, and organizing\nwiki-style reference pages in kb/. Use when capturing finalized story\nknowledge, updating character profiles, documenting world mechanics, or\nrestructuring the kb."
+description: "Maintaining the story knowledge base: creating, updating, and organizing wiki-style reference pages in kb/. Use when capturing finalized story knowledge, updating character profiles, documenting world mechanics, or restructuring the kb.\n"
 ---
 
 # KB Management

@@ -1,6 +1,6 @@
 ---
 name: intent-modeling
-description: "'Use before acting on human instructions: separate what they said from what they meant.'"
+description: "Use before acting on human instructions: separate what they said from what they meant."
 ---
 
 # Intent Modeling

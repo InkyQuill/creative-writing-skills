@@ -1,6 +1,6 @@
 ---
 name: structured-artifact
-description: "Load when building a static HTML artifact — single page or multi-page site —\nto make structured information explorable through layout and navigation."
+description: "Load when building a static HTML artifact — single page or multi-page site —\nto make structured information explorable through layout and navigation.\n"
 disable-model-invocation: true
 ---
 

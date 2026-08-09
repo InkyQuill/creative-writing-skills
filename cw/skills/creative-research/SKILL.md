@@ -1,6 +1,6 @@
 ---
 name: creative-research
-description: "Load when a story needs factual grounding the writer doesn't have: historical\ndetail, cultural texture, domain accuracy, or how other authors handled\nsimilar material. Pass the question and story context; returns a sourced\nreport the writer can draw from."
+description: "Load when a story needs factual grounding the writer doesn't have: historical detail, cultural texture, domain accuracy, or how other authors handled similar material. Pass the question and story context; returns a sourced report the writer can draw from.\n"
 ---
 
 # Creative Research

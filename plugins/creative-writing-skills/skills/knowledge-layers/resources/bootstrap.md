@@ -7,11 +7,11 @@ intent in `AGENTS.md`, governance depth in `.context/`.
 
 ```
 kb/
-  AGENTS.md          # intent: what belongs here, key rules
+  {instruction-file}  # active harness instructions: intent and key rules
   .context/
-    CONTEXT.md       # governance depth: writing conventions, structure, validation
-  index.md           # catalog of pages with one-line summaries
-  vocab.md           # project-wide terminology
+    CONTEXT.md         # governance depth: writing conventions, structure, validation
+  index.md             # catalog of pages with one-line summaries
+  vocab.md             # project-wide terminology
 ```
 
 Add directories as the KB grows: a topic earns a directory when it has
@@ -34,7 +34,7 @@ the old decision record still explains why it was built that way.
 **Sources**: raw material: articles, research, transcripts, data. Immutable.
 Agents read from sources but never modify them.
 
-## Starter AGENTS.md
+## Starter instruction file
 
 ```markdown
 # KB Guide

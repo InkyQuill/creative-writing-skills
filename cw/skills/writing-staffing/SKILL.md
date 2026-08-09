@@ -1,6 +1,6 @@
 ---
 name: writing-staffing
-description: "Internal capability-based dispatch reference for composing writing teams.\nUse when explicitly staffing a workflow to choose skills, context, and\nparallel lanes without relying on named agents or a specific runtime."
+description: "Internal capability-based dispatch reference for composing writing teams. Use when explicitly staffing a workflow to choose skills, context, and parallel lanes without relying on named agents or a specific runtime.\n"
 ---
 
 # Writing Staffing

@@ -203,8 +203,58 @@ class DistributionScaffoldTests(unittest.TestCase):
 
     def test_frontmatter_parser_returns_metadata_and_body(self):
         metadata, body = split_frontmatter("---\nname: demo\ndescription: |\n  First line.\n  Second line.\n---\n\n# Demo\n")
-        self.assertEqual(metadata, {"name": "demo", "description": "First line.\nSecond line."})
+        self.assertEqual(metadata, {"name": "demo", "description": "First line.\nSecond line.\n"})
         self.assertEqual(body, "\n# Demo\n")
+
+    def test_frontmatter_parser_decodes_supported_yaml_string_scalars(self):
+        single_metadata, _ = split_frontmatter(
+            "---\n"
+            "name: demo\n"
+            "description: 'Use the author''s exact intent.'\n"
+            "---\n"
+        )
+        double_metadata, _ = split_frontmatter(
+            "---\n"
+            "name: demo\n"
+            "description: \"Use the author's exact intent.\\n\"\n"
+            "---\n"
+        )
+
+        self.assertEqual("Use the author's exact intent.", single_metadata["description"])
+        self.assertEqual("Use the author's exact intent.\n", double_metadata["description"])
+
+    def test_frontmatter_parser_distinguishes_literal_and_folded_blocks(self):
+        literal_metadata, _ = split_frontmatter(
+            "---\n"
+            "name: demo\n"
+            "description: |\n"
+            "  first line\n"
+            "  second line\n"
+            "---\n"
+        )
+        folded_metadata, _ = split_frontmatter(
+            "---\n"
+            "name: demo\n"
+            "description: >\n"
+            "  first line\n"
+            "  second line\n"
+            "\n"
+            "  next paragraph\n"
+            "---\n"
+        )
+
+        self.assertEqual("first line\nsecond line\n", literal_metadata["description"])
+        self.assertEqual(
+            "first line second line\nnext paragraph\n",
+            folded_metadata["description"],
+        )
+
+    def test_frontmatter_parser_rejects_malformed_double_quoted_scalars(self):
+        for value in ('"unterminated', '"complete" trailing'):
+            with self.subTest(value=value), self.assertRaises(ValueError):
+                split_frontmatter(
+                    f"---\nname: demo\ndescription: {value}\n---\nBody.\n"
+                )
 
     def test_reference_parser_distinguishes_skills_from_code_urls_and_tags(self):
         text = "Use $story-memory, not /story-memory.\n```bash\necho $chapter\n```\nhttps://example.com/story-memory\n</hidden>\n"

@@ -1,6 +1,6 @@
 ---
 name: qi-layer
-description: "'Use when writing or maintaining CLAUDE.md, .context/CONTEXT.md, or CLAUDE.md mirrors: keep intent docs minimal and load-bearing.'"
+description: "Use when writing or maintaining harness instruction files and .context/CONTEXT.md: keep intent docs minimal and load-bearing."
 ---
 
 # qi-layer
@@ -97,17 +97,10 @@ Specific failure modes:
 - Lateral links between `.context/` directories with contracts between them
 - LCA deduplication: if two siblings share context, put it in the parent
 
-## CLAUDE.md Mirrors
+## Harness Instruction Files
 
-Claude harnesses read CLAUDE.md, not CLAUDE.md. Give every CLAUDE.md a
-sibling CLAUDE.md whose first line is `@CLAUDE.md` — normally the whole
-file. After creating or moving CLAUDE.md files, inspect the containing tree: create missing mirrors, leave exact mirrors unchanged, and report divergent files as conflicts.
+Use the instruction filename required by the active harness at each directory. When multiple harness entry points share guidance, each may import one distinct canonical source but must never import itself. After creating or moving instruction files, inspect the containing tree: create missing mirrors, leave exact mirrors unchanged, and report divergent files as conflicts.
 
-Never write shared instructions into CLAUDE.md. Claude-only knowledge is rare; when it exists, put it below the `@CLAUDE.md` import and expect manual mirror verification to keep flagging the file, so the divergence stays visible.
+Keep shared instructions in one canonical source. Put harness-only guidance in the applicable entry point, and treat intentional divergence as a conflict that requires explicit review rather than silently overwriting it.
 
-Loading differs by level. At the root, each harness auto-loads its own
-file every session: Claude reads CLAUDE.md, others read CLAUDE.md. In
-subdirectories, Claude auto-injects CLAUDE.md when it touches files there;
-other agents see nested CLAUDE.md only by reading it on entry. Don't lean
-on Claude's auto-injection: a nested CLAUDE.md carries the local additions
-an agent needs on entry, with everything else inherited from ancestors.
+At every directory, work from the active harness's instruction file and read any applicable local instructions on entry. Do not rely on harness-specific automatic loading when another tool may need the same local guidance.

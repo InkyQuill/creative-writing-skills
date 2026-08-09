@@ -26,6 +26,14 @@ DEFAULT_OUTPUT_ROOT = REPO_ROOT / "plugins" / "creative-writing-skills" / "skill
 _SKILL_NAME_RE = re.compile(r"[a-z][a-z0-9-]*\Z")
 _SLASH_SKILL_RE = re.compile(r"(?<![A-Za-z0-9_.</%-])/([a-z][a-z0-9-]*)(?!(?:[A-Za-z0-9/-]|\.[A-Za-z0-9]))")
 _QI_OWNERSHIP = "`/qi-maintenance` owns when colocated knowledge must move with source changes."
+_QI_DESCRIPTION = (
+    "description: 'Use when writing or maintaining AGENTS.md, .context/CONTEXT.md, "
+    "or CLAUDE.md mirrors: keep intent docs minimal and load-bearing.'"
+)
+_QI_DESCRIPTION_ADAPTATION = (
+    "description: 'Use when writing or maintaining harness instruction files and "
+    ".context/CONTEXT.md: keep intent docs minimal and load-bearing.'"
+)
 _QI_ADAPTATION = (
     "When colocated knowledge changes, keep its AGENTS.md and .context "
     "documentation synchronized with the source in the same change."
@@ -38,14 +46,54 @@ _QI_MIRROR_COMMAND = (
     "rare; when it exists, put it below the `@AGENTS.md` import and expect\n"
     "`claude-md-fix` to keep flagging the file, so the divergence stays visible."
 )
-_QI_MIRROR_ADAPTATION = (
-    "After creating or moving AGENTS.md files, inspect the containing tree: create "
-    "missing mirrors, leave exact mirrors unchanged, and report divergent files as "
-    "conflicts.\n\n"
-    "Never write shared instructions into CLAUDE.md. Claude-only knowledge is rare; "
-    "when it exists, put it below the `@AGENTS.md` import and expect manual mirror "
-    "verification to keep flagging the file, so the divergence stays visible."
+_QI_MIRROR_SECTION = (
+    "## CLAUDE.md Mirrors\n\n"
+    "Claude harnesses read CLAUDE.md, not AGENTS.md. Give every AGENTS.md a\n"
+    "sibling CLAUDE.md whose first line is `@AGENTS.md` — normally the whole\n"
+    f"file. {_QI_MIRROR_COMMAND}\n\n"
+    "Loading differs by level. At the root, each harness auto-loads its own\n"
+    "file every session: Claude reads CLAUDE.md, others read AGENTS.md. In\n"
+    "subdirectories, Claude auto-injects CLAUDE.md when it touches files there;\n"
+    "other agents see nested AGENTS.md only by reading it on entry. Don't lean\n"
+    "on Claude's auto-injection: a nested AGENTS.md carries the local additions\n"
+    "an agent needs on entry, with everything else inherited from ancestors."
 )
+_QI_MIRROR_ADAPTATION = (
+    "## Harness Instruction Files\n\n"
+    "Use the instruction filename required by the active harness at each directory. "
+    "When multiple harness entry points share guidance, each may import one distinct "
+    "canonical source but must never import itself. After creating or moving "
+    "instruction files, inspect the containing tree: create missing mirrors, leave "
+    "exact mirrors unchanged, and report divergent files as conflicts.\n\n"
+    "Keep shared instructions in one canonical source. Put harness-only guidance in "
+    "the applicable entry point, and treat intentional divergence as a conflict that "
+    "requires explicit review rather than silently overwriting it.\n\n"
+    "At every directory, work from the active harness's instruction file and read any "
+    "applicable local instructions on entry. Do not rely on harness-specific automatic "
+    "loading when another tool may need the same local guidance."
+)
+_KNOWLEDGE_BOOTSTRAP_LAYOUT = (
+    "```\n"
+    "kb/\n"
+    "  AGENTS.md          # intent: what belongs here, key rules\n"
+    "  .context/\n"
+    "    CONTEXT.md       # governance depth: writing conventions, structure, validation\n"
+    "  index.md           # catalog of pages with one-line summaries\n"
+    "  vocab.md           # project-wide terminology\n"
+    "```"
+)
+_KNOWLEDGE_BOOTSTRAP_LAYOUT_ADAPTATION = (
+    "```\n"
+    "kb/\n"
+    "  {instruction-file}  # active harness instructions: intent and key rules\n"
+    "  .context/\n"
+    "    CONTEXT.md         # governance depth: writing conventions, structure, validation\n"
+    "  index.md             # catalog of pages with one-line summaries\n"
+    "  vocab.md             # project-wide terminology\n"
+    "```"
+)
+_KNOWLEDGE_BOOTSTRAP_HEADING = "## Starter AGENTS.md"
+_KNOWLEDGE_BOOTSTRAP_HEADING_ADAPTATION = "## Starter instruction file"
 _MERMAID_COMMAND = "Validate with `meridian mermaid check`."
 _MERMAID_ADAPTATION = (
     "Validate with an available Mermaid parser or renderer, and report syntax errors "
@@ -130,12 +178,37 @@ def _adapt_markdown(
 ) -> str:
     is_skill_document = relative_path == Path("SKILL.md")
     if skill_name == "qi-layer" and is_skill_document:
+        if _QI_DESCRIPTION not in text:
+            raise ValueError("qi-layer: expected licensed description was not found")
+        text = text.replace(_QI_DESCRIPTION, _QI_DESCRIPTION_ADAPTATION, 1)
         if _QI_OWNERSHIP not in text:
             raise ValueError("qi-layer: expected licensed ownership sentence was not found")
         text = text.replace(_QI_OWNERSHIP, _QI_ADAPTATION, 1)
-        if _QI_MIRROR_COMMAND not in text:
-            raise ValueError("qi-layer: expected licensed mirror command was not found")
-        text = text.replace(_QI_MIRROR_COMMAND, _QI_MIRROR_ADAPTATION, 1)
+        if _QI_MIRROR_SECTION not in text:
+            raise ValueError("qi-layer: expected licensed mirror section was not found")
+        text = text.replace(_QI_MIRROR_SECTION, _QI_MIRROR_ADAPTATION, 1)
+    if (
+        skill_name == "knowledge-layers"
+        and relative_path == Path("resources/bootstrap.md")
+    ):
+        if _KNOWLEDGE_BOOTSTRAP_LAYOUT not in text:
+            raise ValueError(
+                "knowledge-layers: expected licensed bootstrap layout was not found"
+            )
+        if _KNOWLEDGE_BOOTSTRAP_HEADING not in text:
+            raise ValueError(
+                "knowledge-layers: expected licensed bootstrap heading was not found"
+            )
+        text = text.replace(
+            _KNOWLEDGE_BOOTSTRAP_LAYOUT,
+            _KNOWLEDGE_BOOTSTRAP_LAYOUT_ADAPTATION,
+            1,
+        )
+        text = text.replace(
+            _KNOWLEDGE_BOOTSTRAP_HEADING,
+            _KNOWLEDGE_BOOTSTRAP_HEADING_ADAPTATION,
+            1,
+        )
     if skill_name == "structured-artifact" and relative_path == Path("resources/diagrams.md"):
         if _MERMAID_COMMAND not in text:
             raise ValueError("structured-artifact: expected licensed Mermaid command was not found")

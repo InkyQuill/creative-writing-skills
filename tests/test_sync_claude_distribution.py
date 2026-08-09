@@ -1,5 +1,6 @@
 import io
 import json
+import os
 import shutil
 import tempfile
 import unittest
@@ -7,6 +8,7 @@ from contextlib import redirect_stdout
 from pathlib import Path
 from unittest.mock import patch
 
+from scripts.distribution import split_frontmatter
 from scripts.sync_claude_distribution import (
     UnsupportedTransformError,
     _commit_candidate,
@@ -155,6 +157,10 @@ class ClaudeDistributionRenderTests(unittest.TestCase):
 
             project_setup = (output_root / "skills/project-setup/SKILL.md").read_text()
             qi_layer = (output_root / "skills/qi-layer/SKILL.md").read_text()
+            bootstrap = (
+                output_root
+                / "skills/knowledge-layers/resources/bootstrap.md"
+            ).read_text()
             worker_resource = (
                 output_root
                 / "skills/creative-writing-muse/resources/workers/critic.md"
@@ -162,6 +168,16 @@ class ClaudeDistributionRenderTests(unittest.TestCase):
             self.assertIn("CLAUDE.md", project_setup)
             self.assertNotIn("AGENTS.md", project_setup)
             self.assertNotIn("AGENTS.md", qi_layer)
+            self.assertIn(
+                "instruction filename required by the active harness", qi_layer
+            )
+            self.assertIn("must never import itself", qi_layer)
+            self.assertNotIn("CLAUDE.md, not CLAUDE.md", qi_layer)
+            self.assertNotIn("sibling CLAUDE.md", qi_layer)
+            self.assertNotIn("@CLAUDE.md", qi_layer)
+            self.assertIn("{instruction-file}", bootstrap)
+            self.assertIn("## Starter instruction file", bootstrap)
+            self.assertNotIn("AGENTS.md", bootstrap)
             self.assertIn("/story-review", worker_resource)
             self.assertNotIn("$story-review", worker_resource)
 
@@ -200,11 +216,408 @@ class ClaudeDistributionRenderTests(unittest.TestCase):
             )
             self.assertEqual("Apache-2.0", manifest["license"])
 
+            intent_metadata, _ = split_frontmatter(
+                (output_root / "skills/intent-modeling/SKILL.md").read_text()
+            )
+            qi_metadata, _ = split_frontmatter(qi_layer)
+            muse_skill_metadata, _ = split_frontmatter(
+                (output_root / "skills/creative-writing-muse/SKILL.md").read_text()
+            )
+            self.assertEqual(
+                "Use before acting on human instructions: separate what they said "
+                "from what they meant.",
+                intent_metadata["description"],
+            )
+            self.assertEqual(
+                "Use when writing or maintaining harness instruction files and "
+                ".context/CONTEXT.md: keep intent docs minimal and load-bearing.",
+                qi_metadata["description"],
+            )
+            self.assertEqual(
+                "Use when fiction or story work spans planning, drafting, critique, "
+                "research, continuity, voice, or durable story state, or when the "
+                "author explicitly asks for a muse or broad end-to-end creative-writing "
+                "help.\n",
+                muse_skill_metadata["description"],
+            )
+
 
 class ClaudeDistributionCliTests(unittest.TestCase):
     def _copy_canonical_inputs(self, root: Path) -> None:
         shutil.copytree("plugins", root / "plugins")
         shutil.copytree("config", root / "config")
+
+    def _write_config(self, repo_root: Path, mutate) -> None:
+        path = repo_root / "config/distribution.json"
+        config = json.loads(path.read_text())
+        mutate(config)
+        path.write_text(json.dumps(config) + "\n")
+
+    def test_apply_rejects_noncanonical_claude_config_without_mutation(self):
+        cases = {
+            "absolute root": lambda config, outside: config["claude"].update(
+                {"root": str(outside / "target-cw")}
+            ),
+            "parent-relative root": lambda config, outside: config["claude"].update(
+                {"root": "../outside/target-cw"}
+            ),
+            "absolute marketplace": lambda config, outside: config["claude"].update(
+                {"marketplace": str(outside / "marketplace.json")}
+            ),
+            "extra Claude key": lambda config, outside: config["claude"].update(
+                {"extra": "value"}
+            ),
+            "extra top-level key": lambda config, outside: config.update(
+                {"extra": "value"}
+            ),
+        }
+        for label, mutate in cases.items():
+            with self.subTest(label=label), tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary)
+                repo_root = root / "repo"
+                outside = root / "outside"
+                repo_root.mkdir()
+                outside.mkdir()
+                self._copy_canonical_inputs(repo_root)
+                cw_root = repo_root / "cw"
+                cw_root.mkdir()
+                (cw_root / "sentinel.txt").write_text("original cw\n")
+                target_cw = outside / "target-cw"
+                target_cw.mkdir()
+                (target_cw / "sentinel.txt").write_text("outside cw\n")
+                (outside / "marketplace.json").write_text("outside marketplace\n")
+                self._write_config(
+                    repo_root,
+                    lambda config: mutate(config, outside),
+                )
+
+                status = main(["--apply"], repo_root=repo_root)
+
+                self.assertEqual(1, status)
+                self.assertEqual(
+                    "original cw\n", (cw_root / "sentinel.txt").read_text()
+                )
+                self.assertEqual(
+                    "outside cw\n", (target_cw / "sentinel.txt").read_text()
+                )
+                self.assertEqual(
+                    "outside marketplace\n",
+                    (outside / "marketplace.json").read_text(),
+                )
+
+    def test_apply_rejects_nonpartitioned_skill_inventories_without_mutation(self):
+        cases = {
+            "duplicate authored skill": lambda config: config[
+                "authored_skills"
+            ].append(config["authored_skills"][0]),
+            "overlapping inventories": lambda config: config[
+                "authored_skills"
+            ].append(config["vendored_skills"][0]),
+            "incomplete inventories": lambda config: config[
+                "authored_skills"
+            ].pop(),
+        }
+        for label, mutate in cases.items():
+            with self.subTest(label=label), tempfile.TemporaryDirectory() as temporary:
+                repo_root = Path(temporary)
+                self._copy_canonical_inputs(repo_root)
+                cw_root = repo_root / "cw"
+                cw_root.mkdir()
+                (cw_root / "sentinel.txt").write_text("original cw\n")
+                self._write_config(repo_root, mutate)
+
+                status = main(["--apply"], repo_root=repo_root)
+
+                self.assertEqual(1, status)
+                self.assertEqual(
+                    "original cw\n", (cw_root / "sentinel.txt").read_text()
+                )
+
+    def test_apply_rejects_escaped_worker_registry_without_mutation(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            repo_root = root / "repo"
+            outside = root / "outside"
+            repo_root.mkdir()
+            outside.mkdir()
+            self._copy_canonical_inputs(repo_root)
+            cw_root = repo_root / "cw"
+            cw_root.mkdir()
+            (cw_root / "sentinel.txt").write_text("original cw\n")
+            registry = outside / "registry.json"
+            registry.write_text('{"workers": []}\n')
+            self._write_config(
+                repo_root,
+                lambda config: config.update({"workers": "../../outside/registry.json"}),
+            )
+
+            status = main(["--apply"], repo_root=repo_root)
+
+            self.assertEqual(1, status)
+            self.assertEqual("original cw\n", (cw_root / "sentinel.txt").read_text())
+            self.assertEqual('{"workers": []}\n', registry.read_text())
+
+    def test_apply_rejects_parent_segments_in_control_paths_without_mutation(self):
+        cases = {
+            "worker registry": lambda repo_root: self._write_config(
+                repo_root,
+                lambda config: config.update(
+                    {
+                        "workers": (
+                            "skills/creative-writing-muse/../creative-writing-muse/"
+                            "resources/workers/registry.json"
+                        )
+                    }
+                ),
+            ),
+            "worker prompt": lambda repo_root: (
+                lambda path, value: path.write_text(
+                    json.dumps(
+                        {
+                            **value,
+                            "workers": [
+                                {
+                                    **value["workers"][0],
+                                    "prompt": "../workers/brainstormer.md",
+                                },
+                                *value["workers"][1:],
+                            ],
+                        }
+                    )
+                    + "\n"
+                )
+            )(
+                repo_root
+                / "plugins/creative-writing-skills/skills/creative-writing-muse/"
+                "resources/workers/registry.json",
+                json.loads(
+                    (
+                        repo_root
+                        / "plugins/creative-writing-skills/skills/creative-writing-muse/"
+                        "resources/workers/registry.json"
+                    ).read_text()
+                ),
+            ),
+        }
+        for label, mutate in cases.items():
+            with self.subTest(label=label), tempfile.TemporaryDirectory() as temporary:
+                repo_root = Path(temporary)
+                self._copy_canonical_inputs(repo_root)
+                cw_root = repo_root / "cw"
+                cw_root.mkdir()
+                (cw_root / "sentinel.txt").write_text("original cw\n")
+                mutate(repo_root)
+
+                status = main(["--apply"], repo_root=repo_root)
+
+                self.assertEqual(1, status)
+                self.assertEqual(
+                    "original cw\n", (cw_root / "sentinel.txt").read_text()
+                )
+
+    def test_apply_rejects_symlinked_marketplace_parent_without_mutation(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            repo_root = root / "repo"
+            outside = root / "outside"
+            repo_root.mkdir()
+            outside.mkdir()
+            self._copy_canonical_inputs(repo_root)
+            cw_root = repo_root / "cw"
+            cw_root.mkdir()
+            (cw_root / "sentinel.txt").write_text("original cw\n")
+            outside_marketplace = outside / "marketplace.json"
+            outside_marketplace.write_text("outside marketplace\n")
+            (repo_root / ".claude-plugin").symlink_to(outside, target_is_directory=True)
+
+            status = main(["--apply"], repo_root=repo_root)
+
+            self.assertEqual(1, status)
+            self.assertEqual("original cw\n", (cw_root / "sentinel.txt").read_text())
+            self.assertEqual("outside marketplace\n", outside_marketplace.read_text())
+
+    def test_apply_rejects_canonical_resource_symlinks_without_mutation(self):
+        def markdown_link(repo_root, outside):
+            target = outside / "outside.md"
+            target.write_text("external Markdown\n")
+            link = (
+                repo_root
+                / "plugins/creative-writing-skills/skills/character-sim/"
+                "resources/leak.md"
+            )
+            link.parent.mkdir()
+            link.symlink_to(target)
+
+        def binary_link(repo_root, outside):
+            target = outside / "outside.bin"
+            target.write_bytes(b"external binary\n")
+            link = (
+                repo_root
+                / "plugins/creative-writing-skills/skills/character-sim/"
+                "resources/leak.bin"
+            )
+            link.parent.mkdir()
+            link.symlink_to(target)
+
+        def directory_link(repo_root, outside):
+            target = outside / "external-directory"
+            target.mkdir()
+            (target / "leak.md").write_text("external directory\n")
+            link = (
+                repo_root
+                / "plugins/creative-writing-skills/skills/character-sim/"
+                "resources"
+            )
+            link.symlink_to(target, target_is_directory=True)
+
+        def loop_link(repo_root, outside):
+            skill = (
+                repo_root
+                / "plugins/creative-writing-skills/skills/character-sim"
+            )
+            (skill / "loop").symlink_to(skill, target_is_directory=True)
+
+        for label, mutate in {
+            "Markdown file": markdown_link,
+            "binary file": binary_link,
+            "directory": directory_link,
+            "loop": loop_link,
+        }.items():
+            with self.subTest(label=label), tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary)
+                repo_root = root / "repo"
+                outside = root / "outside"
+                repo_root.mkdir()
+                outside.mkdir()
+                self._copy_canonical_inputs(repo_root)
+                cw_root = repo_root / "cw"
+                cw_root.mkdir()
+                (cw_root / "sentinel.txt").write_text("original cw\n")
+                mutate(repo_root, outside)
+
+                status = main(["--apply"], repo_root=repo_root)
+
+                self.assertEqual(1, status)
+                self.assertEqual(
+                    "original cw\n", (cw_root / "sentinel.txt").read_text()
+                )
+
+    def test_apply_excludes_openai_yaml_symlink_without_following_it(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            repo_root = root / "repo"
+            outside = root / "outside"
+            repo_root.mkdir()
+            outside.mkdir()
+            self._copy_canonical_inputs(repo_root)
+            outside_file = outside / "openai.yaml"
+            outside_file.write_text("external control data\n")
+            agents = (
+                repo_root
+                / "plugins/creative-writing-skills/skills/character-sim/agents"
+            )
+            agents.mkdir()
+            (agents / "openai.yaml").symlink_to(outside_file)
+
+            status = main(["--apply"], repo_root=repo_root)
+
+            self.assertEqual(0, status)
+            self.assertFalse(
+                (repo_root / "cw/skills/character-sim/agents/openai.yaml").exists()
+            )
+            self.assertEqual("external control data\n", outside_file.read_text())
+
+    def test_apply_rejects_special_files_and_directories_used_as_files_before_staging(self):
+        def fifo_resource(repo_root):
+            resource = (
+                repo_root
+                / "plugins/creative-writing-skills/skills/character-sim/"
+                "resources/channel"
+            )
+            resource.parent.mkdir()
+            os.mkfifo(resource)
+
+        def skill_document_directory(repo_root):
+            skill_file = (
+                repo_root
+                / "plugins/creative-writing-skills/skills/character-sim/SKILL.md"
+            )
+            skill_file.unlink()
+            skill_file.mkdir()
+
+        def worker_prompt_directory(repo_root):
+            prompt = (
+                repo_root
+                / "plugins/creative-writing-skills/skills/creative-writing-muse/"
+                "resources/workers/critic.md"
+            )
+            prompt.unlink()
+            prompt.mkdir()
+
+        for label, mutate in {
+            "FIFO resource": fifo_resource,
+            "SKILL.md directory": skill_document_directory,
+            "worker prompt directory": worker_prompt_directory,
+        }.items():
+            with self.subTest(label=label), tempfile.TemporaryDirectory() as temporary:
+                repo_root = Path(temporary)
+                self._copy_canonical_inputs(repo_root)
+                cw_root = repo_root / "cw"
+                cw_root.mkdir()
+                (cw_root / "sentinel.txt").write_text("original cw\n")
+                mutate(repo_root)
+
+                status = main(["--apply"], repo_root=repo_root)
+
+                self.assertEqual(1, status)
+                self.assertEqual(
+                    "original cw\n", (cw_root / "sentinel.txt").read_text()
+                )
+                self.assertFalse(
+                    any(
+                        path.name.startswith(".claude-distribution-")
+                        for path in repo_root.iterdir()
+                    )
+                )
+
+    def test_apply_uses_selected_checkout_skill_registry_in_both_directions(self):
+        cases = {
+            "accept checkout-only skill": ("local-demo", 0),
+            "reject live-only skill": ("zoom-out", 1),
+        }
+        for label, (reference, expected_status) in cases.items():
+            with self.subTest(label=label), tempfile.TemporaryDirectory() as temporary:
+                repo_root = Path(temporary)
+                self._copy_canonical_inputs(repo_root)
+                self._write_config(
+                    repo_root,
+                    lambda config: [
+                        config[key].__setitem__(
+                            config[key].index("zoom-out"), "local-demo"
+                        )
+                        for key in ("canonical_skills", "vendored_skills")
+                    ],
+                )
+                skills_root = repo_root / "plugins/creative-writing-skills/skills"
+                source = skills_root / "zoom-out"
+                replacement = skills_root / "local-demo"
+                source.rename(replacement)
+                skill_file = replacement / "SKILL.md"
+                text = skill_file.read_text().replace(
+                    "name: zoom-out", "name: local-demo", 1
+                )
+                skill_file.write_text(text + f"\nLoad ${reference}.\n")
+
+                status = main(["--apply"], repo_root=repo_root)
+
+                self.assertEqual(expected_status, status)
+                if expected_status == 0:
+                    rendered = (
+                        repo_root / "cw/skills/local-demo/SKILL.md"
+                    ).read_text()
+                    self.assertIn("Load /local-demo.", rendered)
+                else:
+                    self.assertFalse((repo_root / "cw").exists())
 
     def test_apply_generates_marketplace_and_check_reports_precise_drift(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -237,6 +650,61 @@ class ClaudeDistributionCliTests(unittest.TestCase):
             self.assertEqual(
                 "changed generated file: cw/skills/story-memory/SKILL.md\n",
                 check_output.getvalue(),
+            )
+
+    def test_check_reports_typed_inventory_drift_in_path_order(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            repo_root = Path(temporary)
+            self._copy_canonical_inputs(repo_root)
+            self.assertEqual(0, main(["--apply"], repo_root=repo_root))
+            cw_root = repo_root / "cw"
+            (cw_root / "extra-link").symlink_to(repo_root / "outside")
+            mode_changed = cw_root / "skills/character-sim/SKILL.md"
+            mode_changed.chmod(0o755)
+            (cw_root / "skills/obsolete-empty").mkdir()
+            (cw_root / "skills/story-memory/SKILL.md").unlink()
+            wrong_type = cw_root / "skills/zoom-out/SKILL.md"
+            wrong_type.unlink()
+            wrong_type.mkdir()
+
+            output = io.StringIO()
+            with redirect_stdout(output):
+                status = main(["--check"], repo_root=repo_root)
+
+            self.assertEqual(1, status)
+            self.assertEqual(
+                [
+                    "unexpected generated symlink: cw/extra-link",
+                    "changed generated file: cw/skills/character-sim/SKILL.md "
+                    "(mode 0644 != 0755)",
+                    "unexpected generated directory: cw/skills/obsolete-empty",
+                    "missing generated file: cw/skills/story-memory/SKILL.md",
+                    "changed generated path: cw/skills/zoom-out/SKILL.md "
+                    "(expected file, found directory)",
+                ],
+                output.getvalue().splitlines(),
+            )
+
+    def test_check_classifies_marketplace_symlink_as_changed_type(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            repo_root = Path(temporary)
+            self._copy_canonical_inputs(repo_root)
+            self.assertEqual(0, main(["--apply"], repo_root=repo_root))
+            marketplace = repo_root / ".claude-plugin/marketplace.json"
+            marketplace.unlink()
+            outside = repo_root / "outside-marketplace.json"
+            outside.write_text("outside\n")
+            marketplace.symlink_to(outside)
+
+            output = io.StringIO()
+            with redirect_stdout(output):
+                status = main(["--check"], repo_root=repo_root)
+
+            self.assertEqual(1, status)
+            self.assertEqual(
+                "changed generated path: .claude-plugin/marketplace.json "
+                "(expected file, found symlink)\n",
+                output.getvalue(),
             )
 
     def test_apply_leaves_existing_distribution_untouched_when_render_fails(self):
@@ -306,6 +774,291 @@ class ClaudeDistributionCliTests(unittest.TestCase):
 
             self.assertEqual("old cw\n", (cw_root / "value.txt").read_text())
             self.assertEqual("old marketplace\n", marketplace_path.read_text())
+
+    def test_transaction_attempts_both_restores_and_retains_failed_backups(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            cw_root = root / "cw"
+            cw_root.mkdir()
+            (cw_root / "value.txt").write_text("old cw\n")
+            candidate_cw = root / "candidate-cw"
+            candidate_cw.mkdir()
+            (candidate_cw / "value.txt").write_text("new cw\n")
+            marketplace_path = root / "marketplace.json"
+            marketplace_path.write_text("old marketplace\n")
+            candidate_marketplace = root / "candidate-marketplace.json"
+            candidate_marketplace.write_text("new marketplace\n")
+            transaction_root = root / "transaction"
+            transaction_root.mkdir()
+            previous_cw = transaction_root / "previous-cw"
+            previous_marketplace = transaction_root / "previous-marketplace.json"
+            real_replace = os.replace
+
+            def fail_forward_and_restores(source, destination):
+                source = Path(source)
+                destination = Path(destination)
+                if source == candidate_marketplace and destination == marketplace_path:
+                    raise OSError("injected marketplace install failure")
+                if source == previous_marketplace and destination == marketplace_path:
+                    raise OSError("injected marketplace restore failure")
+                if source == previous_cw and destination == cw_root:
+                    raise OSError("injected cw restore failure")
+                return real_replace(source, destination)
+
+            with patch(
+                "scripts.sync_claude_distribution.os.replace",
+                side_effect=fail_forward_and_restores,
+            ):
+                with self.assertRaisesRegex(
+                    ValueError,
+                    "marketplace restore failure.*cw restore failure",
+                ):
+                    _commit_candidate(
+                        candidate_cw,
+                        cw_root,
+                        candidate_marketplace,
+                        marketplace_path,
+                        transaction_root,
+                    )
+
+            self.assertTrue(previous_cw.is_dir())
+            self.assertEqual("old cw\n", (previous_cw / "value.txt").read_text())
+            self.assertTrue(previous_marketplace.is_file())
+            self.assertEqual("old marketplace\n", previous_marketplace.read_text())
+
+    def test_transaction_preserves_interrupt_semantics_when_restore_fails(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            cw_root = root / "cw"
+            cw_root.mkdir()
+            (cw_root / "value.txt").write_text("old cw\n")
+            candidate_cw = root / "candidate-cw"
+            candidate_cw.mkdir()
+            (candidate_cw / "value.txt").write_text("new cw\n")
+            marketplace_path = root / "marketplace.json"
+            marketplace_path.write_text("old marketplace\n")
+            candidate_marketplace = root / "candidate-marketplace.json"
+            candidate_marketplace.write_text("new marketplace\n")
+            transaction_root = root / "transaction"
+            transaction_root.mkdir()
+            previous_cw = transaction_root / "previous-cw"
+            real_replace = os.replace
+
+            def interrupt_and_fail_restore(source, destination):
+                source = Path(source)
+                destination = Path(destination)
+                if source == candidate_marketplace and destination == marketplace_path:
+                    raise KeyboardInterrupt("injected install interrupt")
+                if source == previous_cw and destination == cw_root:
+                    raise OSError("injected cw restore failure")
+                return real_replace(source, destination)
+
+            with patch(
+                "scripts.sync_claude_distribution.os.replace",
+                side_effect=interrupt_and_fail_restore,
+            ):
+                with self.assertRaises(KeyboardInterrupt) as caught:
+                    _commit_candidate(
+                        candidate_cw,
+                        cw_root,
+                        candidate_marketplace,
+                        marketplace_path,
+                        transaction_root,
+                    )
+
+            self.assertIn("cw restore failure", str(caught.exception))
+            self.assertEqual(
+                "old cw\n", (previous_cw / "value.txt").read_text()
+            )
+
+    def test_transaction_keeps_restoring_the_other_member_after_one_restore_fails(self):
+        for failed_restore in ("cw", "marketplace"):
+            with self.subTest(failed_restore=failed_restore), tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary)
+                cw_root = root / "cw"
+                cw_root.mkdir()
+                (cw_root / "value.txt").write_text("old cw\n")
+                candidate_cw = root / "candidate-cw"
+                candidate_cw.mkdir()
+                (candidate_cw / "value.txt").write_text("new cw\n")
+                marketplace_path = root / "marketplace.json"
+                marketplace_path.write_text("old marketplace\n")
+                candidate_marketplace = root / "candidate-marketplace.json"
+                candidate_marketplace.write_text("new marketplace\n")
+                transaction_root = root / "transaction"
+                transaction_root.mkdir()
+                previous_cw = transaction_root / "previous-cw"
+                previous_marketplace = transaction_root / "previous-marketplace.json"
+                real_replace = os.replace
+
+                def fail_install_and_one_restore(source, destination):
+                    source = Path(source)
+                    destination = Path(destination)
+                    if source == candidate_marketplace and destination == marketplace_path:
+                        raise OSError("injected marketplace install failure")
+                    if failed_restore == "cw" and source == previous_cw:
+                        raise OSError("injected cw restore failure")
+                    if failed_restore == "marketplace" and source == previous_marketplace:
+                        raise OSError("injected marketplace restore failure")
+                    return real_replace(source, destination)
+
+                with patch(
+                    "scripts.sync_claude_distribution.os.replace",
+                    side_effect=fail_install_and_one_restore,
+                ):
+                    with self.assertRaisesRegex(
+                        ValueError, f"{failed_restore} restore failure"
+                    ):
+                        _commit_candidate(
+                            candidate_cw,
+                            cw_root,
+                            candidate_marketplace,
+                            marketplace_path,
+                            transaction_root,
+                        )
+
+                if failed_restore == "cw":
+                    self.assertEqual(
+                        "old marketplace\n", marketplace_path.read_text()
+                    )
+                    self.assertEqual(
+                        "old cw\n", (previous_cw / "value.txt").read_text()
+                    )
+                else:
+                    self.assertEqual("old cw\n", (cw_root / "value.txt").read_text())
+                    self.assertEqual(
+                        "old marketplace\n", previous_marketplace.read_text()
+                    )
+
+    def test_apply_retains_recovery_directory_when_a_restore_fails(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            repo_root = Path(temporary)
+            self._copy_canonical_inputs(repo_root)
+            cw_root = repo_root / "cw"
+            cw_root.mkdir()
+            (cw_root / "sentinel.txt").write_text("old cw\n")
+            marketplace_path = repo_root / ".claude-plugin/marketplace.json"
+            marketplace_path.parent.mkdir()
+            marketplace_path.write_text("old marketplace\n")
+            real_replace = os.replace
+
+            def fail_marketplace_install_and_restore(source, destination):
+                source = Path(source)
+                destination = Path(destination)
+                if (
+                    source.name == "candidate-marketplace.json"
+                    and destination == marketplace_path
+                ):
+                    raise OSError("injected marketplace install failure")
+                if (
+                    source.name == "previous-marketplace.json"
+                    and destination == marketplace_path
+                ):
+                    raise OSError("injected marketplace restore failure")
+                return real_replace(source, destination)
+
+            output = io.StringIO()
+            with patch(
+                "scripts.sync_claude_distribution.os.replace",
+                side_effect=fail_marketplace_install_and_restore,
+            ), redirect_stdout(output):
+                status = main(["--apply"], repo_root=repo_root)
+
+            self.assertEqual(1, status)
+            self.assertEqual("old cw\n", (cw_root / "sentinel.txt").read_text())
+            recovery_directories = sorted(
+                path
+                for path in repo_root.iterdir()
+                if path.name.startswith(".claude-distribution-")
+            )
+            self.assertEqual(1, len(recovery_directories))
+            backup = recovery_directories[0] / "previous-marketplace.json"
+            self.assertEqual("old marketplace\n", backup.read_text())
+            self.assertIn(str(recovery_directories[0]), output.getvalue())
+
+    def test_transaction_rolls_back_each_forward_rename_for_absent_and_present_members(self):
+        for cw_present in (False, True):
+            for marketplace_present in (False, True):
+                operations = ["install cw", "install marketplace"]
+                if cw_present:
+                    operations.insert(0, "backup cw")
+                if marketplace_present:
+                    operations.insert(-1, "backup marketplace")
+                for failed_operation in operations:
+                    with (
+                        self.subTest(
+                            cw_present=cw_present,
+                            marketplace_present=marketplace_present,
+                            failed_operation=failed_operation,
+                        ),
+                        tempfile.TemporaryDirectory() as temporary,
+                    ):
+                        root = Path(temporary)
+                        cw_root = root / "cw"
+                        if cw_present:
+                            cw_root.mkdir()
+                            (cw_root / "value.txt").write_text("old cw\n")
+                        candidate_cw = root / "candidate-cw"
+                        candidate_cw.mkdir()
+                        (candidate_cw / "value.txt").write_text("new cw\n")
+                        marketplace_path = root / "marketplace.json"
+                        if marketplace_present:
+                            marketplace_path.write_text("old marketplace\n")
+                        candidate_marketplace = root / "candidate-marketplace.json"
+                        candidate_marketplace.write_text("new marketplace\n")
+                        transaction_root = root / "transaction"
+                        transaction_root.mkdir()
+                        previous_cw = transaction_root / "previous-cw"
+                        previous_marketplace = (
+                            transaction_root / "previous-marketplace.json"
+                        )
+                        real_replace = os.replace
+                        operation_paths = {
+                            "backup cw": (cw_root, previous_cw),
+                            "install cw": (candidate_cw, cw_root),
+                            "backup marketplace": (
+                                marketplace_path,
+                                previous_marketplace,
+                            ),
+                            "install marketplace": (
+                                candidate_marketplace,
+                                marketplace_path,
+                            ),
+                        }
+
+                        def fail_selected(source, destination):
+                            pair = (Path(source), Path(destination))
+                            if pair == operation_paths[failed_operation]:
+                                raise OSError(f"injected {failed_operation} failure")
+                            return real_replace(source, destination)
+
+                        with patch(
+                            "scripts.sync_claude_distribution.os.replace",
+                            side_effect=fail_selected,
+                        ):
+                            with self.assertRaisesRegex(
+                                OSError, f"injected {failed_operation} failure"
+                            ):
+                                _commit_candidate(
+                                    candidate_cw,
+                                    cw_root,
+                                    candidate_marketplace,
+                                    marketplace_path,
+                                    transaction_root,
+                                )
+
+                        self.assertEqual(cw_present, cw_root.exists())
+                        if cw_present:
+                            self.assertEqual(
+                                "old cw\n", (cw_root / "value.txt").read_text()
+                            )
+                        self.assertEqual(
+                            marketplace_present, marketplace_path.exists()
+                        )
+                        if marketplace_present:
+                            self.assertEqual(
+                                "old marketplace\n", marketplace_path.read_text()
+                            )
 
 
 if __name__ == "__main__":

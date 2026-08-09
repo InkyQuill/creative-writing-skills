@@ -1,6 +1,6 @@
 ---
 name: creative-writing-muse
-description: "Use when fiction or story work spans planning, drafting, critique, research,\ncontinuity, voice, or durable story state, or when the author explicitly asks\nfor a muse or broad end-to-end creative-writing help."
+description: "Use when fiction or story work spans planning, drafting, critique, research, continuity, voice, or durable story state, or when the author explicitly asks for a muse or broad end-to-end creative-writing help.\n"
 ---
 
 # Creative Writing Muse

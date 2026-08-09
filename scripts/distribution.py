@@ -73,7 +73,7 @@ def split_frontmatter(text: str) -> tuple[dict[str, object], str]:
                     break
                 block.append(candidate)
                 index += 1
-            metadata[key] = textwrap.dedent("".join(block)).rstrip("\r\n")
+            metadata[key] = _parse_block_scalar(value, textwrap.dedent("".join(block)))
             continue
         if not value:
             raise ValueError(f"Missing frontmatter value: {key}")
@@ -88,9 +88,56 @@ def _parse_scalar(value: str) -> object:
         return True
     if value == "false":
         return False
-    if value.startswith('"') and value.endswith('"'):
-        return json.loads(value)
+    if value.startswith('"'):
+        try:
+            return json.loads(value)
+        except json.JSONDecodeError as error:
+            raise ValueError(f"Invalid double-quoted scalar: {value}") from error
+    if value.startswith("'"):
+        if not value.endswith("'") or len(value) < 2:
+            raise ValueError("Unterminated single-quoted scalar")
+        inner = value[1:-1]
+        decoded: list[str] = []
+        index = 0
+        while index < len(inner):
+            if inner[index] != "'":
+                decoded.append(inner[index])
+                index += 1
+                continue
+            if index + 1 == len(inner) or inner[index + 1] != "'":
+                raise ValueError(
+                    "Single quotes inside a single-quoted scalar must be doubled"
+                )
+            decoded.append("'")
+            index += 2
+        return "".join(decoded)
     return value
+
+
+def _parse_block_scalar(style: str, value: str) -> str:
+    normalized = value.replace("\r\n", "\n").replace("\r", "\n")
+    lines = normalized.splitlines()
+    if not lines:
+        return ""
+    if style == "|":
+        return "\n".join(lines).rstrip("\n") + "\n"
+
+    folded: list[str] = []
+    for index, line in enumerate(lines):
+        folded.append(line)
+        if index == len(lines) - 1:
+            continue
+        following = lines[index + 1]
+        if not line:
+            separator = "\n" if not following else ""
+        elif not following:
+            separator = "\n"
+        elif line[:1].isspace() or following[:1].isspace():
+            separator = "\n"
+        else:
+            separator = " "
+        folded.append(separator)
+    return "".join(folded).rstrip("\n") + "\n"
 
 
 def skill_directories(root: Path) -> dict[str, Path]:

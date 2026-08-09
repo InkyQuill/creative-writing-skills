@@ -1,6 +1,6 @@
 ---
 name: reader-sim
-description: "Read as a specified first-time reader persona and report the felt experience. Use for skill-only workflows when a draft needs persona-bound reader-response signal instead of analytical critique."
+description: "Read as a specified first-time reader persona and report the felt experience. Use for skill-only workflows when a draft needs persona-bound reader-response signal instead of analytical critique.\n"
 ---
 
 # Reader Simulation
