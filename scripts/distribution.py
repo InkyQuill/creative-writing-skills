@@ -19,7 +19,7 @@ _FRONTMATTER_KEYS = {
 _FENCE_RE = re.compile(r"^(?:`{3,}|~{3,})")
 _CODEX_SKILL_RE = re.compile(r"\$([a-z][a-z0-9-]*)")
 _CLAUDE_SKILL_RE = re.compile(
-    r"(?<![A-Za-z0-9_.</%-])/([a-z][a-z0-9-]*)(?![A-Za-z0-9/-])"
+    r"(?<![A-Za-z0-9_.</%-])(?<![>}\]])/([a-z][a-z0-9-]*)(?![A-Za-z0-9/-])"
 )
 
 
