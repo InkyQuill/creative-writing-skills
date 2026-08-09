@@ -180,6 +180,16 @@ class VendorGenericSkillsTests(unittest.TestCase):
 
         self.assertEqual(rendered, source)
 
+    def test_normalizer_reopens_fence_at_surviving_outer_list_level(self):
+        source = (
+            "123. - ```bash\n       Load /qi-maintenance.\n     ````\n"
+            "     Load /qi-maintenance.\n     Load /story-memory.\n     ````\n"
+        )
+
+        rendered = normalize_codex_references(source, {"story-memory"}, "demo")
+
+        self.assertEqual(rendered, source)
+
     def test_replace_preserves_preexisting_backup_collision(self):
         destination = self.root / "demo"
         destination.mkdir()

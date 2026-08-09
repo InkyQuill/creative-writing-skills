@@ -88,8 +88,8 @@ def _advance_column(column: int, character: str) -> int:
     return column + 1
 
 
-def _column_at(line: str, index: int) -> int:
-    column = 0
+def _column_at(line: str, index: int, initial_column: int = 0) -> int:
+    column = initial_column
     for character in line[:index]:
         column = _advance_column(column, character)
     return column
@@ -107,7 +107,7 @@ def _consume_block_quote(line: str, index: int) -> int | None:
     return end
 
 
-def _consume_list_item(line: str, index: int) -> tuple[int, int] | None:
+def _consume_list_item(line: str, index: int, initial_column: int = 0) -> tuple[int, int] | None:
     end = index
     while end < len(line) and end - index < 3 and line[end] == " ":
         end += 1
@@ -119,10 +119,12 @@ def _consume_list_item(line: str, index: int) -> tuple[int, int] | None:
         return None
     while end < len(line) and line[end] in " \t":
         end += 1
-    return end, _column_at(line, end)
+    return end, _column_at(line, end, initial_column)
 
 
-def _opening_fence_line(line: str) -> tuple[str, tuple[tuple[str, int], ...]]:
+def _opening_fence_line(
+    line: str, initial_column: int = 0
+) -> tuple[str, tuple[tuple[str, int], ...]]:
     index = 0
     containers: list[tuple[str, int]] = []
     while True:
@@ -131,7 +133,7 @@ def _opening_fence_line(line: str) -> tuple[str, tuple[tuple[str, int], ...]]:
             containers.append(("block-quote", 0))
             index = block_quote
             continue
-        list_item = _consume_list_item(line, index)
+        list_item = _consume_list_item(line, index, initial_column)
         if list_item is not None:
             index, content_column = list_item
             containers.append(("list-item", content_column))
@@ -139,22 +141,24 @@ def _opening_fence_line(line: str) -> tuple[str, tuple[tuple[str, int], ...]]:
         return line[index:], tuple(containers)
 
 
-def _container_fence_line(line: str, containers: tuple[tuple[str, int], ...]) -> str | None:
+def _container_fence_line(
+    line: str, containers: tuple[tuple[str, int], ...]
+) -> tuple[int, int]:
     index = 0
-    for kind, content_column in containers:
+    for matched, (kind, content_column) in enumerate(containers):
         if kind == "block-quote":
             block_quote = _consume_block_quote(line, index)
             if block_quote is None:
-                return None
+                return index, matched
             index = block_quote
             continue
         while _column_at(line, index) < content_column:
             if index == len(line) or line[index] not in " \t":
-                return None
+                return index, matched
             index += 1
         if _column_at(line, index) != content_column:
-            return None
-    return line[index:]
+            return index, matched
+    return index, len(containers)
 
 
 def normalize_codex_references(text: str, canonical_skills: set[str], skill_name: str) -> str:
@@ -174,11 +178,19 @@ def normalize_codex_references(text: str, canonical_skills: set[str], skill_name
 
     for line in text.splitlines(keepends=True):
         fence_line = line.rstrip("\r\n")
+        opening_containers: tuple[tuple[str, int], ...] | None = None
+        opening_content: str | None = None
         if fence is not None:
             marker, length, containers = fence
-            content = _container_fence_line(fence_line, containers)
-            if content is None:
+            index, matched = _container_fence_line(fence_line, containers)
+            content = fence_line[index:]
+            if matched != len(containers):
                 fence = None
+                surviving = containers[:matched]
+                opening_content, new_containers = _opening_fence_line(
+                    content, _column_at(fence_line, index)
+                )
+                opening_containers = surviving + new_containers
             else:
                 closing = re.fullmatch(r" {0,3}" + re.escape(marker) + rf"{{{length},}}[ \t]*", content)
                 rendered.append(line)
@@ -186,11 +198,12 @@ def normalize_codex_references(text: str, canonical_skills: set[str], skill_name
                     fence = None
                 continue
 
-        content, containers = _opening_fence_line(fence_line)
-        opening = re.match(r" {0,3}(([`~])\2{2,})(.*)", content)
+        if opening_content is None or opening_containers is None:
+            opening_content, opening_containers = _opening_fence_line(fence_line)
+        opening = re.match(r" {0,3}(([`~])\2{2,})(.*)", opening_content)
         if opening is not None and not (opening.group(2) == "`" and "`" in opening.group(3)):
             rendered.append(line)
-            fence = (opening.group(2), len(opening.group(1)), containers)
+            fence = (opening.group(2), len(opening.group(1)), opening_containers)
             continue
         rendered.append(normalize(line))
     return "".join(rendered)
