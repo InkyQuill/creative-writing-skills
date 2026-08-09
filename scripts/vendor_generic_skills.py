@@ -20,8 +20,7 @@ CONFIG_PATH = REPO_ROOT / "config" / "distribution.json"
 DEFAULT_OUTPUT_ROOT = REPO_ROOT / "plugins" / "creative-writing-skills" / "skills"
 _SKILL_NAME_RE = re.compile(r"[a-z][a-z0-9-]*\Z")
 _SLASH_SKILL_RE = re.compile(r"(?<![A-Za-z0-9_.</%-])/([a-z][a-z0-9-]*)(?!(?:[A-Za-z0-9/-]|\.[A-Za-z0-9]))")
-_BLOCK_QUOTE_PREFIX_RE = re.compile(r" {0,3}(?:>[ \t]?)+(.*)")
-_LIST_ITEM_PREFIX_RE = re.compile(r"^( {0,3})([-+*]|\d{1,9}[.)])( +)(.*)")
+_LIST_MARKER_RE = re.compile(r"[-+*]|\d{1,9}[.)]")
 _QI_OWNERSHIP = "`/qi-maintenance` owns when colocated knowledge must move with source changes."
 _QI_ADAPTATION = (
     "When colocated knowledge changes, keep its AGENTS.md and .context "
@@ -83,35 +82,86 @@ def validated_vendored_skills() -> tuple[str, ...]:
     return skills
 
 
-def _opening_fence_line(line: str) -> tuple[str, tuple[str, int] | None]:
-    block_quote = _BLOCK_QUOTE_PREFIX_RE.match(line)
-    if block_quote is not None:
-        return block_quote.group(1), ("block-quote", 0)
-
-    list_item = _LIST_ITEM_PREFIX_RE.match(line)
-    if list_item is not None:
-        indentation = len(list_item.group(1)) + len(list_item.group(2)) + len(list_item.group(3))
-        return list_item.group(4), ("list-item", indentation)
-    return line, None
+def _advance_column(column: int, character: str) -> int:
+    if character == "\t":
+        return column + 4 - (column % 4)
+    return column + 1
 
 
-def _container_fence_line(line: str, container: tuple[str, int] | None) -> str:
-    if container is None:
-        return line
-    kind, indentation = container
-    if kind == "block-quote":
-        block_quote = _BLOCK_QUOTE_PREFIX_RE.match(line)
-        return block_quote.group(1) if block_quote is not None else line
-    if line.startswith(" " * indentation):
-        return line[indentation:]
-    return line
+def _column_at(line: str, index: int) -> int:
+    column = 0
+    for character in line[:index]:
+        column = _advance_column(column, character)
+    return column
+
+
+def _consume_block_quote(line: str, index: int) -> int | None:
+    end = index
+    while end < len(line) and end - index < 3 and line[end] == " ":
+        end += 1
+    if end == len(line) or line[end] != ">":
+        return None
+    end += 1
+    if end < len(line) and line[end] in " \t":
+        end += 1
+    return end
+
+
+def _consume_list_item(line: str, index: int) -> tuple[int, int] | None:
+    end = index
+    while end < len(line) and end - index < 3 and line[end] == " ":
+        end += 1
+    marker = _LIST_MARKER_RE.match(line, end)
+    if marker is None:
+        return None
+    end = marker.end()
+    if end == len(line) or line[end] not in " \t":
+        return None
+    while end < len(line) and line[end] in " \t":
+        end += 1
+    return end, _column_at(line, end)
+
+
+def _opening_fence_line(line: str) -> tuple[str, tuple[tuple[str, int], ...]]:
+    index = 0
+    containers: list[tuple[str, int]] = []
+    while True:
+        block_quote = _consume_block_quote(line, index)
+        if block_quote is not None:
+            containers.append(("block-quote", 0))
+            index = block_quote
+            continue
+        list_item = _consume_list_item(line, index)
+        if list_item is not None:
+            index, content_column = list_item
+            containers.append(("list-item", content_column))
+            continue
+        return line[index:], tuple(containers)
+
+
+def _container_fence_line(line: str, containers: tuple[tuple[str, int], ...]) -> str:
+    index = 0
+    for kind, content_column in containers:
+        if kind == "block-quote":
+            block_quote = _consume_block_quote(line, index)
+            if block_quote is None:
+                return line
+            index = block_quote
+            continue
+        while _column_at(line, index) < content_column:
+            if index == len(line) or line[index] not in " \t":
+                return line
+            index += 1
+        if _column_at(line, index) != content_column:
+            return line
+    return line[index:]
 
 
 def normalize_codex_references(text: str, canonical_skills: set[str], skill_name: str) -> str:
     """Convert Claude slash skill references outside fenced code blocks to Codex syntax."""
 
     rendered: list[str] = []
-    fence: tuple[str, int, tuple[str, int] | None] | None = None
+    fence: tuple[str, int, tuple[tuple[str, int], ...]] | None = None
 
     def normalize(segment_text: str) -> str:
         def replace(match: re.Match[str]) -> str:
@@ -125,19 +175,19 @@ def normalize_codex_references(text: str, canonical_skills: set[str], skill_name
     for line in text.splitlines(keepends=True):
         fence_line = line.rstrip("\r\n")
         if fence is not None:
-            marker, length, container = fence
-            content = _container_fence_line(fence_line, container)
+            marker, length, containers = fence
+            content = _container_fence_line(fence_line, containers)
             closing = re.fullmatch(r" {0,3}" + re.escape(marker) + rf"{{{length},}}[ \t]*", content)
             rendered.append(line)
             if closing is not None:
                 fence = None
             continue
 
-        content, container = _opening_fence_line(fence_line)
+        content, containers = _opening_fence_line(fence_line)
         opening = re.match(r" {0,3}(([`~])\2{2,})(.*)", content)
         if opening is not None and not (opening.group(2) == "`" and "`" in opening.group(3)):
             rendered.append(line)
-            fence = (opening.group(2), len(opening.group(1)), container)
+            fence = (opening.group(2), len(opening.group(1)), containers)
             continue
         rendered.append(normalize(line))
     return "".join(rendered)
