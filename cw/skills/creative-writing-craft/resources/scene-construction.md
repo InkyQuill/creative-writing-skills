@@ -1,9 +1,7 @@
 ---
 name: creative-writing-craft
-type: reference
 description: >
   How to build scenes: entry, dialogue, pacing, transitions. Use when writing or evaluating how scenes work on the page.
-model-invocable: true
 ---
 
 # Scene Construction

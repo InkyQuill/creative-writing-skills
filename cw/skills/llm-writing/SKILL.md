@@ -1,6 +1,6 @@
 ---
 name: llm-writing
-description: Load before writing or revising human-facing text. Choose words deliberately, ground the piece in the reader's context, and remove default LLM phrasing before the final draft.
+description: "Load before writing or revising human-facing text. Choose words deliberately, ground the piece in the reader's context, and remove default LLM phrasing before the final draft."
 ---
 
 # LLM Writing

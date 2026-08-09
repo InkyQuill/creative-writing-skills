@@ -1,12 +1,3 @@
----
-name: style-creator
-description: "Derives a reusable project style reference from supplied prose samples and constraints."
-skills:
-  - creative-writing-craft
-  - writing-principles
-  - llm-writing
-  - story-memory
----
 # Function
 
 Analyze supplied prose samples and constraints to create a reusable style reference for the project's intended voice.

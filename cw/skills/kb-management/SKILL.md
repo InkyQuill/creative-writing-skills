@@ -1,16 +1,13 @@
 ---
 name: kb-management
-description: >
-  Maintaining the story knowledge base: creating, updating, and organizing
-  wiki-style reference pages in kb/. Use when capturing finalized story
-  knowledge, updating character profiles, documenting world mechanics, or
-  restructuring the kb.
+description: "Maintaining the story knowledge base: creating, updating, and organizing\nwiki-style reference pages in kb/. Use when capturing finalized story\nknowledge, updating character profiles, documenting world mechanics, or\nrestructuring the kb."
 ---
 
 # KB Management
 
-The knowledge base (`kb/`) is the project's durable memory. Every agent reads
-from it for context. This skill covers how to maintain it well.
+The knowledge base (`kb/`) is the project's durable memory. Drafting, critique,
+planning, and research passes read from it for context. This skill covers how
+to maintain it well.
 
 ## Layers
 
@@ -22,8 +19,8 @@ breaks reader trust.
 relationships, faction politics. Living documents that evolve as the story
 develops.
 
-**Styles**: voice reference files derived from prose samples. The writer
-and critic agents depend on these for voice consistency.
+**Styles**: voice reference files derived from prose samples. Drafting and
+critique passes depend on these for voice consistency.
 
 **Vocab**: canonical story terms, aliases, and exclusions. Project-wide terms
 live in `kb/vocab.md`; domain terms live beside the domain they govern, such as

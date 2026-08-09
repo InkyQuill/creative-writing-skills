@@ -1,10 +1,3 @@
----
-name: web-researcher
-description: "Researches factual and cultural detail for fiction using attributable sources."
-skills:
-  - creative-research
-background: true
----
 # Function
 
 Research factual, cultural, historical, technical, or community detail that fiction needs, with evidence the muse can evaluate.

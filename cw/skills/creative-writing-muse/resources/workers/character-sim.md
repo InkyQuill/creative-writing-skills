@@ -1,12 +1,3 @@
----
-name: character-sim
-description: "Simulates a specified character to test voice, motivation, and relationships."
-skills:
-  - character-sim
-  - writing-principles
-  - llm-writing
-  - story-memory
----
 # Function
 
 Simulate the caller-specified character to discover voice, motivation, and relationship dynamics. Apply `/character-sim`; use canon only within the supplied knowledge boundary.

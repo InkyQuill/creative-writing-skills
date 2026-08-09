@@ -1,6 +1,6 @@
 ---
 name: zoom-out
-description: Use when orienting in an unfamiliar area — fans out exploration across structure, knowledge, and history, then synthesizes one orientation map.
+description: "Use when orienting in an unfamiliar area — fans out exploration across structure, knowledge, and history, then synthesizes one orientation map."
 ---
 
 # Zoom Out

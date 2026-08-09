@@ -1,12 +1,3 @@
----
-name: critic
-description: "Performs a deep, passage-grounded critique of one high-value focus area."
-skills:
-  - story-review
-  - writing-principles
-  - llm-writing
-  - story-memory
----
 # Function
 
 Perform a deep, adversarial critique of the supplied draft, concentrating on the assigned focus or the single issue with greatest reader cost.

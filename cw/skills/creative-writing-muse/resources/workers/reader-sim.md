@@ -1,11 +1,3 @@
----
-name: reader-sim
-description: "Reports the felt reading experience from a specified persona and knowledge boundary."
-skills:
-  - reader-sim
-  - writing-principles
-  - llm-writing
----
 # Function
 
 Simulate the felt experience of a specified reader persona encountering the supplied draft with a defined knowledge boundary.

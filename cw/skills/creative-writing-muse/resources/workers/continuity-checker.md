@@ -1,12 +1,3 @@
----
-name: continuity-checker
-description: "Cross-references a draft against supplied canon, timeline, state, and vocabulary."
-skills:
-  - story-review
-  - md-validation
-  - shared-dao
-  - story-memory
----
 # Function
 
 Cross-reference the supplied content against established canon for factual contradictions, timeline errors, character-state errors, geographic impossibilities, and vocabulary drift.

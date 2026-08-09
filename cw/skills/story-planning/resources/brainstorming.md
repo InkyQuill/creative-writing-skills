@@ -1,9 +1,7 @@
 ---
 name: story-planning
-type: reference
 description: >
   Story story-planning capture: minimal notes that preserve creative freedom. Use when exploring narrative ideas, discussing characters, planning chapters, or thinking through story possibilities.
-model-invocable: true
 ---
 
 # Brainstorming Capture

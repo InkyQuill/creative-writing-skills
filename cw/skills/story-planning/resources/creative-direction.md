@@ -1,9 +1,7 @@
 ---
 name: story-planning
-type: mode-shift
 description: >
   Shape what the story wants to be before producing pages. Use when brainstorming with the author, synthesizing options, or deciding how much ceremony a piece of story work needs.
-model-invocable: true
 ---
 
 # Creative Direction

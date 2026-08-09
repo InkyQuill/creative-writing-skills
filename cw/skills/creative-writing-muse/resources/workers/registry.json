@@ -1,0 +1,84 @@
+{
+  "workers": [
+    {
+      "name": "brainstormer",
+      "description": "Generates distinct creative options for a scoped story question without forcing convergence.",
+      "prompt": "brainstormer.md",
+      "skills": ["story-planning", "story-memory", "intent-modeling", "llm-writing"],
+      "access": "workspace-write",
+      "claude": {"model": "inherit", "background": false}
+    },
+    {
+      "name": "character-sim",
+      "description": "Simulates a specified character to test voice, motivation, and relationships.",
+      "prompt": "character-sim.md",
+      "skills": ["character-sim", "writing-principles", "llm-writing", "story-memory"],
+      "access": "read-only",
+      "claude": {"model": "inherit", "background": false}
+    },
+    {
+      "name": "continuity-checker",
+      "description": "Cross-references a draft against supplied canon, timeline, state, and vocabulary.",
+      "prompt": "continuity-checker.md",
+      "skills": ["story-review", "md-validation", "shared-dao", "story-memory"],
+      "access": "read-only",
+      "claude": {"model": "inherit", "background": false}
+    },
+    {
+      "name": "critic",
+      "description": "Performs a deep, passage-grounded critique of one high-value focus area.",
+      "prompt": "critic.md",
+      "skills": ["story-review", "writing-principles", "llm-writing", "story-memory"],
+      "access": "read-only",
+      "claude": {"model": "inherit", "background": false}
+    },
+    {
+      "name": "editor",
+      "description": "Provides an independent editorial diagnosis at the requested edit level.",
+      "prompt": "editor.md",
+      "skills": ["story-review", "writing-principles", "creative-writing-craft", "llm-writing", "story-memory"],
+      "access": "read-only",
+      "claude": {"model": "inherit", "background": false}
+    },
+    {
+      "name": "outliner",
+      "description": "Turns a confirmed direction into an arc, chapter, scene, or beat blueprint.",
+      "prompt": "outliner.md",
+      "skills": ["story-planning", "story-memory", "md-validation"],
+      "access": "workspace-write",
+      "claude": {"model": "inherit", "background": false}
+    },
+    {
+      "name": "reader-sim",
+      "description": "Reports the felt reading experience from a specified persona and knowledge boundary.",
+      "prompt": "reader-sim.md",
+      "skills": ["reader-sim", "writing-principles", "llm-writing"],
+      "access": "read-only",
+      "claude": {"model": "inherit", "background": false}
+    },
+    {
+      "name": "style-creator",
+      "description": "Derives a reusable project style reference from supplied prose samples and constraints.",
+      "prompt": "style-creator.md",
+      "skills": ["creative-writing-craft", "writing-principles", "llm-writing", "story-memory"],
+      "access": "workspace-write",
+      "claude": {"model": "inherit", "background": false}
+    },
+    {
+      "name": "web-researcher",
+      "description": "Researches factual and cultural detail for fiction using attributable sources.",
+      "prompt": "web-researcher.md",
+      "skills": ["creative-research"],
+      "access": "workspace-write",
+      "claude": {"model": "inherit", "background": true}
+    },
+    {
+      "name": "writer",
+      "description": "Produces or revises fiction from an approved brief, context, and style references.",
+      "prompt": "writer.md",
+      "skills": ["creative-writing-modes", "creative-writing-craft", "writing-principles", "story-memory", "llm-writing"],
+      "access": "workspace-write",
+      "claude": {"model": "inherit", "background": false}
+    }
+  ]
+}

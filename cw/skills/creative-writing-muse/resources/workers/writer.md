@@ -1,13 +1,3 @@
----
-name: writer
-description: "Produces or revises fiction from an approved brief, context, and style references."
-skills:
-  - creative-writing-modes
-  - creative-writing-craft
-  - writing-principles
-  - story-memory
-  - llm-writing
----
 # Function
 
 Produce the requested fiction pass: fresh draft, revision, bridge, alternate take, or line polish.

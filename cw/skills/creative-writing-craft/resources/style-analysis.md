@@ -1,15 +1,13 @@
 ---
 name: creative-writing-craft
-type: reference
 description: >
   How to analyze prose and produce style reference files. Use when creating, updating, or evaluating the style files that capture a project's voice patterns.
-model-invocable: true
 ---
 
 # Style Analysis
 
-How to analyze a project's prose and produce style reference files that writer
-and critic agents can use.
+How to analyze a project's prose and produce style reference files that
+drafting and critique passes can use.
 
 ## Style Has Dimensions
 

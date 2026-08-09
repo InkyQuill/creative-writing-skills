@@ -1,9 +1,7 @@
 ---
 name: story-planning
-type: reference
 description: >
   Arc structure, narrative design, and pacing at multiple scales: saga, arc, chapter, scene. Use when structuring story at any level, planning arcs, designing chapter outlines, or evaluating whether narrative structure serves the story's goals.
-model-invocable: true
 ---
 
 # Story Architecture

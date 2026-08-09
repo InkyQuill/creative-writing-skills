@@ -1,7 +1,7 @@
 # KB Bootstrap
 
 Starter layout for a new project KB. The KB tree follows `/qi-layer`:
-intent in `AGENTS.md`, governance depth in `.context/`.
+intent in `CLAUDE.md`, governance depth in `.context/`.
 
 ## Directory Layout
 
@@ -34,7 +34,7 @@ the old decision record still explains why it was built that way.
 **Sources**: raw material: articles, research, transcripts, data. Immutable.
 Agents read from sources but never modify them.
 
-## Starter AGENTS.md
+## Starter CLAUDE.md
 
 ```markdown
 # KB Guide

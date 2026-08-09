@@ -1,9 +1,7 @@
 ---
 name: story-review
-type: reference
 description: >
   Adversarial reading methodology for narrative fiction: find what doesn't work, not confirm what does. Focus-area driven with dedicated resources per area. Use when reviewing drafts, evaluating prose quality, or assessing changes at any stage.
-model-invocable: true
 ---
 
 # Prose Critique

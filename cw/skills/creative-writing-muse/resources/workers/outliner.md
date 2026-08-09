@@ -1,11 +1,3 @@
----
-name: outliner
-description: "Turns a confirmed direction into an arc, chapter, scene, or beat blueprint."
-skills:
-  - story-planning
-  - story-memory
-  - md-validation
----
 # Function
 
 Turn a confirmed story direction into a structural blueprint at the requested saga, arc, chapter, scene, or beat level.

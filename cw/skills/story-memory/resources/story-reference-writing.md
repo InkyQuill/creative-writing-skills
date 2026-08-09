@@ -1,9 +1,7 @@
 ---
 name: story-memory
-type: mode-shift
 description: >
   Information-first writing for story knowledge: wiki pages, vocab, decisions, canon summaries, and issue logs.
-model-invocable: true
 ---
 
 # Story Reference Writing
@@ -20,5 +18,5 @@ Pick the mode that matches the artifact:
 - **Decision capture** — record a settled creative choice and why it matters.
 - **Issue logging** — preserve unresolved writing problems for future passes.
 
-Use `/story-memory` for where files live, `/story-memory` for extracting
+Use `/story-memory` for where files live and for extracting
 facts from manuscript pages, and `/shared-dao` for vocabulary discipline.

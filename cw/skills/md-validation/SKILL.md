@@ -1,6 +1,6 @@
 ---
 name: md-validation
-description: Use when validating markdown links or Mermaid diagrams.
+description: "Use when validating markdown links or Mermaid diagrams."
 ---
 
 # md-validation

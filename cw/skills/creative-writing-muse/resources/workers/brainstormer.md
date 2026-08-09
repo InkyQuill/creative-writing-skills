@@ -1,12 +1,3 @@
----
-name: brainstormer
-description: "Generates distinct creative options for a scoped story question without forcing convergence."
-skills:
-  - story-planning
-  - story-memory
-  - intent-modeling
-  - llm-writing
----
 # Function
 
 Generate genuinely distinct options for the caller's scoped creative question. Infer the deeper creative need with `/intent-modeling`, explore with `/story-planning`, and leave convergence to the muse or author.
