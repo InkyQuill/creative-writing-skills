@@ -150,6 +150,36 @@ class VendorGenericSkillsTests(unittest.TestCase):
 
         self.assertEqual(rendered, source)
 
+    def test_normalizer_reopens_root_fence_after_list_fence_ends(self):
+        source = (
+            "- ```bash\n  Load /qi-maintenance.\n````\n"
+            "Load /qi-maintenance.\nLoad /story-memory.\n````\n"
+        )
+
+        rendered = normalize_codex_references(source, {"story-memory"}, "demo")
+
+        self.assertEqual(rendered, source)
+
+    def test_normalizer_reopens_root_fence_after_quote_fence_ends(self):
+        source = (
+            "> ```bash\n> Load /qi-maintenance.\n````\n"
+            "Load /qi-maintenance.\nLoad /story-memory.\n````\n"
+        )
+
+        rendered = normalize_codex_references(source, {"story-memory"}, "demo")
+
+        self.assertEqual(rendered, source)
+
+    def test_normalizer_reopens_root_fence_after_composed_container_ends(self):
+        source = (
+            "> - ```bash\n>   Load /qi-maintenance.\n````\n"
+            "Load /qi-maintenance.\nLoad /story-memory.\n````\n"
+        )
+
+        rendered = normalize_codex_references(source, {"story-memory"}, "demo")
+
+        self.assertEqual(rendered, source)
+
     def test_replace_preserves_preexisting_backup_collision(self):
         destination = self.root / "demo"
         destination.mkdir()

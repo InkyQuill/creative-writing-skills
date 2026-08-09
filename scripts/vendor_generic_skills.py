@@ -139,21 +139,21 @@ def _opening_fence_line(line: str) -> tuple[str, tuple[tuple[str, int], ...]]:
         return line[index:], tuple(containers)
 
 
-def _container_fence_line(line: str, containers: tuple[tuple[str, int], ...]) -> str:
+def _container_fence_line(line: str, containers: tuple[tuple[str, int], ...]) -> str | None:
     index = 0
     for kind, content_column in containers:
         if kind == "block-quote":
             block_quote = _consume_block_quote(line, index)
             if block_quote is None:
-                return line
+                return None
             index = block_quote
             continue
         while _column_at(line, index) < content_column:
             if index == len(line) or line[index] not in " \t":
-                return line
+                return None
             index += 1
         if _column_at(line, index) != content_column:
-            return line
+            return None
     return line[index:]
 
 
@@ -177,11 +177,14 @@ def normalize_codex_references(text: str, canonical_skills: set[str], skill_name
         if fence is not None:
             marker, length, containers = fence
             content = _container_fence_line(fence_line, containers)
-            closing = re.fullmatch(r" {0,3}" + re.escape(marker) + rf"{{{length},}}[ \t]*", content)
-            rendered.append(line)
-            if closing is not None:
+            if content is None:
                 fence = None
-            continue
+            else:
+                closing = re.fullmatch(r" {0,3}" + re.escape(marker) + rf"{{{length},}}[ \t]*", content)
+                rendered.append(line)
+                if closing is not None:
+                    fence = None
+                continue
 
         content, containers = _opening_fence_line(fence_line)
         opening = re.match(r" {0,3}(([`~])\2{2,})(.*)", content)
