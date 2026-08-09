@@ -1,11 +1,13 @@
 import tempfile
 import unittest
+import os
 from pathlib import Path
 from unittest.mock import patch
 
 from scripts.vendor_generic_skills import (
     SOURCE,
     VendorDriftError,
+    _replace_directory,
     check_checkout,
     normalize_codex_references,
     render_from_checkout,
@@ -29,6 +31,12 @@ class VendorGenericSkillsTests(unittest.TestCase):
         )
         self.vendored_skills.start()
         self.addCleanup(self.vendored_skills.stop)
+        self.canonical_skills = patch(
+            "scripts.vendor_generic_skills.canonical_skills",
+            return_value={"demo"},
+        )
+        self.canonical_skills.start()
+        self.addCleanup(self.canonical_skills.stop)
 
     def test_render_copies_complete_skill_directory(self):
         render_from_checkout(self.checkout, self.output)
@@ -59,3 +67,80 @@ class VendorGenericSkillsTests(unittest.TestCase):
     def test_normalizer_rejects_unbundled_skill_reference(self):
         with self.assertRaisesRegex(ValueError, "qi-layer: unbundled skill reference /qi-maintenance"):
             normalize_codex_references("Load /qi-maintenance.\n", {"qi-layer"}, "qi-layer")
+
+    def test_invalid_vendored_names_do_not_mutate_output_or_escape_it(self):
+        outside = self.root / "escape"
+        outside.mkdir()
+        (outside / "keep.txt").write_text("keep\n")
+        invalid_configurations = (
+            ("../escape",),
+            (str(outside),),
+            ("demo/demo",),
+            (".",),
+            ("demo", "demo"),
+            ("not-canonical",),
+        )
+
+        for index, names in enumerate(invalid_configurations):
+            output = self.root / f"output-{index}"
+            with self.subTest(names=names), patch(
+                "scripts.vendor_generic_skills.vendored_skills", return_value=names
+            ), patch(
+                "scripts.vendor_generic_skills.canonical_skills", return_value=set(names) - {"not-canonical"}
+            ):
+                with self.assertRaises(ValueError):
+                    render_from_checkout(self.checkout, output)
+            self.assertFalse(output.exists())
+            self.assertEqual((outside / "keep.txt").read_text(), "keep\n")
+
+    def test_normalizer_preserves_commonmark_fenced_blocks(self):
+        source = (
+            "Use /story-memory.\n"
+            "   ```bash\nLoad /qi-maintenance.\n   ```\n"
+            "~~~text\nLoad /qi-maintenance.\n~~~\n"
+            "```\n~~~\nLoad /qi-maintenance.\n```\n"
+            "````\n```\nLoad /qi-maintenance.\n````\n"
+            "```\n```not-a-close /qi-maintenance\n```\n"
+            "```\nLoad /qi-maintenance.\n"
+        )
+
+        rendered = normalize_codex_references(source, {"story-memory"}, "demo")
+
+        self.assertEqual(rendered, source.replace("Use /story-memory.", "Use $story-memory."))
+
+    def test_replace_preserves_preexisting_backup_collision(self):
+        destination = self.root / "demo"
+        destination.mkdir()
+        (destination / "value.txt").write_text("old\n")
+        staged = self.root / "staged"
+        staged.mkdir()
+        (staged / "value.txt").write_text("new\n")
+        collision = self.root / ".demo.vendor-backup"
+        collision.mkdir()
+        (collision / "keep.txt").write_text("keep\n")
+
+        _replace_directory(staged, destination)
+
+        self.assertEqual((destination / "value.txt").read_text(), "new\n")
+        self.assertEqual((collision / "keep.txt").read_text(), "keep\n")
+
+    def test_replace_rolls_back_when_install_rename_fails(self):
+        destination = self.root / "demo"
+        destination.mkdir()
+        (destination / "value.txt").write_text("old\n")
+        staged = self.root / "staged"
+        staged.mkdir()
+        (staged / "value.txt").write_text("new\n")
+        real_replace = os.replace
+
+        def fail_install(source, target):
+            if Path(source) == staged and Path(target) == destination:
+                raise OSError("injected install failure")
+            return real_replace(source, target)
+
+        with patch("scripts.vendor_generic_skills.os.replace", side_effect=fail_install):
+            with self.assertRaisesRegex(OSError, "injected install failure"):
+                _replace_directory(staged, destination)
+
+        self.assertEqual((destination / "value.txt").read_text(), "old\n")
+        self.assertTrue(staged.is_dir())

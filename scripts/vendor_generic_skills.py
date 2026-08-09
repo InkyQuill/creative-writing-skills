@@ -18,7 +18,7 @@ from typing import Iterator
 REPO_ROOT = Path(__file__).resolve().parent.parent
 CONFIG_PATH = REPO_ROOT / "config" / "distribution.json"
 DEFAULT_OUTPUT_ROOT = REPO_ROOT / "plugins" / "creative-writing-skills" / "skills"
-_FENCE_RE = re.compile(r"^(?:`{3,}|~{3,})")
+_SKILL_NAME_RE = re.compile(r"[a-z][a-z0-9-]*\Z")
 _SLASH_SKILL_RE = re.compile(r"(?<![A-Za-z0-9_.</%-])/([a-z][a-z0-9-]*)(?!(?:[A-Za-z0-9/-]|\.[A-Za-z0-9]))")
 _QI_OWNERSHIP = "`/qi-maintenance` owns when colocated knowledge must move with source changes."
 _QI_ADAPTATION = (
@@ -68,12 +68,24 @@ def canonical_skills() -> set[str]:
     return set(skills)
 
 
+def validated_vendored_skills() -> tuple[str, ...]:
+    skills = vendored_skills()
+    canonical = canonical_skills()
+    if len(set(skills)) != len(skills):
+        raise ValueError("config/distribution.json vendored_skills must not contain duplicates")
+    for skill in skills:
+        if _SKILL_NAME_RE.fullmatch(skill) is None:
+            raise ValueError(f"config/distribution.json has invalid vendored skill name: {skill!r}")
+        if skill not in canonical:
+            raise ValueError(f"config/distribution.json vendored skill is not canonical: {skill}")
+    return skills
+
+
 def normalize_codex_references(text: str, canonical_skills: set[str], skill_name: str) -> str:
     """Convert Claude slash skill references outside fenced code blocks to Codex syntax."""
 
     rendered: list[str] = []
-    segment: list[str] = []
-    fenced = False
+    fence: tuple[str, int] | None = None
 
     def normalize(segment_text: str) -> str:
         def replace(match: re.Match[str]) -> str:
@@ -85,21 +97,21 @@ def normalize_codex_references(text: str, canonical_skills: set[str], skill_name
         return _SLASH_SKILL_RE.sub(replace, segment_text)
 
     for line in text.splitlines(keepends=True):
-        if _FENCE_RE.match(line):
-            if not fenced:
-                rendered.append(normalize("".join(segment)))
-                segment = []
-            else:
-                rendered.extend(segment)
-                segment = []
+        fence_line = line.rstrip("\r\n")
+        if fence is not None:
+            marker, length = fence
+            closing = re.fullmatch(r" {0,3}" + re.escape(marker) + rf"{{{length},}}[ \t]*", fence_line)
             rendered.append(line)
-            fenced = not fenced
-        else:
-            segment.append(line)
-    if fenced:
-        rendered.extend(segment)
-    else:
-        rendered.append(normalize("".join(segment)))
+            if closing is not None:
+                fence = None
+            continue
+
+        opening = re.match(r" {0,3}(([`~])\2{2,})(.*)", fence_line)
+        if opening is not None and not (opening.group(2) == "`" and "`" in opening.group(3)):
+            rendered.append(line)
+            fence = (opening.group(2), len(opening.group(1)))
+            continue
+        rendered.append(normalize(line))
     return "".join(rendered)
 
 
@@ -127,28 +139,36 @@ def _copy_skill(source: Path, destination: Path, skill_name: str, known_skills: 
 
 
 def _replace_directory(staged: Path, destination: Path) -> None:
-    backup = destination.with_name(f".{destination.name}.vendor-backup")
-    if backup.exists():
-        shutil.rmtree(backup)
-    if destination.exists():
-        os.replace(destination, backup)
+    backup_root: Path | None = None
+    backup: Path | None = None
+    keep_backup = False
     try:
+        if destination.exists():
+            backup_root = Path(tempfile.mkdtemp(prefix=f".{destination.name}.vendor-backup-", dir=destination.parent))
+            backup = backup_root / "previous"
+            os.replace(destination, backup)
         os.replace(staged, destination)
     except BaseException:
-        if backup.exists():
-            os.replace(backup, destination)
+        if backup is not None and backup.exists():
+            try:
+                os.replace(backup, destination)
+            except BaseException:
+                keep_backup = True
+                raise
         raise
-    if backup.exists():
-        shutil.rmtree(backup)
+    finally:
+        if backup_root is not None and not keep_backup:
+            shutil.rmtree(backup_root)
 
 
 def render_from_checkout(checkout: Path, output_root: Path) -> None:
     """Render configured skill snapshots from a licensed source checkout."""
 
     source_root = checkout / SOURCE.skills_path
+    configured_skills = validated_vendored_skills()
     known_skills = canonical_skills()
     output_root.mkdir(parents=True, exist_ok=True)
-    for skill_name in vendored_skills():
+    for skill_name in configured_skills:
         source = source_root / skill_name
         with tempfile.TemporaryDirectory(prefix=f".{skill_name}.vendor-", dir=output_root) as temporary:
             staged = Path(temporary) / skill_name
@@ -164,7 +184,7 @@ def _relative_files(root: Path) -> set[Path]:
 
 def _drifted_files(expected_root: Path, output_root: Path) -> list[str]:
     changed: list[str] = []
-    for skill_name in vendored_skills():
+    for skill_name in validated_vendored_skills():
         expected = expected_root / skill_name
         actual = output_root / skill_name
         expected_files = _relative_files(expected)
