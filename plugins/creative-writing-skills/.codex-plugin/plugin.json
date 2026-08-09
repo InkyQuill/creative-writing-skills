@@ -1,0 +1,29 @@
+{
+  "name": "creative-writing-skills",
+  "version": "0.5.9",
+  "description": "Composable skills for planning, drafting, and revising creative writing.",
+  "author": {
+    "name": "InkyQuill"
+  },
+  "homepage": "https://github.com/InkyQuill/creative-writing-skills",
+  "repository": "https://github.com/InkyQuill/creative-writing-skills",
+  "license": "Apache-2.0",
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Creative Writing Skills",
+    "shortDescription": "Plan, draft, and improve fiction.",
+    "longDescription": "Creative-writing workflows for research, planning, drafting, revision, continuity, and story knowledge management.",
+    "developerName": "InkyQuill",
+    "category": "Productivity",
+    "capabilities": [
+      "Interactive",
+      "Write"
+    ],
+    "websiteURL": "https://github.com/InkyQuill/creative-writing-skills",
+    "defaultPrompt": [
+      "Use $creative-writing-muse to help me plan a scene.",
+      "Use $world-creation to reconcile this setting idea with my story files.",
+      "Use $story-review to critique this chapter."
+    ]
+  }
+}
