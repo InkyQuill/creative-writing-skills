@@ -184,6 +184,13 @@ class DistributionScaffoldTests(unittest.TestCase):
             if path.is_file() and path.suffix in {".md", ".json", ".yaml"}:
                 self.assertIsNone(forbidden.search(path.read_text()), str(path))
 
+    def test_removed_package_scaffolding_is_absent(self):
+        for relative in (
+            "mars.toml", "meridian.toml", "agents", "skills", "bootstrap",
+            ".codex/hooks.json", ".codex/hooks/deny-interactive-prompts",
+        ):
+            self.assertFalse((REPO_ROOT / relative).exists(), relative)
+
     def test_canonical_skill_references_use_dollar_and_resolve(self):
         canonical = set(load_json(REPO_ROOT / "config" / "distribution.json")["canonical_skills"])
         for path in (PLUGIN_ROOT / "skills").rglob("*.md"):

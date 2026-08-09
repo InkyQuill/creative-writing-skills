@@ -6,52 +6,49 @@ on:
   pull_request:
     branches: [main]
 
+env:
+  PYTHONDONTWRITEBYTECODE: "1"
+
 jobs:
   validate:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install uv
-        uses: astral-sh/setup-uv@v7
-
-      - name: Install meridian
+      - name: Check out licensed vendor source
+        env:
+          SOURCE_COMMIT: fd7a3ad9cd7697a0645ff6ff4bd5e809cf7673a3
         run: |
-          uv tool install meridian-cli
-          echo "$HOME/.local/bin" >> $GITHUB_PATH
+          git init "${RUNNER_TEMP}/licensed-source"
+          git -C "${RUNNER_TEMP}/licensed-source" remote add origin https://github.com/haowjy/creative-writing-skills.git
+          git -C "${RUNNER_TEMP}/licensed-source" fetch --depth 1 origin "${SOURCE_COMMIT}"
+          git -C "${RUNNER_TEMP}/licensed-source" checkout --detach "${SOURCE_COMMIT}"
 
-      - name: Setup Node.js
+      - name: Run unit tests
+        run: python3 -m unittest discover -s tests -v
+
+      - name: Validate distribution
+        run: python3 scripts/validate_distribution.py
+
+      - name: Check vendored generic skill drift
+        run: python3 scripts/vendor_generic_skills.py --check --source-checkout "${RUNNER_TEMP}/licensed-source"
+
+      - name: Check Claude distribution drift
+        run: python3 scripts/sync_claude_distribution.py --check
+
+      - name: Setup Node.js for Claude validation
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: "20"
 
       - name: Install Claude Code CLI
         run: npm install -g @anthropic-ai/claude-code
 
-      - name: Validate package structure
-        run: meridian mars check
-
-      - name: Validate Claude plugin manifest
+      - name: Validate Claude marketplace
         run: claude plugins validate .claude-plugin/marketplace.json
 
-      - name: Validate cw plugin (manifest + components)
+      - name: Validate Claude plugin
         run: claude plugins validate cw
-
-      - name: Validate YAML frontmatter
-        run: |
-          error=0
-          for f in agents/*.md skills/*/SKILL.md cw/skills/*/SKILL.md; do
-            if [ -f "$f" ]; then
-              if ! head -1 "$f" | grep -q '^---'; then
-                echo "::error file=$f::Missing YAML frontmatter"
-                error=1
-              fi
-            fi
-          done
-          exit $error
-
-      - name: Lint cw distribution (leaks, refs, frontmatter, version)
-        run: python3 scripts/sync_cw_skills.py --lint
 
       - name: Build Claude.ai skill packages
         run: python3 scripts/create_skill_zips.py
