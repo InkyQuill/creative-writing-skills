@@ -16,16 +16,17 @@ _FRONTMATTER_KEYS = {
     "disable-model-invocation",
     "argument-hint",
 }
-_FENCE_RE = re.compile(r"^(?:`{3,}|~{3,})")
+_FENCE_RE = re.compile(r"^ {0,3}(?:`{3,}|~{3,})")
 _CODEX_SKILL_RE = re.compile(r"\$([a-z][a-z0-9-]*)")
 _CLAUDE_SKILL_RE = re.compile(
     r"(?<![A-Za-z0-9_.</%-])/([a-z][a-z0-9-]*)(?![A-Za-z0-9/-])"
 )
 _URL_RE = re.compile(r"\b[a-z][a-z0-9+.-]*://[^\s<>]+", re.IGNORECASE)
-_HTML_TAG_RE = re.compile(r"</?[A-Za-z][^>\n]*>")
+_HTML_TAG_RE = re.compile(r"</?[A-Za-z][^>]*>")
 _MARKDOWN_LINK_OPEN_RE = re.compile(r"\]\(")
 _MARKDOWN_REFERENCE_DESTINATION_RE = re.compile(
-    r"^[ \t]{0,3}\[[^\]\n]+\]:[ \t]*(?P<destination><[^>\n]+>|\S+)",
+    r"^[ \t]{0,3}\[[^\]\n]+\]:[ \t]*(?:\r?\n[ \t]+)?"
+    r"(?P<destination><[^>\n]+>|\S+)",
     re.MULTILINE,
 )
 _ROOT_FILE_PATH_RE = re.compile(
@@ -163,7 +164,7 @@ def _mask_markdown_link_destinations(text: str, characters: list[str]) -> None:
 
 
 def _is_filesystem_path_token(token: str) -> bool:
-    core = token.strip("`*_~'\"(),;:!?")
+    core = token.strip("`*_'\"(),;:!?")
     if not core or "</" in core:
         return False
     if core.startswith(("~/", "./", "../")):
