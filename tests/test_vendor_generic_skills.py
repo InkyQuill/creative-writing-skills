@@ -170,6 +170,33 @@ class VendorGenericSkillsTests(unittest.TestCase):
 
         self.assertEqual(rendered, source)
 
+    def test_normalizer_preserves_list_state_fenced_code_byte_for_byte(self):
+        cases = {
+            "blank line in open fence": (
+                "- ```markdown\n"
+                "  literal\n"
+                "\n"
+                "  [placeholder](kb/{domain}/vocab.md)\n"
+                "  $chapter /story-memory @ghost\n"
+                "  ```\n"
+            ),
+            "continuation after empty marker": (
+                "-\n"
+                "    ```markdown\n"
+                "    [placeholder](kb/{domain}/vocab.md)\n"
+                "    $chapter /story-memory @ghost\n"
+                "    ```\n"
+            ),
+        }
+        for label, source in cases.items():
+            with self.subTest(label=label):
+                rendered = normalize_codex_references(
+                    source,
+                    {"story-memory"},
+                    "demo",
+                )
+                self.assertEqual(rendered, source)
+
     def test_normalizer_preserves_quote_list_fenced_code(self):
         source = "> - ```bash\n>   Load /qi-maintenance.\n>   Load /story-memory.\n>   ```\n"
 

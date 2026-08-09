@@ -140,10 +140,16 @@ def _consume_list_item(
     if marker is None:
         return None
     end = marker.end()
-    if end == len(line) or line[end] not in " \t":
+    marker_column = _column_at(line, end, initial_column)
+    if end == len(line):
+        return end, marker_column + 1
+    if line[end] not in " \t":
         return None
+    first_whitespace_end = end + 1
     while end < len(line) and line[end] in " \t":
         end += 1
+    if _column_at(line, end, initial_column) - marker_column > 4:
+        end = first_whitespace_end
     return end, _column_at(line, end, initial_column)
 
 
@@ -190,6 +196,7 @@ def _container_fence_line(
 
 def iter_fenced_lines(text: str):
     fence: tuple[str, int, tuple[tuple[str, int], ...]] | None = None
+    pending_containers: tuple[tuple[str, int], ...] = ()
     for line in text.splitlines(keepends=True):
         fence_line = line.rstrip("\r\n")
         opening_containers: tuple[tuple[str, int], ...] | None = None
@@ -199,6 +206,12 @@ def iter_fenced_lines(text: str):
             index, matched = _container_fence_line(fence_line, containers)
             content = fence_line[index:]
             if matched != len(containers):
+                if (
+                    not content.strip()
+                    and all(kind == "list-item" for kind, _ in containers[matched:])
+                ):
+                    yield line, True
+                    continue
                 fence = None
                 surviving = containers[:matched]
                 opening_content, new_containers = _opening_fence_line(
@@ -216,6 +229,36 @@ def iter_fenced_lines(text: str):
                     fence = None
                 continue
 
+        if pending_containers:
+            index, matched = _container_fence_line(
+                fence_line,
+                pending_containers,
+            )
+            content = fence_line[index:]
+            if matched == len(pending_containers):
+                if not content.strip():
+                    yield line, False
+                    continue
+                opening_content = content
+                opening_containers = pending_containers
+            else:
+                surviving = pending_containers[:matched]
+                if (
+                    not content.strip()
+                    and all(
+                        kind == "list-item"
+                        for kind, _ in pending_containers[matched:]
+                    )
+                ):
+                    yield line, False
+                    continue
+                opening_content, new_containers = _opening_fence_line(
+                    content,
+                    _column_at(fence_line, index),
+                )
+                opening_containers = surviving + new_containers
+            pending_containers = ()
+
         if opening_content is None or opening_containers is None:
             opening_content, opening_containers = _opening_fence_line(fence_line)
         opening = re.match(r" {0,3}(([`~])\2{2,})(.*)", opening_content)
@@ -229,6 +272,12 @@ def iter_fenced_lines(text: str):
             )
             yield line, True
             continue
+        if (
+            not opening_content.strip()
+            and opening_containers
+            and opening_containers[-1][0] == "list-item"
+        ):
+            pending_containers = opening_containers
         yield line, False
 
 

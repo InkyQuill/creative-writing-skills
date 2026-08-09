@@ -272,6 +272,68 @@ class DistributionScaffoldTests(unittest.TestCase):
                 self.assertEqual(extract_skill_references(text, "/"), set())
                 self.assertEqual(extract_skill_references(text, "$"), set())
 
+    def test_reference_parser_preserves_list_state_for_contained_fences(self):
+        cases = {
+            "blank line in open fence": (
+                "- ```markdown\n"
+                "  literal\n"
+                "\n"
+                "  [placeholder](kb/{domain}/vocab.md)\n"
+                "  $chapter /story-memory @ghost\n"
+                "  ```\n"
+            ),
+            "continuation after empty marker": (
+                "-\n"
+                "    ```markdown\n"
+                "    [placeholder](kb/{domain}/vocab.md)\n"
+                "    $chapter /story-memory @ghost\n"
+                "    ```\n"
+            ),
+        }
+        for label, text in cases.items():
+            with self.subTest(label=label):
+                self.assertEqual(extract_skill_references(text, "/"), set())
+                self.assertEqual(extract_skill_references(text, "$"), set())
+                self.assertEqual(
+                    map_outside_fences(
+                        text,
+                        lambda visible: visible
+                        .replace("kb/{domain}/vocab.md", "visible-link")
+                        .replace("@ghost", "@visible")
+                    ),
+                    text,
+                )
+
+    def test_reference_parser_does_not_open_over_indented_list_fence(self):
+        cases = {
+            "excessive marker padding": (
+                "-     ```markdown /story-memory\n"
+                "  [placeholder](kb/{domain}/vocab.md)\n"
+                "  $chapter @ghost\n"
+            ),
+            "excessive continuation indent": (
+                "-\n"
+                "      ```markdown /story-memory\n"
+                "  [placeholder](kb/{domain}/vocab.md)\n"
+                "  $chapter @ghost\n"
+            ),
+        }
+        for label, text in cases.items():
+            with self.subTest(label=label):
+                self.assertEqual(
+                    extract_skill_references(text, "/"),
+                    {"story-memory"},
+                )
+                self.assertEqual(extract_skill_references(text, "$"), {"chapter"})
+                visible = map_outside_fences(
+                    text,
+                    lambda segment: segment
+                    .replace("```markdown", "not-a-fence")
+                    .replace("@ghost", "@visible"),
+                )
+                self.assertIn("not-a-fence", visible)
+                self.assertIn("@visible", visible)
+
     def test_backtick_in_info_string_is_not_a_fence_opener(self):
         text = "```bad`info\n/story-memory $story-memory\n```\n"
         self.assertEqual(extract_skill_references(text, "/"), {"story-memory"})
@@ -525,6 +587,39 @@ class ValidatorTests(unittest.TestCase):
             problems,
         )
         self.assertNotIn("story-memory: dangling skill reference $chapter", problems)
+
+    def test_validator_ignores_references_in_list_state_fences(self):
+        cases = {
+            "blank line in open fence": (
+                "- ```markdown\n"
+                "  literal\n"
+                "\n"
+                "  [placeholder](kb/{domain}/vocab.md)\n"
+                "  $chapter /story-memory @ghost\n"
+                "  ```\n"
+            ),
+            "continuation after empty marker": (
+                "-\n"
+                "    ```markdown\n"
+                "    [placeholder](kb/{domain}/vocab.md)\n"
+                "    $chapter /story-memory @ghost\n"
+                "    ```\n"
+            ),
+        }
+        skill = self.skills / "story-memory" / "SKILL.md"
+        for label, body in cases.items():
+            with self.subTest(label=label):
+                skill.write_text(
+                    "---\nname: story-memory\ndescription: Demo.\n---\n" + body
+                )
+                problems = validate(self.root)
+                for unexpected in (
+                    "story-memory: missing relative resource kb/{domain}/vocab.md",
+                    "story-memory: dangling skill reference $chapter",
+                    "story-memory: Claude-style reference /story-memory in canonical Codex skill",
+                    "story-memory: dangling worker reference @ghost",
+                ):
+                    self.assertNotIn(unexpected, problems)
 
     def test_validator_treats_invalid_backtick_info_as_visible_content(self):
         skill = self.skills / "story-memory" / "SKILL.md"
