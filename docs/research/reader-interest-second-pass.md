@@ -1,6 +1,6 @@
 # Reader interest, immersion, and reward: second-pass evidence
 
-Scope: external evidence on what makes fiction/books interesting, immersive, rewarding, or worth continuing, compared against `skills/writing-principles`.
+Scope: external evidence on what makes fiction/books interesting, immersive, rewarding, or worth continuing, compared against `plugins/creative-writing-skills/skills/writing-principles`.
 
 ## 1) Executive synthesis
 

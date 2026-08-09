@@ -191,6 +191,57 @@ class DistributionScaffoldTests(unittest.TestCase):
         ):
             self.assertFalse((REPO_ROOT / relative).exists(), relative)
 
+    def test_active_workflow_docs_resolve_canonical_sources(self):
+        research_paths = (
+            REPO_ROOT / "docs" / "research" / "README.md",
+            REPO_ROOT / "docs" / "research" / "reader-interest-second-pass.md",
+        )
+        for path in research_paths:
+            text = path.read_text()
+            self.assertNotRegex(text, r"\bMeridian\b", str(path))
+            self.assertNotRegex(text, r"[\"`](?:agents|skills)/", str(path))
+            canonical_sources = re.findall(
+                r"`(plugins/creative-writing-skills/skills/[^`]+)`",
+                text,
+            )
+            self.assertTrue(canonical_sources, str(path))
+            for relative in canonical_sources:
+                self.assertTrue((REPO_ROOT / relative.rstrip("/")).exists(), relative)
+
+        workflow_path = REPO_ROOT / "docs" / "writing-workflow.html"
+        workflow_text = workflow_path.read_text()
+        self.assertNotRegex(workflow_text, r"[\"`](?:agents|skills)/")
+        self.assertNotIn("cw/", workflow_text)
+        data_match = re.search(
+            r"    const DATA = (\{.*?\n  \});\n    let mode",
+            workflow_text,
+            re.DOTALL,
+        )
+        self.assertIsNotNone(data_match)
+        data = json.loads(data_match.group(1))
+
+        workers_root = (
+            "plugins/creative-writing-skills/skills/creative-writing-muse/"
+            "resources/workers"
+        )
+        registry = load_json(REPO_ROOT / workers_root / "registry.json")
+        expected_worker_sources = {
+            f"{workers_root}/{item['prompt']}" for item in registry["workers"]
+        }
+        expected_worker_sources.add(
+            "plugins/creative-writing-skills/skills/creative-writing-muse/SKILL.md"
+        )
+        actual_worker_sources = {
+            item["path"] for item in data["agents"].values() if item["path"]
+        }
+        self.assertEqual(actual_worker_sources, expected_worker_sources)
+
+        for name, item in data["skills"].items():
+            expected = f"plugins/creative-writing-skills/skills/{name}/SKILL.md"
+            self.assertEqual(item["path"], expected)
+            self.assertEqual(item["source"], "canonical plugin")
+            self.assertTrue((REPO_ROOT / expected).is_file(), expected)
+
     def test_canonical_skill_references_use_dollar_and_resolve(self):
         canonical = set(load_json(REPO_ROOT / "config" / "distribution.json")["canonical_skills"])
         for path in (PLUGIN_ROOT / "skills").rglob("*.md"):

@@ -102,7 +102,7 @@
     "agents": {
       "brainstormer": {
         "name": "brainstormer",
-        "path": "agents/brainstormer.md",
+        "path": "plugins/creative-writing-skills/skills/creative-writing-muse/resources/workers/brainstormer.md",
         "description": "Creative option generation for a scoped question or angle.",
         "load": [
           "story-planning",
@@ -115,7 +115,7 @@
       },
       "character-sim": {
         "name": "character-sim",
-        "path": "agents/character-sim.md",
+        "path": "plugins/creative-writing-skills/skills/creative-writing-muse/resources/workers/character-sim.md",
         "description": "In-character conversation for voice discovery and relationship testing.",
         "load": [
           "character-sim",
@@ -129,7 +129,7 @@
       },
       "continuity-checker": {
         "name": "continuity-checker",
-        "path": "agents/continuity-checker.md",
+        "path": "plugins/creative-writing-skills/skills/creative-writing-muse/resources/workers/continuity-checker.md",
         "description": "Cross-references content against established canon for contradictions.",
         "load": [
           "story-review",
@@ -142,7 +142,7 @@
       },
       "critic": {
         "name": "critic",
-        "path": "agents/critic.md",
+        "path": "plugins/creative-writing-skills/skills/creative-writing-muse/resources/workers/critic.md",
         "description": "Deep adversarial critique of a draft, one focus area at a time.",
         "load": [
           "story-review",
@@ -155,7 +155,7 @@
       },
       "editor": {
         "name": "editor",
-        "path": "agents/editor.md",
+        "path": "plugins/creative-writing-skills/skills/creative-writing-muse/resources/workers/editor.md",
         "description": "Holistic third-party book editor pass across narrative structure, voice, line quality, copy consistency, and proofreading priority.",
         "load": [
           "story-review",
@@ -169,7 +169,7 @@
       },
       "muse": {
         "name": "muse",
-        "path": "agents/muse.md",
+        "path": "plugins/creative-writing-skills/skills/creative-writing-muse/SKILL.md",
         "description": "Author-facing creative partner for all story work, from planning through production handoff.",
         "load": [
           "story-planning",
@@ -205,7 +205,7 @@
       },
       "outliner": {
         "name": "outliner",
-        "path": "agents/outliner.md",
+        "path": "plugins/creative-writing-skills/skills/creative-writing-muse/resources/workers/outliner.md",
         "description": "Sequences confirmed direction into arc, chapter, and beat-level outlines.",
         "load": [
           "story-planning",
@@ -217,7 +217,7 @@
       },
       "reader-sim": {
         "name": "reader-sim",
-        "path": "agents/reader-sim.md",
+        "path": "plugins/creative-writing-skills/skills/creative-writing-muse/resources/workers/reader-sim.md",
         "description": "Experiential reader response from a caller-specified reader persona; pass the persona, draft, and knowledge boundary.",
         "load": [
           "reader-sim",
@@ -229,7 +229,7 @@
       },
       "style-creator": {
         "name": "style-creator",
-        "path": "agents/style-creator.md",
+        "path": "plugins/creative-writing-skills/skills/creative-writing-muse/resources/workers/style-creator.md",
         "description": "Analyzes prose samples to produce style reference files for the project's voice.",
         "load": [
           "creative-writing-craft",
@@ -243,7 +243,7 @@
       },
       "web-researcher": {
         "name": "web-researcher",
-        "path": "agents/web-researcher.md",
+        "path": "plugins/creative-writing-skills/skills/creative-writing-muse/resources/workers/web-researcher.md",
         "description": "Web research for fiction \u2014 primary sources, reference works, cultural detail, domain expertise, and community discussion.",
         "load": [
           "creative-research"
@@ -253,7 +253,7 @@
       },
       "writer": {
         "name": "writer",
-        "path": "agents/writer.md",
+        "path": "plugins/creative-writing-skills/skills/creative-writing-muse/resources/workers/writer.md",
         "description": "Production prose from scene briefs, revision notes, and style references; uses progressive mode guidance for fresh drafts, revisions, bridges, alternate takes, and line polish.",
         "load": [
           "creative-writing-modes",
@@ -269,27 +269,27 @@
     "skills": {
       "character-sim": {
         "name": "character-sim",
-        "path": "skills/character-sim/SKILL.md",
+        "path": "plugins/creative-writing-skills/skills/character-sim/SKILL.md",
         "description": "Speak as a specified character from their current knowledge, voice, and emotional state. Use for skill-only workflows that need in-character conversation, voice discovery, or relationship pressure tests.",
         "type": "mode-shift",
         "modelInvocable": true,
         "loads": [],
         "resources": [],
-        "source": "source"
+        "source": "canonical plugin"
       },
       "creative-research": {
         "name": "creative-research",
-        "path": "skills/creative-research/SKILL.md",
+        "path": "plugins/creative-writing-skills/skills/creative-research/SKILL.md",
         "description": "Load when a story needs factual grounding the writer doesn't have: historical detail, cultural texture, domain accuracy, or how other authors handled similar material. Pass the question and story context; returns a sourced report the writer can draw from.",
         "type": "reference",
         "modelInvocable": true,
         "loads": [],
         "resources": [],
-        "source": "source"
+        "source": "canonical plugin"
       },
       "creative-writing-craft": {
         "name": "creative-writing-craft",
-        "path": "skills/creative-writing-craft/SKILL.md",
+        "path": "plugins/creative-writing-skills/skills/creative-writing-craft/SKILL.md",
         "description": "Craft references for writing fiction well: prose, scenes, style, voice, and genre/page-level technique. Load when a writer, critic, or muse needs how-to-write guidance rather than a production mode.",
         "type": "reference",
         "modelInvocable": true,
@@ -305,11 +305,11 @@
           "resources/scene-construction.md",
           "resources/style-analysis.md"
         ],
-        "source": "source"
+        "source": "canonical plugin"
       },
       "creative-writing-modes": {
         "name": "creative-writing-modes",
-        "path": "skills/creative-writing-modes/SKILL.md",
+        "path": "plugins/creative-writing-skills/skills/creative-writing-modes/SKILL.md",
         "description": "Creative-writing addendum to /llm-writing. Load when putting prose on the page: draft, revise, bridge, vary, or polish.",
         "type": "mode-shift",
         "modelInvocable": true,
@@ -319,31 +319,31 @@
         "resources": [
           "resources/prose-modes.md"
         ],
-        "source": "source"
+        "source": "canonical plugin"
       },
       "creative-writing-muse": {
         "name": "creative-writing-muse",
-        "path": "skills/creative-writing-muse/SKILL.md",
+        "path": "plugins/creative-writing-skills/skills/creative-writing-muse/SKILL.md",
         "description": "Load when no subagents are available and one agent must plan, draft, critique, research, and capture memory by switching stances.",
         "type": "mode-shift",
         "modelInvocable": false,
         "loads": [],
         "resources": [],
-        "source": "source"
+        "source": "canonical plugin"
       },
       "reader-sim": {
         "name": "reader-sim",
-        "path": "skills/reader-sim/SKILL.md",
+        "path": "plugins/creative-writing-skills/skills/reader-sim/SKILL.md",
         "description": "Read as a specified first-time reader persona and report the felt experience. Use for skill-only workflows when a draft needs persona-bound reader-response signal instead of analytical critique.",
         "type": "mode-shift",
         "modelInvocable": true,
         "loads": [],
         "resources": [],
-        "source": "source"
+        "source": "canonical plugin"
       },
       "story-memory": {
         "name": "story-memory",
-        "path": "skills/story-memory/SKILL.md",
+        "path": "plugins/creative-writing-skills/skills/story-memory/SKILL.md",
         "description": "Creative-writing domain knowledge for durable story state. Load when preserving or retrieving project memory \u2014 fact extraction, context scoping, reference writing, artifact layout, and issue tracking. If you are @kb-lead, load this for the fiction-specific categories and conventions your general methodology doesn't cover.",
         "type": "reference",
         "modelInvocable": true,
@@ -356,11 +356,11 @@
           "resources/writing-artifacts.md",
           "resources/writing-issues.md"
         ],
-        "source": "source"
+        "source": "canonical plugin"
       },
       "story-planning": {
         "name": "story-planning",
-        "path": "skills/story-planning/SKILL.md",
+        "path": "plugins/creative-writing-skills/skills/story-planning/SKILL.md",
         "description": "Planning work before prose: creative direction, story-planning, outlining, and story architecture. Load when deciding what should happen or how a story should be structured.",
         "type": "mode-shift",
         "modelInvocable": true,
@@ -377,11 +377,11 @@
           "resources/story-architecture/chapter-and-scene.md",
           "resources/story-architecture/structural-problems.md"
         ],
-        "source": "source"
+        "source": "canonical plugin"
       },
       "story-review": {
         "name": "story-review",
-        "path": "skills/story-review/SKILL.md",
+        "path": "plugins/creative-writing-skills/skills/story-review/SKILL.md",
         "description": "Review work after prose exists: editorial review, craft critique, continuity/voice review, copyediting, proofreading, and synthesis of reader-sim signal. Load when diagnosing a draft rather than rewriting it.",
         "type": "mode-shift",
         "modelInvocable": true,
@@ -403,11 +403,11 @@
           "resources/prose-critique/voice.md",
           "resources/reader-sim-signal.md"
         ],
-        "source": "source"
+        "source": "canonical plugin"
       },
       "writing-principles": {
         "name": "writing-principles",
-        "path": "skills/writing-principles/SKILL.md",
+        "path": "plugins/creative-writing-skills/skills/writing-principles/SKILL.md",
         "description": "What fiction readers want (reader reward channels) and the specific ways LLM training damages them. Load when drafting prose, critiquing, or diagnosing why a passage feels flat.",
         "type": "principle",
         "modelInvocable": null,
@@ -418,65 +418,65 @@
           "resources/citations.md",
           "resources/failure-modes.md"
         ],
-        "source": "source"
+        "source": "canonical plugin"
       },
       "writing-staffing": {
         "name": "writing-staffing",
-        "path": "skills/writing-staffing/SKILL.md",
+        "path": "plugins/creative-writing-skills/skills/writing-staffing/SKILL.md",
         "description": "Dispatch reference for composing writing teams. Teaches which extra skills to attach via --skills, which resources to reference in spawn prompts, and when to fan out. Load when staffing a workflow.",
         "type": "reference",
         "modelInvocable": false,
         "loads": [],
         "resources": [],
-        "source": "source"
+        "source": "canonical plugin"
       },
       "grill-with-docs": {
         "name": "grill-with-docs",
-        "path": "cw/skills/grill-with-docs/SKILL.md",
+        "path": "plugins/creative-writing-skills/skills/grill-with-docs/SKILL.md",
         "description": "Use when challenging a plan \u2014 grills the author against documented decisions and sharpens terminology.",
-        "type": "cw/manual-or-dependency",
+        "type": "canonical skill",
         "modelInvocable": null,
         "loads": [
           "intent-modeling"
         ],
         "resources": [],
-        "source": "cw"
+        "source": "canonical plugin"
       },
       "information-hierarchy": {
         "name": "information-hierarchy",
-        "path": "cw/skills/information-hierarchy/SKILL.md",
+        "path": "plugins/creative-writing-skills/skills/information-hierarchy/SKILL.md",
         "description": "Load for large human-facing outputs: reports, docs, multi-section\nexplanations, artifacts. Choose the right form for each beat (prose, diagram,\ntable, mockup) and put the answer first, depth behind it. If the medium allows, use progressive disclosure.",
-        "type": "cw/manual-or-dependency",
+        "type": "canonical skill",
         "modelInvocable": null,
         "loads": [],
         "resources": [],
-        "source": "cw"
+        "source": "canonical plugin"
       },
       "intent-modeling": {
         "name": "intent-modeling",
-        "path": "cw/skills/intent-modeling/SKILL.md",
+        "path": "plugins/creative-writing-skills/skills/intent-modeling/SKILL.md",
         "description": "Use before acting on human instructions: separate what they said from what they meant.",
-        "type": "cw/manual-or-dependency",
+        "type": "canonical skill",
         "modelInvocable": null,
         "loads": [],
         "resources": [],
-        "source": "cw"
+        "source": "canonical plugin"
       },
       "kb-management": {
         "name": "kb-management",
-        "path": "cw/skills/kb-management/SKILL.md",
+        "path": "plugins/creative-writing-skills/skills/kb-management/SKILL.md",
         "description": "Maintaining the story knowledge base: creating, updating, and organizing wiki-style reference pages in kb/. Use when capturing finalized story knowledge, updating character profiles, documenting world mechanics, or restructuring the kb.",
-        "type": "cw/manual-or-dependency",
+        "type": "canonical skill",
         "modelInvocable": null,
         "loads": [],
         "resources": [],
-        "source": "cw"
+        "source": "canonical plugin"
       },
       "knowledge-layers": {
         "name": "knowledge-layers",
-        "path": "cw/skills/knowledge-layers/SKILL.md",
+        "path": "plugins/creative-writing-skills/skills/knowledge-layers/SKILL.md",
         "description": "Use when deciding where knowledge goes or reading/writing durable docs \u2014 AGENTS.md, .context/, KB, docs/, and work directories.",
-        "type": "cw/manual-or-dependency",
+        "type": "canonical skill",
         "modelInvocable": null,
         "loads": [
           "qi-layer",
@@ -486,48 +486,48 @@
         "resources": [
           "resources/bootstrap.md"
         ],
-        "source": "cw"
+        "source": "canonical plugin"
       },
       "llm-writing": {
         "name": "llm-writing",
-        "path": "cw/skills/llm-writing/SKILL.md",
+        "path": "plugins/creative-writing-skills/skills/llm-writing/SKILL.md",
         "description": "Load before writing or revising human-facing text. Choose words deliberately, ground the piece in the reader's context, and remove default LLM phrasing before the final draft.",
-        "type": "cw/manual-or-dependency",
+        "type": "canonical skill",
         "modelInvocable": null,
         "loads": [
           "intent-modeling",
           "information-hierarchy"
         ],
         "resources": [],
-        "source": "cw"
+        "source": "canonical plugin"
       },
       "md-validation": {
         "name": "md-validation",
-        "path": "cw/skills/md-validation/SKILL.md",
+        "path": "plugins/creative-writing-skills/skills/md-validation/SKILL.md",
         "description": "Use when validating markdown links or Mermaid diagrams.",
-        "type": "cw/manual-or-dependency",
+        "type": "canonical skill",
         "modelInvocable": null,
         "loads": [],
         "resources": [
           "resources/mermaid-authoring.md"
         ],
-        "source": "cw"
+        "source": "canonical plugin"
       },
       "project-setup": {
         "name": "project-setup",
-        "path": "cw/skills/project-setup/SKILL.md",
+        "path": "plugins/creative-writing-skills/skills/project-setup/SKILL.md",
         "description": "One-time project setup for creative writing. Interviews you about your project, collects writing samples, proposes kb structure, and creates CLAUDE.md with project conventions.",
-        "type": "cw/manual-or-dependency",
+        "type": "canonical skill",
         "modelInvocable": null,
         "loads": [],
         "resources": [],
-        "source": "cw"
+        "source": "canonical plugin"
       },
       "qi-layer": {
         "name": "qi-layer",
-        "path": "cw/skills/qi-layer/SKILL.md",
+        "path": "plugins/creative-writing-skills/skills/qi-layer/SKILL.md",
         "description": "Use when exploring or changing the codebase \u2014 read AGENTS.md first, use .context/CONTEXT.md for detail, keep intent docs succinct.",
-        "type": "cw/manual-or-dependency",
+        "type": "canonical skill",
         "modelInvocable": null,
         "loads": [
           "knowledge-layers",
@@ -536,35 +536,35 @@
         "resources": [
           "resources/references.md"
         ],
-        "source": "cw"
+        "source": "canonical plugin"
       },
       "reflect": {
         "name": "reflect",
-        "path": "cw/skills/reflect/SKILL.md",
+        "path": "plugins/creative-writing-skills/skills/reflect/SKILL.md",
         "description": "User-invoked pause before reporting to check intent vs literal completion, surface adjacent wins, and route knowledge capture.",
-        "type": "cw/manual-or-dependency",
+        "type": "canonical skill",
         "modelInvocable": null,
         "loads": [
           "intent-modeling"
         ],
         "resources": [],
-        "source": "cw"
+        "source": "canonical plugin"
       },
       "shared-dao": {
         "name": "shared-dao",
-        "path": "cw/skills/shared-dao/SKILL.md",
+        "path": "plugins/creative-writing-skills/skills/shared-dao/SKILL.md",
         "description": "Shared vocabulary for creative writing projects. Load when establishing canonical story terms, resolving ambiguous names, checking term consistency, or deciding where vocabulary belongs in kb/.",
-        "type": "cw/manual-or-dependency",
+        "type": "canonical skill",
         "modelInvocable": null,
         "loads": [],
         "resources": [],
-        "source": "cw"
+        "source": "canonical plugin"
       },
       "structured-artifact": {
         "name": "structured-artifact",
-        "path": "cw/skills/structured-artifact/SKILL.md",
+        "path": "plugins/creative-writing-skills/skills/structured-artifact/SKILL.md",
         "description": "Load when building a static HTML artifact \u2014 single page or multi-page site \u2014\nto make structured information explorable through layout and navigation.",
-        "type": "cw/manual-or-dependency",
+        "type": "canonical skill",
         "modelInvocable": null,
         "loads": [
           "information-hierarchy"
@@ -582,19 +582,19 @@
           "resources/timeline.md",
           "resources/tree-and-toc.md"
         ],
-        "source": "cw"
+        "source": "canonical plugin"
       },
       "zoom-out": {
         "name": "zoom-out",
-        "path": "cw/skills/zoom-out/SKILL.md",
+        "path": "plugins/creative-writing-skills/skills/zoom-out/SKILL.md",
         "description": "Use when orienting in an unfamiliar area \u2014 fans out exploration across structure, knowledge, and history, then synthesizes one orientation map.",
-        "type": "cw/manual-or-dependency",
+        "type": "canonical skill",
         "modelInvocable": null,
         "loads": [
           "qi-layer"
         ],
         "resources": [],
-        "source": "cw"
+        "source": "canonical plugin"
       }
     }
   };
