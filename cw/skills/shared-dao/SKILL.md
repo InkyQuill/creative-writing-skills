@@ -1,9 +1,6 @@
 ---
 name: shared-dao
-description: >
-  Shared vocabulary for creative writing projects. Load when establishing
-  canonical story terms, resolving ambiguous names, checking term consistency,
-  or deciding where vocabulary belongs in kb/.
+description: "Shared vocabulary for creative writing projects. Load when establishing canonical story terms, resolving ambiguous names, checking term consistency, or deciding where vocabulary belongs in kb/.\n"
 ---
 
 # Shared Dao
@@ -54,7 +51,8 @@ Before defining new terms, check what already exists:
 
 1. Read relevant vocab files.
 2. Search `CLAUDE.md`, kb pages, outlines, drafts, and work notes.
-3. Spawn focused subagents when the search is broad enough to crowd your context.
+3. When delegation is available and the search would crowd your context,
+   assign focused search lanes by artifact scope or domain.
 4. Check how the author uses the term in conversation and prose.
 
 Mint new terms when they mark a real new concept. Let new vocabulary reflect

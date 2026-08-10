@@ -1,0 +1,54 @@
+{
+  "schema_version": 1,
+  "hash_algorithm": "sha256",
+  "resources": [
+    {
+      "path": "SKILL.md",
+      "sha256": "a94b0c1eda9bae77f2234ce461d9e2d2da3a7fbd6f0adb0916b612a88c588bbf"
+    },
+    {
+      "path": "resources/card-grid.md",
+      "sha256": "9500f9f248aa957388e7bb5bd491223dccf403c2c00b3fb99820c63657f036bf"
+    },
+    {
+      "path": "resources/data-chart.md",
+      "sha256": "6a49b4336a9e3b4592231443b7452026f89e19067599fea63008264b830efea6"
+    },
+    {
+      "path": "resources/data-table.md",
+      "sha256": "af7ad6c2adc55dbf07b49f2258ec962617a8da5446a0d5fe897c8f9f3f6def2a"
+    },
+    {
+      "path": "resources/diagrams.md",
+      "sha256": "2850544e2befd9496ea0440275e192a07d47b3d89514575edeab056e1dd637dc"
+    },
+    {
+      "path": "resources/diff-view.md",
+      "sha256": "72b49f7e576d67236045a12d70961719c5951016506302f68ffc9b2f5b8164e1"
+    },
+    {
+      "path": "resources/experimental-react-flow.md",
+      "sha256": "14932f87f14370f59e76a9dd571da14e7fa2096548f9c162fbe88665abcbfd36"
+    },
+    {
+      "path": "resources/layout-and-theme.md",
+      "sha256": "7efa1bdde6d9c290d4cc17525f3e05b01e4654b2e70b2533f63f0182119aca1d"
+    },
+    {
+      "path": "resources/mockups.md",
+      "sha256": "edfa9e155e3aef01c5bdf0daf08821bba6f8b25665c9af33a42589fc4864f618"
+    },
+    {
+      "path": "resources/multi-page-site.md",
+      "sha256": "d24b8a4e6b408c1a633ec9e09ba49f6a9ddfc96ef79a6f34c8b19b65a9978b68"
+    },
+    {
+      "path": "resources/timeline.md",
+      "sha256": "e97331773eaaf5a09fadf0c5b5c416e8c49319ac397b492911d2def6c570c598"
+    },
+    {
+      "path": "resources/tree-and-toc.md",
+      "sha256": "375c57152bf7394a3a549d064c22287d27ac388400cc0567119f37c056f5dc48"
+    }
+  ]
+}

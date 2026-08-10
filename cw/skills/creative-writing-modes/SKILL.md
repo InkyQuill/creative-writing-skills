@@ -1,7 +1,6 @@
 ---
 name: creative-writing-modes
-description: |
-  Creative-writing addendum to /llm-writing. Load when putting prose on the page: draft, revise, bridge, vary, or polish.
+description: "Creative-writing addendum to /llm-writing. Load when putting prose on the page: draft, revise, bridge, vary, or polish.\n"
 ---
 
 # Creative Writing Modes

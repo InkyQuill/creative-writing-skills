@@ -1,6 +1,6 @@
 ---
 name: grill-with-docs
-description: Use when challenging a plan — grills the author against documented decisions and sharpens terminology.
+description: "Use when challenging a plan — grills the author against documented decisions and sharpens terminology."
 ---
 
 # Grill With Docs

@@ -1,0 +1,20 @@
+{
+  "name": "creative-writing-skills",
+  "interface": {
+    "displayName": "Creative Writing Skills"
+  },
+  "plugins": [
+    {
+      "name": "creative-writing-skills",
+      "source": {
+        "source": "local",
+        "path": "./plugins/creative-writing-skills"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Productivity"
+    }
+  ]
+}

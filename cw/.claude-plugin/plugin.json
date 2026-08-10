@@ -1,10 +1,11 @@
 {
   "name": "creative-writing-skills",
-  "version": "0.5.8",
-  "description": "Composable agents and skills for creative writing projects. The muse agent is the primary entry point: a creative partner that brainstorms, drafts, critiques, and maintains your story's knowledge base. On claude.ai (skills only), activate the creative-writing-muse skill instead.",
+  "version": "0.5.9",
+  "description": "Composable skills for planning, drafting, and revising creative writing.",
   "author": {
-    "name": "Jimmy Yao",
-    "email": "dev.jimm.py@gmail.com"
+    "name": "InkyQuill"
   },
-  "homepage": "https://github.com/haowjy/creative-writing-skills"
+  "homepage": "https://github.com/InkyQuill/creative-writing-skills",
+  "repository": "https://github.com/InkyQuill/creative-writing-skills",
+  "license": "Apache-2.0"
 }

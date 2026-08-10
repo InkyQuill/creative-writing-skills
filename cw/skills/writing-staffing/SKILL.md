@@ -1,107 +1,123 @@
 ---
 name: writing-staffing
-description: >
-  Dispatch reference for composing writing teams. Teaches which skills to
-  load for each subagent, which resources to reference, and when to fan out
-  versus run parallel lanes. Load when staffing a workflow.
+description: "Internal capability-based dispatch reference for composing writing teams. Use when explicitly staffing a workflow to choose skills, context, and parallel lanes without relying on named agents or a specific runtime.\n"
 ---
 
 # Writing Staffing
 
-Each subagent has its own skill set. This skill teaches what *extra* skills
-to load and reference when dispatching work.
+When delegation is available, the muse assigns bounded work by capability,
+names the relevant skills and resources, and provides the files each lane
+needs. When delegation is unavailable, the muse loads the same skills and
+performs the lane directly. Keep the author-facing thread coherent in either
+case.
 
-**Fan-out** gives the same question and files to different model families for
-independent judgment. Reserve it for high-stakes calls where model diversity
-can reveal different blind spots. **Parallel lanes** use different prompts or
-focus areas; use them when the work divides cleanly.
+## Model Selection
+
+Use the default model unless the work needs a different capability. Prefer
+strong creative judgment for generation and high-stakes critique, structured
+reasoning for outlining and cross-document synthesis, and fast economical
+execution for mechanical gathering whose misses will be caught in synthesis.
+
+**Fan-out** means giving the same question and files to different model
+families for independent judgment. Reserve it for high-stakes calls where
+model diversity can reveal different blind spots. **Parallel lanes** use
+different prompts or focus areas; use each lane's default model unless it
+needs a capability it lacks.
 
 ## Dispatch Reference
 
-### `@writer`
+### Prose drafting
 
-Extra skills: `/character-sim` for voice fidelity, `/shared-dao` for
-project vocabulary.
+Load `/creative-writing-modes` and `/creative-writing-craft`. Add
+`/character-sim` for voice fidelity and `/shared-dao` for project vocabulary.
 
-Reference: name the production mode from `/creative-writing-modes` →
+Name the production mode from `/creative-writing-modes` →
 `resources/prose-modes.md` (fresh draft, revision, bridge, alternate take,
 line polish). Point to `/creative-writing-craft` →
-`resources/prose-writing.md` or `resources/scene-construction.md` when
-relevant. Include style files, character state, and continuity anchors.
+`resources/prose-writing.md` or `resources/scene-construction.md` when relevant.
+Provide style files, character state, and continuity anchors.
 
 One writer per scene — voice consistency degrades when multiple writers
 handle adjacent content.
 
-### `@critic`
+### Focused critique
 
-Extra skills: `/creative-writing-craft` for prose/voice focus, `/shared-dao`
-for vocabulary checks.
+Load `/story-review`. Add `/creative-writing-craft` for prose or voice focus
+and `/shared-dao` for vocabulary checks.
 
-Assign a focus area: structure, character, voice, prose, or continuity.
-Include style files for voice critique.
+Assign one focus area: structure, character, voice, prose, or continuity.
+Provide style files for voice critique.
 
 Run different focus areas as parallel lanes. Scale to stakes:
 1–2 for low-stakes, 3 for standard chapters, 4–5 for pivotal scenes with
 duplicated coverage on the critical dimension.
 
 For a pivotal scene or disputed judgment, fan out the same critical dimension
-once across two strong model families, then synthesize the disagreement.
+across two meaningfully different reasoning approaches, then synthesize the
+disagreement.
 
-### `@editor`
+### Holistic editing
 
-Name the edit level: editorial review, developmental, line edit, copyedit,
-proofreading. Point to `/story-review` → `resources/editorial-review.md` for
-holistic pass, or the specific edit-level resource.
+Load `/story-review` and name the edit level (editorial review, developmental,
+line edit, copyedit, proofreading). Point to `/story-review` →
+`resources/editorial-review.md` for holistic pass, or the specific
+edit-level resource.
 
 Use when the draft needs a priority order across concerns. For depth on
-one dimension, use `@critic`.
+one dimension, use a focused critique lane.
 
-### `@continuity-checker`
+### Cross-project continuity
 
-Include the draft plus canon, timeline, character state, and vocab files.
-More expensive than a critic with continuity focus — reads broadly. Use the
-critic for routine checks, the continuity-checker for deep validation.
+Provide the draft plus canon files, timeline, character state, and vocab. This
+lane reads broadly across the project, so reserve it for deep validation; use
+a focused critique lane for routine continuity checks.
 
-### `@brainstormer`
+### Brainstorming
 
-Extra skills: `/character-sim` for character arcs, `/creative-research` for
-real-world grounding.
+Load `/story-planning`. Add `/character-sim` for character arcs and
+`/creative-research` for real-world grounding.
 
 Run parallel lanes on different *angles*, not the same angle. Three perspectives
 beats five instances of one.
 
-### `@outliner`
+### Outlining
 
-Outlining starts after direction is chosen — use `@brainstormer` first.
-The outliner's output feeds the writer.
+Load `/story-planning` after direction is chosen. Brainstorm first; the outline
+then feeds the prose-drafting pass.
 
-### `@style-creator`
+### Style analysis
 
-Include sample chapters or existing style files. Point to
-`/creative-writing-craft` → `resources/style-analysis.md`.
+Load `/creative-writing-craft`, provide sample chapters or existing style
+files, and use `resources/style-analysis.md`.
 
-### `@reader-sim`
+### Reader simulation
 
-Extra skills: `/character-sim` when the reader persona is a specific
+Load `/reader-sim`. Add `/character-sim` when the reader persona is a specific
 character type.
 
-Specify the reader persona and knowledge boundary (what has this reader
-already read). Include the draft.
+Specify the reader persona and knowledge boundary: what has this reader already
+read? Provide the draft.
 
 Run after the write/critique loop converges, before presenting to the
 author. A scene can be technically clean and leave a reader cold.
 
-### `@character-sim`
+### Character simulation
 
-Include character state and voice/style files. Specify the scenario or
-relationship to explore. Use one parallel lane per character or perspective
-for independent exploration; use one shared simulation when testing their
-interaction.
+Load `/character-sim`, provide character state and voice/style files, and
+specify the scenario or relationship to explore. Use one parallel lane per
+character or perspective for independent exploration; use one shared
+simulation when testing their interaction.
 
-### `@web-researcher`
+### Research
 
-Specify the question, story context, and what the story currently assumes
-so the researcher can flag contradictions.
+Load `/creative-research`. Provide the specific question, story context, and
+what the story currently assumes so contradictions can be flagged.
+
+### Story memory
+
+After the triggering event settles — a chapter is finalized, a brainstorm
+concludes, or the author makes a decision — have the muse apply `/story-memory`
+directly for fact extraction, fiction-specific categories, and artifact layout.
 
 ## Effort Scaling
 

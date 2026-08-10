@@ -1,6 +1,6 @@
 # Research Notes
 
-Durable copies of research originally gathered during the creative-writing skill collapse. These files preserve the source links outside the active Meridian work directory.
+Durable copies of research originally gathered during the creative-writing skill consolidation. These files preserve the source evidence alongside the current Codex-primary canonical plugin tree.
 
 - [Craft research: how credible sources describe writing well and structuring story](craft-how-to-write-structure.md)
 - [Reader interest, immersion, and reward: second-pass evidence](reader-interest-second-pass.md)
@@ -8,7 +8,7 @@ Durable copies of research originally gathered during the creative-writing skill
 
 Use these as evidence notes when refining:
 
-- `skills/creative-writing-craft/`
-- `skills/story-planning/`
-- `skills/story-review/`
-- `skills/writing-principles/`
+- `plugins/creative-writing-skills/skills/creative-writing-craft/`
+- `plugins/creative-writing-skills/skills/story-planning/`
+- `plugins/creative-writing-skills/skills/story-review/`
+- `plugins/creative-writing-skills/skills/writing-principles/`

@@ -1,7 +1,6 @@
 ---
 name: story-planning
-description: |
-  Planning work before prose: creative direction, story-planning, outlining, and story architecture. Load when deciding what should happen or how a story should be structured.
+description: "Planning work before prose: creative direction, story-planning, outlining, and story architecture. Load when deciding what should happen or how a story should be structured.\n"
 ---
 
 # Story Planning
@@ -10,6 +9,6 @@ Use this for pre-page decisions: what the story wants, what options exist, and h
 
 Load only the resource needed:
 
-- `resources/story-planning.md` — author-facing direction and option synthesis.
-- `resources/story-planning.md` — exploratory capture and source tagging.
-- `resources/story-planning.md` — arc, chapter, scene, and beat structure.
+- `resources/creative-direction.md` — scoped option, evidence, and tradeoff analysis for the muse.
+- `resources/brainstorming.md` — exploratory capture and source tagging.
+- `resources/story-architecture.md` — arc, chapter, scene, and beat structure.
