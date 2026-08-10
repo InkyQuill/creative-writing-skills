@@ -15,7 +15,7 @@ The following skill snapshots are imported from the Apache-2.0 distribution at
 - `zoom-out`
 
 Their immediate development provenance is
-`haowjy/meridian-base@d3c4b331…`. Refreshes from that repository are
+`haowjy/meridian-base@d3c4b3313d38e18dd7970f1db34af15c25dbf238`. Refreshes from that repository are
 prohibited until it declares a compatible license. These skills are not
 original InkyQuill work.
 

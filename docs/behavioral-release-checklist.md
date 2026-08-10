@@ -25,7 +25,7 @@ it does not establish model routing or writing behavior.
 |---|---|
 | Date | 2026-08-10 |
 | Result | PASS |
-| Evidence | All commands exited 0 in fresh processes: 155 unit tests passed; distribution validation passed; the pinned licensed snapshots matched; the Claude distribution was in sync; and 25 deterministic `.skill` archives were created. |
+| Evidence | All commands exited 0 in fresh processes: all discovered unit tests passed; distribution validation passed; the pinned licensed snapshots matched; the Claude distribution was in sync; and 25 deterministic `.skill` archives were created. |
 
 ### Codex marketplace and installed skill surface
 

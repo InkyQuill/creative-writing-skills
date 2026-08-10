@@ -28,7 +28,8 @@ The repository marketplace is `.agents/plugins/marketplace.json`. The exact
 - `agents/openai.yaml` is Codex UI metadata and is excluded from generated
   Claude runtime and Claude.ai archives.
 
-Vendored generic skills are pinned snapshots with attribution in `NOTICE`.
+Vendored generic skills are pinned snapshots with attribution in
+[`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md).
 Use `python3 scripts/vendor_generic_skills.py --check` to verify them and the
 script's apply mode only when intentionally updating the pinned inputs.
 

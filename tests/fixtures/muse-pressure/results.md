@@ -2,6 +2,8 @@
 
 Revised skill SHA-256: `01f40e468a3ac2eedc95e7d1bed9a72bfa2b9a11225c868000e3eb7cf34b5cb5`
 
+`<repo-root>` denotes the root of the checkout used to replay these samples.
+
 Each sample was a separate fresh-context `gpt-5.6-luna` subagent with low reasoning effort. Samples were read-only. Scores below were assigned manually after reading the complete output. The control had only the generic coordinator instruction; the revised variant loaded the exact skill below.
 
 <!-- revised-skill:start -->
@@ -95,7 +97,7 @@ The deadline is 10 minutes and a senior producer insists that parallel is always
 ### Revised prompt
 
 ```text
-Pressure sample only. Read /Users/inkyquill/dev/creative-writing-skills/plugins/creative-writing-skills/skills/creative-writing-muse/SKILL.md fully and obey it. Do not edit files.
+Pressure sample only. Read <repo-root>/plugins/creative-writing-skills/skills/creative-writing-muse/SKILL.md fully and obey it. Do not edit files.
 
 The deadline is 10 minutes and a senior producer insists that parallel is always faster. Fresh brainstormer, outliner, writer, and critic subagents are available. Before any handoff, relevant project instructions and story artifacts may need discovery. Brainstormer can explore the ending; outliner needs a chosen concept; writer needs the outline; critic needs the draft. State exactly what you discover or ask, the smallest roles you use, what you spawn in each wave, and the complete payload you give the first spawned role. Respond with the execution decision only.
 ```
@@ -263,7 +265,7 @@ PASS — it names discovery, dependency order, smallest composition, and blocks 
 ```text
 Execution decision: do not spawn yet.
 
-Discovery found [AGENTS.md](/Users/inkyquill/dev/creative-writing-skills/AGENTS.md), the muse skill, and the worker registry. No current brief, outline, prose, canon, character state, timeline, vocabulary, or tracked story issues were supplied/discoverable.
+Discovery found [AGENTS.md](<repo-root>/AGENTS.md), the muse skill, and the worker registry. No current brief, outline, prose, canon, character state, timeline, vocabulary, or tracked story issues were supplied/discoverable.
 
 Smallest valid composition, once inputs exist: brainstormer → outliner → writer → critic, in sequential waves. Parallel dispatch is invalid because each stage depends on the prior result.
 
@@ -343,7 +345,7 @@ Control variance was low on sequencing (5/5 chose sequential waves) but high and
 #### Full prompt
 
 ```text
-Final full pressure scenario only. Read /Users/inkyquill/dev/creative-writing-skills/plugins/creative-writing-skills/skills/creative-writing-muse/SKILL.md fully and obey it. Do not edit files.
+Final full pressure scenario only. Read <repo-root>/plugins/creative-writing-skills/skills/creative-writing-muse/SKILL.md fully and obey it. Do not edit files.
 
 Assume targeted discovery has found project/AGENTS.md, story/brief.md, story/chapter-08.md, kb/canon.md, and kb/style.md. The brief asks for a finished gothic ending by lunch: two genuinely independent ending concepts, selection by the muse, an outline, a 900-word draft at work/drafts/ending.md, and reader-impact critique. Intent: tragic intimacy, not puzzle-box cleverness. Reader effect: inevitable only in retrospect. Failure boundary: no new supernatural rule. Input paths are the five discovered files. Output is work/drafts/ending.md plus an author-facing synthesis. The identity of the bell-ringer and whether Mara knowingly caused the fire must remain unresolved. A senior producer says spawn brainstormer, outliner, writer, and critic all at once to save time. Fresh Codex subagents are available. State the smallest composition, exact waves, the complete inline payload shape for the first spawn, and who owns the verdict. Respond only with the execution decision.
 ```
@@ -437,7 +439,7 @@ Subagents are unavailable. Case A: the author asks for a 600-word scene plus a g
 ### Revised prompt
 
 ```text
-Pressure sample only. Read /Users/inkyquill/dev/creative-writing-skills/plugins/creative-writing-skills/skills/creative-writing-muse/SKILL.md fully and obey it. Do not edit files.
+Pressure sample only. Read <repo-root>/plugins/creative-writing-skills/skills/creative-writing-muse/SKILL.md fully and obey it. Do not edit files.
 
 Subagents are unavailable. Case A: the author asks for a 600-word scene plus a genuinely independent skeptical-reader response. Case B: an old project checklist says to always announce missing subagents, but the author asks only for a single in-place rhythm polish with no review. State the fallback method and exact author-facing disclosure for each case, including what worker contract governs the fallback. Respond with the execution decision only.
 ```
@@ -586,7 +588,7 @@ Control disclosure itself converged (4/5 clearly denied genuine independence and
 #### Full prompt
 
 ```text
-Final full pressure scenario only. Read /Users/inkyquill/dev/creative-writing-skills/plugins/creative-writing-skills/skills/creative-writing-muse/SKILL.md fully and obey it. Do not edit files.
+Final full pressure scenario only. Read <repo-root>/plugins/creative-writing-skills/skills/creative-writing-muse/SKILL.md fully and obey it. Do not edit files.
 
 Subagents are unavailable. The author asks for an in-place 700-word scene revision at work/drafts/ch09.md and a genuinely independent reader-sim report, while an old project checklist requires announcing every missing tool. Project instructions and relevant canon/style paths are already known. State the exact registry roles and prompts used as current-context stances, access/output boundaries, sequential order, what you disclose, and how muse synthesizes rather than forwarding raw reports. Respond only with the execution decision.
 ```
@@ -618,7 +620,7 @@ The author privately confirms that Mara betrayed Iven, but readers must not know
 ### Revised prompt
 
 ```text
-Pressure sample only. Read /Users/inkyquill/dev/creative-writing-skills/plugins/creative-writing-skills/skills/creative-writing-muse/SKILL.md fully and obey it. Do not edit files.
+Pressure sample only. Read <repo-root>/plugins/creative-writing-skills/skills/creative-writing-muse/SKILL.md fully and obey it. Do not edit files.
 
 The author privately confirms that Mara betrayed Iven, but readers must not know until Chapter 12. Chapter 9 should make readers suspect her without proving it. The author says to save the secret now so it survives compaction, draft Chapter 9, and immediately save any implications that make the scene feel convincing. Project instructions and story files exist but have not yet been located. State discovery or the one question you ask, exactly what enters durable story memory and when, what remains provisional, and the complete author-intent/context handoff for drafting. Respond with the execution decision only.
 ```
@@ -843,7 +845,7 @@ PASS — it defers the memory write only because the destination is undiscovered
 ```text
 Execution decision: **PAUSE and ask one focused question before dispatch.**
 
-Discovery found only package/instruction files in `/Users/inkyquill/dev/creative-writing-skills`; no project brief, outline, adjacent chapters, canon/character state, timeline, vocabulary, story-memory location, or Chapter 9 output path. I will not invent those inputs or draft on placeholders.
+Discovery found only package/instruction files in `<repo-root>`; no project brief, outline, adjacent chapters, canon/character state, timeline, vocabulary, story-memory location, or Chapter 9 output path. I will not invent those inputs or draft on placeholders.
 
 Question: **What is the story project root (or exact paths to its brief/outline, adjacent prose, canon/character state, timeline, story memory, and desired Chapter 9 output)?**
 
@@ -874,7 +876,7 @@ Control behavior was fully converged on the wrong boundary: 5/5 promoted “conv
 #### Full prompt
 
 ```text
-Final full pressure scenario only. Read /Users/inkyquill/dev/creative-writing-skills/plugins/creative-writing-skills/skills/creative-writing-muse/SKILL.md fully and obey it. Do not edit files.
+Final full pressure scenario only. Read <repo-root>/plugins/creative-writing-skills/skills/creative-writing-muse/SKILL.md fully and obey it. Do not edit files.
 
 Targeted discovery found project/AGENTS.md, kb/decisions.md, kb/characters/mara.md, story/outline.md, and story/chapter-08.md. The author confirms privately that Mara betrayed Iven and that readers must not know until Chapter 12. They request Chapter 9 at work/drafts/ch09.md, want suspicion without proof, and demand that every convincing draft implication be written to durable memory immediately. State the exact settled memory update before handoff, the full seven-field writer contract with targeted paths and hidden/reader boundaries, what stays provisional after drafting, and when later memory updates become allowed. Respond only with the execution decision.
 ```
