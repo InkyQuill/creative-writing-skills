@@ -21,7 +21,11 @@ from scripts.distribution import (
     split_frontmatter,
 )
 from scripts.validate_distribution import main as validate_main
-from scripts.validate_distribution import _is_within, validate
+from scripts.validate_distribution import (
+    _is_within,
+    compute_structured_artifact_audit,
+    validate,
+)
 
 
 EXPECTED_SKILLS = {
@@ -56,6 +60,37 @@ PRESSURE_RESULTS = REPO_ROOT / "tests" / "fixtures" / "muse-pressure" / "results
 
 
 class DistributionScaffoldTests(unittest.TestCase):
+    def test_structured_artifact_audit_is_deterministic_and_current(self):
+        skill_root = PLUGIN_ROOT / "skills" / "structured-artifact"
+        expected = load_json(
+            REPO_ROOT / "config" / "structured-artifact-audit.json"
+        )
+        self.assertEqual(compute_structured_artifact_audit(skill_root), expected)
+        self.assertEqual(
+            [item["path"] for item in expected["resources"]],
+            sorted(item["path"] for item in expected["resources"]),
+        )
+        result = subprocess.run(
+            ["python3", "scripts/audit_structured_artifact_resources.py"],
+            cwd=REPO_ROOT,
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(json.loads(result.stdout), expected)
+
+    def test_structured_artifact_audit_helper_rejects_symlinks(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            target = root / "target.js"
+            target.write_text("safe();\n")
+            (root / "linked.js").symlink_to(target)
+            with self.assertRaisesRegex(
+                ValueError,
+                "structured-artifact resource must be a regular file",
+            ):
+                compute_structured_artifact_audit(root)
+
     def test_worker_registry_is_complete_and_resolvable(self):
         registry_path = PLUGIN_ROOT / "skills" / "creative-writing-muse" / "resources" / "workers" / "registry.json"
         registry = load_json(registry_path)
@@ -797,6 +832,14 @@ class ValidatorTests(unittest.TestCase):
             },
         }
         self._write_json(self.root / "config" / "distribution.json", config)
+        self._write_json(
+            self.root / "config" / "structured-artifact-audit.json",
+            {
+                "schema_version": 1,
+                "hash_algorithm": "sha256",
+                "resources": [],
+            },
+        )
 
         for name in EXPECTED_SKILLS:
             skill = self.skills / name / "SKILL.md"
@@ -868,6 +911,24 @@ class ValidatorTests(unittest.TestCase):
 
     def write_claude_manifest(self):
         self._write_json(self.root / "cw" / ".claude-plugin" / "plugin.json", self.claude_manifest)
+
+    def approve_structured_artifact_resources(self, *relative_paths):
+        resources = []
+        root = self.skills / "structured-artifact"
+        for relative_path in sorted(relative_paths):
+            path = root / relative_path
+            resources.append({
+                "path": relative_path,
+                "sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
+            })
+        self._write_json(
+            self.root / "config" / "structured-artifact-audit.json",
+            {
+                "schema_version": 1,
+                "hash_algorithm": "sha256",
+                "resources": resources,
+            },
+        )
 
     def test_validator_accepts_complete_fixture(self):
         self.assertEqual(validate(self.root), [])
@@ -1062,7 +1123,7 @@ class ValidatorTests(unittest.TestCase):
             validate(self.root, canonical_only=True),
         )
 
-    def test_validator_rejects_unsafe_non_markdown_structured_artifact_resource(self):
+    def test_validator_rejects_unlisted_executable_resource(self):
         resource = (
             self.skills / "structured-artifact" / "resources" / "unsafe.html"
         )
@@ -1072,158 +1133,232 @@ class ValidatorTests(unittest.TestCase):
         )
 
         self.assertIn(
-            "structured-artifact: unsafe executable HTML/JavaScript in "
-            "resources/unsafe.html: innerHTML assignment",
+            "structured-artifact audit: unlisted executable resource resources/unsafe.html",
             validate(self.root, canonical_only=True),
         )
 
-    def test_validator_rejects_document_write_in_structured_artifact_markdown(self):
+    def test_validator_rejects_unlisted_claude_executable_resource(self):
         resource = (
-            self.skills / "structured-artifact" / "resources" / "unsafe.md"
+            self.root / "cw/skills/structured-artifact/resources/unsafe.html"
         )
         resource.parent.mkdir(exist_ok=True)
         resource.write_text(
-            "# Unsafe\n\n```html\n<script>document.write(userHtml)</script>\n```\n"
+            '<script>document /* gap */ .write?.(userHtml)</script>\n'
         )
 
         self.assertIn(
-            "structured-artifact: unsafe executable HTML/JavaScript in "
-            "resources/unsafe.md: document.write/writeln",
-            validate(self.root, canonical_only=True),
+            "cw/skills/structured-artifact audit: unlisted executable resource "
+            "resources/unsafe.html",
+            validate(self.root),
         )
 
-    def test_validator_rejects_empty_inner_html_assignment(self):
-        resource = (
-            self.skills / "structured-artifact" / "resources" / "clear.js"
-        )
-        resource.parent.mkdir(exist_ok=True)
-        resource.write_text('output.innerHTML = "";\n')
-
-        self.assertIn(
-            "structured-artifact: unsafe executable HTML/JavaScript in "
-            "resources/clear.js: innerHTML assignment",
-            validate(self.root, canonical_only=True),
-        )
-
-    def test_validator_accepts_safe_structured_artifact_dom_resource(self):
-        resource = (
-            self.skills / "structured-artifact" / "resources" / "safe.js"
-        )
-        resource.parent.mkdir(exist_ok=True)
-        resource.write_text(
-            'const button = document.createElement("button");\n'
-            "button.textContent = label;\n"
-            'button.addEventListener("click", render);\n'
-            "root.replaceChildren(button);\n"
-        )
-
-        self.assertFalse(
-            [problem for problem in validate(self.root, canonical_only=True) if "safe.js" in problem]
-        )
-
-    def test_validator_rejects_every_inner_html_assignment_operator(self):
-        resource = (
-            self.skills / "structured-artifact" / "resources" / "assignment.js"
-        )
-        resource.parent.mkdir(exist_ok=True)
-        operators = (
-            "=", "+=", "-=", "*=", "/=", "%=", "**=", "<<=", ">>=", ">>>=",
-            "&=", "^=", "|=", "&&=", "||=", "??=",
-        )
-        expected = (
-            "structured-artifact: unsafe executable HTML/JavaScript in "
-            "resources/assignment.js: innerHTML assignment"
-        )
-
-        for operator in operators:
-            with self.subTest(operator=operator):
-                resource.write_text(f"output.innerHTML {operator} userHtml;\n")
-                self.assertIn(expected, validate(self.root, canonical_only=True))
-
-    def test_validator_normalizes_optional_and_computed_sink_members(self):
-        resource = self.skills / "structured-artifact" / "resources" / "members.md"
-        resource.parent.mkdir(exist_ok=True)
+    def test_validator_discovers_executable_bearing_declared_text_suffixes(self):
+        resources = self.skills / "structured-artifact/resources"
+        resources.mkdir(exist_ok=True)
         cases = {
-            "optional direct write": (
-                "```js\ndocument?.write(userHtml);\n```\n",
-                "document.write/writeln",
-            ),
-            "optional computed writeln": (
-                "```js\ndocument?.['writeln'](userHtml);\n```\n",
-                "document.write/writeln",
-            ),
-            "computed write": (
-                "```html\n<script>document[\"write\"](userHtml);</script>\n```\n",
-                "document.write/writeln",
-            ),
-            "optional computed inner html": (
-                "```js\nnode?.['innerHTML'] ||= userHtml;\n```\n",
-                "innerHTML assignment",
-            ),
-            "computed outer html compound": (
-                "```js\nnode[\"outerHTML\"] &&= userHtml;\n```\n",
-                "outerHTML assignment",
-            ),
+            "component.tsx": "export const Demo = () => <button>Go</button>;\n",
+            "embedded.txt": "<script>run()</script>\n",
+            "vector.xml": '<svg xmlns="http://www.w3.org/2000/svg"></svg>\n',
+            "fenced.rst": "```javascript\nrun();\n```\n",
         }
-
-        for label, (source, finding) in cases.items():
-            with self.subTest(label=label):
-                resource.write_text(source)
+        for name, source in cases.items():
+            with self.subTest(name=name):
+                path = resources / name
+                path.write_text(source)
                 self.assertIn(
-                    "structured-artifact: unsafe executable HTML/JavaScript in "
-                    f"resources/members.md: {finding}",
+                    "structured-artifact audit: unlisted executable resource "
+                    f"resources/{name}",
                     validate(self.root, canonical_only=True),
                 )
+                path.unlink()
 
-    def test_validator_normalizes_claude_structured_artifact_sink_members(self):
+    def test_validator_rejects_invalid_audit_schema(self):
+        audit = self.root / "config/structured-artifact-audit.json"
+        self._write_json(audit, {
+            "schema_version": 2,
+            "hash_algorithm": "sha512",
+            "resources": "automatic",
+            "extra": True,
+        })
+
+        problems = validate(self.root, canonical_only=True)
+        self.assertIn("structured-artifact audit fields do not match schema", problems)
+        self.assertIn("structured-artifact audit schema_version must be 1", problems)
+        self.assertIn("structured-artifact audit hash_algorithm must be sha256", problems)
+        self.assertIn("structured-artifact audit resources must be a list", problems)
+
+    def test_validator_rejects_canonical_executable_resource_mutations_by_hash(self):
         resource = (
-            self.root / "cw/skills/structured-artifact/resources/members.md"
+            self.skills / "structured-artifact" / "resources" / "audited.md"
         )
         resource.parent.mkdir(exist_ok=True)
-        cases = {
-            "logical assignment": (
-                "node.innerHTML ??= userHtml;",
-                "innerHTML assignment",
-            ),
-            "computed outer assignment": (
-                "node['outerHTML'] **= 2;",
-                "outerHTML assignment",
-            ),
-            "optional write": (
-                "document?.write(userHtml);",
-                "document.write/writeln",
-            ),
-            "computed writeln": (
-                "document[\"writeln\"](userHtml);",
-                "document.write/writeln",
+        resource.write_text("```js\nroot.replaceChildren(node);\n```\n")
+        self.approve_structured_artifact_resources("resources/audited.md")
+        mutations = {
+            "logical assignment": "```js\nnode.innerHTML ||= html;\n```\n",
+            "optional call": "```js\ndocument.write?.(html);\n```\n",
+            "computed optional call": "```js\ndocument['writeln']?.(html);\n```\n",
+            "comment trivia": "```js\ndocument /* gap */ .write(html);\n```\n",
+            "quoted Mermaid key": (
+                "```mermaid\n%%{init: {'securityLevel': 'loose'}}%%\ngraph TD\n```\n"
             ),
         }
-
-        for label, (source, finding) in cases.items():
-            with self.subTest(label=label):
-                resource.write_text(f"```js\n{source}\n```\n")
-                self.assertIn(
-                    "cw/skills/structured-artifact: unsafe executable HTML/JavaScript "
-                    f"in resources/members.md: {finding}",
-                    validate(self.root),
-                )
-
-    def test_validator_accepts_safe_optional_dom_members_in_both_runtimes(self):
-        source = (
-            "const button = document?.createElement('button');\n"
-            "button?.['textContent'] = label;\n"
-            "button?.addEventListener('click', render);\n"
-            "root?.['replaceChildren'](button);\n"
+        expected = (
+            "structured-artifact audit: SHA-256 mismatch for resources/audited.md"
         )
-        canonical = self.skills / "structured-artifact/resources/safe-optional.js"
-        claude = self.root / "cw/skills/structured-artifact/resources/safe-optional.js"
+        for label, source in mutations.items():
+            with self.subTest(label=label):
+                resource.write_text(source)
+                self.assertIn(expected, validate(self.root, canonical_only=True))
+
+    def test_validator_rejects_claude_executable_resource_mutations_by_hash(self):
+        canonical = self.skills / "structured-artifact/resources/audited.md"
+        generated = self.root / "cw/skills/structured-artifact/resources/audited.md"
         canonical.parent.mkdir(exist_ok=True)
-        claude.parent.mkdir(exist_ok=True)
+        generated.parent.mkdir(exist_ok=True)
+        approved = "```js\nroot.replaceChildren(node);\n```\n"
+        canonical.write_text(approved)
+        generated.write_text(approved)
+        self.approve_structured_artifact_resources("resources/audited.md")
+        mutations = (
+            "```js\nnode.innerHTML ||= html;\n```\n",
+            "```js\ndocument.write?.(html);\n```\n",
+            "```js\ndocument[/* gap */ 'writeln']?.(html);\n```\n",
+            "```mermaid\n%%{init: {\"securityLevel\": \"loose\"}}%%\ngraph TD\n```\n",
+        )
+        expected = (
+            "cw/skills/structured-artifact audit: SHA-256 mismatch for "
+            "resources/audited.md"
+        )
+        for source in mutations:
+            with self.subTest(source=source):
+                generated.write_text(source)
+                self.assertIn(expected, validate(self.root))
+
+    def test_validator_accepts_approved_strings_comments_prose_and_safe_dom(self):
+        source = (
+            "# Reviewed examples\n\n"
+            "Prose may say `node.innerHTML = html` without executing it.\n\n"
+            "```js\n"
+            "const warning = 'never use document.write(html)';\n"
+            "// document.write(html) is prohibited.\n"
+            "/* node.insertAdjacentHTML('beforeend', html) is prohibited. */\n"
+            "const button = document?.createElement('button');\n"
+            "button.textContent = warning;\n"
+            "button.addEventListener('click', render);\n"
+            "root.replaceChildren(button);\n"
+            "```\n"
+        )
+        canonical = self.skills / "structured-artifact/resources/reviewed.md"
+        generated = self.root / "cw/skills/structured-artifact/resources/reviewed.md"
+        canonical.parent.mkdir(exist_ok=True)
+        generated.parent.mkdir(exist_ok=True)
         canonical.write_text(source)
-        claude.write_text(source)
+        generated.write_text(source)
+        self.approve_structured_artifact_resources("resources/reviewed.md")
 
         self.assertFalse(
-            [problem for problem in validate(self.root) if "safe-optional.js" in problem]
+            [problem for problem in validate(self.root) if "reviewed.md" in problem]
+        )
+
+    def test_validator_rejects_missing_and_unsafe_audit_entries(self):
+        audit_path = self.root / "config/structured-artifact-audit.json"
+        cases = {
+            "missing": {
+                "path": "resources/missing.js",
+                "sha256": "0" * 64,
+            },
+            "escape": {
+                "path": "../outside.js",
+                "sha256": "0" * 64,
+            },
+        }
+        for label, entry in cases.items():
+            with self.subTest(label=label):
+                self._write_json(audit_path, {
+                    "schema_version": 1,
+                    "hash_algorithm": "sha256",
+                    "resources": [entry],
+                })
+                problems = validate(self.root, canonical_only=True)
+                if label == "missing":
+                    self.assertIn(
+                        "structured-artifact audit: listed resource is missing "
+                        "resources/missing.js",
+                        problems,
+                    )
+                else:
+                    self.assertIn(
+                        "structured-artifact audit path is not a safe relative path: "
+                        "../outside.js",
+                        problems,
+                    )
+
+    def test_validator_rejects_duplicate_unsorted_and_symlinked_audit_entries(self):
+        resources = self.skills / "structured-artifact/resources"
+        resources.mkdir(exist_ok=True)
+        first = resources / "a.js"
+        second = resources / "b.js"
+        first.write_text("a();\n")
+        second.write_text("b();\n")
+        digest = hashlib.sha256(first.read_bytes()).hexdigest()
+        audit = self.root / "config/structured-artifact-audit.json"
+        self._write_json(audit, {
+            "schema_version": 1,
+            "hash_algorithm": "sha256",
+            "resources": [
+                {"path": "resources/b.js", "sha256": hashlib.sha256(second.read_bytes()).hexdigest()},
+                {"path": "resources/a.js", "sha256": digest},
+                {"path": "resources/a.js", "sha256": digest},
+            ],
+        })
+        problems = validate(self.root, canonical_only=True)
+        self.assertIn("structured-artifact audit resources must be sorted by path", problems)
+        self.assertIn("structured-artifact audit contains duplicate path resources/a.js", problems)
+
+        target = self.root / "outside.js"
+        target.write_text("a();\n")
+        first.unlink()
+        first.symlink_to(target)
+        self._write_json(audit, {
+            "schema_version": 1,
+            "hash_algorithm": "sha256",
+            "resources": [{"path": "resources/a.js", "sha256": digest}],
+        })
+        self.assertIn(
+            "structured-artifact audit: listed resource must be a regular file "
+            "resources/a.js",
+            validate(self.root, canonical_only=True),
+        )
+
+    def test_validator_rejects_symlinked_audit_path_ancestor_without_following_it(self):
+        skill_root = self.skills / "structured-artifact"
+        outside = self.root / "outside"
+        outside.mkdir()
+        target = outside / "audited.js"
+        target.write_text("safe();\n")
+        (skill_root / "linked").symlink_to(outside, target_is_directory=True)
+        self._write_json(
+            self.root / "config/structured-artifact-audit.json",
+            {
+                "schema_version": 1,
+                "hash_algorithm": "sha256",
+                "resources": [{
+                    "path": "linked/audited.js",
+                    "sha256": hashlib.sha256(target.read_bytes()).hexdigest(),
+                }],
+            },
+        )
+
+        problems = validate(self.root, canonical_only=True)
+        self.assertIn(
+            "structured-artifact: runtime resource linked must not be a symlink",
+            problems,
+        )
+        self.assertIn(
+            "structured-artifact audit: listed resource must be a regular file "
+            "linked/audited.js",
+            problems,
         )
 
     def test_validator_rejects_invalid_claude_invocation_policy(self):

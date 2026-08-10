@@ -1,9 +1,12 @@
 #!/usr/bin/env python3
 
 import argparse
+import hashlib
 import json
+import os
 import re
-from pathlib import Path
+import stat
+from pathlib import Path, PurePosixPath
 from urllib.parse import unquote
 
 if __package__:
@@ -121,152 +124,116 @@ STRUCTURED_ARTIFACT_EXECUTABLE_FENCE_LANGUAGES = {
     "cjs", "html", "htm", "javascript", "js", "jsx", "mermaid", "mjs",
     "svg", "ts", "tsx", "typescript",
 }
-STRUCTURED_ARTIFACT_HIGH_RISK_RE = re.compile(
-    r"innerHTML|outerHTML|insertAdjacentHTML|\b(?:write|writeln)\b|setAttribute"
-    r"|srcdoc|dangerouslySetInnerHTML|createContextualFragment|setHTMLUnsafe"
-    r"|parseHTMLUnsafe|parseFromString|\beval\b|\bFunction\b|setTimeout"
-    r"|setInterval|securityLevel|^\s*click\s|<[^>]+\s+on[a-z]+\s*=",
+STRUCTURED_ARTIFACT_RAW_EXECUTABLE_RE = re.compile(
+    r"<\s*(?:script|svg)\b|<[^>]+\s+on[a-z]+\s*=",
     re.IGNORECASE,
 )
-STRUCTURED_ARTIFACT_COMPUTED_MEMBER_RE = re.compile(
-    r"(?:\?\.)?\[\s*(['\"])([A-Za-z_$][A-Za-z0-9_$]*)\1\s*\]"
-)
-STRUCTURED_ARTIFACT_OPTIONAL_MEMBER_RE = re.compile(
-    r"\?\.\s*(?=[A-Za-z_$])"
-)
-JS_ASSIGNMENT_OPERATOR_RE = (
-    r"(?:\*\*=|>>>=|<<=|>>=|&&=|\|\|=|\?\?=|\+=|-=|\*=|/=|%=|&=|\^=|\|="
-    r"|=(?!=|>))"
-)
-STRUCTURED_ARTIFACT_UNSAFE_PATTERNS = (
-    (
-        "innerHTML assignment",
-        re.compile(
-            rf"\.innerHTML\s*{JS_ASSIGNMENT_OPERATOR_RE}",
-            re.IGNORECASE,
-        ),
-    ),
-    (
-        "outerHTML assignment",
-        re.compile(
-            rf"\.outerHTML\s*{JS_ASSIGNMENT_OPERATOR_RE}",
-            re.IGNORECASE,
-        ),
-    ),
-    ("insertAdjacentHTML", re.compile(r"\.insertAdjacentHTML\s*\(", re.IGNORECASE)),
-    (
-        "document.write/writeln",
-        re.compile(r"\bdocument\.(?:write|writeln)\s*\(", re.IGNORECASE),
-    ),
-    ("inline event attribute", re.compile(r"<[^>]+\s+on[a-z]+\s*=", re.IGNORECASE)),
-    (
-        "event-handler setAttribute",
-        re.compile(r"\.setAttribute\s*\(\s*['\"]on[a-z]+['\"]", re.IGNORECASE),
-    ),
-    (
-        "srcdoc assignment",
-        re.compile(
-            rf"\.srcdoc\s*{JS_ASSIGNMENT_OPERATOR_RE}"
-            r"|\.setAttribute\s*\(\s*['\"]srcdoc['\"]",
-            re.IGNORECASE,
-        ),
-    ),
-    (
-        "dangerous raw HTML API",
-        re.compile(
-            r"\bdangerouslySetInnerHTML\b"
-            r"|\.(?:createContextualFragment|setHTMLUnsafe)\s*\("
-            r"|\bDocument\.parseHTMLUnsafe\s*\("
-            r"|\.parseFromString\s*\([^,]+,\s*['\"]text/html['\"]",
-            re.IGNORECASE,
-        ),
-    ),
-    (
-        "string-to-code sink",
-        re.compile(
-            r"\beval\s*\(|\b(?:new\s+)?Function\s*\("
-            r"|\b(?:setTimeout|setInterval)\s*\(\s*['\"`]",
-            re.IGNORECASE,
-        ),
-    ),
-    (
-        "Mermaid loose security",
-        re.compile(r"securityLevel\s*:\s*['\"]loose['\"]", re.IGNORECASE),
-    ),
-    ("Mermaid callback directive", re.compile(r"(?m)^\s*click\s+\w+\s+\w+")),
-)
+STRUCTURED_ARTIFACT_AUDIT_NAME = "structured-artifact-audit.json"
 
 
-def _structured_artifact_executable_text(
-    text: str,
-    suffix: str,
-) -> str:
-    if suffix in STRUCTURED_ARTIFACT_EXECUTABLE_SUFFIXES:
-        return text
-
-    selected: list[str] = []
-    fence_character = ""
-    fence_length = 0
-    include_fence = False
+def _has_executable_fence(text: str) -> bool:
     for line in text.splitlines():
         stripped = line.lstrip(" ")
-        indent = len(line) - len(stripped)
-        if not fence_character and indent <= 3 and stripped[:1] in {"`", "~"}:
-            character = stripped[0]
-            marker_length = len(stripped) - len(stripped.lstrip(character))
-            if marker_length >= 3:
-                info = stripped[marker_length:].strip().split(maxsplit=1)
-                language = info[0].lower() if info else ""
-                fence_character = character
-                fence_length = marker_length
-                include_fence = language in STRUCTURED_ARTIFACT_EXECUTABLE_FENCE_LANGUAGES
-                continue
-        if fence_character:
-            closing = stripped.rstrip()
-            if (
-                indent <= 3
-                and closing
-                and set(closing) == {fence_character}
-                and len(closing) >= fence_length
-            ):
-                fence_character = ""
-                fence_length = 0
-                include_fence = False
-                continue
-            if include_fence:
-                selected.append(line)
+        if len(line) - len(stripped) > 3 or stripped[:1] not in {"`", "~"}:
             continue
-        if STRUCTURED_ARTIFACT_HIGH_RISK_RE.search(line):
-            selected.append(line)
-    return "\n".join(selected)
+        marker = stripped[0]
+        marker_length = len(stripped) - len(stripped.lstrip(marker))
+        if marker_length < 3:
+            continue
+        info = stripped[marker_length:].strip().split(maxsplit=1)
+        if info and info[0].lower() in STRUCTURED_ARTIFACT_EXECUTABLE_FENCE_LANGUAGES:
+            return True
+    return False
 
 
-def _normalize_javascript_members(text: str) -> str:
-    normalized = STRUCTURED_ARTIFACT_COMPUTED_MEMBER_RE.sub(
-        lambda match: f".{match.group(2)}",
-        text,
+def _is_executable_artifact(path: Path, content: bytes) -> bool:
+    suffix = path.suffix.lower()
+    if suffix in STRUCTURED_ARTIFACT_EXECUTABLE_SUFFIXES:
+        return True
+    if suffix not in TEXT_RUNTIME_SUFFIXES:
+        return False
+    try:
+        text = content.decode("utf-8")
+    except UnicodeDecodeError:
+        return False
+    return _has_executable_fence(text) or bool(
+        STRUCTURED_ARTIFACT_RAW_EXECUTABLE_RE.search(text)
     )
-    return STRUCTURED_ARTIFACT_OPTIONAL_MEMBER_RE.sub(".", normalized)
 
 
-def _validate_structured_artifact_resource(
-    owner: str,
-    relative: str,
-    suffix: str,
-    text: str,
-    problems: list[str],
-) -> None:
-    executable = _normalize_javascript_members(
-        _structured_artifact_executable_text(text, suffix)
-    )
-    findings: set[str] = set()
-    for finding, pattern in STRUCTURED_ARTIFACT_UNSAFE_PATTERNS:
-        if pattern.search(executable):
-            findings.add(finding)
-    for finding in sorted(findings):
-        problems.append(
-            f"{owner}: unsafe executable HTML/JavaScript in {relative}: {finding}"
-        )
+def _regular_files_no_follow(root: Path, *, reject_unsafe: bool = False):
+    try:
+        root_mode = root.lstat().st_mode
+    except OSError as error:
+        if reject_unsafe:
+            raise ValueError(f"cannot inspect structured-artifact root: {error}") from error
+        return
+    if not stat.S_ISDIR(root_mode):
+        if reject_unsafe:
+            raise ValueError("structured-artifact root must be a real directory")
+        return
+    pending = [root]
+    while pending:
+        directory = pending.pop()
+        try:
+            entries = sorted(os.scandir(directory), key=lambda entry: entry.name)
+        except OSError as error:
+            if reject_unsafe:
+                raise ValueError(
+                    f"cannot inspect structured-artifact directory {directory}: {error}"
+                ) from error
+            continue
+        for entry in entries:
+            path = Path(entry.path)
+            try:
+                mode = entry.stat(follow_symlinks=False).st_mode
+            except OSError as error:
+                if reject_unsafe:
+                    raise ValueError(
+                        f"cannot inspect structured-artifact resource {path}: {error}"
+                    ) from error
+                continue
+            if stat.S_ISDIR(mode):
+                pending.append(path)
+            elif stat.S_ISREG(mode):
+                yield path
+            elif reject_unsafe:
+                raise ValueError(
+                    f"structured-artifact resource must be a regular file: {path}"
+                )
+
+
+def _lstat_relative_no_follow(root: Path, relative: str) -> os.stat_result | None:
+    current = root
+    parts = PurePosixPath(relative).parts
+    for index, part in enumerate(parts):
+        current = current / part
+        try:
+            result = current.lstat()
+        except OSError:
+            return None
+        if stat.S_ISLNK(result.st_mode):
+            return result
+        if index < len(parts) - 1 and not stat.S_ISDIR(result.st_mode):
+            return result
+    return result
+
+
+def compute_structured_artifact_audit(skill_root: Path) -> dict[str, object]:
+    resources = []
+    for path in _regular_files_no_follow(skill_root, reject_unsafe=True):
+        content = path.read_bytes()
+        if _is_executable_artifact(path, content):
+            resources.append({
+                "path": path.relative_to(skill_root).as_posix(),
+                "sha256": hashlib.sha256(content).hexdigest(),
+            })
+    resources.sort(key=lambda entry: entry["path"])
+    return {
+        "schema_version": 1,
+        "hash_algorithm": "sha256",
+        "resources": resources,
+    }
 
 
 def _load_object(
@@ -292,6 +259,182 @@ def _load_object(
         problems.append(f"invalid {label}: expected JSON object")
         return None
     return value
+
+
+def _load_structured_artifact_audit(
+    repo_root: Path,
+    problems: list[str],
+) -> dict[str, str] | None:
+    path = repo_root / "config" / STRUCTURED_ARTIFACT_AUDIT_NAME
+    if _reject_control_symlink(path, repo_root, "structured-artifact audit", problems):
+        return None
+    audit = _load_object(path, "structured-artifact audit", problems)
+    if audit is None:
+        return None
+    if set(audit) != {"schema_version", "hash_algorithm", "resources"}:
+        problems.append("structured-artifact audit fields do not match schema")
+    if audit.get("schema_version") != 1:
+        problems.append("structured-artifact audit schema_version must be 1")
+    if audit.get("hash_algorithm") != "sha256":
+        problems.append("structured-artifact audit hash_algorithm must be sha256")
+    resources = audit.get("resources")
+    if not isinstance(resources, list):
+        problems.append("structured-artifact audit resources must be a list")
+        return None
+
+    approved: dict[str, str] = {}
+    paths: list[str] = []
+    valid = True
+    for entry in resources:
+        if not isinstance(entry, dict) or set(entry) != {"path", "sha256"}:
+            problems.append("structured-artifact audit resource fields do not match schema")
+            valid = False
+            continue
+        relative = entry.get("path")
+        digest = entry.get("sha256")
+        safe_path = isinstance(relative, str) and bool(relative)
+        if safe_path:
+            pure = PurePosixPath(relative)
+            safe_path = (
+                not pure.is_absolute()
+                and "\\" not in relative
+                and relative == pure.as_posix()
+                and all(part not in {"", ".", ".."} for part in pure.parts)
+            )
+        if not safe_path:
+            problems.append(
+                f"structured-artifact audit path is not a safe relative path: {relative}"
+            )
+            valid = False
+            continue
+        if not isinstance(digest, str) or re.fullmatch(r"[0-9a-f]{64}", digest) is None:
+            problems.append(
+                f"structured-artifact audit SHA-256 is invalid for {relative}"
+            )
+            valid = False
+            continue
+        paths.append(relative)
+        if relative in approved:
+            problems.append(f"structured-artifact audit contains duplicate path {relative}")
+            valid = False
+        else:
+            approved[relative] = digest
+    if paths != sorted(paths):
+        problems.append("structured-artifact audit resources must be sorted by path")
+        valid = False
+    return approved if valid else None
+
+
+def _validate_structured_artifact_audit_root(
+    owner: str,
+    skill_root: Path,
+    approved: dict[str, str] | None,
+    problems: list[str],
+) -> None:
+    if approved is None or not skill_root.is_dir() or skill_root.is_symlink():
+        return
+    discovered: dict[str, str] = {}
+    for path in _regular_files_no_follow(skill_root):
+        try:
+            content = path.read_bytes()
+        except OSError:
+            continue
+        if _is_executable_artifact(path, content):
+            relative = path.relative_to(skill_root).as_posix()
+            discovered[relative] = hashlib.sha256(content).hexdigest()
+
+    for relative in sorted(set(discovered) - set(approved)):
+        problems.append(f"{owner} audit: unlisted executable resource {relative}")
+    for relative in sorted(approved):
+        result = _lstat_relative_no_follow(skill_root, relative)
+        if result is None:
+            problems.append(f"{owner} audit: listed resource is missing {relative}")
+            continue
+        if not stat.S_ISREG(result.st_mode):
+            problems.append(
+                f"{owner} audit: listed resource must be a regular file {relative}"
+            )
+            continue
+        if relative not in discovered:
+            problems.append(
+                f"{owner} audit: listed resource is not executable-bearing {relative}"
+            )
+            continue
+        if discovered[relative] != approved[relative]:
+            problems.append(f"{owner} audit: SHA-256 mismatch for {relative}")
+
+
+def _validate_claude_structured_artifact_audit(
+    canonical_root: Path,
+    claude_root: Path,
+    approved: dict[str, str] | None,
+    problems: list[str],
+) -> None:
+    owner = "cw/skills/structured-artifact"
+    if approved is None or not claude_root.is_dir() or claude_root.is_symlink():
+        return
+    discovered: dict[str, bytes] = {}
+    for path in _regular_files_no_follow(claude_root):
+        try:
+            content = path.read_bytes()
+        except OSError:
+            continue
+        if _is_executable_artifact(path, content):
+            discovered[path.relative_to(claude_root).as_posix()] = content
+    for relative in sorted(set(discovered) - set(approved)):
+        problems.append(f"{owner} audit: unlisted executable resource {relative}")
+
+    try:
+        if __package__:
+            from scripts.sync_claude_distribution import (
+                _transform_resource_markdown,
+                transform_skill,
+            )
+        else:
+            from sync_claude_distribution import (
+                _transform_resource_markdown,
+                transform_skill,
+            )
+    except ImportError as error:
+        problems.append(f"{owner} audit: cannot load Claude transformer: {error}")
+        return
+
+    for relative in sorted(approved):
+        canonical_path = canonical_root / PurePosixPath(relative)
+        canonical_result = _lstat_relative_no_follow(canonical_root, relative)
+        generated_result = _lstat_relative_no_follow(claude_root, relative)
+        if canonical_result is None or generated_result is None:
+            problems.append(f"{owner} audit: listed resource is missing {relative}")
+            continue
+        if (
+            not stat.S_ISREG(canonical_result.st_mode)
+            or not stat.S_ISREG(generated_result.st_mode)
+        ):
+            problems.append(
+                f"{owner} audit: listed resource must be a regular file {relative}"
+            )
+            continue
+        canonical_bytes = canonical_path.read_bytes()
+        if hashlib.sha256(canonical_bytes).hexdigest() != approved[relative]:
+            continue
+        if relative == "SKILL.md":
+            expected = transform_skill(
+                canonical_bytes.decode("utf-8"),
+                "structured-artifact",
+                EXPECTED_SKILLS,
+                disable_model_invocation=True,
+            ).encode("utf-8")
+        elif canonical_path.suffix.lower() == ".md":
+            expected = _transform_resource_markdown(
+                canonical_bytes.decode("utf-8"),
+                "structured-artifact",
+                PurePosixPath(relative),
+                EXPECTED_SKILLS,
+            ).encode("utf-8")
+        else:
+            expected = canonical_bytes
+        if discovered.get(relative) != expected:
+            problems.append(f"{owner} audit: SHA-256 mismatch for {relative}")
 
 
 def _nonempty_string(value: object) -> bool:
@@ -733,6 +876,7 @@ def _validate_skills(
     plugin_root: Path,
     worker_names: set[str],
     unreadable_paths: set[Path],
+    structured_artifact_audit: dict[str, str] | None,
     problems: list[str],
 ) -> None:
     skills_root = plugin_root / "skills"
@@ -797,18 +941,16 @@ def _validate_skills(
                     worker_names,
                     problems,
                 )
-            if skill_name == "structured-artifact":
-                _validate_structured_artifact_resource(
-                    skill_name,
-                    relative,
-                    path.suffix.lower(),
-                    text,
-                    problems,
-                )
             for match in PLATFORM_VOCABULARY_RE.finditer(text):
                 problems.append(
                     f"{skill_name}: forbidden canonical runtime vocabulary {match.group(0)}"
                 )
+    _validate_structured_artifact_audit_root(
+        "structured-artifact",
+        skills_root / "structured-artifact",
+        structured_artifact_audit,
+        problems,
+    )
 
 
 def _validate_workers(
@@ -947,6 +1089,7 @@ def _validate_claude_distribution(
     config: dict[str, object] | None,
     canonical_manifest: dict[str, object] | None,
     worker_names: set[str],
+    structured_artifact_audit: dict[str, str] | None,
     problems: list[str],
 ) -> None:
     claude_root_value: object = "cw"
@@ -1031,6 +1174,14 @@ def _validate_claude_distribution(
         if not path.is_file() and not path.is_symlink():
             problems.append(f"{relative.as_posix()}: missing generated skill")
 
+    if valid_skill_root:
+        _validate_claude_structured_artifact_audit(
+            repo_root / "plugins" / PLUGIN_NAME / "skills" / "structured-artifact",
+            skill_root / "structured-artifact",
+            structured_artifact_audit,
+            problems,
+        )
+
     agent_root = claude_root / "agents"
     valid_agent_root = True
     if agent_root.is_symlink():
@@ -1113,15 +1264,6 @@ def _validate_claude_distribution(
         except (OSError, UnicodeError) as error:
             problems.append(f"{label}: cannot read: {error}")
             continue
-        structured_artifact_root = skill_root / "structured-artifact"
-        if valid_skill_root and _is_within(path, structured_artifact_root):
-            _validate_structured_artifact_resource(
-                "cw/skills/structured-artifact",
-                _runtime_label(path, structured_artifact_root),
-                path.suffix.lower(),
-                text,
-                problems,
-            )
         if (
             path.name == "SKILL.md"
             and path.parent.parent == skill_root
@@ -1156,10 +1298,17 @@ def validate(repo_root: Path, *, canonical_only: bool = False) -> list[str]:
     manifest, plugin_root, canonical_safe = _validate_manifest(repo_root, problems)
     _validate_marketplace(repo_root, problems)
     config = _validate_config(repo_root, problems)
+    structured_artifact_audit = _load_structured_artifact_audit(repo_root, problems)
     if canonical_safe:
         workers = _validate_workers(plugin_root, config, unreadable_paths, problems)
         effective_workers = workers if workers == EXPECTED_WORKERS else EXPECTED_WORKERS
-        _validate_skills(plugin_root, effective_workers, unreadable_paths, problems)
+        _validate_skills(
+            plugin_root,
+            effective_workers,
+            unreadable_paths,
+            structured_artifact_audit,
+            problems,
+        )
     else:
         effective_workers = EXPECTED_WORKERS
     if not canonical_only:
@@ -1168,6 +1317,7 @@ def validate(repo_root: Path, *, canonical_only: bool = False) -> list[str]:
             config,
             manifest,
             effective_workers,
+            structured_artifact_audit,
             problems,
         )
     return list(dict.fromkeys(problems))
