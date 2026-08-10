@@ -7,6 +7,10 @@ skills:
   - creative-writing-craft
   - llm-writing
   - story-memory
+disallowed-tools:
+  - Edit
+  - Write
+  - NotebookEdit
 ---
 # Function
 

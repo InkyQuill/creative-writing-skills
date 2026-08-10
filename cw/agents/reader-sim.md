@@ -5,6 +5,10 @@ skills:
   - reader-sim
   - writing-principles
   - llm-writing
+disallowed-tools:
+  - Edit
+  - Write
+  - NotebookEdit
 ---
 # Function
 

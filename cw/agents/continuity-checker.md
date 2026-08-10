@@ -6,6 +6,10 @@ skills:
   - md-validation
   - shared-dao
   - story-memory
+disallowed-tools:
+  - Edit
+  - Write
+  - NotebookEdit
 ---
 # Function
 

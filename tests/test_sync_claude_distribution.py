@@ -237,6 +237,46 @@ class ClaudeTransformTests(unittest.TestCase):
         self.assertIn("Return findings to muse.", rendered)
         self.assertNotIn("model: inherit", rendered)
 
+    def test_read_only_worker_disallows_file_mutation_tools(self):
+        worker = {
+            "name": "critic",
+            "description": "Critique prose.",
+            "skills": ["story-review"],
+            "access": "read-only",
+            "claude": {"model": "inherit", "background": False},
+        }
+
+        rendered = render_agent(worker, "Return findings to muse.\n")
+
+        self.assertIn(
+            "disallowed-tools:\n  - Edit\n  - Write\n  - NotebookEdit", rendered
+        )
+
+    def test_workspace_write_worker_has_no_tool_restriction(self):
+        worker = {
+            "name": "writer",
+            "description": "Draft prose.",
+            "skills": ["story-review"],
+            "access": "workspace-write",
+            "claude": {"model": "inherit", "background": False},
+        }
+
+        rendered = render_agent(worker, "Draft the scene.\n")
+
+        self.assertNotIn("disallowed-tools", rendered)
+
+    def test_worker_rejects_invalid_access(self):
+        worker = {
+            "name": "critic",
+            "description": "Critique prose.",
+            "skills": ["story-review"],
+            "access": "read-write",
+            "claude": {"model": "inherit", "background": False},
+        }
+
+        with self.assertRaisesRegex(ValueError, "access must be read-only or workspace-write"):
+            render_agent(worker, "Return findings to muse.\n")
+
     def test_unknown_codex_only_construct_fails(self):
         source = (
             "---\n"
@@ -406,9 +446,16 @@ class ClaudeDistributionRenderTests(unittest.TestCase):
             critic = (output_root / "agents/critic.md").read_text()
             researcher = (output_root / "agents/web-researcher.md").read_text()
             muse = (output_root / "agents/muse.md").read_text()
-            for forbidden in ("model:", "tools:", "sandbox:", "access:"):
+            for forbidden in ("model:", "sandbox:", "access:"):
                 self.assertNotIn(forbidden, critic)
                 self.assertNotIn(forbidden, muse)
+            # critic is a read-only worker: it must be hard-blocked from
+            # mutating tools, not merely instructed not to use them.
+            self.assertIn(
+                "disallowed-tools:\n  - Edit\n  - Write\n  - NotebookEdit", critic
+            )
+            # muse is workspace-write and must not carry the same restriction.
+            self.assertNotIn("disallowed-tools:", muse)
             self.assertNotIn("background:", critic)
             self.assertIn("background: true", researcher)
             for skill in EXPECTED_SKILLS:

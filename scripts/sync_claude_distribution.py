@@ -566,6 +566,7 @@ def render_agent(
     description = worker.get("description")
     skills = worker.get("skills")
     claude = worker.get("claude")
+    access = worker.get("access")
     if not isinstance(name, str) or not re.fullmatch(r"[a-z][a-z0-9-]*", name):
         raise ValueError("worker name must be a kebab-case string")
     if not isinstance(description, str) or not description.strip():
@@ -578,6 +579,8 @@ def render_agent(
         raise ValueError(f"worker {name}: unknown skills {', '.join(unknown)}")
     if not isinstance(claude, dict):
         raise ValueError(f"worker {name}: claude metadata must be an object")
+    if access not in ("read-only", "workspace-write"):
+        raise ValueError(f"worker {name}: access must be read-only or workspace-write")
 
     lines = [
         "---",
@@ -588,6 +591,11 @@ def render_agent(
     ]
     if claude.get("background") is True:
         lines.append("background: true")
+    if access == "read-only":
+        # A read-only worker must never alter files, matching the muse
+        # orchestration contract ("a read-only role never alters files").
+        lines.append("disallowed-tools:")
+        lines.extend(f"  - {tool}" for tool in ("Edit", "Write", "NotebookEdit"))
     lines.extend(("---", ""))
     return "\n".join(lines) + _transform_markdown(
         prompt, f"agent {name}", known_skills
@@ -596,7 +604,7 @@ def render_agent(
 
 def _write_json(path: Path, value: object) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(value, indent=2, ensure_ascii=False) + "\n")
+    path.write_text(json.dumps(value, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
 
 
 def _copy_skill(
@@ -608,30 +616,42 @@ def _copy_skill(
     disable_model_invocation: bool,
 ) -> None:
     for path in sorted(source.rglob("*")):
-        if path.is_dir():
-            continue
         relative = path.relative_to(source)
+        try:
+            mode = path.stat(follow_symlinks=False).st_mode
+        except OSError as error:
+            raise ValueError(f"{skill_name}: cannot inspect {relative}: {error}") from error
         if relative.as_posix() == "agents/openai.yaml":
             continue
+        if stat.S_ISLNK(mode):
+            # Preflight already rejects symlinks in this tree; re-checking here
+            # closes the TOCTOU window between preflight and copy.
+            raise ValueError(f"{skill_name}: runtime resource is a symlink: {relative}")
+        if stat.S_ISDIR(mode):
+            continue
+        if not stat.S_ISREG(mode):
+            raise ValueError(f"{skill_name}: runtime resource is not a regular file: {relative}")
         target = destination / relative
         target.parent.mkdir(parents=True, exist_ok=True)
         if relative == Path("SKILL.md"):
             target.write_text(
                 transform_skill(
-                    path.read_text(),
+                    path.read_text(encoding="utf-8"),
                     skill_name,
                     known_skills,
                     disable_model_invocation=disable_model_invocation,
-                )
+                ),
+                encoding="utf-8",
             )
         elif path.suffix.lower() == ".md":
             target.write_text(
                 _transform_resource_markdown(
-                    path.read_text(),
+                    path.read_text(encoding="utf-8"),
                     skill_name,
                     relative,
                     known_skills,
-                )
+                ),
+                encoding="utf-8",
             )
         else:
             shutil.copyfile(path, target)
@@ -714,16 +734,18 @@ def _render_distribution(
             raise ValueError(f"worker {name}: invalid prompt path {prompt_name!r}")
         worker_names.add(name)
         (agents_root / f"{name}.md").write_text(
-            render_agent(worker, prompt_path.read_text(), context.known_skills)
+            render_agent(worker, prompt_path.read_text(encoding="utf-8"), context.known_skills),
+            encoding="utf-8",
         )
 
     muse_source = source_skills["creative-writing-muse"] / "SKILL.md"
     (agents_root / "muse.md").write_text(
         _render_muse_agent(
-            muse_source.read_text(),
+            muse_source.read_text(encoding="utf-8"),
             list(configured_skills),
             context.known_skills,
-        )
+        ),
+        encoding="utf-8",
     )
 
     canonical_manifest = load_json(context.manifest_path)
@@ -772,12 +794,22 @@ def _render_marketplace(repo_root: Path) -> dict[str, object]:
 
 def _inventory_entry(path: Path) -> InventoryEntry | None:
     try:
-        status = path.lstat()
+        status = os.lstat(path)
     except FileNotFoundError:
         return None
     mode = stat.S_IMODE(status.st_mode)
     if stat.S_ISREG(status.st_mode):
-        return InventoryEntry("file", mode, path.read_bytes())
+        flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)
+        descriptor = os.open(path, flags)
+        try:
+            opened_status = os.fstat(descriptor)
+            if not stat.S_ISREG(opened_status.st_mode):
+                return InventoryEntry("special", stat.S_IMODE(opened_status.st_mode))
+            with os.fdopen(descriptor, "rb", closefd=False) as stream:
+                payload = stream.read()
+        finally:
+            os.close(descriptor)
+        return InventoryEntry("file", mode, payload)
     if stat.S_ISDIR(status.st_mode):
         return InventoryEntry("directory", mode)
     if stat.S_ISLNK(status.st_mode):
