@@ -9,6 +9,70 @@ Use a disposable story project containing a short manuscript, two established
 canon facts, one deliberate continuity contradiction, a prose style sample,
 and writable `work/` and `kb/` directories. Reset it between scenarios.
 
+## Migration Verification Record
+
+Static verification checks repository structure and deterministic generation;
+it does not establish model routing or writing behavior.
+
+- [x] `git diff --check`
+- [x] `PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tests -v`
+- [x] `PYTHONDONTWRITEBYTECODE=1 python3 scripts/validate_distribution.py`
+- [x] `PYTHONDONTWRITEBYTECODE=1 python3 scripts/vendor_generic_skills.py --check`
+- [x] `PYTHONDONTWRITEBYTECODE=1 python3 scripts/sync_claude_distribution.py --check`
+- [x] `PYTHONDONTWRITEBYTECODE=1 python3 scripts/create_skill_zips.py`
+
+| Static verification field | Value |
+|---|---|
+| Date | 2026-08-10 |
+| Result | PASS |
+| Evidence | All commands exited 0 in fresh processes: 155 unit tests passed; distribution validation passed; the pinned licensed snapshots matched; the Claude distribution was in sync; and 25 deterministic `.skill` archives were created. |
+
+### Codex marketplace and installed skill surface
+
+- [x] `codex plugin marketplace add .` completed without requiring an
+  unattended confirmation.
+- [x] `creative-writing-skills` appeared as available from the added source.
+- [x] A supported Codex plugin surface installed the plugin and exposed 25
+  unique skills, including `creative-writing-muse` and `world-creation`.
+
+| Marketplace verification field | Value |
+|---|---|
+| Date | 2026-08-10 |
+| Codex CLI/build | Codex CLI 0.147.0 |
+| Marketplace result | PASS — `codex plugin marketplace add .` added local marketplace `creative-writing-skills` without a confirmation prompt. |
+| Availability/install result | PASS — `codex plugin list --available --json` exposed `creative-writing-skills@creative-writing-skills` version 0.5.9, and `codex plugin add creative-writing-skills@creative-writing-skills` installed and enabled it without a confirmation prompt. |
+| Installed skill evidence | PASS — a fresh ephemeral Codex context, instructed not to read files or use tools, reported 25 unique `creative-writing-skills:*` skills including `creative-writing-muse` and `world-creation`. |
+
+### Release-blocking model smoke scenarios
+
+Run each prompt in a genuinely fresh Codex conversation with the installed
+plugin. These remain unchecked unless routing and file effects are observed in
+that fresh model context.
+
+- [x] **Automatic muse prompt:** “Help me develop a novel idea about a city
+  that forgets one resident every winter.”
+  - **Expected:** automatic muse activation, intent capture, and specialist
+    routing without canon writes.
+  - **Date/model/build:** 2026-08-10; `gpt-5.6-sol`; Codex CLI 0.147.0.
+  - **Routing observed:** Automatic `creative-writing-muse` activation from the
+    installed plugin; intent and failure boundaries were stated; setting work
+    routed to installed `world-creation`, which presented one recommended
+    foundational decision.
+  - **Files touched:** None; the disposable fixture remained Git-clean.
+  - **Result:** PASS.
+- [x] **World-creation prompt:** “Use `$world-creation` to reconcile a new
+  inheritance law with this project's existing lore.”
+  - **Expected:** both supported layouts are discovered, one decision question
+    is asked with a recommendation, and no prose file is edited.
+  - **Date/model/build:** 2026-08-10; `gpt-5.6-sol`; Codex CLI 0.147.0.
+  - **Routing observed:** Explicit installed `world-creation` activation; it
+    inspected both layout families, read relevant lore, character, planning,
+    canonical-prose, and draft-prose evidence, identified the equally populated
+    layouts, and asked one jurisdiction question with a recommendation.
+  - **Files touched:** None; the disposable fixture remained Git-clean under a
+    workspace-write sandbox, including all canonical and draft prose.
+  - **Result:** PASS.
+
 ## 1. Automatic muse activation
 
 - [ ] **Prompt:** “Help me figure out why the middle of my novel drags, propose

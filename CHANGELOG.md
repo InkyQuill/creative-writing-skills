@@ -2,6 +2,23 @@
 
 ## [Unreleased]
 
+### Added
+- Added a Codex-primary repo marketplace and installable `creative-writing-skills` plugin containing exactly 25 canonical skills.
+- Added muse-owned worker prompts and a machine-readable worker registry for specialist delegation with a bounded single-agent fallback.
+- Added the standalone `world-creation` skill with dual-layout project discovery, one-decision-at-a-time recommendations, confirmation before canonization, and immutable manuscript prose.
+- Added distribution validation, deterministic Claude compatibility generation, licensed-vendor drift checks, release safeguards, and deterministic archives for all 25 skills.
+
+### Changed
+- Made `plugins/creative-writing-skills/` the canonical runtime and generate the committed `cw/` Claude Code, Cowork, and Claude.ai compatibility distribution from it.
+- Pinned the ten vendored generic skills to the Apache-2.0-covered `haowjy/creative-writing-skills` snapshot at `fd7a3ad9cd7697a0645ff6ff4bd5e809cf7673a3`; unlicensed `haowjy/meridian-base` is retained as provenance only and is not a permitted refresh source.
+
+### Removed
+- Removed the Mars package, Meridian dependency and commands, legacy root runtime trees, and generated Mars target configuration from active build, validation, release, and contributor workflows.
+
+### Breaking
+- Contributors who previously edited root `skills/` must now edit `plugins/creative-writing-skills/skills/` and regenerate `cw/`; `cw/` is generated output and must not be hand-edited.
+- `meridian mars` commands are no longer part of this repository's workflow. Use the repository-local Python validation, synchronization, vendoring, archive, and release entry points documented in `AGENTS.md`.
+
 ## [0.5.9] - 2026-08-08
 
 ### Changed

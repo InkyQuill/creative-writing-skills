@@ -21,9 +21,15 @@ runtime skill set plus the existing `world-creation` skill.
 - Preserve muse-led delegation to fresh writer, critic, editor, reader,
   planner, research, style, and continuity contexts.
 - Preserve a useful single-agent fallback when subagents are unavailable.
-- Promote the complete 25-skill runtime currently assembled in `cw/skills/`
-  into the canonical Codex plugin.
-- Add `world-creation` as a standalone 26th canonical skill.
+- Promote the complete 24-skill runtime currently assembled in `cw/skills/`
+  into the canonical Codex plugin, sourcing the 14 creative-writing-specific
+  skills from this repository and vendoring the remaining 10 generic skills
+  from the pinned Apache-2.0-covered snapshot in
+  `haowjy/creative-writing-skills` (see "Vendored generic skills" below).
+- Add `world-creation` — the author's existing skill, currently at
+  `~/Documents/writing/aria/.agents/skills/world-creation` and itself derived
+  from the MIT-licensed `grill-me` in `mattpocock/skills` and `worldbuilding`
+  in `danjdewhurst/story-skills` — as a standalone 25th canonical skill.
 - Keep Claude Code, Cowork, and Claude.ai support through a deterministic
   generated compatibility distribution under `cw/`.
 - Keep current story projects usable without automatic manuscript migration.
@@ -93,12 +99,38 @@ release artifacts. A small, explicit compatibility ruleset may contain
 Claude-only transformations, but `cw/` itself is not an independent prompt
 source.
 
+### Vendored generic skills
+
+Ten of the twenty-four skills inherited from the previous `cw/skills/` runtime
+are generic rather than creative-writing content: `information-hierarchy`,
+`intent-modeling`, `knowledge-layers`, `llm-writing`, `qi-layer`, `reflect`,
+`grill-with-docs`, `structured-artifact`, `md-validation`, and `zoom-out`.
+Their licensed distribution source is the Apache-2.0-covered `cw/skills/`
+snapshot in `haowjy/creative-writing-skills` commit
+`fd7a3ad9cd7697a0645ff6ff4bd5e809cf7673a3`.
+
+`plugins/creative-writing-skills/skills/` vendors those ten pinned snapshots
+through `scripts/vendor_generic_skills.py`. Apply mode reads the named source
+checkout, normalizes frontmatter to plain Codex `name`/`description` metadata,
+and writes the canonical plugin tree. Check mode proves the committed copies
+still match that exact licensed snapshot. Vendoring runs only when deliberately
+refreshing the pinned inputs; install and ordinary runtime use the committed
+copies.
+
+`haowjy/meridian-base` commit
+`d3c4b3313d38e18dd7970f1db34af15c25dbf238` is recorded only as the ten
+skills' immediate development provenance. That repository has no declared
+license, so it is not a distributable input and refreshes from it are
+prohibited unless a compatible license is declared. `THIRD_PARTY_NOTICES.md`
+records both the licensed source and the provenance boundary; the skills are
+not described as original InkyQuill work.
+
 ### Rejected alternatives
 
 1. A neutral `src/` schema generating both Codex and Claude was rejected
    because it would introduce another private package format and recreate the
    abstraction cost that Mars imposed.
-2. Separate hand-maintained `codex/` and `cw/` trees were rejected because 26
+2. Separate hand-maintained `codex/` and `cw/` trees were rejected because 25
    skills and the orchestration prompts would drift.
 3. A plugin manifest at repository root was rejected for distribution because
    the documented Git-backed repo marketplace layout expects installable
@@ -108,9 +140,11 @@ source.
 
 ### Canonical skill set
 
-Promote all 25 skills currently bundled in `cw/skills/` into the canonical
-Codex plugin. Add `world-creation` for a total of 26 skills. Preserve resources
-that those skills need and remove harness-specific metadata or instructions.
+Promote all 24 skills currently bundled in `cw/skills/` into the canonical
+Codex plugin — 14 sourced directly from this repository, 10 vendored per
+"Vendored generic skills" above. Add `world-creation` for a total of 25
+skills. Preserve resources that those skills need and remove harness-specific
+metadata or instructions.
 
 Each canonical skill must:
 
@@ -189,8 +223,24 @@ expected result, such as an adversarial critique immediately after drafting.
 
 ## World Creation Integration
 
-Add the existing Aria `world-creation` skill as a standalone canonical skill,
-not as a resource buried inside `story-planning`.
+Add the author's existing `world-creation` skill as a standalone canonical
+skill, not as a resource buried inside `story-planning`. Its starting point was
+the local skill at `~/Documents/writing/aria/.agents/skills/world-creation`,
+itself a modified derivative of Matt Pocock's `skills/productivity/grill-me`
+at `mattpocock/skills` commit
+`84fdeffd12f2ee307994d1eb6feb48173b6e0502` and Daniel Dewhurst's
+`skills/worldbuilding` at `danjdewhurst/story-skills` commit
+`c482d48f4eb9b488f033a77a51f9fae55cc0d75f`, both MIT-licensed. Their notices
+are retained in `LICENSES/` and `THIRD_PARTY_NOTICES.md`.
+
+The migration imports `SKILL.md` and moves `WORLD-FILE-FORMAT.md` to
+`references/world-file-format.md`, preserving the source's read-only and
+confirmation boundaries. It does not copy the local per-skill
+`agents/openai.yaml`: the supported skill package surface does not include
+that interface override, and the Claude generator excludes it as well. The
+useful world-creation starter request from that file instead lives in the
+plugin manifest's `interface.defaultPrompt`, where Codex supports plugin UI
+prompt suggestions.
 
 Preserve its strongest behavior:
 
@@ -220,6 +270,11 @@ Support both project layouts as equal first-class discovery conventions:
 The skill discovers the actual project structure rather than preferring one
 layout after it finds clear local conventions. Canonical prose and draft prose
 remain read-only throughout this workflow.
+
+As authored today, the source skill only implements Layout A
+(`worldbuilding/`, `characters/`, `chapters/`, `drafts/`, `plot/`). Layout B
+discovery is new work added during this integration, not an existing
+capability being preserved.
 
 Muse routes setting creation, reconciliation, expansion, and sanity-checking
 to `world-creation`. The skill also remains independently auto-triggerable and
@@ -310,7 +365,8 @@ Repository validation must check:
 
 - Codex plugin manifest schema and required metadata;
 - marketplace schema, policies, and source path;
-- all 26 canonical skill packages and UI metadata;
+- all 25 canonical skill packages and UI metadata;
+- vendored generic skills match their upstream source (vendoring drift);
 - skill names, descriptions, and directory-name consistency;
 - relative resource links;
 - worker-to-skill mappings;
@@ -341,11 +397,13 @@ CI runs:
 
 1. canonical Codex plugin and marketplace validation;
 2. canonical skill and reference linting;
-3. unit and fixture tests;
-4. Claude distribution drift and leak checks;
-5. Claude plugin validation when the Claude CLI is available in CI;
-6. Claude.ai skill archive generation;
-7. release tag and canonical plugin version consistency.
+3. vendored generic-skill drift check (`scripts/vendor_generic_skills.py`
+   check mode);
+4. unit and fixture tests;
+5. Claude distribution drift and leak checks;
+6. Claude plugin validation when the Claude CLI is available in CI;
+7. Claude.ai skill archive generation;
+8. release tag and canonical plugin version consistency.
 
 ### Behavioral release checklist
 
@@ -386,11 +444,16 @@ covers:
 
 1. Add the repo marketplace, canonical plugin manifest, repository-local
    validator, and initial tests.
-2. Promote the full current 25-skill runtime into the canonical plugin and port
-   it to vanilla Codex conventions.
+2. Promote the 14 creative-writing-specific skills from this repository into
+   the canonical plugin and port them to vanilla Codex conventions; stand up
+   `scripts/vendor_generic_skills.py` and vendor the 10 generic skills from
+   their confirmed upstream source.
 3. Convert muse and the former agent profiles into Codex orchestration plus
    worker prompt resources.
-4. Add and adapt `world-creation`, including both project-layout conventions.
+4. Import `world-creation` from
+   `~/Documents/writing/aria/.agents/skills/world-creation` into the canonical
+   plugin and add both project-layout conventions (Layout A is already
+   implemented there; Layout B is new).
 5. Implement deterministic Claude generation and regenerate `cw/`.
 6. Update project setup, README, architecture documentation, release tooling,
    and CI for the Codex-primary workflow.
@@ -407,8 +470,10 @@ new primary and compatibility paths pass their validation gates.
 - `codex plugin marketplace add InkyQuill/creative-writing-skills` recognizes
   the repo marketplace, and the plugin can be installed from it on a supported
   Codex surface.
-- The installed plugin exposes 26 valid skills with automatic and explicit
+- The installed plugin exposes 25 valid skills with automatic and explicit
   activation.
+- Vendored generic skills reproducibly match their upstream source and
+  validate identically to hand-authored skills.
 - Muse delegates to fresh Codex subagents for specialist work and provides a
   functioning single-agent fallback.
 - `world-creation` works directly and through muse without editing story prose.
