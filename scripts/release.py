@@ -77,7 +77,7 @@ def run_command(
 
 
 def _write_manifest(path: Path, manifest: dict[str, object]) -> None:
-    path.write_text(json.dumps(manifest, indent=2, ensure_ascii=False) + "\n")
+    path.write_text(json.dumps(manifest, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
 
 
 def _status(runner: Runner, repo_root: Path) -> set[str]:

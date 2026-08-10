@@ -242,7 +242,7 @@ def _load_object(
         problems.append(f"missing {label}: {path}")
         return None
     try:
-        value = json.loads(path.read_text())
+        value = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, UnicodeError) as error:
         if unreadable_paths is not None:
             unreadable_paths.add(path)
@@ -457,7 +457,7 @@ def _resolve_relative(base: Path, value: object, boundary: Path) -> Path | None:
         resolved.relative_to(boundary.resolve())
     except (OSError, RuntimeError, ValueError):
         return None
-    return candidate
+    return resolved
 
 
 def _is_within(path: Path, boundary: Path) -> bool:
@@ -907,7 +907,7 @@ def _validate_skills(
                 problems.append(f"{skill_name}: runtime resource {relative} escapes skill root")
                 continue
             try:
-                text = path.read_text()
+                text = path.read_text(encoding="utf-8")
             except (OSError, UnicodeError) as error:
                 problems.append(f"{skill_name}: cannot read {relative}: {error}")
                 continue
@@ -1241,7 +1241,7 @@ def _validate_claude_distribution(
             problems.append(f"{label}: runtime resource escapes Claude root")
             continue
         try:
-            text = path.read_text()
+            text = path.read_text(encoding="utf-8")
         except (OSError, UnicodeError) as error:
             problems.append(f"{label}: cannot read: {error}")
             continue

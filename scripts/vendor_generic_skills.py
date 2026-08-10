@@ -434,7 +434,7 @@ class InventoryEntry:
 
 
 def distribution() -> dict[str, object]:
-    value = json.loads(CONFIG_PATH.read_text())
+    value = json.loads(CONFIG_PATH.read_text(encoding="utf-8"))
     if not isinstance(value, dict):
         raise ValueError(f"Expected JSON object in {CONFIG_PATH}")
     return value
@@ -747,11 +747,12 @@ def _copy_skill(source: Path, destination: Path, skill_name: str, known_skills: 
     for markdown in destination.rglob("*.md"):
         markdown.write_text(
             _adapt_markdown(
-                markdown.read_text(),
+                markdown.read_text(encoding="utf-8"),
                 skill_name,
                 known_skills,
                 markdown.relative_to(destination),
-            )
+            ),
+            encoding="utf-8",
         )
 
 

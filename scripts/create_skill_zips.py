@@ -63,7 +63,7 @@ def load_expected_skill_names(repo_root: Path) -> set[str]:
     config_path = repo_root / "config" / "distribution.json"
     if config_path.is_symlink() or not config_path.is_file():
         raise ValueError(f"distribution config must be a regular file: {config_path}")
-    config = json.loads(config_path.read_text())
+    config = json.loads(config_path.read_text(encoding="utf-8"))
     names = config.get("canonical_skills")
     if (
         not isinstance(names, list)

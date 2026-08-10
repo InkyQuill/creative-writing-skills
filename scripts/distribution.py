@@ -42,7 +42,7 @@ _INSTRUCTIONAL_RESOURCE_PATH_RE = re.compile(
 
 
 def load_json(path: Path) -> dict[str, object]:
-    value = json.loads(path.read_text())
+    value = json.loads(path.read_text(encoding="utf-8"))
     if not isinstance(value, dict):
         raise ValueError(f"Expected JSON object in {path}")
     return cast(dict[str, object], value)
