@@ -9,7 +9,7 @@ Run `analyze.py` against each published chapter and record the results:
 ```bash
 for chapter in story/chapter*/[0-9]*chapter.md; do
     echo "=== $(basename "$chapter") ==="
-    uv run resources/analyze.py "$chapter"
+    python3 resources/prose-critique/analyze.py "$chapter"
     echo ""
 done > baseline_report.txt
 ```

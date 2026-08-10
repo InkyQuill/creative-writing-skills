@@ -10,14 +10,15 @@ Capture story brainstorming as minimal working notes that preserve creative free
 
 ## Report Structure
 
-When producing a standalone brainstorm document, tag all generated content
-as `<AI>` since none came from the author:
+When producing a standalone brainstorm document, preserve the source of each
+part. Tag only new AI suggestions. Author statements remain untagged, and
+hidden content stays wrapped in `<hidden>...</hidden>`.
 
 ```markdown
 # [Topic]: [Angle]
 
 ## Approach
-<AI>What direction you explored and why.</AI>
+What the author stated about the direction and constraints.
 
 ## Ideas
 <AI>Concrete possibilities, organized logically.</AI>
@@ -26,10 +27,14 @@ as `<AI>` since none came from the author:
 <AI>What each option gains and gives up.</AI>
 
 ## Connections
-<AI>How this connects to existing story threads.</AI>
+Author-stated connections remain untagged.
+<AI>New possible connections suggested during this pass.</AI>
 
 ## Open Questions
 <AI>Questions the author should consider before committing.</AI>
+
+## Author-Only Context
+<hidden>Any author-only information stays hidden.</hidden>
 ```
 
 ## Source Tagging

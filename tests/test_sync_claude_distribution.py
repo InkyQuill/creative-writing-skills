@@ -253,6 +253,10 @@ class ClaudeDistributionRenderTests(unittest.TestCase):
             self.assertEqual(EXPECTED_WORKERS | {"muse"}, agent_names)
 
             project_setup = (output_root / "skills/project-setup/SKILL.md").read_text()
+            grill = (output_root / "skills/grill-with-docs/SKILL.md").read_text()
+            story_planning = (
+                output_root / "skills/story-planning/SKILL.md"
+            ).read_text()
             qi_layer = (output_root / "skills/qi-layer/SKILL.md").read_text()
             bootstrap = (
                 output_root
@@ -264,6 +268,14 @@ class ClaudeDistributionRenderTests(unittest.TestCase):
             ).read_text()
             self.assertIn("CLAUDE.md", project_setup)
             self.assertNotIn("AGENTS.md", project_setup)
+            self.assertIn("Project conventions in `CLAUDE.md`", grill)
+            self.assertNotIn("AGENTS.md", grill)
+            for resource in (
+                "creative-direction.md",
+                "brainstorming.md",
+                "story-architecture.md",
+            ):
+                self.assertIn(f"`resources/{resource}`", story_planning)
             self.assertNotIn("AGENTS.md", qi_layer)
             self.assertIn(
                 "instruction filename required by the active harness", qi_layer

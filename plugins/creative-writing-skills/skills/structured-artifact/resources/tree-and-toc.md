@@ -21,13 +21,27 @@ const data = {
 };
 
 function renderNode(n) {
-  if (!n.children) return `<li class="leaf">${n.name}</li>`;
-  return `<li><details open><summary>${n.name}</summary><ul>${
-    n.children.map(renderNode).join("")
-  }</ul></details></li>`;
+  const item = document.createElement("li");
+  if (!n.children) {
+    item.className = "leaf";
+    item.textContent = n.name;
+    return item;
+  }
+
+  const details = document.createElement("details");
+  details.open = true;
+  const summary = document.createElement("summary");
+  summary.textContent = n.name;
+  const children = document.createElement("ul");
+  n.children.forEach(child => children.append(renderNode(child)));
+  details.append(summary, children);
+  item.append(details);
+  return item;
 }
 
-document.getElementById("tree").innerHTML = `<ul>${renderNode(data)}</ul>`;
+const treeList = document.createElement("ul");
+treeList.append(renderNode(data));
+document.getElementById("tree").replaceChildren(treeList);
 
 document.getElementById("treeSearch").oninput = e => {
   const q = e.target.value.toLowerCase();
@@ -51,11 +65,16 @@ section.
 <main id="doc"><!-- headings with ids --></main>
 <script>
 const headings = [...document.querySelectorAll("#doc h2, #doc h3")];
-document.getElementById("toc").innerHTML = headings
-  .map(h => `<a href="#${h.id}" data-id="${h.id}">${h.textContent}</a><br>`)
-  .join("");
+const toc = document.getElementById("toc");
+headings.forEach(heading => {
+  const link = document.createElement("a");
+  link.href = `#${encodeURIComponent(heading.id)}`;
+  link.dataset.id = heading.id;
+  link.textContent = heading.textContent;
+  toc.append(link, document.createElement("br"));
+});
 
-const links = [...document.querySelectorAll("#toc a")];
+const links = [...toc.querySelectorAll("a")];
 const obs = new IntersectionObserver(entries => {
   entries.filter(e => e.isIntersecting).forEach(e => {
     links.forEach(a => a.classList.toggle("active", a.dataset.id === e.target.id));

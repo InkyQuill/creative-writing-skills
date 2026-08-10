@@ -35,8 +35,10 @@ Check for conflicts between what the chapter establishes and what's already in t
 ## Quality Bar
 
 Entries are compressed, annotated, factual. "The protagonist learned that the
-mentor's secret project started three years before her arrival [Ch. 7]" is
-specific, sourced, factual. Treat vocab cautiously: update existing vocab
+mentor's secret project started three years before her arrival — Chapter 7: Scene where the protagonist learns when the mentor's secret project began" is
+specific, sourced, factual. Cite prose evidence as `Chapter N: Scene where X
+discovers Y` and project-document evidence by path, such as `magic-system.md`.
+Treat vocab cautiously: update existing vocab
 entries only when the canonical term is already settled. Otherwise report
 candidate terms, aliases actually used, and chapter sources for the author or
 orchestrator to ratify. Future agents read these to maintain continuity; vague

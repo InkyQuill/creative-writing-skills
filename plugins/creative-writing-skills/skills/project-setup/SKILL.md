@@ -31,13 +31,12 @@ Ask about writing samples: these are the foundation for style analysis:
 - Are there published works they want to draw style inspiration from?
 - Voice goals: close third, omniscient, first person? Formal, colloquial?
 
-Collect whatever they have. Save samples to `kb/samples/` so they're available
-for future style analysis. If they have enough material, offer to analyze
-their style using the `$creative-writing-craft` methodology: read the samples,
-identify the voice dimensions, and produce initial style files in `kb/styles/`.
-
-If they're starting fresh with no samples, capture their voice goals in
-`AGENTS.md` so style files can be created from early drafts.
+During discovery, keep samples and voice goals provisional in the conversation.
+Do not save samples, write style files, or capture voice goals in `AGENTS.md`
+yet. If the author has enough material, propose analysis with the
+`$creative-writing-craft` methodology as part of the workspace plan. If they
+are starting fresh, include their voice goals in the proposed `AGENTS.md`
+content so style files can be created from early drafts after approval.
 
 ## Propose and Iterate
 

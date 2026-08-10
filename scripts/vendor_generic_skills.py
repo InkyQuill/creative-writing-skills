@@ -7,6 +7,7 @@ import json
 import os
 import re
 import shutil
+import stat
 import subprocess
 import tempfile
 from contextlib import contextmanager
@@ -99,6 +100,165 @@ _MERMAID_ADAPTATION = (
     "Validate with an available Mermaid parser or renderer, and report syntax errors "
     "before delivery."
 )
+_GRILL_INSTRUCTION_FILE = (
+    "2. Project conventions in `CLAUDE.md` — established names and labels."
+)
+_GRILL_INSTRUCTION_FILE_ADAPTATION = (
+    "2. Project conventions in `AGENTS.md` — established names and labels."
+)
+_LLM_DISK_DRAFT = (
+    "3. **Draft.** Write a full draft to disk so you can edit it piece by piece."
+)
+_LLM_DISK_DRAFT_ADAPTATION = (
+    "3. **Draft.** For an explicitly writable artifact task, write the draft only "
+    "to the caller-assigned path and revise it there. Otherwise, draft and revise "
+    "in the response context without creating or changing files."
+)
+_TREE_RENDERING = '''function renderNode(n) {
+  if (!n.children) return `<li class="leaf">${n.name}</li>`;
+  return `<li><details open><summary>${n.name}</summary><ul>${
+    n.children.map(renderNode).join("")
+  }</ul></details></li>`;
+}
+
+document.getElementById("tree").innerHTML = `<ul>${renderNode(data)}</ul>`;'''
+_TREE_RENDERING_ADAPTATION = '''function renderNode(n) {
+  const item = document.createElement("li");
+  if (!n.children) {
+    item.className = "leaf";
+    item.textContent = n.name;
+    return item;
+  }
+
+  const details = document.createElement("details");
+  details.open = true;
+  const summary = document.createElement("summary");
+  summary.textContent = n.name;
+  const children = document.createElement("ul");
+  n.children.forEach(child => children.append(renderNode(child)));
+  details.append(summary, children);
+  item.append(details);
+  return item;
+}
+
+const treeList = document.createElement("ul");
+treeList.append(renderNode(data));
+document.getElementById("tree").replaceChildren(treeList);'''
+_TOC_RENDERING = '''const headings = [...document.querySelectorAll("#doc h2, #doc h3")];
+document.getElementById("toc").innerHTML = headings
+  .map(h => `<a href="#${h.id}" data-id="${h.id}">${h.textContent}</a><br>`)
+  .join("");
+
+const links = [...document.querySelectorAll("#toc a")];'''
+_TOC_RENDERING_ADAPTATION = '''const headings = [...document.querySelectorAll("#doc h2, #doc h3")];
+const toc = document.getElementById("toc");
+headings.forEach(heading => {
+  const link = document.createElement("a");
+  link.href = `#${encodeURIComponent(heading.id)}`;
+  link.dataset.id = heading.id;
+  link.textContent = heading.textContent;
+  toc.append(link, document.createElement("br"));
+});
+
+const links = [...toc.querySelectorAll("a")];'''
+_MERMAID_CONFIG = '''mermaid.initialize({
+  startOnLoad: false,
+  theme: document.documentElement.classList.contains('dark') ? 'dark' : 'default',
+  securityLevel: 'loose',  // required for click callbacks
+  flowchart: { curve: 'basis', nodeSpacing: 50, rankSpacing: 60 },
+});
+await mermaid.run({ querySelector: '.mermaid' });'''
+_MERMAID_CONFIG_ADAPTATION = '''mermaid.initialize({
+  startOnLoad: false,
+  theme: document.documentElement.classList.contains('dark') ? 'dark' : 'default',
+  securityLevel: 'strict',
+  flowchart: { curve: 'basis', nodeSpacing: 50, rankSpacing: 60 },
+});
+await mermaid.run({ querySelector: '.mermaid' });'''
+_MERMAID_LOOSE_NOTE = (
+    "`securityLevel: 'loose'` lets `click` directives call your JS. Without it, callbacks\n"
+    "are silently dropped."
+)
+_MERMAID_STRICT_NOTE = (
+    "Keep `securityLevel: 'strict'`. Bind interactions after rendering and only "
+    "for node IDs present in the detail allow-list."
+)
+_MERMAID_CLICK_BINDING = '''### Click Callbacks
+
+Two approaches — use whichever fits your graph:
+
+**Mermaid `click` directives** (simpler, requires valid JS identifiers as node IDs):
+
+```mermaid
+flowchart TD
+  api[API Layer] --> svc[Service]
+  click api showDetail "api"
+  click svc showDetail "svc"
+```
+
+**Post-render DOM binding** (works with any node ID):
+
+```js
+document.querySelectorAll('#diagram .node').forEach(node => {
+  node.style.cursor = 'pointer';
+  node.addEventListener('click', () => {
+    const id = node.id.replace(/^flowchart-/, '').replace(/-\\d+$/, '');
+    showDetail(id);
+  });
+});
+```'''
+_MERMAID_CLICK_BINDING_ADAPTATION = '''### Post-render Click Binding
+
+Do not use Mermaid `click` directives or global callbacks. Declare the exact
+detail keys the page supports, keep them aligned with `DETAIL`, and bind only
+those nodes after Mermaid renders:
+
+```js
+const ALLOWED_DETAIL_KEYS = new Set(['api']);
+
+document.querySelectorAll('#diagram .node').forEach(node => {
+  const key = node.id.replace(/^flowchart-/, '').replace(/-\\d+$/, '');
+  if (!ALLOWED_DETAIL_KEYS.has(key)) return;
+  node.style.cursor = 'pointer';
+  node.addEventListener('click', () => showDetail(key));
+});
+```'''
+_DETAIL_RENDERING = '''function showDetail(key) {
+  const d = DETAIL[key]; if (!d) return;
+  document.getElementById('detail-title').textContent = d.title;
+  document.getElementById('detail-desc').textContent = d.desc;
+  if (d.code && window.hljs) {
+    document.getElementById('detail-code').innerHTML =
+      `<pre><code>${hljs.highlight(d.code, { language: d.lang }).value}</code></pre>`;
+  }
+  document.getElementById('detail-panel').classList.remove('collapsed');
+}'''
+_DETAIL_RENDERING_ADAPTATION = '''function showDetail(key) {
+  if (!ALLOWED_DETAIL_KEYS.has(key)) return;
+  const d = DETAIL[key];
+  document.getElementById('detail-title').textContent = d.title;
+  document.getElementById('detail-desc').textContent = d.desc;
+  const codeHost = document.getElementById('detail-code');
+  if (d.code) {
+    const pre = document.createElement('pre');
+    const code = document.createElement('code');
+    code.className = `language-${d.lang}`;
+    code.textContent = d.code;
+    pre.append(code);
+    codeHost.replaceChildren(pre);
+    if (window.hljs) hljs.highlightElement(code);
+  } else {
+    codeHost.replaceChildren();
+  }
+  document.getElementById('detail-panel').classList.remove('collapsed');
+}'''
+_LOOSE_CALLBACK_NOTE = (
+    "`showDetail` must be on `window` (a top-level `function` declaration) so Mermaid's\n"
+    "loose-mode callback can reach it."
+)
+_STRICT_CALLBACK_NOTE = (
+    "`showDetail` stays local; strict mode never invokes it from diagram text."
+)
 
 
 @dataclass(frozen=True)
@@ -177,6 +337,22 @@ def _adapt_markdown(
     relative_path: Path,
 ) -> str:
     is_skill_document = relative_path == Path("SKILL.md")
+    if skill_name == "grill-with-docs" and is_skill_document:
+        if _GRILL_INSTRUCTION_FILE not in text:
+            raise ValueError(
+                "grill-with-docs: expected licensed instruction-file reference was not found"
+            )
+        text = text.replace(
+            _GRILL_INSTRUCTION_FILE,
+            _GRILL_INSTRUCTION_FILE_ADAPTATION,
+            1,
+        )
+    if skill_name == "llm-writing" and is_skill_document:
+        if _LLM_DISK_DRAFT not in text:
+            raise ValueError(
+                "llm-writing: expected licensed disk-draft instruction was not found"
+            )
+        text = text.replace(_LLM_DISK_DRAFT, _LLM_DISK_DRAFT_ADAPTATION, 1)
     if skill_name == "qi-layer" and is_skill_document:
         if _QI_DESCRIPTION not in text:
             raise ValueError("qi-layer: expected licensed description was not found")
@@ -209,17 +385,156 @@ def _adapt_markdown(
             _KNOWLEDGE_BOOTSTRAP_HEADING_ADAPTATION,
             1,
         )
+    if (
+        skill_name == "structured-artifact"
+        and relative_path == Path("resources/tree-and-toc.md")
+    ):
+        if _TREE_RENDERING not in text:
+            raise ValueError(
+                "structured-artifact: expected licensed tree rendering example was not found"
+            )
+        if _TOC_RENDERING not in text:
+            raise ValueError(
+                "structured-artifact: expected licensed TOC rendering example was not found"
+            )
+        text = text.replace(_TREE_RENDERING, _TREE_RENDERING_ADAPTATION, 1)
+        text = text.replace(_TOC_RENDERING, _TOC_RENDERING_ADAPTATION, 1)
     if skill_name == "structured-artifact" and relative_path == Path("resources/diagrams.md"):
         if _MERMAID_COMMAND not in text:
             raise ValueError("structured-artifact: expected licensed Mermaid command was not found")
+        expected_examples = (
+            ("Mermaid configuration", _MERMAID_CONFIG),
+            ("Mermaid loose-mode note", _MERMAID_LOOSE_NOTE),
+            ("Mermaid click-binding example", _MERMAID_CLICK_BINDING),
+            ("detail rendering example", _DETAIL_RENDERING),
+            ("loose callback note", _LOOSE_CALLBACK_NOTE),
+        )
+        for label, source in expected_examples:
+            if source not in text:
+                raise ValueError(
+                    f"structured-artifact: expected licensed {label} was not found"
+                )
         text = text.replace(_MERMAID_COMMAND, _MERMAID_ADAPTATION, 1)
+        text = text.replace(_MERMAID_CONFIG, _MERMAID_CONFIG_ADAPTATION, 1)
+        text = text.replace(_MERMAID_LOOSE_NOTE, _MERMAID_STRICT_NOTE, 1)
+        text = text.replace(
+            _MERMAID_CLICK_BINDING,
+            _MERMAID_CLICK_BINDING_ADAPTATION,
+            1,
+        )
+        text = text.replace(_DETAIL_RENDERING, _DETAIL_RENDERING_ADAPTATION, 1)
+        text = text.replace(_LOOSE_CALLBACK_NOTE, _STRICT_CALLBACK_NOTE, 1)
     return normalize_codex_references(text, known_skills, skill_name)
 
 
+def _absolute(path: Path) -> Path:
+    return Path(os.path.abspath(path))
+
+
+def _require_safe_directory(
+    path: Path,
+    label: str,
+    *,
+    allow_missing_leaf: bool = False,
+    boundary: Path | None = None,
+) -> Path:
+    absolute = _absolute(path)
+    if absolute == Path(absolute.anchor):
+        raise ValueError(f"{label} must not be a filesystem root")
+
+    if boundary is None:
+        current = absolute.parent
+        parts = (absolute.name,)
+    else:
+        boundary = _absolute(boundary)
+        try:
+            relative = absolute.relative_to(boundary)
+        except ValueError as error:
+            raise ValueError(f"{label} escapes its boundary: {absolute}") from error
+        current = boundary
+        parts = relative.parts
+    for index, part in enumerate(parts):
+        current = current / part
+        is_leaf = index == len(parts) - 1
+        try:
+            mode = os.lstat(current).st_mode
+        except FileNotFoundError as error:
+            if allow_missing_leaf and is_leaf:
+                return absolute
+            raise ValueError(f"{label} does not exist: {current}") from error
+        except OSError as error:
+            raise ValueError(f"cannot inspect {label}: {current}: {error}") from error
+        if stat.S_ISLNK(mode):
+            raise ValueError(f"{label} is a symlink: {current}")
+        if not stat.S_ISDIR(mode):
+            raise ValueError(f"{label} is not a directory: {current}")
+    return absolute
+
+
+def _preflight_source_tree(source: Path, skill_name: str) -> None:
+    def walk(directory: Path) -> None:
+        try:
+            entries = sorted(os.scandir(directory), key=lambda entry: entry.name)
+        except OSError as error:
+            raise ValueError(
+                f"{skill_name}: cannot inspect licensed source: {directory}: {error}"
+            ) from error
+        for entry in entries:
+            entry_path = Path(entry.path)
+            relative = entry_path.relative_to(source)
+            try:
+                mode = entry.stat(follow_symlinks=False).st_mode
+            except OSError as error:
+                raise ValueError(
+                    f"{skill_name}: cannot inspect source entry {relative}: {error}"
+                ) from error
+            if stat.S_ISLNK(mode):
+                raise ValueError(
+                    f"{skill_name}: source entry is a symlink: {relative}"
+                )
+            if stat.S_ISDIR(mode):
+                walk(entry_path)
+            elif not stat.S_ISREG(mode):
+                raise ValueError(
+                    f"{skill_name}: source entry is not a regular file: {relative}"
+                )
+
+    walk(source)
+    skill_file = source / "SKILL.md"
+    try:
+        mode = os.lstat(skill_file).st_mode
+    except FileNotFoundError as error:
+        raise ValueError(f"{skill_name}: missing SKILL.md in licensed source") from error
+    if stat.S_ISLNK(mode) or not stat.S_ISREG(mode):
+        raise ValueError(f"{skill_name}: SKILL.md must be a regular file")
+
+
+def _copy_source_tree(source: Path, destination: Path, skill_name: str) -> None:
+    destination.mkdir()
+    for entry in sorted(os.scandir(source), key=lambda item: item.name):
+        source_entry = Path(entry.path)
+        destination_entry = destination / entry.name
+        relative = source_entry.relative_to(source)
+        try:
+            mode = entry.stat(follow_symlinks=False).st_mode
+        except OSError as error:
+            raise ValueError(
+                f"{skill_name}: cannot inspect source entry {relative}: {error}"
+            ) from error
+        if stat.S_ISLNK(mode):
+            raise ValueError(f"{skill_name}: source entry is a symlink: {relative}")
+        if stat.S_ISDIR(mode):
+            _copy_source_tree(source_entry, destination_entry, skill_name)
+        elif stat.S_ISREG(mode):
+            shutil.copy2(source_entry, destination_entry, follow_symlinks=False)
+        else:
+            raise ValueError(
+                f"{skill_name}: source entry is not a regular file: {relative}"
+            )
+
+
 def _copy_skill(source: Path, destination: Path, skill_name: str, known_skills: set[str]) -> None:
-    if not (source / "SKILL.md").is_file():
-        raise ValueError(f"{skill_name}: missing SKILL.md in licensed source")
-    shutil.copytree(source, destination)
+    _copy_source_tree(source, destination, skill_name)
     for markdown in destination.rglob("*.md"):
         markdown.write_text(
             _adapt_markdown(
@@ -257,15 +572,66 @@ def _replace_directory(staged: Path, destination: Path) -> None:
 def render_from_checkout(checkout: Path, output_root: Path) -> None:
     """Render configured skill snapshots from a licensed source checkout."""
 
-    source_root = checkout / SOURCE.skills_path
     configured_skills = validated_vendored_skills()
     known_skills = canonical_skills()
-    output_root.mkdir(parents=True, exist_ok=True)
+    checkout = _require_safe_directory(checkout, "licensed checkout boundary")
+    source_root = _require_safe_directory(
+        checkout / SOURCE.skills_path,
+        "licensed source root boundary",
+        boundary=checkout,
+    )
+    sources: dict[str, Path] = {}
     for skill_name in configured_skills:
-        source = source_root / skill_name
-        with tempfile.TemporaryDirectory(prefix=f".{skill_name}.vendor-", dir=output_root) as temporary:
-            staged = Path(temporary) / skill_name
-            _copy_skill(source, staged, skill_name, known_skills)
+        source = _require_safe_directory(
+            source_root / skill_name,
+            f"{skill_name} licensed source skill boundary",
+            boundary=source_root,
+        )
+        _preflight_source_tree(source, skill_name)
+        sources[skill_name] = source
+
+    output_root = _absolute(output_root)
+    _require_safe_directory(
+        output_root.parent,
+        "vendor output parent boundary",
+    )
+    output_exists = output_root.exists()
+    _require_safe_directory(
+        output_root,
+        "vendor output root boundary",
+        allow_missing_leaf=True,
+        boundary=output_root.parent,
+    )
+    if output_root == checkout or checkout in output_root.parents:
+        raise ValueError("vendor output root must be outside the licensed checkout")
+    if output_exists:
+        for skill_name in configured_skills:
+            destination = output_root / skill_name
+            try:
+                mode = os.lstat(destination).st_mode
+            except FileNotFoundError:
+                continue
+            if stat.S_ISLNK(mode):
+                raise ValueError(
+                    f"{skill_name}: vendor output skill boundary is a symlink"
+                )
+            if not stat.S_ISDIR(mode):
+                raise ValueError(
+                    f"{skill_name}: vendor output skill boundary is not a directory"
+                )
+
+    with tempfile.TemporaryDirectory(
+        prefix=".vendor-generic-skills-render-",
+        dir=output_root.parent,
+    ) as temporary:
+        staged_root = Path(temporary) / "skills"
+        staged_root.mkdir()
+        for skill_name in configured_skills:
+            staged = staged_root / skill_name
+            _copy_skill(sources[skill_name], staged, skill_name, known_skills)
+        output_root.mkdir(exist_ok=True)
+        for skill_name in configured_skills:
+            staged = staged_root / skill_name
             _replace_directory(staged, output_root / skill_name)
 
 
@@ -304,7 +670,7 @@ def check_checkout(checkout: Path, output_root: Path) -> None:
 @contextmanager
 def source_checkout(source_checkout: Path | None) -> Iterator[Path]:
     if source_checkout is not None:
-        yield source_checkout.resolve()
+        yield _absolute(source_checkout)
         return
 
     with tempfile.TemporaryDirectory(prefix="vendor-generic-skills-source-") as temporary:

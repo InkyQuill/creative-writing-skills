@@ -32,6 +32,13 @@ _MARKDOWN_REFERENCE_DESTINATION_RE = re.compile(
 _ROOT_FILE_PATH_RE = re.compile(
     r"^/[A-Za-z0-9._-]+\.[A-Za-z0-9_-]+(?:$|[`'\"),;:!?])"
 )
+_INLINE_CODE_RE = re.compile(r"(?<!`)`([^`\r\n]+)`(?!`)")
+_INSTRUCTIONAL_RESOURCE_PATH_RE = re.compile(
+    r"(?:resources|references)/[A-Za-z0-9._/-]+\."
+    r"(?:bash|cjs|css|html?|js|json|jsx|md|mjs|py|sh|svg|toml|ts|tsx|txt|xml|ya?ml|zsh)"
+    r"(?:#[A-Za-z0-9._:-]+)?\Z",
+    re.IGNORECASE,
+)
 
 
 def load_json(path: Path) -> dict[str, object]:
@@ -429,3 +436,25 @@ def extract_skill_references(text: str, sigil: str) -> set[str]:
 
     map_outside_fences(text, collect)
     return references
+
+
+def extract_instructional_relative_paths(text: str) -> set[str]:
+    """Return standalone backticked skill-root resource paths outside fences."""
+
+    paths: set[str] = set()
+
+    def collect(segment: str) -> str:
+        for match in _INLINE_CODE_RE.finditer(segment):
+            if (
+                match.start() > 0
+                and segment[match.start() - 1] == "["
+                and segment[match.end():].startswith("](")
+            ):
+                continue
+            candidate = match.group(1)
+            if _INSTRUCTIONAL_RESOURCE_PATH_RE.fullmatch(candidate):
+                paths.add(candidate)
+        return segment
+
+    map_outside_fences(text, collect)
+    return paths

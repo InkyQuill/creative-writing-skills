@@ -26,40 +26,31 @@ Initialize with manual start for stable node IDs and click callbacks.
 mermaid.initialize({
   startOnLoad: false,
   theme: document.documentElement.classList.contains('dark') ? 'dark' : 'default',
-  securityLevel: 'loose',  // required for click callbacks
+  securityLevel: 'strict',
   flowchart: { curve: 'basis', nodeSpacing: 50, rankSpacing: 60 },
 });
 await mermaid.run({ querySelector: '.mermaid' });
 ```
 
-`securityLevel: 'loose'` lets `click` directives call your JS. Without it, callbacks
-are silently dropped.
+Keep `securityLevel: 'strict'`. Bind interactions after rendering and only for node IDs present in the detail allow-list.
 
 When the viewer toggles theme, re-initialize Mermaid with the new theme and re-render
 the diagram.
 
-### Click Callbacks
+### Post-render Click Binding
 
-Two approaches — use whichever fits your graph:
-
-**Mermaid `click` directives** (simpler, requires valid JS identifiers as node IDs):
-
-```mermaid
-flowchart TD
-  api[API Layer] --> svc[Service]
-  click api showDetail "api"
-  click svc showDetail "svc"
-```
-
-**Post-render DOM binding** (works with any node ID):
+Do not use Mermaid `click` directives or global callbacks. Declare the exact
+detail keys the page supports, keep them aligned with `DETAIL`, and bind only
+those nodes after Mermaid renders:
 
 ```js
+const ALLOWED_DETAIL_KEYS = new Set(['api']);
+
 document.querySelectorAll('#diagram .node').forEach(node => {
+  const key = node.id.replace(/^flowchart-/, '').replace(/-\d+$/, '');
+  if (!ALLOWED_DETAIL_KEYS.has(key)) return;
   node.style.cursor = 'pointer';
-  node.addEventListener('click', () => {
-    const id = node.id.replace(/^flowchart-/, '').replace(/-\d+$/, '');
-    showDetail(id);
-  });
+  node.addEventListener('click', () => showDetail(key));
 });
 ```
 
@@ -80,19 +71,27 @@ const DETAIL = {
 };
 
 function showDetail(key) {
-  const d = DETAIL[key]; if (!d) return;
+  if (!ALLOWED_DETAIL_KEYS.has(key)) return;
+  const d = DETAIL[key];
   document.getElementById('detail-title').textContent = d.title;
   document.getElementById('detail-desc').textContent = d.desc;
-  if (d.code && window.hljs) {
-    document.getElementById('detail-code').innerHTML =
-      `<pre><code>${hljs.highlight(d.code, { language: d.lang }).value}</code></pre>`;
+  const codeHost = document.getElementById('detail-code');
+  if (d.code) {
+    const pre = document.createElement('pre');
+    const code = document.createElement('code');
+    code.className = `language-${d.lang}`;
+    code.textContent = d.code;
+    pre.append(code);
+    codeHost.replaceChildren(pre);
+    if (window.hljs) hljs.highlightElement(code);
+  } else {
+    codeHost.replaceChildren();
   }
   document.getElementById('detail-panel').classList.remove('collapsed');
 }
 ```
 
-`showDetail` must be on `window` (a top-level `function` declaration) so Mermaid's
-loose-mode callback can reach it.
+`showDetail` stays local; strict mode never invokes it from diagram text.
 
 ### Pan and Zoom
 

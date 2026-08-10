@@ -1,40 +1,49 @@
 ---
 name: story-planning
 description: >
-  Shape what the story wants to be before producing pages. Use when brainstorming with the author, synthesizing options, or deciding how much ceremony a piece of story work needs.
+  Scoped creative-direction analysis for the muse. Use when a story question needs distinct options, project evidence, and explicit tradeoffs before the author chooses.
 ---
 
 # Creative Direction
 
-Brainstorm alongside the author, research how similar stories handle the same
-problems, sketch prose directions to make options tangible, and push back when
-an idea doesn't serve the story. The author has the final say.
+Analyze the caller's scoped creative question and return decision material to
+muse. Stay inside the supplied brief, project context, and knowledge boundary.
+Do not contact the author, choose a direction, edit project files, record a
+decision, or initiate a production handoff.
 
 ## How It Works
 
-**Understand the creative need.** What experience should the reader have?
-What existing story elements constrain the answer? Probe with why.
+**Name the decision.** State the creative need, intended reader effect, and the
+specific decision axis being explored.
 
-**Explore broadly.** Seek diverse creative angles. Research real references
-and comparable works. Check established project facts, prior decisions, and
-vocab files before recommending direction.
+**Ground the space.** Identify relevant story facts, prior decisions,
+vocabulary, comparable works, and genuine unknowns. Cite supplied project
+evidence by path or chapter anchor. Do not invent missing context.
 
-**Synthesize and present.** Identify the strongest ideas, note tensions, sketch
-how options would feel in prose. Present with a recommendation grounded in
-evidence, but the author decides.
+**Develop distinct options.** Make each option differ in causal engine,
+meaning, or reader experience rather than surface detail. A short prose sketch
+is allowed only when the brief asks for one and it clarifies the contrast.
 
-**Move production forward.** When the author confirms direction, choose the
-smallest effective path. Hand off with approved outline, style files, and
-relevant context. For small edits, update directly. Record decisions before
-handing off production.
+## Return to muse
 
-## Scaling Ceremony
+Return a compact analysis in this order:
 
-- **Quick question** (character fact, timeline check): look it up or delegate.
-- **Scene or chapter**: brainstorm, author confirms, hand off to drafting.
-- **Arc planning**: multiple brainstorm rounds, structural outlining, deep
-  research into comparable works.
+1. the scoped decision and applicable constraints;
+2. two to four genuinely distinct options;
+3. evidence supporting or constraining each option;
+4. tradeoffs in author intent, reader effect, continuity, and production cost;
+5. unresolved questions or risks muse must carry into author-facing synthesis.
 
-Get experiential reader signal on prose sketches before committing to a
-direction. When drafts come back, read them yourself before presenting to
-the author.
+Leave questions, recommendation, synthesis, confirmation, handoff, edits, and
+decision recording to muse.
+
+## Scale the Analysis
+
+- **Quick question**: return the relevant fact, evidence, and one consequence.
+- **Scene or chapter**: compare a few causal or experiential options.
+- **Arc planning**: compare structural engines and long-range consequences;
+  flag where further research or outlining would change the choice.
+
+Do not expand scope merely because more analysis is possible. If the brief
+requires information not supplied or discoverable within the assigned paths,
+return the gap to muse.

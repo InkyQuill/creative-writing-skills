@@ -157,6 +157,106 @@ class DistributionScaffoldTests(unittest.TestCase):
         self.assertIn("Report evidence without proposing repairs", text)
         self.assertIn("Leave fix selection and canon resolution to muse and the author", text)
 
+    def test_story_planning_routes_to_each_task_specific_resource(self):
+        skill = (PLUGIN_ROOT / "skills/story-planning/SKILL.md").read_text()
+        self.assertIn("`resources/creative-direction.md`", skill)
+        self.assertIn("`resources/brainstorming.md`", skill)
+        self.assertIn("`resources/story-architecture.md`", skill)
+        self.assertNotIn("`resources/story-planning.md`", skill)
+
+    def test_project_setup_keeps_discovery_material_provisional_until_approval(self):
+        text = (PLUGIN_ROOT / "skills/project-setup/SKILL.md").read_text()
+        discovery, creation = text.split("## Create the Files", 1)
+        self.assertIn("keep samples and voice goals provisional", discovery.lower())
+        self.assertIn("do not save", discovery.lower())
+        self.assertIn("once approved", creation.lower())
+        self.assertIn("Save any writing samples to `kb/samples/`", creation)
+
+    def test_llm_writing_requires_an_authorized_artifact_path_for_disk_drafts(self):
+        text = (PLUGIN_ROOT / "skills/llm-writing/SKILL.md").read_text()
+        self.assertIn("explicitly writable artifact", text)
+        self.assertIn("caller-assigned path", text)
+        self.assertIn("draft and revise in the response context", text)
+        self.assertNotIn("Write a full draft to disk so you can edit it piece by piece", text)
+
+    def test_creative_direction_returns_scoped_analysis_to_muse(self):
+        text = (
+            PLUGIN_ROOT
+            / "skills/story-planning/resources/creative-direction.md"
+        ).read_text()
+        self.assertIn("Return to muse", text)
+        self.assertIn("options", text.lower())
+        self.assertIn("evidence", text.lower())
+        self.assertIn("tradeoffs", text.lower())
+        for author_facing_owner in (
+            "Brainstorm alongside the author",
+            "Synthesize and present",
+            "author confirms direction",
+            "Hand off",
+            "update directly",
+            "Record decisions",
+        ):
+            self.assertNotIn(author_facing_owner, text)
+
+    def test_brainstorm_capture_preserves_author_and_hidden_provenance(self):
+        text = (
+            PLUGIN_ROOT
+            / "skills/story-planning/resources/brainstorming.md"
+        ).read_text()
+        self.assertIn("Tag only new AI suggestions", text)
+        self.assertIn("author statements remain untagged", text.lower())
+        self.assertIn("hidden content stays wrapped in `<hidden>...</hidden>`", text.lower())
+        self.assertNotIn("tag all generated content", text)
+
+    def test_story_memory_promotion_preserves_source_tags_and_hidden_boundary(self):
+        text = (
+            PLUGIN_ROOT
+            / "skills/story-memory/resources/writing-artifacts.md"
+        ).read_text()
+        self.assertIn("Untagged author-stated text remains untagged", text)
+        self.assertIn("Preserve `<AI>...</AI>` markers", text)
+        self.assertIn("Exclude `<hidden>...</hidden>`", text)
+        self.assertIn("both the fact and its destination", text)
+
+    def test_structured_artifact_examples_do_not_enable_markup_injection(self):
+        resource_root = PLUGIN_ROOT / "skills/structured-artifact/resources"
+        tree = (resource_root / "tree-and-toc.md").read_text()
+        diagrams = (resource_root / "diagrams.md").read_text()
+        self.assertNotIn("innerHTML", tree)
+        self.assertNotIn("innerHTML", diagrams)
+        self.assertIn("textContent", tree)
+        self.assertIn("replaceChildren", tree)
+        self.assertIn("textContent", diagrams)
+        self.assertIn("replaceChildren", diagrams)
+        self.assertIn("securityLevel: 'strict'", diagrams)
+        self.assertNotIn("securityLevel: 'loose'", diagrams)
+        self.assertNotRegex(diagrams, r"(?m)^\s*click\s+\w+\s+\w+")
+        self.assertIn("ALLOWED_DETAIL_KEYS", diagrams)
+        self.assertNotIn("new Set(Object.keys(DETAIL))", diagrams)
+
+    def test_prose_analyzer_commands_use_packaged_path_and_python3(self):
+        root = PLUGIN_ROOT / "skills/story-review/resources"
+        documents = (
+            root / "prose-critique.md",
+            root / "prose-critique/analyze.py",
+            root / "prose-critique/baseline.md",
+        )
+        expected = "python3 resources/prose-critique/analyze.py"
+        for path in documents:
+            text = path.read_text()
+            self.assertIn(expected, text, str(path))
+            self.assertNotIn("uv run resources/analyze.py", text, str(path))
+
+    def test_story_memory_evidence_examples_use_full_source_anchors(self):
+        root = PLUGIN_ROOT / "skills/story-memory"
+        markdown = "\n".join(path.read_text() for path in root.rglob("*.md"))
+        self.assertNotRegex(markdown, r"\[(?:Ch\.?|Chapter)\s*\d+\]")
+        self.assertIn(
+            "Chapter 7: Scene where the protagonist learns when the mentor's secret project began",
+            markdown,
+        )
+        self.assertIn("`magic-system.md`", markdown)
+
     def test_all_non_world_skills_exist_with_minimal_frontmatter(self):
         config = load_json(REPO_ROOT / "config" / "distribution.json")
         for name in set(config["canonical_skills"]) - {"world-creation"}:
@@ -220,6 +320,9 @@ class DistributionScaffoldTests(unittest.TestCase):
         self.assertIsNotNone(data_match)
         data = json.loads(data_match.group(1))
 
+        config = load_json(REPO_ROOT / "config" / "distribution.json")
+        self.assertEqual(set(data["skills"]), set(config["canonical_skills"]))
+
         workers_root = (
             "plugins/creative-writing-skills/skills/creative-writing-muse/"
             "resources/workers"
@@ -236,11 +339,40 @@ class DistributionScaffoldTests(unittest.TestCase):
         }
         self.assertEqual(actual_worker_sources, expected_worker_sources)
 
+        self.assertEqual(
+            set(data["agents"]["muse"]["routes"]),
+            {item["name"] for item in registry["workers"]},
+        )
+
+        for worker in registry["workers"]:
+            embedded = data["agents"][worker["name"]]
+            self.assertEqual(embedded["description"], worker["description"])
+            self.assertEqual(
+                set(embedded["load"] + embedded["available"]),
+                set(worker["skills"]),
+            )
+
         for name, item in data["skills"].items():
             expected = f"plugins/creative-writing-skills/skills/{name}/SKILL.md"
             self.assertEqual(item["path"], expected)
             self.assertEqual(item["source"], "canonical plugin")
             self.assertTrue((REPO_ROOT / expected).is_file(), expected)
+            metadata, _ = split_frontmatter((REPO_ROOT / expected).read_text())
+            self.assertEqual(item["description"], str(metadata["description"]).strip())
+            self.assertEqual(
+                item["modelInvocable"],
+                not metadata.get("disable-model-invocation", False),
+            )
+
+        muse_metadata, _ = split_frontmatter(
+            (PLUGIN_ROOT / "skills/creative-writing-muse/SKILL.md").read_text()
+        )
+        self.assertEqual(
+            data["agents"]["muse"]["description"],
+            str(muse_metadata["description"]).strip(),
+        )
+        self.assertIn("fallback", workflow_text.lower())
+        self.assertNotIn("@kb-lead", workflow_text)
 
     def test_canonical_skill_references_use_dollar_and_resolve(self):
         canonical = set(load_json(REPO_ROOT / "config" / "distribution.json")["canonical_skills"])
@@ -633,6 +765,53 @@ class ValidatorTests(unittest.TestCase):
         skill.write_text("---\nname: demo\ndescription: Demo.\n---\nRead [guide](references/guide.md).\n")
         self.assertIn("demo: missing relative resource references/guide.md", validate(self.root))
 
+    def test_validator_rejects_missing_backticked_instructional_resources(self):
+        skill = self.skills / "story-memory" / "SKILL.md"
+        skill.write_text(
+            "---\nname: story-memory\ndescription: Demo.\n---\n"
+            "Read `resources/missing.md` and `references/also-missing.py`.\n"
+        )
+        problems = validate(self.root)
+        self.assertIn(
+            "story-memory: missing relative resource resources/missing.md",
+            problems,
+        )
+        self.assertIn(
+            "story-memory: missing relative resource references/also-missing.py",
+            problems,
+        )
+
+    def test_validator_ignores_backticked_commands_and_fenced_code_paths(self):
+        skill = self.skills / "story-memory" / "SKILL.md"
+        skill.write_text(
+            "---\nname: story-memory\ndescription: Demo.\n---\n"
+            "Run `python3 resources/missing.py --check`.\n"
+            "```bash\npython3 resources/also-missing.py\n```\n"
+        )
+        problems = validate(self.root)
+        self.assertNotIn(
+            "story-memory: missing relative resource resources/missing.py",
+            problems,
+        )
+        self.assertNotIn(
+            "story-memory: missing relative resource resources/also-missing.py",
+            problems,
+        )
+
+    def test_validator_resolves_backticked_resources_from_other_canonical_skills(self):
+        resource = self.skills / "story-review" / "resources" / "guide.md"
+        resource.parent.mkdir()
+        resource.write_text("# Guide\n")
+        skill = self.skills / "story-memory" / "SKILL.md"
+        skill.write_text(
+            "---\nname: story-memory\ndescription: Demo.\n---\n"
+            "Use $story-review → `resources/guide.md`.\n"
+        )
+        self.assertNotIn(
+            "story-memory: missing relative resource resources/guide.md",
+            validate(self.root),
+        )
+
     def test_validator_reports_whitespace_only_resource_target(self):
         skill = self.skills / "story-memory" / "SKILL.md"
         skill.write_text(
@@ -864,6 +1043,17 @@ class ValidatorTests(unittest.TestCase):
             "Run meridian mars check.\n"
         )
         self.assertIn("story-memory: forbidden canonical runtime vocabulary meridian mars", validate(self.root))
+
+    def test_validator_rejects_claude_instruction_filename_in_canonical_runtime(self):
+        skill = self.skills / "story-memory" / "SKILL.md"
+        skill.write_text(
+            "---\nname: story-memory\ndescription: Demo.\n---\n"
+            "Read `CLAUDE.md` before continuing.\n"
+        )
+        self.assertIn(
+            "story-memory: Claude-only vocabulary CLAUDE.md",
+            validate(self.root),
+        )
 
     def test_validator_scans_fences_and_non_markdown_runtime_vocabulary(self):
         skill_root = self.skills / "story-memory"

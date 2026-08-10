@@ -11,7 +11,102 @@ from scripts.vendor_generic_skills import (
     check_checkout,
     normalize_codex_references,
     render_from_checkout,
+    source_checkout,
 )
+
+
+TREE_SOURCE = '''# Tree and TOC
+
+```html
+function renderNode(n) {
+  if (!n.children) return `<li class="leaf">${n.name}</li>`;
+  return `<li><details open><summary>${n.name}</summary><ul>${
+    n.children.map(renderNode).join("")
+  }</ul></details></li>`;
+}
+
+document.getElementById("tree").innerHTML = `<ul>${renderNode(data)}</ul>`;
+```
+
+```html
+const headings = [...document.querySelectorAll("#doc h2, #doc h3")];
+document.getElementById("toc").innerHTML = headings
+  .map(h => `<a href="#${h.id}" data-id="${h.id}">${h.textContent}</a><br>`)
+  .join("");
+
+const links = [...document.querySelectorAll("#toc a")];
+```
+'''
+
+
+DIAGRAM_SOURCE = '''# Diagrams
+
+Validate with `meridian mermaid check`.
+
+```js
+mermaid.initialize({
+  startOnLoad: false,
+  theme: document.documentElement.classList.contains('dark') ? 'dark' : 'default',
+  securityLevel: 'loose',  // required for click callbacks
+  flowchart: { curve: 'basis', nodeSpacing: 50, rankSpacing: 60 },
+});
+await mermaid.run({ querySelector: '.mermaid' });
+```
+
+`securityLevel: 'loose'` lets `click` directives call your JS. Without it, callbacks
+are silently dropped.
+
+### Click Callbacks
+
+Two approaches — use whichever fits your graph:
+
+**Mermaid `click` directives** (simpler, requires valid JS identifiers as node IDs):
+
+```mermaid
+flowchart TD
+  api[API Layer] --> svc[Service]
+  click api showDetail "api"
+  click svc showDetail "svc"
+```
+
+**Post-render DOM binding** (works with any node ID):
+
+```js
+document.querySelectorAll('#diagram .node').forEach(node => {
+  node.style.cursor = 'pointer';
+  node.addEventListener('click', () => {
+    const id = node.id.replace(/^flowchart-/, '').replace(/-\\d+$/, '');
+    showDetail(id);
+  });
+});
+```
+
+```js
+const DETAIL = {
+  api: {
+    title: 'API Layer',
+    desc: 'Entry point. Validates payload, hands off to service.',
+    files: ['src/api/orders.ts:14'],
+    code: `app.post('/orders', validate(schema), handler);`,
+    lang: 'typescript',
+  },
+};
+
+function showDetail(key) {
+  const d = DETAIL[key]; if (!d) return;
+  document.getElementById('detail-title').textContent = d.title;
+  document.getElementById('detail-desc').textContent = d.desc;
+  if (d.code && window.hljs) {
+    document.getElementById('detail-code').innerHTML =
+      `<pre><code>${hljs.highlight(d.code, { language: d.lang }).value}</code></pre>`;
+  }
+  document.getElementById('detail-panel').classList.remove('collapsed');
+}
+```
+
+`showDetail` must be on `window` (a top-level `function` declaration) so Mermaid's
+loose-mode callback can reach it.
+'''
 
 
 class VendorGenericSkillsTests(unittest.TestCase):
@@ -45,6 +140,11 @@ class VendorGenericSkillsTests(unittest.TestCase):
             (self.checkout / "cw" / "skills" / "demo" / "SKILL.md").read_text(),
         )
         self.assertTrue((self.output / "demo" / "resources" / "guide.md").is_file())
+
+    def test_render_updates_a_preexisting_safe_output_root(self):
+        self.output.mkdir()
+        render_from_checkout(self.checkout, self.output)
+        self.assertIn("# Demo", (self.output / "demo/SKILL.md").read_text())
 
     def test_check_reports_changed_vendored_file(self):
         render_from_checkout(self.checkout, self.output)
@@ -193,9 +293,7 @@ class VendorGenericSkillsTests(unittest.TestCase):
         source = self.checkout / "cw" / "skills" / "structured-artifact"
         (source / "resources").mkdir(parents=True)
         (source / "SKILL.md").write_text("---\nname: structured-artifact\n---\nBody.\n")
-        (source / "resources" / "diagrams.md").write_text(
-            "Validate with `meridian mermaid check`.\n"
-        )
+        (source / "resources" / "diagrams.md").write_text(DIAGRAM_SOURCE)
         with patch(
             "scripts.vendor_generic_skills.vendored_skills",
             return_value=("structured-artifact",),
@@ -210,6 +308,131 @@ class VendorGenericSkillsTests(unittest.TestCase):
         self.assertNotIn("meridian", rendered.lower())
         self.assertIn("available Mermaid parser or renderer", rendered)
         self.assertIn("report syntax errors before delivery", rendered)
+
+    def test_render_adapts_grill_instruction_file_for_codex(self):
+        source = self.checkout / "cw" / "skills" / "grill-with-docs"
+        source.mkdir(parents=True)
+        (source / "SKILL.md").write_text(
+            "---\nname: grill-with-docs\n---\n"
+            "2. Project conventions in `CLAUDE.md` — established names and labels.\n"
+        )
+        with patch(
+            "scripts.vendor_generic_skills.vendored_skills",
+            return_value=("grill-with-docs",),
+        ), patch(
+            "scripts.vendor_generic_skills.canonical_skills",
+            return_value={"grill-with-docs"},
+        ):
+            render_from_checkout(self.checkout, self.output)
+
+        rendered = (self.output / "grill-with-docs/SKILL.md").read_text()
+        self.assertIn("Project conventions in `AGENTS.md`", rendered)
+        self.assertNotIn("CLAUDE.md", rendered)
+
+    def test_grill_adaptation_rejects_unrecognized_licensed_source(self):
+        source = self.checkout / "cw" / "skills" / "grill-with-docs"
+        source.mkdir(parents=True)
+        (source / "SKILL.md").write_text(
+            "---\nname: grill-with-docs\n---\n"
+            "2. Changed project conventions wording.\n"
+        )
+        with patch(
+            "scripts.vendor_generic_skills.vendored_skills",
+            return_value=("grill-with-docs",),
+        ), patch(
+            "scripts.vendor_generic_skills.canonical_skills",
+            return_value={"grill-with-docs"},
+        ):
+            with self.assertRaisesRegex(ValueError, "licensed instruction-file reference"):
+                render_from_checkout(self.checkout, self.output)
+
+    def test_render_adapts_llm_writing_disk_boundary(self):
+        source = self.checkout / "cw" / "skills" / "llm-writing"
+        source.mkdir(parents=True)
+        (source / "SKILL.md").write_text(
+            "---\nname: llm-writing\n---\n"
+            "3. **Draft.** Write a full draft to disk so you can edit it piece by piece.\n"
+        )
+        with patch(
+            "scripts.vendor_generic_skills.vendored_skills",
+            return_value=("llm-writing",),
+        ), patch(
+            "scripts.vendor_generic_skills.canonical_skills",
+            return_value={"llm-writing"},
+        ):
+            render_from_checkout(self.checkout, self.output)
+
+        rendered = (self.output / "llm-writing/SKILL.md").read_text()
+        self.assertIn("explicitly writable artifact", rendered)
+        self.assertIn("caller-assigned path", rendered)
+        self.assertIn("response context", rendered)
+        self.assertNotIn("Write a full draft to disk so you can edit it piece by piece", rendered)
+
+    def test_llm_writing_adaptation_rejects_unrecognized_licensed_source(self):
+        source = self.checkout / "cw" / "skills" / "llm-writing"
+        source.mkdir(parents=True)
+        (source / "SKILL.md").write_text(
+            "---\nname: llm-writing\n---\n3. **Draft.** Changed upstream.\n"
+        )
+        with patch(
+            "scripts.vendor_generic_skills.vendored_skills",
+            return_value=("llm-writing",),
+        ), patch(
+            "scripts.vendor_generic_skills.canonical_skills",
+            return_value={"llm-writing"},
+        ):
+            with self.assertRaisesRegex(ValueError, "licensed disk-draft instruction"):
+                render_from_checkout(self.checkout, self.output)
+
+    def test_render_hardens_structured_artifact_examples(self):
+        source = self.checkout / "cw" / "skills" / "structured-artifact"
+        (source / "resources").mkdir(parents=True)
+        (source / "SKILL.md").write_text("---\nname: structured-artifact\n---\nBody.\n")
+        (source / "resources/tree-and-toc.md").write_text(TREE_SOURCE)
+        (source / "resources/diagrams.md").write_text(DIAGRAM_SOURCE)
+        with patch(
+            "scripts.vendor_generic_skills.vendored_skills",
+            return_value=("structured-artifact",),
+        ), patch(
+            "scripts.vendor_generic_skills.canonical_skills",
+            return_value={"structured-artifact"},
+        ):
+            render_from_checkout(self.checkout, self.output)
+
+        tree = (self.output / "structured-artifact/resources/tree-and-toc.md").read_text()
+        diagrams = (self.output / "structured-artifact/resources/diagrams.md").read_text()
+        self.assertNotIn("innerHTML", tree)
+        self.assertNotIn("innerHTML", diagrams)
+        self.assertIn("textContent", tree)
+        self.assertIn("replaceChildren", tree)
+        self.assertIn("securityLevel: 'strict'", diagrams)
+        self.assertNotIn("securityLevel: 'loose'", diagrams)
+        self.assertNotRegex(diagrams, r"(?m)^\s*click\s+\w+\s+\w+")
+        self.assertIn("ALLOWED_DETAIL_KEYS", diagrams)
+        self.assertNotIn("new Set(Object.keys(DETAIL))", diagrams)
+
+    def test_structured_artifact_security_adaptations_reject_source_drift(self):
+        source = self.checkout / "cw" / "skills" / "structured-artifact"
+        (source / "resources").mkdir(parents=True)
+        (source / "SKILL.md").write_text("---\nname: structured-artifact\n---\nBody.\n")
+        (source / "resources/tree-and-toc.md").write_text(
+            TREE_SOURCE.replace("renderNode(n)", "renderTreeNode(n)", 1)
+        )
+        (source / "resources/diagrams.md").write_text(
+            DIAGRAM_SOURCE.replace("required for click callbacks", "changed upstream", 1)
+        )
+        with patch(
+            "scripts.vendor_generic_skills.vendored_skills",
+            return_value=("structured-artifact",),
+        ), patch(
+            "scripts.vendor_generic_skills.canonical_skills",
+            return_value={"structured-artifact"},
+        ):
+            with self.assertRaisesRegex(
+                ValueError,
+                "licensed (?:tree rendering example|Mermaid configuration)",
+            ):
+                render_from_checkout(self.checkout, self.output)
 
     def test_invalid_vendored_names_do_not_mutate_output_or_escape_it(self):
         outside = self.root / "escape"
@@ -235,6 +458,104 @@ class VendorGenericSkillsTests(unittest.TestCase):
                     render_from_checkout(self.checkout, output)
             self.assertFalse(output.exists())
             self.assertEqual((outside / "keep.txt").read_text(), "keep\n")
+
+    def test_render_rejects_symlinked_checkout_boundary(self):
+        checkout_link = self.root / "checkout-link"
+        checkout_link.symlink_to(self.checkout, target_is_directory=True)
+        with self.assertRaisesRegex(ValueError, "checkout.*symlink"):
+            render_from_checkout(checkout_link, self.output)
+        self.assertFalse(self.output.exists())
+
+    def test_explicit_source_checkout_preserves_symlink_for_preflight(self):
+        checkout_link = self.root / "checkout-option"
+        checkout_link.symlink_to(self.checkout, target_is_directory=True)
+        with source_checkout(checkout_link) as selected:
+            with self.assertRaisesRegex(ValueError, "checkout.*symlink"):
+                render_from_checkout(selected, self.output)
+        self.assertFalse(self.output.exists())
+
+    def test_render_rejects_symlinked_source_root_boundary(self):
+        source_root = self.checkout / "cw" / "skills"
+        external = self.root / "external-skills"
+        source_root.rename(external)
+        source_root.symlink_to(external, target_is_directory=True)
+        with self.assertRaisesRegex(ValueError, "source root.*symlink"):
+            render_from_checkout(self.checkout, self.output)
+        self.assertFalse(self.output.exists())
+
+    def test_render_rejects_symlinked_skill_boundary(self):
+        skill = self.checkout / "cw" / "skills" / "demo"
+        external = self.root / "external-demo"
+        skill.rename(external)
+        skill.symlink_to(external, target_is_directory=True)
+        with self.assertRaisesRegex(ValueError, "demo.*symlink"):
+            render_from_checkout(self.checkout, self.output)
+        self.assertFalse(self.output.exists())
+
+    def test_render_rejects_symlinked_and_special_source_entries(self):
+        skill = self.checkout / "cw" / "skills" / "demo"
+        external = self.root / "outside.md"
+        external.write_text("outside\n")
+        link = skill / "resources" / "leak.md"
+        link.symlink_to(external)
+        with self.assertRaisesRegex(ValueError, "source entry.*symlink"):
+            render_from_checkout(self.checkout, self.output)
+        self.assertFalse(self.output.exists())
+
+        link.unlink()
+        fifo = skill / "resources" / "pipe"
+        os.mkfifo(fifo)
+        with self.assertRaisesRegex(ValueError, "source entry.*regular"):
+            render_from_checkout(self.checkout, self.output)
+        self.assertFalse(self.output.exists())
+
+    def test_render_rejects_symlinked_output_boundaries(self):
+        external = self.root / "external-output"
+        external.mkdir()
+        self.output.symlink_to(external, target_is_directory=True)
+        with self.assertRaisesRegex(ValueError, "output root.*symlink"):
+            render_from_checkout(self.checkout, self.output)
+        self.assertEqual(list(external.iterdir()), [])
+
+    def test_late_invalid_skill_does_not_partially_apply_earlier_skill(self):
+        self.output.mkdir()
+        existing = self.output / "demo"
+        existing.mkdir()
+        (existing / "SKILL.md").write_text("old demo\n")
+        broken = self.checkout / "cw" / "skills" / "broken"
+        broken.mkdir()
+        (broken / "not-skill.md").write_text("late failure\n")
+
+        with patch(
+            "scripts.vendor_generic_skills.vendored_skills",
+            return_value=("demo", "broken"),
+        ), patch(
+            "scripts.vendor_generic_skills.canonical_skills",
+            return_value={"demo", "broken"},
+        ):
+            with self.assertRaisesRegex(ValueError, "broken: missing SKILL.md"):
+                render_from_checkout(self.checkout, self.output)
+
+        self.assertEqual((existing / "SKILL.md").read_text(), "old demo\n")
+        self.assertFalse((self.output / "broken").exists())
+
+    def test_complete_stage_uses_each_configured_skill_source(self):
+        second = self.checkout / "cw" / "skills" / "second"
+        second.mkdir()
+        (second / "SKILL.md").write_text(
+            "---\nname: second\n---\n\n# Second\n"
+        )
+        with patch(
+            "scripts.vendor_generic_skills.vendored_skills",
+            return_value=("demo", "second"),
+        ), patch(
+            "scripts.vendor_generic_skills.canonical_skills",
+            return_value={"demo", "second"},
+        ):
+            render_from_checkout(self.checkout, self.output)
+
+        self.assertIn("# Demo", (self.output / "demo/SKILL.md").read_text())
+        self.assertIn("# Second", (self.output / "second/SKILL.md").read_text())
 
     def test_normalizer_preserves_commonmark_fenced_blocks(self):
         source = (

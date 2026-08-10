@@ -9,6 +9,7 @@ from urllib.parse import unquote
 if __package__:
     from scripts.distribution import (
         REPO_ROOT,
+        extract_instructional_relative_paths,
         extract_skill_references,
         iter_fenced_lines,
         map_outside_fences,
@@ -17,6 +18,7 @@ if __package__:
 else:
     from distribution import (
         REPO_ROOT,
+        extract_instructional_relative_paths,
         extract_skill_references,
         iter_fenced_lines,
         map_outside_fences,
@@ -480,6 +482,33 @@ def _validate_markdown(
             display_target = target or "<empty>"
             problems.append(f"{skill_name}: missing relative resource {display_target}")
 
+    for target in sorted(extract_instructional_relative_paths(text)):
+        relative = _link_path(target)
+        candidates = [skill_root]
+        try:
+            candidates.extend(
+                candidate
+                for candidate in sorted(skill_root.parent.iterdir())
+                if candidate != skill_root
+                and candidate.is_dir()
+                and not candidate.is_symlink()
+            )
+        except OSError:
+            pass
+        found = False
+        if relative:
+            for candidate_root in candidates:
+                resolved = _resolve_relative(
+                    candidate_root,
+                    relative,
+                    candidate_root,
+                )
+                if resolved is not None and resolved.exists():
+                    found = True
+                    break
+        if not found:
+            problems.append(f"{skill_name}: missing relative resource {target}")
+
     reference_text = _without_urls_outside_fences(text)
     for reference in sorted(extract_skill_references(reference_text, "/")):
         problems.append(
@@ -490,6 +519,8 @@ def _validate_markdown(
             problems.append(f"{skill_name}: dangling skill reference ${reference}")
 
     visible = _outside_fences(reference_text)
+    if "CLAUDE.md" in visible:
+        problems.append(f"{skill_name}: Claude-only vocabulary CLAUDE.md")
     for reference in sorted(_worker_references(visible) - worker_names):
         problems.append(f"{skill_name}: dangling worker reference @{reference}")
 

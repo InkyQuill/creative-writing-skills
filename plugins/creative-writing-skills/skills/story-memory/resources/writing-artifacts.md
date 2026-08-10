@@ -38,6 +38,13 @@ always authoritative.
 
 When a work item completes, promote *knowledge* from work to kb: not raw artifacts. Brainstorm captures and draft iterations stay archived in the work item.
 
+Preserve provenance during promotion. Untagged author-stated text remains untagged.
+Preserve `<AI>...</AI>` markers around AI suggestions; promotion does
+not turn a suggestion into author-stated canon. Exclude `<hidden>...</hidden>`
+content unless the author explicitly confirms both the fact and its destination
+in durable knowledge. Even after that confirmation, preserve any knowledge
+boundary the author assigns.
+
 ## Convention Is Swappable
 
 This skill defines convention. A project can replace it without touching agent bodies.
