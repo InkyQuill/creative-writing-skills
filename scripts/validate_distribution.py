@@ -114,6 +114,79 @@ TEXT_RUNTIME_SUFFIXES = {
     ".rs", ".rst", ".sass", ".scss", ".sh", ".sql", ".svg", ".toml",
     ".ts", ".tsx", ".txt", ".xml", ".yaml", ".yml", ".zsh",
 }
+STRUCTURED_ARTIFACT_UNSAFE_PATTERNS = (
+    (
+        "innerHTML assignment",
+        re.compile(
+            r"(?:\.innerHTML|\[\s*['\"]innerHTML['\"]\s*\])\s*\+?=(?!=)",
+            re.IGNORECASE,
+        ),
+    ),
+    (
+        "outerHTML assignment",
+        re.compile(
+            r"(?:\.outerHTML|\[\s*['\"]outerHTML['\"]\s*\])\s*\+?=(?!=)",
+            re.IGNORECASE,
+        ),
+    ),
+    ("insertAdjacentHTML", re.compile(r"\.insertAdjacentHTML\s*\(", re.IGNORECASE)),
+    (
+        "document.write/writeln",
+        re.compile(r"\bdocument\.(?:write|writeln)\s*\(", re.IGNORECASE),
+    ),
+    ("inline event attribute", re.compile(r"<[^>]+\s+on[a-z]+\s*=", re.IGNORECASE)),
+    (
+        "event-handler setAttribute",
+        re.compile(r"\.setAttribute\s*\(\s*['\"]on[a-z]+['\"]", re.IGNORECASE),
+    ),
+    (
+        "srcdoc assignment",
+        re.compile(
+            r"(?:\.srcdoc|\[\s*['\"]srcdoc['\"]\s*\])\s*\+?=(?!=)"
+            r"|\.setAttribute\s*\(\s*['\"]srcdoc['\"]",
+            re.IGNORECASE,
+        ),
+    ),
+    (
+        "dangerous raw HTML API",
+        re.compile(
+            r"\bdangerouslySetInnerHTML\b"
+            r"|\.(?:createContextualFragment|setHTMLUnsafe)\s*\("
+            r"|\bDocument\.parseHTMLUnsafe\s*\("
+            r"|\.parseFromString\s*\([^,]+,\s*['\"]text/html['\"]",
+            re.IGNORECASE,
+        ),
+    ),
+    (
+        "string-to-code sink",
+        re.compile(
+            r"\beval\s*\(|\b(?:new\s+)?Function\s*\("
+            r"|\b(?:setTimeout|setInterval)\s*\(\s*['\"`]",
+            re.IGNORECASE,
+        ),
+    ),
+    (
+        "Mermaid loose security",
+        re.compile(r"securityLevel\s*:\s*['\"]loose['\"]", re.IGNORECASE),
+    ),
+    ("Mermaid callback directive", re.compile(r"(?m)^\s*click\s+\w+\s+\w+")),
+)
+
+
+def _validate_structured_artifact_resource(
+    owner: str,
+    relative: str,
+    text: str,
+    problems: list[str],
+) -> None:
+    findings: set[str] = set()
+    for finding, pattern in STRUCTURED_ARTIFACT_UNSAFE_PATTERNS:
+        if pattern.search(text):
+            findings.add(finding)
+    for finding in sorted(findings):
+        problems.append(
+            f"{owner}: unsafe executable HTML/JavaScript in {relative}: {finding}"
+        )
 
 
 def _load_object(
@@ -644,6 +717,13 @@ def _validate_skills(
                     worker_names,
                     problems,
                 )
+            if skill_name == "structured-artifact":
+                _validate_structured_artifact_resource(
+                    skill_name,
+                    relative,
+                    text,
+                    problems,
+                )
             for match in PLATFORM_VOCABULARY_RE.finditer(text):
                 problems.append(
                     f"{skill_name}: forbidden canonical runtime vocabulary {match.group(0)}"
@@ -952,6 +1032,14 @@ def _validate_claude_distribution(
         except (OSError, UnicodeError) as error:
             problems.append(f"{label}: cannot read: {error}")
             continue
+        structured_artifact_root = skill_root / "structured-artifact"
+        if valid_skill_root and _is_within(path, structured_artifact_root):
+            _validate_structured_artifact_resource(
+                "cw/skills/structured-artifact",
+                _runtime_label(path, structured_artifact_root),
+                text,
+                problems,
+            )
         if (
             path.name == "SKILL.md"
             and path.parent.parent == skill_root

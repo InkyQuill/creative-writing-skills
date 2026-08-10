@@ -18,6 +18,7 @@ from scripts.distribution import split_frontmatter
 from scripts.sync_claude_distribution import (
     UnsupportedTransformError,
     _commit_candidate,
+    _transform_resource_markdown,
     main,
     render_agent,
     render_distribution,
@@ -281,6 +282,23 @@ class ClaudeTransformTests(unittest.TestCase):
         self.assertIn("Use $md-validation before committing.", rendered)
         self.assertNotIn("Use /md-validation before committing.", rendered)
 
+    def test_bootstrap_transform_rejects_duplicate_canonical_instruction(self):
+        instruction = (
+            "Use `$md-validation` for link checking and diagram validation before\n"
+            "committing."
+        )
+
+        with self.assertRaisesRegex(
+            UnsupportedTransformError,
+            "fenced validation instruction.*exactly once; found 2",
+        ):
+            _transform_resource_markdown(
+                f"```markdown\n{instruction}\n\n{instruction}\n```\n",
+                "knowledge-layers",
+                Path("resources/bootstrap.md"),
+                frozenset({"knowledge-layers", "md-validation"}),
+            )
+
 
 class ClaudeDistributionRenderTests(unittest.TestCase):
     def test_render_distribution_materializes_complete_claude_tree(self):
@@ -460,6 +478,39 @@ class ClaudeDistributionCliTests(unittest.TestCase):
         config = json.loads(path.read_text())
         mutate(config)
         path.write_text(json.dumps(config) + "\n")
+
+    def test_apply_rejects_duplicate_bootstrap_instruction_without_mutation(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            repo_root = Path(temporary) / "repo"
+            repo_root.mkdir()
+            self._copy_canonical_inputs(repo_root)
+            bootstrap = (
+                repo_root
+                / "plugins/creative-writing-skills/skills/knowledge-layers/"
+                "resources/bootstrap.md"
+            )
+            instruction = (
+                "Use `$md-validation` for link checking and diagram validation before\n"
+                "committing."
+            )
+            bootstrap.write_text(
+                bootstrap.read_text().replace(
+                    instruction,
+                    instruction + "\n\n" + instruction,
+                )
+            )
+            cw_root = repo_root / "cw"
+            cw_root.mkdir()
+            sentinel = cw_root / "sentinel.txt"
+            sentinel.write_text("original cw\n")
+            stdout = io.StringIO()
+
+            with redirect_stdout(stdout):
+                status = main(["--apply"], repo_root=repo_root)
+
+            self.assertEqual(1, status)
+            self.assertIn("exactly once; found 2", stdout.getvalue())
+            self.assertEqual("original cw\n", sentinel.read_text())
 
     def test_apply_rejects_noncanonical_claude_config_without_mutation(self):
         cases = {

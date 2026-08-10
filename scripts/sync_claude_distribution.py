@@ -16,6 +16,7 @@ if __package__:
         extract_skill_references,
         load_json,
         map_outside_fences,
+        replace_exactly_once,
         skill_directories,
         split_frontmatter,
     )
@@ -25,6 +26,7 @@ else:
         extract_skill_references,
         load_json,
         map_outside_fences,
+        replace_exactly_once,
         skill_directories,
         split_frontmatter,
     )
@@ -539,21 +541,19 @@ def _transform_resource_markdown(
         skill_name == "knowledge-layers"
         and relative_path == Path("resources/bootstrap.md")
     ):
-        if _KNOWLEDGE_BOOTSTRAP_CANONICAL_VALIDATION not in rendered:
-            raise UnsupportedTransformError(
-                "knowledge-layers/resources/bootstrap.md: expected canonical "
-                "fenced validation instruction"
-            )
+        rendered = replace_exactly_once(
+            rendered,
+            _KNOWLEDGE_BOOTSTRAP_CANONICAL_VALIDATION,
+            _KNOWLEDGE_BOOTSTRAP_CLAUDE_VALIDATION,
+            "knowledge-layers/resources/bootstrap.md: expected canonical fenced "
+            "validation instruction",
+            UnsupportedTransformError,
+        )
         if "md-validation" not in known_skills:
             raise UnsupportedTransformError(
                 "knowledge-layers/resources/bootstrap.md: unknown Claude skill "
                 "reference /md-validation"
             )
-        rendered = rendered.replace(
-            _KNOWLEDGE_BOOTSTRAP_CANONICAL_VALIDATION,
-            _KNOWLEDGE_BOOTSTRAP_CLAUDE_VALIDATION,
-            1,
-        )
     return rendered
 
 

@@ -283,35 +283,12 @@ class DistributionScaffoldTests(unittest.TestCase):
 
     def test_structured_artifact_examples_do_not_enable_markup_injection(self):
         resource_root = PLUGIN_ROOT / "skills/structured-artifact/resources"
-        artifact_resources = {
-            path.relative_to(resource_root).as_posix(): path.read_text()
-            for path in resource_root.rglob("*.md")
-        }
-        self.assertEqual(
-            {
-                "card-grid.md",
-                "data-chart.md",
-                "data-table.md",
-                "diagrams.md",
-                "diff-view.md",
-                "experimental-react-flow.md",
-                "layout-and-theme.md",
-                "mockups.md",
-                "multi-page-site.md",
-                "timeline.md",
-                "tree-and-toc.md",
-            },
-            set(artifact_resources),
-        )
-        for name, text in artifact_resources.items():
-            with self.subTest(resource=name):
-                for match in re.finditer(r"\.innerHTML\s*=\s*([^;\n]+)", text):
-                    self.assertIn(match.group(1).strip(), {'""', "''"})
-                self.assertNotRegex(text, r"\b(?:outerHTML|insertAdjacentHTML)\b")
-                self.assertNotRegex(text, r"\bon[a-z]+\s*=\s*[\"'][^\n>]*\$\{")
-                self.assertNotRegex(text, r"`[^`\n]*<[^`\n]*\$\{")
-                self.assertNotIn("securityLevel: 'loose'", text)
-                self.assertNotRegex(text, r"(?m)^\s*click\s+\w+\s+\w+")
+        security_problems = [
+            problem
+            for problem in validate(REPO_ROOT, canonical_only=True)
+            if "unsafe executable HTML/JavaScript" in problem
+        ]
+        self.assertEqual([], security_problems)
         tree = (resource_root / "tree-and-toc.md").read_text()
         diagrams = (resource_root / "diagrams.md").read_text()
         cards = (resource_root / "card-grid.md").read_text()
@@ -1083,6 +1060,65 @@ class ValidatorTests(unittest.TestCase):
         self.assertIn(
             "story-memory: disable-model-invocation true is Claude-only",
             validate(self.root, canonical_only=True),
+        )
+
+    def test_validator_rejects_unsafe_non_markdown_structured_artifact_resource(self):
+        resource = (
+            self.skills / "structured-artifact" / "resources" / "unsafe.html"
+        )
+        resource.parent.mkdir(exist_ok=True)
+        resource.write_text(
+            '<div id="output"></div><script>output.innerHTML = userHtml;</script>\n'
+        )
+
+        self.assertIn(
+            "structured-artifact: unsafe executable HTML/JavaScript in "
+            "resources/unsafe.html: innerHTML assignment",
+            validate(self.root, canonical_only=True),
+        )
+
+    def test_validator_rejects_document_write_in_structured_artifact_markdown(self):
+        resource = (
+            self.skills / "structured-artifact" / "resources" / "unsafe.md"
+        )
+        resource.parent.mkdir(exist_ok=True)
+        resource.write_text(
+            "# Unsafe\n\n```html\n<script>document.write(userHtml)</script>\n```\n"
+        )
+
+        self.assertIn(
+            "structured-artifact: unsafe executable HTML/JavaScript in "
+            "resources/unsafe.md: document.write/writeln",
+            validate(self.root, canonical_only=True),
+        )
+
+    def test_validator_rejects_empty_inner_html_assignment(self):
+        resource = (
+            self.skills / "structured-artifact" / "resources" / "clear.js"
+        )
+        resource.parent.mkdir(exist_ok=True)
+        resource.write_text('output.innerHTML = "";\n')
+
+        self.assertIn(
+            "structured-artifact: unsafe executable HTML/JavaScript in "
+            "resources/clear.js: innerHTML assignment",
+            validate(self.root, canonical_only=True),
+        )
+
+    def test_validator_accepts_safe_structured_artifact_dom_resource(self):
+        resource = (
+            self.skills / "structured-artifact" / "resources" / "safe.js"
+        )
+        resource.parent.mkdir(exist_ok=True)
+        resource.write_text(
+            'const button = document.createElement("button");\n'
+            "button.textContent = label;\n"
+            'button.addEventListener("click", render);\n'
+            "root.replaceChildren(button);\n"
+        )
+
+        self.assertFalse(
+            [problem for problem in validate(self.root, canonical_only=True) if "safe.js" in problem]
         )
 
     def test_validator_rejects_invalid_claude_invocation_policy(self):

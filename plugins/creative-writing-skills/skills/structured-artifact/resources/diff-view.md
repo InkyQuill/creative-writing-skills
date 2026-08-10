@@ -24,8 +24,8 @@ If you already have a unified diff string, omit jsdiff.
 
 ```html
 <div>
-  <button onclick="renderDiff('side-by-side')">Side by Side</button>
-  <button onclick="renderDiff('line-by-line')">Unified</button>
+  <button type="button" data-diff-mode="side-by-side">Side by Side</button>
+  <button type="button" data-diff-mode="line-by-line">Unified</button>
 </div>
 <div id="diff"></div>
 <script>
@@ -35,7 +35,7 @@ const patch = Diff.createTwoFilesPatch("old.js", "new.js", oldText, newText);
 
 function renderDiff(mode) {
   const el = document.getElementById("diff");
-  el.innerHTML = "";
+  el.replaceChildren();
   const ui = new Diff2HtmlUI(el, patch, {
     drawFileList: false,
     outputFormat: mode,
@@ -46,6 +46,12 @@ function renderDiff(mode) {
   ui.highlightCode();
 }
 
-renderDiff("side-by-side");
+document.querySelectorAll("[data-diff-mode]").forEach(button => {
+  button.addEventListener("click", () => renderDiff(button.dataset.diffMode));
+});
+
+renderDiff(
+  "side-by-side"
+);
 </script>
 ```

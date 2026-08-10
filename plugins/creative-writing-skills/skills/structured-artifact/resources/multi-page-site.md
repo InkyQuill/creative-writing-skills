@@ -46,8 +46,12 @@ the same minimal nav so the reader can always get back:
 <header>
   <a href="index.html">← Index</a>
   <span class="crumb">Runtime loop</span>
-  <button onclick="toggleTheme()">☀/🌙</button>
+  <button id="themeToggle" type="button">☀/🌙</button>
 </header>
+<script src="shared.js"></script>
+<script>
+document.getElementById("themeToggle").addEventListener("click", toggleTheme);
+</script>
 ```
 
 Cross-link between child pages inline where beats connect ("checkpoints are

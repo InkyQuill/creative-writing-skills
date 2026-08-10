@@ -129,6 +129,53 @@ renderCards();
 ```
 '''
 
+DATA_TABLE_SOURCE = '''# Data Table
+
+```html
+<input id="search" placeholder="Search..." oninput="applyFilter()">
+<div id="table"></div>
+<script>
+function applyFilter() {
+  const q = document.getElementById("search").value.toLowerCase();
+  table.setFilter(row =>
+    Object.values(row).join(" ").toLowerCase().includes(q)
+  );
+}
+
+table.on("rowClick", showDetail);
+</script>
+```
+'''
+
+MULTI_PAGE_SOURCE = '''# Multi Page
+
+```html
+<header>
+  <a href="index.html">← Index</a>
+  <span class="crumb">Runtime loop</span>
+  <button onclick="toggleTheme()">☀/🌙</button>
+</header>
+```
+'''
+
+DIFF_VIEW_SOURCE = '''# Diff View
+
+```html
+<div>
+  <button onclick="renderDiff('side-by-side')">Side by Side</button>
+  <button onclick="renderDiff('line-by-line')">Unified</button>
+</div>
+<script>
+function renderDiff(mode) {
+  const el = document.getElementById("diff");
+  el.innerHTML = "";
+  return mode;
+}
+renderDiff("side-by-side");
+</script>
+```
+'''
+
 
 class VendorGenericSkillsTests(unittest.TestCase):
     def setUp(self):
@@ -521,6 +568,9 @@ class VendorGenericSkillsTests(unittest.TestCase):
         (source / "resources/tree-and-toc.md").write_text(TREE_SOURCE)
         (source / "resources/diagrams.md").write_text(DIAGRAM_SOURCE)
         (source / "resources/card-grid.md").write_text(CARD_GRID_SOURCE)
+        (source / "resources/data-table.md").write_text(DATA_TABLE_SOURCE)
+        (source / "resources/multi-page-site.md").write_text(MULTI_PAGE_SOURCE)
+        (source / "resources/diff-view.md").write_text(DIFF_VIEW_SOURCE)
         with patch(
             "scripts.vendor_generic_skills.vendored_skills",
             return_value=("structured-artifact",),
@@ -533,6 +583,9 @@ class VendorGenericSkillsTests(unittest.TestCase):
         tree = (self.output / "structured-artifact/resources/tree-and-toc.md").read_text()
         diagrams = (self.output / "structured-artifact/resources/diagrams.md").read_text()
         cards = (self.output / "structured-artifact/resources/card-grid.md").read_text()
+        data_table = (self.output / "structured-artifact/resources/data-table.md").read_text()
+        multi_page = (self.output / "structured-artifact/resources/multi-page-site.md").read_text()
+        diff_view = (self.output / "structured-artifact/resources/diff-view.md").read_text()
         self.assertNotIn("innerHTML", tree)
         self.assertNotIn("innerHTML", diagrams)
         self.assertIn("textContent", tree)
@@ -553,6 +606,11 @@ class VendorGenericSkillsTests(unittest.TestCase):
             ".sort((a, b) => (a[s] === b[s] ? 0 : a[s] > b[s] ? 1 : -1))",
             cards,
         )
+        for rendered in (data_table, multi_page, diff_view):
+            self.assertNotRegex(rendered, r"\son[a-z]+=", msg=rendered)
+            self.assertIn("addEventListener", rendered)
+        self.assertNotIn("innerHTML", diff_view)
+        self.assertIn("replaceChildren", diff_view)
 
     def test_card_grid_security_adaptation_rejects_source_drift(self):
         source = self.checkout / "cw" / "skills" / "structured-artifact"
@@ -573,6 +631,91 @@ class VendorGenericSkillsTests(unittest.TestCase):
             with self.assertRaisesRegex(
                 ValueError,
                 "expected licensed card-grid rendering example",
+            ):
+                render_from_checkout(self.checkout, self.output)
+
+    def test_card_grid_security_adaptation_rejects_duplicate_source_block(self):
+        source = self.checkout / "cw" / "skills" / "structured-artifact"
+        (source / "resources").mkdir(parents=True)
+        (source / "SKILL.md").write_text(
+            "---\nname: structured-artifact\n---\nBody.\n"
+        )
+        (source / "resources/card-grid.md").write_text(
+            CARD_GRID_SOURCE + "\n" + CARD_GRID_SOURCE
+        )
+        self.output.mkdir()
+        sentinel = self.output / "sentinel.txt"
+        sentinel.write_text("unchanged\n")
+        with patch(
+            "scripts.vendor_generic_skills.vendored_skills",
+            return_value=("structured-artifact",),
+        ), patch(
+            "scripts.vendor_generic_skills.canonical_skills",
+            return_value={"structured-artifact"},
+        ):
+            with self.assertRaisesRegex(
+                ValueError,
+                "card-grid rendering example.*exactly once; found 2",
+            ):
+                render_from_checkout(self.checkout, self.output)
+        self.assertEqual("unchanged\n", sentinel.read_text())
+
+    def test_bootstrap_adaptation_rejects_duplicate_source_block(self):
+        source = self.checkout / "cw" / "skills" / "knowledge-layers"
+        (source / "resources").mkdir(parents=True)
+        (source / "SKILL.md").write_text(
+            "---\nname: knowledge-layers\n---\nBody.\n"
+        )
+        validation = (
+            "Use `/md-validation` for link checking and diagram validation before\n"
+            "committing."
+        )
+        (source / "resources/bootstrap.md").write_text(
+            "## Directory Layout\n\n"
+            "```\n"
+            "kb/\n"
+            "  AGENTS.md          # intent: what belongs here, key rules\n"
+            "  .context/\n"
+            "    CONTEXT.md       # governance depth: writing conventions, structure, validation\n"
+            "  index.md           # catalog of pages with one-line summaries\n"
+            "  vocab.md           # project-wide terminology\n"
+            "```\n\n"
+            "## Starter AGENTS.md\n\n"
+            f"```markdown\n{validation}\n\n{validation}\n```\n"
+        )
+        with patch(
+            "scripts.vendor_generic_skills.vendored_skills",
+            return_value=("knowledge-layers",),
+        ), patch(
+            "scripts.vendor_generic_skills.canonical_skills",
+            return_value={"knowledge-layers", "md-validation"},
+        ):
+            with self.assertRaisesRegex(
+                ValueError,
+                "bootstrap validation instruction.*exactly once; found 2",
+            ):
+                render_from_checkout(self.checkout, self.output)
+
+    def test_existing_grill_adaptation_rejects_duplicate_source_block(self):
+        source = self.checkout / "cw" / "skills" / "grill-with-docs"
+        source.mkdir(parents=True)
+        instruction = (
+            "2. Project conventions in `CLAUDE.md` — established names and labels."
+        )
+        (source / "SKILL.md").write_text(
+            "---\nname: grill-with-docs\n---\n"
+            f"{instruction}\n{instruction}\n"
+        )
+        with patch(
+            "scripts.vendor_generic_skills.vendored_skills",
+            return_value=("grill-with-docs",),
+        ), patch(
+            "scripts.vendor_generic_skills.canonical_skills",
+            return_value={"grill-with-docs"},
+        ):
+            with self.assertRaisesRegex(
+                ValueError,
+                "instruction-file reference.*exactly once; found 2",
             ):
                 render_from_checkout(self.checkout, self.output)
 

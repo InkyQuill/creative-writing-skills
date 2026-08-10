@@ -121,6 +121,26 @@ def _parse_scalar(value: str) -> object:
     return value
 
 
+def replace_exactly_once(
+    text: str,
+    source: str,
+    replacement: str,
+    label: str,
+    exception_factory: Callable[[str], Exception] = ValueError,
+) -> str:
+    """Replace one guarded source block, rejecting missing or ambiguous input."""
+
+    occurrences = text.count(source)
+    if occurrences != 1:
+        raise exception_factory(
+            f"{label} must occur exactly once; found {occurrences}"
+        )
+    rendered = text.replace(source, replacement, 1)
+    if source in rendered:
+        raise exception_factory(f"{label} remains after guarded replacement")
+    return rendered
+
+
 def _parse_block_scalar(style: str, value: str) -> str:
     normalized = value.replace("\r\n", "\n").replace("\r", "\n")
     lines = normalized.splitlines()

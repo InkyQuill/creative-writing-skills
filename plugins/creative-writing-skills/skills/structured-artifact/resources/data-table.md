@@ -18,7 +18,7 @@ virtual DOM rendering for large datasets.
 ## Minimal Example
 
 ```html
-<input id="search" placeholder="Search..." oninput="applyFilter()">
+<input id="search" placeholder="Search...">
 <div id="table"></div>
 <script>
 const table = new Tabulator("#table", {
@@ -34,12 +34,14 @@ const table = new Tabulator("#table", {
   ],
 });
 
-function applyFilter() {
+const applyFilter = () => {
   const q = document.getElementById("search").value.toLowerCase();
   table.setFilter(row =>
     Object.values(row).join(" ").toLowerCase().includes(q)
   );
-}
+};
+
+document.getElementById("search").addEventListener("input", applyFilter);
 
 table.on("rowClick", (e, row) => {
   showDetail(row.getData().name);  // wire to detail panel

@@ -22,9 +22,9 @@ from pathlib import Path
 from typing import Iterator
 
 if __package__:
-    from scripts.distribution import map_outside_fences
+    from scripts.distribution import map_outside_fences, replace_exactly_once
 else:
-    from distribution import map_outside_fences
+    from distribution import map_outside_fences, replace_exactly_once
 
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -219,6 +219,54 @@ function renderCards() {
 document.getElementById("cardSearch").addEventListener("input", renderCards);
 document.getElementById("cardSort").addEventListener("change", renderCards);
 renderCards();'''
+_DATA_TABLE_INPUT = '<input id="search" placeholder="Search..." oninput="applyFilter()">'
+_DATA_TABLE_INPUT_ADAPTATION = '<input id="search" placeholder="Search...">'
+_DATA_TABLE_FILTER = '''function applyFilter() {
+  const q = document.getElementById("search").value.toLowerCase();
+  table.setFilter(row =>
+    Object.values(row).join(" ").toLowerCase().includes(q)
+  );
+}'''
+_DATA_TABLE_FILTER_ADAPTATION = '''const applyFilter = () => {
+  const q = document.getElementById("search").value.toLowerCase();
+  table.setFilter(row =>
+    Object.values(row).join(" ").toLowerCase().includes(q)
+  );
+};
+
+document.getElementById("search").addEventListener("input", applyFilter);'''
+_MULTI_PAGE_THEME_CONTROL = '''<header>
+  <a href="index.html">← Index</a>
+  <span class="crumb">Runtime loop</span>
+  <button onclick="toggleTheme()">☀/🌙</button>
+</header>'''
+_MULTI_PAGE_THEME_CONTROL_ADAPTATION = '''<header>
+  <a href="index.html">← Index</a>
+  <span class="crumb">Runtime loop</span>
+  <button id="themeToggle" type="button">☀/🌙</button>
+</header>
+<script src="shared.js"></script>
+<script>
+document.getElementById("themeToggle").addEventListener("click", toggleTheme);
+</script>'''
+_DIFF_VIEW_CONTROLS = '''<div>
+  <button onclick="renderDiff('side-by-side')">Side by Side</button>
+  <button onclick="renderDiff('line-by-line')">Unified</button>
+</div>'''
+_DIFF_VIEW_CONTROLS_ADAPTATION = '''<div>
+  <button type="button" data-diff-mode="side-by-side">Side by Side</button>
+  <button type="button" data-diff-mode="line-by-line">Unified</button>
+</div>'''
+_DIFF_VIEW_INITIAL_RENDER = 'renderDiff("side-by-side");'
+_DIFF_VIEW_CLEAR = 'el.innerHTML = "";'
+_DIFF_VIEW_CLEAR_ADAPTATION = "el.replaceChildren();"
+_DIFF_VIEW_INITIAL_RENDER_ADAPTATION = '''document.querySelectorAll("[data-diff-mode]").forEach(button => {
+  button.addEventListener("click", () => renderDiff(button.dataset.diffMode));
+});
+
+renderDiff(
+  "side-by-side"
+);'''
 _MERMAID_CONFIG = '''mermaid.initialize({
   startOnLoad: false,
   theme: document.documentElement.classList.contains('dark') ? 'dark' : 'default',
@@ -459,120 +507,132 @@ def _adapt_markdown(
     if is_skill_document:
         text = normalize_codex_invocation_metadata(text)
     if skill_name == "grill-with-docs" and is_skill_document:
-        if _GRILL_INSTRUCTION_FILE not in text:
-            raise ValueError(
-                "grill-with-docs: expected licensed instruction-file reference was not found"
-            )
-        text = text.replace(
+        text = replace_exactly_once(
+            text,
             _GRILL_INSTRUCTION_FILE,
             _GRILL_INSTRUCTION_FILE_ADAPTATION,
-            1,
+            "grill-with-docs: expected licensed instruction-file reference",
         )
     if skill_name == "llm-writing" and is_skill_document:
-        if _LLM_DISK_DRAFT not in text:
-            raise ValueError(
-                "llm-writing: expected licensed disk-draft instruction was not found"
-            )
-        text = text.replace(_LLM_DISK_DRAFT, _LLM_DISK_DRAFT_ADAPTATION, 1)
+        text = replace_exactly_once(
+            text,
+            _LLM_DISK_DRAFT,
+            _LLM_DISK_DRAFT_ADAPTATION,
+            "llm-writing: expected licensed disk-draft instruction",
+        )
     if skill_name == "qi-layer" and is_skill_document:
-        if _QI_DESCRIPTION not in text:
-            raise ValueError("qi-layer: expected licensed description was not found")
-        text = text.replace(_QI_DESCRIPTION, _QI_DESCRIPTION_ADAPTATION, 1)
-        if _QI_OWNERSHIP not in text:
-            raise ValueError("qi-layer: expected licensed ownership sentence was not found")
-        text = text.replace(_QI_OWNERSHIP, _QI_ADAPTATION, 1)
-        if _QI_MIRROR_SECTION not in text:
-            raise ValueError("qi-layer: expected licensed mirror section was not found")
-        text = text.replace(_QI_MIRROR_SECTION, _QI_MIRROR_ADAPTATION, 1)
+        text = replace_exactly_once(
+            text, _QI_DESCRIPTION, _QI_DESCRIPTION_ADAPTATION,
+            "qi-layer: expected licensed description",
+        )
+        text = replace_exactly_once(
+            text, _QI_OWNERSHIP, _QI_ADAPTATION,
+            "qi-layer: expected licensed ownership sentence",
+        )
+        text = replace_exactly_once(
+            text, _QI_MIRROR_SECTION, _QI_MIRROR_ADAPTATION,
+            "qi-layer: expected licensed mirror section",
+        )
     if (
         skill_name == "knowledge-layers"
         and relative_path == Path("resources/bootstrap.md")
     ):
-        if _KNOWLEDGE_BOOTSTRAP_LAYOUT not in text:
-            raise ValueError(
-                "knowledge-layers: expected licensed bootstrap layout was not found"
-            )
-        if _KNOWLEDGE_BOOTSTRAP_HEADING not in text:
-            raise ValueError(
-                "knowledge-layers: expected licensed bootstrap heading was not found"
-            )
-        if _KNOWLEDGE_BOOTSTRAP_VALIDATION not in text:
-            raise ValueError(
-                "knowledge-layers: expected licensed bootstrap validation instruction "
-                "was not found"
-            )
+        text = replace_exactly_once(
+            text,
+            _KNOWLEDGE_BOOTSTRAP_LAYOUT,
+            _KNOWLEDGE_BOOTSTRAP_LAYOUT_ADAPTATION,
+            "knowledge-layers: expected licensed bootstrap layout",
+        )
+        text = replace_exactly_once(
+            text,
+            _KNOWLEDGE_BOOTSTRAP_HEADING,
+            _KNOWLEDGE_BOOTSTRAP_HEADING_ADAPTATION,
+            "knowledge-layers: expected licensed bootstrap heading",
+        )
+        text = replace_exactly_once(
+            text,
+            _KNOWLEDGE_BOOTSTRAP_VALIDATION,
+            _KNOWLEDGE_BOOTSTRAP_VALIDATION_ADAPTATION,
+            "knowledge-layers: expected licensed bootstrap validation instruction",
+        )
         if "md-validation" not in known_skills:
             raise ValueError(
                 "knowledge-layers: unbundled skill reference /md-validation"
             )
-        text = text.replace(
-            _KNOWLEDGE_BOOTSTRAP_LAYOUT,
-            _KNOWLEDGE_BOOTSTRAP_LAYOUT_ADAPTATION,
-            1,
-        )
-        text = text.replace(
-            _KNOWLEDGE_BOOTSTRAP_HEADING,
-            _KNOWLEDGE_BOOTSTRAP_HEADING_ADAPTATION,
-            1,
-        )
-        text = text.replace(
-            _KNOWLEDGE_BOOTSTRAP_VALIDATION,
-            _KNOWLEDGE_BOOTSTRAP_VALIDATION_ADAPTATION,
-            1,
-        )
     if (
         skill_name == "structured-artifact"
         and relative_path == Path("resources/card-grid.md")
     ):
-        if _CARD_GRID_RENDERING not in text:
-            raise ValueError(
-                "structured-artifact: expected licensed card-grid rendering example "
-                "was not found"
-            )
-        text = text.replace(
+        text = replace_exactly_once(
+            text,
             _CARD_GRID_RENDERING,
             _CARD_GRID_RENDERING_ADAPTATION,
-            1,
+            "structured-artifact: expected licensed card-grid rendering example",
+        )
+    if (
+        skill_name == "structured-artifact"
+        and relative_path == Path("resources/data-table.md")
+    ):
+        text = replace_exactly_once(
+            text, _DATA_TABLE_INPUT, _DATA_TABLE_INPUT_ADAPTATION,
+            "structured-artifact: expected licensed data-table search input",
+        )
+        text = replace_exactly_once(
+            text, _DATA_TABLE_FILTER, _DATA_TABLE_FILTER_ADAPTATION,
+            "structured-artifact: expected licensed data-table filter function",
+        )
+    if (
+        skill_name == "structured-artifact"
+        and relative_path == Path("resources/multi-page-site.md")
+    ):
+        text = replace_exactly_once(
+            text, _MULTI_PAGE_THEME_CONTROL, _MULTI_PAGE_THEME_CONTROL_ADAPTATION,
+            "structured-artifact: expected licensed multi-page theme control",
+        )
+    if (
+        skill_name == "structured-artifact"
+        and relative_path == Path("resources/diff-view.md")
+    ):
+        text = replace_exactly_once(
+            text, _DIFF_VIEW_CONTROLS, _DIFF_VIEW_CONTROLS_ADAPTATION,
+            "structured-artifact: expected licensed diff-view controls",
+        )
+        text = replace_exactly_once(
+            text, _DIFF_VIEW_CLEAR, _DIFF_VIEW_CLEAR_ADAPTATION,
+            "structured-artifact: expected licensed diff-view clear operation",
+        )
+        text = replace_exactly_once(
+            text, _DIFF_VIEW_INITIAL_RENDER, _DIFF_VIEW_INITIAL_RENDER_ADAPTATION,
+            "structured-artifact: expected licensed diff-view initial render",
         )
     if (
         skill_name == "structured-artifact"
         and relative_path == Path("resources/tree-and-toc.md")
     ):
-        if _TREE_RENDERING not in text:
-            raise ValueError(
-                "structured-artifact: expected licensed tree rendering example was not found"
-            )
-        if _TOC_RENDERING not in text:
-            raise ValueError(
-                "structured-artifact: expected licensed TOC rendering example was not found"
-            )
-        text = text.replace(_TREE_RENDERING, _TREE_RENDERING_ADAPTATION, 1)
-        text = text.replace(_TOC_RENDERING, _TOC_RENDERING_ADAPTATION, 1)
+        text = replace_exactly_once(
+            text, _TREE_RENDERING, _TREE_RENDERING_ADAPTATION,
+            "structured-artifact: expected licensed tree rendering example",
+        )
+        text = replace_exactly_once(
+            text, _TOC_RENDERING, _TOC_RENDERING_ADAPTATION,
+            "structured-artifact: expected licensed TOC rendering example",
+        )
     if skill_name == "structured-artifact" and relative_path == Path("resources/diagrams.md"):
-        if _MERMAID_COMMAND not in text:
-            raise ValueError("structured-artifact: expected licensed Mermaid command was not found")
         expected_examples = (
-            ("Mermaid configuration", _MERMAID_CONFIG),
-            ("Mermaid loose-mode note", _MERMAID_LOOSE_NOTE),
-            ("Mermaid click-binding example", _MERMAID_CLICK_BINDING),
-            ("detail rendering example", _DETAIL_RENDERING),
-            ("loose callback note", _LOOSE_CALLBACK_NOTE),
+            ("Mermaid command", _MERMAID_COMMAND, _MERMAID_ADAPTATION),
+            ("Mermaid configuration", _MERMAID_CONFIG, _MERMAID_CONFIG_ADAPTATION),
+            ("Mermaid loose-mode note", _MERMAID_LOOSE_NOTE, _MERMAID_STRICT_NOTE),
+            ("Mermaid click-binding example", _MERMAID_CLICK_BINDING, _MERMAID_CLICK_BINDING_ADAPTATION),
+            ("detail rendering example", _DETAIL_RENDERING, _DETAIL_RENDERING_ADAPTATION),
+            ("loose callback note", _LOOSE_CALLBACK_NOTE, _STRICT_CALLBACK_NOTE),
         )
-        for label, source in expected_examples:
-            if source not in text:
-                raise ValueError(
-                    f"structured-artifact: expected licensed {label} was not found"
-                )
-        text = text.replace(_MERMAID_COMMAND, _MERMAID_ADAPTATION, 1)
-        text = text.replace(_MERMAID_CONFIG, _MERMAID_CONFIG_ADAPTATION, 1)
-        text = text.replace(_MERMAID_LOOSE_NOTE, _MERMAID_STRICT_NOTE, 1)
-        text = text.replace(
-            _MERMAID_CLICK_BINDING,
-            _MERMAID_CLICK_BINDING_ADAPTATION,
-            1,
-        )
-        text = text.replace(_DETAIL_RENDERING, _DETAIL_RENDERING_ADAPTATION, 1)
-        text = text.replace(_LOOSE_CALLBACK_NOTE, _STRICT_CALLBACK_NOTE, 1)
+        for label, source, replacement in expected_examples:
+            text = replace_exactly_once(
+                text,
+                source,
+                replacement,
+                f"structured-artifact: expected licensed {label}",
+            )
     return normalize_codex_references(text, known_skills, skill_name)
 
 
