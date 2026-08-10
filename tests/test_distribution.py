@@ -1121,6 +1121,111 @@ class ValidatorTests(unittest.TestCase):
             [problem for problem in validate(self.root, canonical_only=True) if "safe.js" in problem]
         )
 
+    def test_validator_rejects_every_inner_html_assignment_operator(self):
+        resource = (
+            self.skills / "structured-artifact" / "resources" / "assignment.js"
+        )
+        resource.parent.mkdir(exist_ok=True)
+        operators = (
+            "=", "+=", "-=", "*=", "/=", "%=", "**=", "<<=", ">>=", ">>>=",
+            "&=", "^=", "|=", "&&=", "||=", "??=",
+        )
+        expected = (
+            "structured-artifact: unsafe executable HTML/JavaScript in "
+            "resources/assignment.js: innerHTML assignment"
+        )
+
+        for operator in operators:
+            with self.subTest(operator=operator):
+                resource.write_text(f"output.innerHTML {operator} userHtml;\n")
+                self.assertIn(expected, validate(self.root, canonical_only=True))
+
+    def test_validator_normalizes_optional_and_computed_sink_members(self):
+        resource = self.skills / "structured-artifact" / "resources" / "members.md"
+        resource.parent.mkdir(exist_ok=True)
+        cases = {
+            "optional direct write": (
+                "```js\ndocument?.write(userHtml);\n```\n",
+                "document.write/writeln",
+            ),
+            "optional computed writeln": (
+                "```js\ndocument?.['writeln'](userHtml);\n```\n",
+                "document.write/writeln",
+            ),
+            "computed write": (
+                "```html\n<script>document[\"write\"](userHtml);</script>\n```\n",
+                "document.write/writeln",
+            ),
+            "optional computed inner html": (
+                "```js\nnode?.['innerHTML'] ||= userHtml;\n```\n",
+                "innerHTML assignment",
+            ),
+            "computed outer html compound": (
+                "```js\nnode[\"outerHTML\"] &&= userHtml;\n```\n",
+                "outerHTML assignment",
+            ),
+        }
+
+        for label, (source, finding) in cases.items():
+            with self.subTest(label=label):
+                resource.write_text(source)
+                self.assertIn(
+                    "structured-artifact: unsafe executable HTML/JavaScript in "
+                    f"resources/members.md: {finding}",
+                    validate(self.root, canonical_only=True),
+                )
+
+    def test_validator_normalizes_claude_structured_artifact_sink_members(self):
+        resource = (
+            self.root / "cw/skills/structured-artifact/resources/members.md"
+        )
+        resource.parent.mkdir(exist_ok=True)
+        cases = {
+            "logical assignment": (
+                "node.innerHTML ??= userHtml;",
+                "innerHTML assignment",
+            ),
+            "computed outer assignment": (
+                "node['outerHTML'] **= 2;",
+                "outerHTML assignment",
+            ),
+            "optional write": (
+                "document?.write(userHtml);",
+                "document.write/writeln",
+            ),
+            "computed writeln": (
+                "document[\"writeln\"](userHtml);",
+                "document.write/writeln",
+            ),
+        }
+
+        for label, (source, finding) in cases.items():
+            with self.subTest(label=label):
+                resource.write_text(f"```js\n{source}\n```\n")
+                self.assertIn(
+                    "cw/skills/structured-artifact: unsafe executable HTML/JavaScript "
+                    f"in resources/members.md: {finding}",
+                    validate(self.root),
+                )
+
+    def test_validator_accepts_safe_optional_dom_members_in_both_runtimes(self):
+        source = (
+            "const button = document?.createElement('button');\n"
+            "button?.['textContent'] = label;\n"
+            "button?.addEventListener('click', render);\n"
+            "root?.['replaceChildren'](button);\n"
+        )
+        canonical = self.skills / "structured-artifact/resources/safe-optional.js"
+        claude = self.root / "cw/skills/structured-artifact/resources/safe-optional.js"
+        canonical.parent.mkdir(exist_ok=True)
+        claude.parent.mkdir(exist_ok=True)
+        canonical.write_text(source)
+        claude.write_text(source)
+
+        self.assertFalse(
+            [problem for problem in validate(self.root) if "safe-optional.js" in problem]
+        )
+
     def test_validator_rejects_invalid_claude_invocation_policy(self):
         cases = {
             "not a list": (

@@ -114,18 +114,42 @@ TEXT_RUNTIME_SUFFIXES = {
     ".rs", ".rst", ".sass", ".scss", ".sh", ".sql", ".svg", ".toml",
     ".ts", ".tsx", ".txt", ".xml", ".yaml", ".yml", ".zsh",
 }
+STRUCTURED_ARTIFACT_EXECUTABLE_SUFFIXES = {
+    ".cjs", ".html", ".htm", ".js", ".jsx", ".mjs", ".svg", ".ts", ".tsx",
+}
+STRUCTURED_ARTIFACT_EXECUTABLE_FENCE_LANGUAGES = {
+    "cjs", "html", "htm", "javascript", "js", "jsx", "mermaid", "mjs",
+    "svg", "ts", "tsx", "typescript",
+}
+STRUCTURED_ARTIFACT_HIGH_RISK_RE = re.compile(
+    r"innerHTML|outerHTML|insertAdjacentHTML|\b(?:write|writeln)\b|setAttribute"
+    r"|srcdoc|dangerouslySetInnerHTML|createContextualFragment|setHTMLUnsafe"
+    r"|parseHTMLUnsafe|parseFromString|\beval\b|\bFunction\b|setTimeout"
+    r"|setInterval|securityLevel|^\s*click\s|<[^>]+\s+on[a-z]+\s*=",
+    re.IGNORECASE,
+)
+STRUCTURED_ARTIFACT_COMPUTED_MEMBER_RE = re.compile(
+    r"(?:\?\.)?\[\s*(['\"])([A-Za-z_$][A-Za-z0-9_$]*)\1\s*\]"
+)
+STRUCTURED_ARTIFACT_OPTIONAL_MEMBER_RE = re.compile(
+    r"\?\.\s*(?=[A-Za-z_$])"
+)
+JS_ASSIGNMENT_OPERATOR_RE = (
+    r"(?:\*\*=|>>>=|<<=|>>=|&&=|\|\|=|\?\?=|\+=|-=|\*=|/=|%=|&=|\^=|\|="
+    r"|=(?!=|>))"
+)
 STRUCTURED_ARTIFACT_UNSAFE_PATTERNS = (
     (
         "innerHTML assignment",
         re.compile(
-            r"(?:\.innerHTML|\[\s*['\"]innerHTML['\"]\s*\])\s*\+?=(?!=)",
+            rf"\.innerHTML\s*{JS_ASSIGNMENT_OPERATOR_RE}",
             re.IGNORECASE,
         ),
     ),
     (
         "outerHTML assignment",
         re.compile(
-            r"(?:\.outerHTML|\[\s*['\"]outerHTML['\"]\s*\])\s*\+?=(?!=)",
+            rf"\.outerHTML\s*{JS_ASSIGNMENT_OPERATOR_RE}",
             re.IGNORECASE,
         ),
     ),
@@ -142,7 +166,7 @@ STRUCTURED_ARTIFACT_UNSAFE_PATTERNS = (
     (
         "srcdoc assignment",
         re.compile(
-            r"(?:\.srcdoc|\[\s*['\"]srcdoc['\"]\s*\])\s*\+?=(?!=)"
+            rf"\.srcdoc\s*{JS_ASSIGNMENT_OPERATOR_RE}"
             r"|\.setAttribute\s*\(\s*['\"]srcdoc['\"]",
             re.IGNORECASE,
         ),
@@ -173,15 +197,71 @@ STRUCTURED_ARTIFACT_UNSAFE_PATTERNS = (
 )
 
 
+def _structured_artifact_executable_text(
+    text: str,
+    suffix: str,
+) -> str:
+    if suffix in STRUCTURED_ARTIFACT_EXECUTABLE_SUFFIXES:
+        return text
+
+    selected: list[str] = []
+    fence_character = ""
+    fence_length = 0
+    include_fence = False
+    for line in text.splitlines():
+        stripped = line.lstrip(" ")
+        indent = len(line) - len(stripped)
+        if not fence_character and indent <= 3 and stripped[:1] in {"`", "~"}:
+            character = stripped[0]
+            marker_length = len(stripped) - len(stripped.lstrip(character))
+            if marker_length >= 3:
+                info = stripped[marker_length:].strip().split(maxsplit=1)
+                language = info[0].lower() if info else ""
+                fence_character = character
+                fence_length = marker_length
+                include_fence = language in STRUCTURED_ARTIFACT_EXECUTABLE_FENCE_LANGUAGES
+                continue
+        if fence_character:
+            closing = stripped.rstrip()
+            if (
+                indent <= 3
+                and closing
+                and set(closing) == {fence_character}
+                and len(closing) >= fence_length
+            ):
+                fence_character = ""
+                fence_length = 0
+                include_fence = False
+                continue
+            if include_fence:
+                selected.append(line)
+            continue
+        if STRUCTURED_ARTIFACT_HIGH_RISK_RE.search(line):
+            selected.append(line)
+    return "\n".join(selected)
+
+
+def _normalize_javascript_members(text: str) -> str:
+    normalized = STRUCTURED_ARTIFACT_COMPUTED_MEMBER_RE.sub(
+        lambda match: f".{match.group(2)}",
+        text,
+    )
+    return STRUCTURED_ARTIFACT_OPTIONAL_MEMBER_RE.sub(".", normalized)
+
+
 def _validate_structured_artifact_resource(
     owner: str,
     relative: str,
+    suffix: str,
     text: str,
     problems: list[str],
 ) -> None:
+    executable = _normalize_javascript_members(
+        _structured_artifact_executable_text(text, suffix)
+    )
     findings: set[str] = set()
     for finding, pattern in STRUCTURED_ARTIFACT_UNSAFE_PATTERNS:
-        if pattern.search(text):
+        if pattern.search(executable):
             findings.add(finding)
     for finding in sorted(findings):
         problems.append(
@@ -721,6 +801,7 @@ def _validate_skills(
                 _validate_structured_artifact_resource(
                     skill_name,
                     relative,
+                    path.suffix.lower(),
                     text,
                     problems,
                 )
@@ -1037,6 +1118,7 @@ def _validate_claude_distribution(
             _validate_structured_artifact_resource(
                 "cw/skills/structured-artifact",
                 _runtime_label(path, structured_artifact_root),
+                path.suffix.lower(),
                 text,
                 problems,
             )
