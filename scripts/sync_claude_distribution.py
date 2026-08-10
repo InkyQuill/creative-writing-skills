@@ -55,9 +55,14 @@ _CONFIG_KEYS = {
     "workers",
     "claude",
 }
-_CLAUDE_CONFIG = {
+_CLAUDE_PATH_CONFIG = {
     "root": "cw",
     "marketplace": ".claude-plugin/marketplace.json",
+}
+_CLAUDE_CONFIG_KEYS = {
+    "root",
+    "marketplace",
+    "disable_model_invocation",
 }
 
 
@@ -115,6 +120,7 @@ class DistributionContext:
     marketplace_path: Path
     skill_names: tuple[str, ...]
     known_skills: frozenset[str]
+    claude_disable_model_invocation: frozenset[str]
 
 
 @dataclass(frozen=True)
@@ -277,8 +283,25 @@ def _load_context(repo_root: Path) -> DistributionContext:
     config = load_json(config_path)
     if set(config) != _CONFIG_KEYS:
         raise ValueError("distribution config fields do not match schema")
-    if config.get("claude") != _CLAUDE_CONFIG:
+    claude = config.get("claude")
+    if not isinstance(claude, dict) or set(claude) != _CLAUDE_CONFIG_KEYS:
+        raise ValueError("distribution Claude fields do not match schema")
+    if any(claude.get(key) != value for key, value in _CLAUDE_PATH_CONFIG.items()):
         raise ValueError("distribution Claude paths are not canonical")
+    disable_model_invocation = claude.get("disable_model_invocation")
+    if not isinstance(disable_model_invocation, list) or any(
+        not isinstance(skill, str) or _SKILL_NAME_RE.fullmatch(skill) is None
+        for skill in disable_model_invocation
+    ):
+        raise ValueError(
+            "distribution Claude disable_model_invocation must be a list of skill names"
+        )
+    if len(disable_model_invocation) != len(set(disable_model_invocation)):
+        raise ValueError(
+            "distribution Claude disable_model_invocation must not contain duplicates"
+        )
+    if disable_model_invocation != sorted(disable_model_invocation):
+        raise ValueError("distribution Claude disable_model_invocation must be sorted")
 
     skill_values = config.get("canonical_skills")
     if not isinstance(skill_values, list) or any(
@@ -288,6 +311,10 @@ def _load_context(repo_root: Path) -> DistributionContext:
         raise ValueError("distribution canonical_skills must contain skill names")
     if len(skill_values) != len(set(skill_values)):
         raise ValueError("distribution canonical_skills must not contain duplicates")
+    if not set(disable_model_invocation) <= set(skill_values):
+        raise ValueError(
+            "distribution Claude disable_model_invocation must be a subset of canonical_skills"
+        )
     partition: dict[str, set[str]] = {}
     for key in ("authored_skills", "vendored_skills"):
         values = config.get(key)
@@ -363,6 +390,7 @@ def _load_context(repo_root: Path) -> DistributionContext:
         marketplace_path=marketplace_path,
         skill_names=tuple(skill_values),
         known_skills=frozenset(skill_values),
+        claude_disable_model_invocation=frozenset(disable_model_invocation),
     )
     _preflight_inputs(context)
     return context
@@ -380,7 +408,12 @@ def _yaml_scalar(value: str) -> str:
     return json.dumps(value, ensure_ascii=False)
 
 
-def _render_skill_frontmatter(metadata: dict[str, object], skill_name: str) -> str:
+def _render_skill_frontmatter(
+    metadata: dict[str, object],
+    skill_name: str,
+    *,
+    disable_model_invocation: bool,
+) -> str:
     if metadata.get("name") != skill_name:
         raise UnsupportedTransformError(
             f"frontmatter name {metadata.get('name')!r} does not match {skill_name!r}"
@@ -396,7 +429,13 @@ def _render_skill_frontmatter(metadata: dict[str, object], skill_name: str) -> s
             raise UnsupportedTransformError(
                 f"{skill_name}: disable-model-invocation must be boolean"
             )
-        lines.append(f"disable-model-invocation: {str(value).lower()}")
+        if value is True:
+            raise UnsupportedTransformError(
+                f"{skill_name}: disable-model-invocation true is not supported "
+                "in canonical Codex skills"
+            )
+    if disable_model_invocation:
+        lines.append("disable-model-invocation: true")
     if "argument-hint" in metadata:
         value = metadata["argument-hint"]
         if not isinstance(value, str) or not value.strip():
@@ -452,6 +491,8 @@ def transform_skill(
     text: str,
     skill_name: str,
     known_skills: set[str] | frozenset[str] | None = None,
+    *,
+    disable_model_invocation: bool = False,
 ) -> str:
     known_skills = known_skills if known_skills is not None else _canonical_skills()
     metadata, body = split_frontmatter(text)
@@ -466,7 +507,11 @@ def transform_skill(
             metadata[key] = _transform_markdown(
                 value, f"{skill_name} {key}", known_skills
             )
-    return _render_skill_frontmatter(metadata, skill_name) + _transform_markdown(
+    return _render_skill_frontmatter(
+        metadata,
+        skill_name,
+        disable_model_invocation=disable_model_invocation,
+    ) + _transform_markdown(
         body, skill_name, known_skills
     )
 
@@ -518,6 +563,8 @@ def _copy_skill(
     destination: Path,
     skill_name: str,
     known_skills: set[str] | frozenset[str],
+    *,
+    disable_model_invocation: bool,
 ) -> None:
     for path in sorted(source.rglob("*")):
         if path.is_dir():
@@ -529,7 +576,12 @@ def _copy_skill(
         target.parent.mkdir(parents=True, exist_ok=True)
         if relative == Path("SKILL.md"):
             target.write_text(
-                transform_skill(path.read_text(), skill_name, known_skills)
+                transform_skill(
+                    path.read_text(),
+                    skill_name,
+                    known_skills,
+                    disable_model_invocation=disable_model_invocation,
+                )
             )
         elif path.suffix.lower() == ".md":
             target.write_text(
@@ -595,6 +647,9 @@ def _render_distribution(
             skills_root / skill_name,
             skill_name,
             context.known_skills,
+            disable_model_invocation=(
+                skill_name in context.claude_disable_model_invocation
+            ),
         )
 
     workers_path = context.workers_path

@@ -142,6 +142,23 @@ class VendorGenericSkillsTests(unittest.TestCase):
         )
         self.assertTrue((self.output / "demo" / "resources" / "guide.md").is_file())
 
+    def test_render_strips_claude_only_invocation_metadata_from_codex_skill(self):
+        skill = self.checkout / "cw" / "skills" / "demo" / "SKILL.md"
+        skill.write_text(
+            "---\n"
+            "name: demo\n"
+            "description: Demo.\n"
+            "disable-model-invocation: true\n"
+            "---\n"
+            "# Demo\n"
+        )
+
+        render_from_checkout(self.checkout, self.output)
+
+        rendered = (self.output / "demo" / "SKILL.md").read_text()
+        self.assertNotIn("disable-model-invocation", rendered)
+        self.assertIn("description: Demo.", rendered)
+
     def test_render_updates_a_preexisting_safe_output_root(self):
         self.output.mkdir()
         render_from_checkout(self.checkout, self.output)

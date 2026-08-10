@@ -45,6 +45,10 @@ AUTHORED_SKILLS = {
     "writing-principles", "writing-staffing",
 }
 VENDORED_SKILLS = EXPECTED_SKILLS - AUTHORED_SKILLS
+CLAUDE_DISABLE_MODEL_INVOCATION = (
+    "reflect",
+    "structured-artifact",
+)
 EXPECTED_WORKERS = {
     "brainstormer", "character-sim", "continuity-checker", "critic", "editor",
     "outliner", "reader-sim", "style-creator", "web-researcher", "writer",
@@ -437,8 +441,48 @@ def _validate_config(repo_root: Path, problems: list[str]) -> dict[str, object] 
     if config.get("workers") != "skills/creative-writing-muse/resources/workers/registry.json":
         problems.append("distribution config workers path is not canonical")
     claude = config.get("claude")
-    if claude != {"root": "cw", "marketplace": ".claude-plugin/marketplace.json"}:
+    expected_claude_keys = {
+        "root",
+        "marketplace",
+        "disable_model_invocation",
+    }
+    if not isinstance(claude, dict) or set(claude) != expected_claude_keys:
+        problems.append("distribution config Claude fields do not match schema")
+        return config
+    if (
+        claude.get("root") != "cw"
+        or claude.get("marketplace") != ".claude-plugin/marketplace.json"
+    ):
         problems.append("distribution config Claude paths are not canonical")
+    disabled = claude.get("disable_model_invocation")
+    valid_disabled = isinstance(disabled, list) and all(
+        isinstance(skill, str) and re.fullmatch(r"[a-z][a-z0-9-]*", skill)
+        for skill in disabled
+    )
+    if not valid_disabled:
+        problems.append(
+            "distribution config Claude disable_model_invocation must be a list of skill names"
+        )
+    else:
+        if len(disabled) != len(set(disabled)):
+            problems.append(
+                "distribution config Claude disable_model_invocation contains duplicates"
+            )
+        if disabled != sorted(disabled):
+            problems.append(
+                "distribution config Claude disable_model_invocation must be sorted"
+            )
+        unexpected = sorted(set(disabled) - EXPECTED_SKILLS)
+        if unexpected:
+            problems.append(
+                "distribution config Claude disable_model_invocation is not a subset "
+                f"of canonical skills: {', '.join(unexpected)}"
+            )
+        if disabled != list(CLAUDE_DISABLE_MODEL_INVOCATION):
+            problems.append(
+                "distribution config Claude disable_model_invocation does not match "
+                "the compatibility policy"
+            )
     return config
 
 
@@ -457,10 +501,14 @@ def _validate_frontmatter(skill_name: str, text: str, problems: list[str]) -> No
         )
     if not _nonempty_string(metadata.get("description")):
         problems.append(f"{skill_name}: frontmatter description must be nonempty")
-    if "disable-model-invocation" in metadata and not isinstance(
-        metadata["disable-model-invocation"], bool
-    ):
-        problems.append(f"{skill_name}: disable-model-invocation must be boolean")
+    if "disable-model-invocation" in metadata:
+        value = metadata["disable-model-invocation"]
+        if not isinstance(value, bool):
+            problems.append(f"{skill_name}: disable-model-invocation must be boolean")
+        elif value is True:
+            problems.append(
+                f"{skill_name}: disable-model-invocation true is Claude-only"
+            )
     if "argument-hint" in metadata and not _nonempty_string(metadata["argument-hint"]):
         problems.append(f"{skill_name}: argument-hint must be nonempty")
     if not body.strip():
@@ -709,6 +757,7 @@ def _validate_claude_frontmatter(
     text: str,
     label: str,
     skill_name: str,
+    disable_model_invocation: bool,
     problems: list[str],
 ) -> None:
     try:
@@ -720,6 +769,14 @@ def _validate_claude_frontmatter(
         problems.append(f"{label}: frontmatter name must be {skill_name}")
     if not _nonempty_string(metadata.get("description")):
         problems.append(f"{label}: description must be nonempty")
+    value = metadata.get("disable-model-invocation")
+    if disable_model_invocation:
+        if value is not True:
+            problems.append(f"{label}: disable-model-invocation must be true")
+    elif "disable-model-invocation" in metadata:
+        problems.append(
+            f"{label}: disable-model-invocation is not configured for {skill_name}"
+        )
     if not body.strip():
         problems.append(f"{label}: body must be nonempty")
 
@@ -733,10 +790,21 @@ def _validate_claude_distribution(
 ) -> None:
     claude_root_value: object = "cw"
     marketplace_value: object = ".claude-plugin/marketplace.json"
+    disabled_skills = set(CLAUDE_DISABLE_MODEL_INVOCATION)
     if config is not None and isinstance(config.get("claude"), dict):
         claude_config = config["claude"]
         claude_root_value = claude_config.get("root", claude_root_value)
         marketplace_value = claude_config.get("marketplace", marketplace_value)
+        configured_disabled = claude_config.get("disable_model_invocation")
+        if (
+            isinstance(configured_disabled, list)
+            and all(isinstance(skill, str) for skill in configured_disabled)
+            and len(configured_disabled) == len(set(configured_disabled))
+            and configured_disabled == sorted(configured_disabled)
+            and set(configured_disabled) <= EXPECTED_SKILLS
+            and configured_disabled == list(CLAUDE_DISABLE_MODEL_INVOCATION)
+        ):
+            disabled_skills = set(configured_disabled)
     claude_root_candidate = repo_root / Path(str(claude_root_value))
     if claude_root_candidate.is_symlink():
         problems.append("cw root must not be a symlink")
@@ -889,7 +957,13 @@ def _validate_claude_distribution(
             and path.parent.parent == skill_root
             and path.parent.name in skill_dirs
         ):
-            _validate_claude_frontmatter(text, label, path.parent.name, problems)
+            _validate_claude_frontmatter(
+                text,
+                label,
+                path.parent.name,
+                path.parent.name in disabled_skills,
+                problems,
+            )
         visible = _outside_fences(_without_urls_outside_fences(text))
         for token in ("AGENTS.md", "spawn_agent", "collaboration."):
             if token in visible:

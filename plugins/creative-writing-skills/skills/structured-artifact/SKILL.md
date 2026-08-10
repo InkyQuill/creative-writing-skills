@@ -3,7 +3,6 @@ name: structured-artifact
 description: |
   Load when building a static HTML artifact — single page or multi-page site —
   to make structured information explorable through layout and navigation.
-disable-model-invocation: true
 ---
 
 # Structured Artifact

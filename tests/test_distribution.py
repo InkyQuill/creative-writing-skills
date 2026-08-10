@@ -395,6 +395,21 @@ class DistributionScaffoldTests(unittest.TestCase):
         self.assertEqual(set(config["canonical_skills"]), EXPECTED_SKILLS)
         self.assertEqual(len(config["authored_skills"]), 15)
         self.assertEqual(len(config["vendored_skills"]), 10)
+        self.assertEqual(
+            ["reflect", "structured-artifact"],
+            config["claude"]["disable_model_invocation"],
+        )
+
+    def test_canonical_codex_skills_do_not_disable_model_invocation(self):
+        for skill_name in sorted(EXPECTED_SKILLS):
+            metadata, _ = split_frontmatter(
+                (PLUGIN_ROOT / "skills" / skill_name / "SKILL.md").read_text()
+            )
+            self.assertIsNot(
+                True,
+                metadata.get("disable-model-invocation"),
+                skill_name,
+            )
 
     def test_frontmatter_parser_returns_metadata_and_body(self):
         metadata, body = split_frontmatter("---\nname: demo\ndescription: |\n  First line.\n  Second line.\n---\n\n# Demo\n")
@@ -688,6 +703,10 @@ class ValidatorTests(unittest.TestCase):
             "claude": {
                 "root": "cw",
                 "marketplace": ".claude-plugin/marketplace.json",
+                "disable_model_invocation": [
+                    "reflect",
+                    "structured-artifact",
+                ],
             },
         }
         self._write_json(self.root / "config" / "distribution.json", config)
@@ -727,7 +746,15 @@ class ValidatorTests(unittest.TestCase):
         for name in EXPECTED_SKILLS:
             skill = self.root / "cw" / "skills" / name / "SKILL.md"
             skill.parent.mkdir(parents=True)
-            skill.write_text(f"---\nname: {name}\ndescription: Demo.\n---\n{name}\n")
+            invocation_metadata = (
+                "disable-model-invocation: true\n"
+                if name in {"reflect", "structured-artifact"}
+                else ""
+            )
+            skill.write_text(
+                f"---\nname: {name}\ndescription: Demo.\n"
+                f"{invocation_metadata}---\n{name}\n"
+            )
         agents = EXPECTED_WORKERS | {"muse"}
         for name in agents:
             agent = self.root / "cw" / "agents" / f"{name}.md"
@@ -930,6 +957,73 @@ class ValidatorTests(unittest.TestCase):
             "cw plugin version 0.0.0 != canonical version "
             f"{self.manifest['version']}",
             validate(self.root),
+        )
+
+    def test_validator_rejects_true_disable_model_invocation_in_codex(self):
+        skill = self.skills / "story-memory" / "SKILL.md"
+        skill.write_text(
+            "---\n"
+            "name: story-memory\n"
+            "description: Demo.\n"
+            "disable-model-invocation: true\n"
+            "---\n"
+            "Story memory.\n"
+        )
+
+        self.assertIn(
+            "story-memory: disable-model-invocation true is Claude-only",
+            validate(self.root, canonical_only=True),
+        )
+
+    def test_validator_rejects_invalid_claude_invocation_policy(self):
+        cases = {
+            "not a list": (
+                "reflect",
+                "distribution config Claude disable_model_invocation must be a list of skill names",
+            ),
+            "duplicates": (
+                ["reflect", "reflect"],
+                "distribution config Claude disable_model_invocation contains duplicates",
+            ),
+            "not sorted": (
+                ["structured-artifact", "reflect"],
+                "distribution config Claude disable_model_invocation must be sorted",
+            ),
+            "not canonical": (
+                ["not-a-skill"],
+                "distribution config Claude disable_model_invocation is not a subset of canonical skills: not-a-skill",
+            ),
+        }
+        path = self.root / "config/distribution.json"
+        original = path.read_text()
+        for label, (value, expected) in cases.items():
+            with self.subTest(label=label):
+                config = json.loads(original)
+                config["claude"]["disable_model_invocation"] = value
+                self._write_json(path, config)
+                self.assertIn(expected, validate(self.root, canonical_only=True))
+        path.write_text(original)
+
+    def test_claude_validation_keeps_safe_invocation_policy_when_config_is_invalid(self):
+        config_path = self.root / "config/distribution.json"
+        config = json.loads(config_path.read_text())
+        config["claude"]["disable_model_invocation"] = ["not-a-skill"]
+        self._write_json(config_path, config)
+        reflect = self.root / "cw/skills/reflect/SKILL.md"
+        reflect.write_text(
+            reflect.read_text().replace("disable-model-invocation: true\n", "")
+        )
+
+        problems = validate(self.root)
+
+        self.assertIn(
+            "distribution config Claude disable_model_invocation is not a subset "
+            "of canonical skills: not-a-skill",
+            problems,
+        )
+        self.assertIn(
+            "cw/skills/reflect/SKILL.md: disable-model-invocation must be true",
+            problems,
         )
 
     def test_validator_rejects_claude_style_reference_in_codex(self):

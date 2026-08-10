@@ -159,24 +159,50 @@ class ArchiveContractTests(unittest.TestCase):
 
 
 class ClaudeTransformTests(unittest.TestCase):
-    def test_skill_transform_converts_description_and_preserves_claude_flags(self):
+    def test_skill_transform_converts_description_and_emits_configured_claude_flag(self):
         source = (
             "---\n"
             "name: demo\n"
             "description: Use $story-memory when updating AGENTS.md.\n"
-            "disable-model-invocation: true\n"
             "argument-hint: Optional focus\n"
             "---\n"
             "# Demo\n"
         )
 
-        rendered = transform_skill(source, "demo")
+        rendered = transform_skill(
+            source,
+            "demo",
+            disable_model_invocation=True,
+        )
 
         self.assertIn("description: \"Use /story-memory when updating CLAUDE.md.\"", rendered)
         self.assertIn("disable-model-invocation: true", rendered)
         self.assertIn('argument-hint: "Optional focus"', rendered)
         self.assertNotIn("AGENTS.md", rendered)
         self.assertNotIn("$story-memory", rendered)
+
+    def test_skill_transform_omits_unconfigured_claude_flag(self):
+        source = "---\nname: demo\ndescription: Demo.\n---\n# Demo\n"
+
+        rendered = transform_skill(source, "demo")
+
+        self.assertNotIn("disable-model-invocation", rendered)
+
+    def test_skill_transform_rejects_claude_flag_in_canonical_input(self):
+        source = (
+            "---\n"
+            "name: demo\n"
+            "description: Demo.\n"
+            "disable-model-invocation: true\n"
+            "---\n"
+            "# Demo\n"
+        )
+
+        with self.assertRaisesRegex(
+            UnsupportedTransformError,
+            "disable-model-invocation true is not supported in canonical Codex skills",
+        ):
+            transform_skill(source, "demo")
 
     def test_skill_transform_uses_claude_instruction_names(self):
         source = (
@@ -318,6 +344,15 @@ class ClaudeDistributionRenderTests(unittest.TestCase):
             self.assertNotIn("AGENTS.md", muse)
             self.assertNotIn("$creative-writing-muse", muse)
 
+            disabled = set()
+            for skill in EXPECTED_SKILLS:
+                metadata, _ = split_frontmatter(
+                    (output_root / "skills" / skill / "SKILL.md").read_text()
+                )
+                if metadata.get("disable-model-invocation") is True:
+                    disabled.add(skill)
+            self.assertEqual({"reflect", "structured-artifact"}, disabled)
+
             manifest = json.loads(
                 (output_root / ".claude-plugin/plugin.json").read_text()
             )
@@ -423,6 +458,68 @@ class ClaudeDistributionCliTests(unittest.TestCase):
                     "outside marketplace\n",
                     (outside / "marketplace.json").read_text(),
                 )
+
+    def test_apply_rejects_invalid_claude_invocation_policy_without_mutation(self):
+        cases = {
+            "missing": (
+                lambda config: config["claude"].pop("disable_model_invocation"),
+                "distribution Claude fields do not match schema",
+            ),
+            "not a list": (
+                lambda config: config["claude"].update(
+                    {"disable_model_invocation": "reflect"}
+                ),
+                "distribution Claude disable_model_invocation must be a list of skill names",
+            ),
+            "duplicates": (
+                lambda config: config["claude"].update(
+                    {"disable_model_invocation": ["reflect", "reflect"]}
+                ),
+                "distribution Claude disable_model_invocation must not contain duplicates",
+            ),
+            "not sorted": (
+                lambda config: config["claude"].update(
+                    {
+                        "disable_model_invocation": [
+                            "structured-artifact",
+                            "reflect",
+                        ]
+                    }
+                ),
+                "distribution Claude disable_model_invocation must be sorted",
+            ),
+            "not canonical": (
+                lambda config: config["claude"].update(
+                    {"disable_model_invocation": ["not-a-skill"]}
+                ),
+                "distribution Claude disable_model_invocation must be a subset of canonical_skills",
+            ),
+        }
+        for label, (mutate, expected) in cases.items():
+            with self.subTest(label=label), tempfile.TemporaryDirectory() as temporary:
+                repo_root = Path(temporary) / "repo"
+                repo_root.mkdir()
+                self._copy_canonical_inputs(repo_root)
+                config_path = repo_root / "config/distribution.json"
+                config = json.loads(config_path.read_text())
+                config["claude"].setdefault(
+                    "disable_model_invocation",
+                    ["reflect", "structured-artifact"],
+                )
+                mutate(config)
+                config_path.write_text(json.dumps(config) + "\n")
+                cw_root = repo_root / "cw"
+                cw_root.mkdir()
+                sentinel = cw_root / "sentinel.txt"
+                sentinel.write_text("original cw\n")
+                stdout = io.StringIO()
+
+                with redirect_stdout(stdout):
+                    status = main(["--apply"], repo_root=repo_root)
+
+                self.assertEqual(1, status)
+                self.assertIn(expected, stdout.getvalue())
+                self.assertEqual("original cw\n", sentinel.read_text())
 
     def test_apply_rejects_nonpartitioned_skill_inventories_without_mutation(self):
         cases = {

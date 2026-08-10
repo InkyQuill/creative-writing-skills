@@ -23,6 +23,10 @@
   "workers": "skills/creative-writing-muse/resources/workers/registry.json",
   "claude": {
     "root": "cw",
-    "marketplace": ".claude-plugin/marketplace.json"
+    "marketplace": ".claude-plugin/marketplace.json",
+    "disable_model_invocation": [
+      "reflect",
+      "structured-artifact"
+    ]
   }
 }

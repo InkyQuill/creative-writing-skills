@@ -382,6 +382,21 @@ def normalize_codex_references(text: str, canonical_skills: set[str], skill_name
     return map_outside_fences(text, normalize)
 
 
+def normalize_codex_invocation_metadata(text: str) -> str:
+    """Remove Claude-only true invocation metadata from skill frontmatter."""
+
+    lines = text.splitlines(keepends=True)
+    if not lines or lines[0].rstrip("\r\n") != "---":
+        return text
+    for index, line in enumerate(lines[1:], start=1):
+        if line.rstrip("\r\n") == "---":
+            break
+        if line.rstrip("\r\n") == "disable-model-invocation: true":
+            del lines[index]
+            return "".join(lines)
+    return text
+
+
 def _adapt_markdown(
     text: str,
     skill_name: str,
@@ -389,6 +404,8 @@ def _adapt_markdown(
     relative_path: Path,
 ) -> str:
     is_skill_document = relative_path == Path("SKILL.md")
+    if is_skill_document:
+        text = normalize_codex_invocation_metadata(text)
     if skill_name == "grill-with-docs" and is_skill_document:
         if _GRILL_INSTRUCTION_FILE not in text:
             raise ValueError(
