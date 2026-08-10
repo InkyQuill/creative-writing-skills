@@ -167,12 +167,71 @@ class DistributionScaffoldTests(unittest.TestCase):
     def test_project_setup_keeps_discovery_material_provisional_until_approval(self):
         text = (PLUGIN_ROOT / "skills/project-setup/SKILL.md").read_text()
         discovery, creation = text.split("## Create the Files", 1)
-        self.assertIn("keep samples and voice goals provisional", discovery.lower())
+        self.assertRegex(
+            discovery.lower(),
+            r"keep\s+samples and voice goals provisional",
+        )
         self.assertIn("do not save", discovery.lower())
         self.assertIn("once approved", creation.lower())
-        self.assertIn("Save any writing samples to `kb/samples/`", creation)
+        self.assertIn("author confirmed", creation.lower())
         self.assertIn("draft project instructions for `AGENTS.md`", text)
         self.assertNotIn("draft an `AGENTS.md`", text)
+
+    def test_project_setup_selects_and_extends_the_established_layout(self):
+        text = (PLUGIN_ROOT / "skills/project-setup/SKILL.md").read_text()
+        self.assertRegex(text, r"indexes and populated\s+directories")
+        for index_name in ("`_index.md`", "`index.md`", "`INDEX.md`", "`README.md`"):
+            self.assertIn(index_name, text)
+        self.assertIn("use Layout A", text)
+        self.assertIn("use Layout B", text)
+        self.assertIn("population score", text)
+        self.assertRegex(text, r"populated\s+core role directories")
+        self.assertIn("durable files", text)
+        self.assertIn("higher population score", text)
+        self.assertRegex(text, r"Never create the\s+competing layout")
+
+    def test_project_setup_requires_one_confirmed_layout_decision_when_ambiguous(self):
+        text = (PLUGIN_ROOT / "skills/project-setup/SKILL.md").read_text()
+        self.assertIn("If neither layout has evidence", text)
+        self.assertRegex(
+            text,
+            r"recommend one layout with a project-specific\s+rationale",
+        )
+        self.assertIn("wait for explicit confirmation", text)
+        self.assertIn("If both have the same population score", text)
+        self.assertRegex(text, r"ask one focused\s+choice")
+        self.assertIn("Do not propose paths or create files until", text)
+
+    def test_project_setup_proposal_and_creation_paths_are_layout_conditional(self):
+        text = (PLUGIN_ROOT / "skills/project-setup/SKILL.md").read_text()
+        self.assertIn("### Layout A paths", text)
+        self.assertIn("### Layout B paths", text)
+        layout_a, layout_b = text.split("### Layout A paths", 1)[1].split(
+            "### Layout B paths", 1
+        )
+        for path in (
+            "`worldbuilding/`",
+            "`characters/`",
+            "`chapters/`",
+            "`drafts/`",
+            "`plot/`",
+        ):
+            self.assertIn(path, layout_a)
+        self.assertIn("Do not create a `kb/`, `story/`", layout_a)
+        for path in (
+            "`kb/world/`",
+            "`kb/characters/`",
+            "`story/`",
+            "`work/drafts/`",
+            "`work/outline/`",
+            "`kb/samples/`",
+            "`kb/styles/`",
+        ):
+            self.assertIn(path, layout_b)
+        self.assertIn("author-confirmed", layout_a.lower())
+        self.assertIn("author-confirmed", layout_b.lower())
+        self.assertIn("local conventions", layout_a.lower())
+        self.assertIn("local conventions", layout_b.lower())
 
     def test_llm_writing_requires_an_authorized_artifact_path_for_disk_drafts(self):
         text = (PLUGIN_ROOT / "skills/llm-writing/SKILL.md").read_text()
@@ -224,8 +283,38 @@ class DistributionScaffoldTests(unittest.TestCase):
 
     def test_structured_artifact_examples_do_not_enable_markup_injection(self):
         resource_root = PLUGIN_ROOT / "skills/structured-artifact/resources"
+        artifact_resources = {
+            path.relative_to(resource_root).as_posix(): path.read_text()
+            for path in resource_root.rglob("*.md")
+        }
+        self.assertEqual(
+            {
+                "card-grid.md",
+                "data-chart.md",
+                "data-table.md",
+                "diagrams.md",
+                "diff-view.md",
+                "experimental-react-flow.md",
+                "layout-and-theme.md",
+                "mockups.md",
+                "multi-page-site.md",
+                "timeline.md",
+                "tree-and-toc.md",
+            },
+            set(artifact_resources),
+        )
+        for name, text in artifact_resources.items():
+            with self.subTest(resource=name):
+                for match in re.finditer(r"\.innerHTML\s*=\s*([^;\n]+)", text):
+                    self.assertIn(match.group(1).strip(), {'""', "''"})
+                self.assertNotRegex(text, r"\b(?:outerHTML|insertAdjacentHTML)\b")
+                self.assertNotRegex(text, r"\bon[a-z]+\s*=\s*[\"'][^\n>]*\$\{")
+                self.assertNotRegex(text, r"`[^`\n]*<[^`\n]*\$\{")
+                self.assertNotIn("securityLevel: 'loose'", text)
+                self.assertNotRegex(text, r"(?m)^\s*click\s+\w+\s+\w+")
         tree = (resource_root / "tree-and-toc.md").read_text()
         diagrams = (resource_root / "diagrams.md").read_text()
+        cards = (resource_root / "card-grid.md").read_text()
         self.assertNotIn("innerHTML", tree)
         self.assertNotIn("innerHTML", diagrams)
         self.assertIn("textContent", tree)
@@ -238,6 +327,27 @@ class DistributionScaffoldTests(unittest.TestCase):
         self.assertIn("ALLOWED_DETAIL_KEYS", diagrams)
         self.assertNotIn("new Set(Object.keys(DETAIL))", diagrams)
         self.assertIn("const d = DETAIL[key];\n  if (!d) return;", diagrams)
+        self.assertNotIn("innerHTML", cards)
+        self.assertNotIn("onclick", cards)
+        self.assertIn(
+            ".sort((a, b) => (a[s] === b[s] ? 0 : a[s] > b[s] ? 1 : -1))",
+            cards,
+        )
+        for operation in (
+            "createElement",
+            "textContent",
+            "addEventListener",
+            "replaceChildren",
+        ):
+            self.assertIn(operation, cards)
+
+    def test_knowledge_bootstrap_template_uses_canonical_skill_syntax(self):
+        text = (
+            PLUGIN_ROOT
+            / "skills/knowledge-layers/resources/bootstrap.md"
+        ).read_text()
+        self.assertIn("Use `$md-validation` for link checking", text)
+        self.assertNotIn("Use `/md-validation` for link checking", text)
 
     def test_prose_analyzer_commands_use_packaged_path_and_python3(self):
         root = PLUGIN_ROOT / "skills/story-review/resources"

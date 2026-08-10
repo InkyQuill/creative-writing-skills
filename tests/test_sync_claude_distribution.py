@@ -265,6 +265,22 @@ class ClaudeTransformTests(unittest.TestCase):
         self.assertIn("Use /story-memory.", rendered)
         self.assertIn("echo $chapter", rendered)
 
+    def test_generic_transform_preserves_fenced_skill_reference(self):
+        source = (
+            "---\n"
+            "name: demo\n"
+            "description: Demo.\n"
+            "---\n"
+            "```markdown\n"
+            "Use $md-validation before committing.\n"
+            "```\n"
+        )
+
+        rendered = transform_skill(source, "demo")
+
+        self.assertIn("Use $md-validation before committing.", rendered)
+        self.assertNotIn("Use /md-validation before committing.", rendered)
+
 
 class ClaudeDistributionRenderTests(unittest.TestCase):
     def test_render_distribution_materializes_complete_claude_tree(self):
@@ -318,6 +334,44 @@ class ClaudeDistributionRenderTests(unittest.TestCase):
             self.assertIn("{instruction-file}", bootstrap)
             self.assertIn("## Starter instruction file", bootstrap)
             self.assertNotIn("AGENTS.md", bootstrap)
+            self.assertIn("Use `/md-validation` for link checking", bootstrap)
+            self.assertNotIn("Use `$md-validation` for link checking", bootstrap)
+            for branch in (
+                "use Layout A",
+                "use Layout B",
+                "If neither layout has evidence",
+                "If both have the same population score",
+                "higher population score",
+                "wait for explicit confirmation",
+                "### Layout A paths",
+                "### Layout B paths",
+            ):
+                self.assertIn(branch, project_setup)
+            self.assertRegex(project_setup, r"Never create the\s+competing layout")
+            for path in (
+                "`worldbuilding/`",
+                "`characters/`",
+                "`chapters/`",
+                "`drafts/`",
+                "`plot/`",
+                "`kb/world/`",
+                "`kb/characters/`",
+                "`story/`",
+                "`work/drafts/`",
+                "`work/outline/`",
+            ):
+                self.assertIn(path, project_setup)
+            generated_cards = (
+                output_root
+                / "skills/structured-artifact/resources/card-grid.md"
+            ).read_text()
+            self.assertNotIn("innerHTML", generated_cards)
+            self.assertNotIn("onclick", generated_cards)
+            self.assertIn("replaceChildren", generated_cards)
+            self.assertIn(
+                ".sort((a, b) => (a[s] === b[s] ? 0 : a[s] > b[s] ? 1 : -1))",
+                generated_cards,
+            )
             self.assertIn("/story-review", worker_resource)
             self.assertNotIn("$story-review", worker_resource)
 

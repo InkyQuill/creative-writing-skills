@@ -101,6 +101,14 @@ _KNOWLEDGE_BOOTSTRAP_LAYOUT_ADAPTATION = (
 )
 _KNOWLEDGE_BOOTSTRAP_HEADING = "## Starter AGENTS.md"
 _KNOWLEDGE_BOOTSTRAP_HEADING_ADAPTATION = "## Starter instruction file"
+_KNOWLEDGE_BOOTSTRAP_VALIDATION = (
+    "Use `/md-validation` for link checking and diagram validation before\n"
+    "committing."
+)
+_KNOWLEDGE_BOOTSTRAP_VALIDATION_ADAPTATION = (
+    "Use `$md-validation` for link checking and diagram validation before\n"
+    "committing."
+)
 _MERMAID_COMMAND = "Validate with `meridian mermaid check`."
 _MERMAID_ADAPTATION = (
     "Validate with an available Mermaid parser or renderer, and report syntax errors "
@@ -167,6 +175,50 @@ headings.forEach(heading => {
 });
 
 const links = [...toc.querySelectorAll("a")];'''
+_CARD_GRID_RENDERING = '''function renderCards() {
+  const q = document.getElementById("cardSearch").value.toLowerCase();
+  const s = document.getElementById("cardSort").value;
+  document.getElementById("cards").innerHTML = items
+    .filter(x => JSON.stringify(x).toLowerCase().includes(q))
+    .sort((a, b) => (a[s] > b[s] ? 1 : -1))
+    .map(x => `<button class="card" onclick="showDetail('${x.name}')">
+      <b>${x.name}</b><br><span style="color:var(--muted)">${x.type}</span>
+    </button>`)
+    .join("");
+}
+
+document.getElementById("cardSearch").oninput = renderCards;
+document.getElementById("cardSort").onchange = renderCards;
+renderCards();'''
+_CARD_GRID_RENDERING_ADAPTATION = '''function createCard(item) {
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = "card";
+
+  const name = document.createElement("b");
+  name.textContent = item.name;
+  const type = document.createElement("span");
+  type.style.color = "var(--muted)";
+  type.textContent = item.type;
+
+  button.append(name, document.createElement("br"), type);
+  button.addEventListener("click", () => showDetail(item.name));
+  return button;
+}
+
+function renderCards() {
+  const q = document.getElementById("cardSearch").value.toLowerCase();
+  const s = document.getElementById("cardSort").value;
+  const cards = items
+    .filter(item => JSON.stringify(item).toLowerCase().includes(q))
+    .sort((a, b) => (a[s] === b[s] ? 0 : a[s] > b[s] ? 1 : -1))
+    .map(createCard);
+  document.getElementById("cards").replaceChildren(...cards);
+}
+
+document.getElementById("cardSearch").addEventListener("input", renderCards);
+document.getElementById("cardSort").addEventListener("change", renderCards);
+renderCards();'''
 _MERMAID_CONFIG = '''mermaid.initialize({
   startOnLoad: false,
   theme: document.documentElement.classList.contains('dark') ? 'dark' : 'default',
@@ -444,6 +496,15 @@ def _adapt_markdown(
             raise ValueError(
                 "knowledge-layers: expected licensed bootstrap heading was not found"
             )
+        if _KNOWLEDGE_BOOTSTRAP_VALIDATION not in text:
+            raise ValueError(
+                "knowledge-layers: expected licensed bootstrap validation instruction "
+                "was not found"
+            )
+        if "md-validation" not in known_skills:
+            raise ValueError(
+                "knowledge-layers: unbundled skill reference /md-validation"
+            )
         text = text.replace(
             _KNOWLEDGE_BOOTSTRAP_LAYOUT,
             _KNOWLEDGE_BOOTSTRAP_LAYOUT_ADAPTATION,
@@ -452,6 +513,25 @@ def _adapt_markdown(
         text = text.replace(
             _KNOWLEDGE_BOOTSTRAP_HEADING,
             _KNOWLEDGE_BOOTSTRAP_HEADING_ADAPTATION,
+            1,
+        )
+        text = text.replace(
+            _KNOWLEDGE_BOOTSTRAP_VALIDATION,
+            _KNOWLEDGE_BOOTSTRAP_VALIDATION_ADAPTATION,
+            1,
+        )
+    if (
+        skill_name == "structured-artifact"
+        and relative_path == Path("resources/card-grid.md")
+    ):
+        if _CARD_GRID_RENDERING not in text:
+            raise ValueError(
+                "structured-artifact: expected licensed card-grid rendering example "
+                "was not found"
+            )
+        text = text.replace(
+            _CARD_GRID_RENDERING,
+            _CARD_GRID_RENDERING_ADAPTATION,
             1,
         )
     if (

@@ -77,6 +77,6 @@ read as current truth, never narrate their own evolution.
 
 ## Validation
 
-Use `/md-validation` for link checking and diagram validation before
+Use `$md-validation` for link checking and diagram validation before
 committing.
 ```

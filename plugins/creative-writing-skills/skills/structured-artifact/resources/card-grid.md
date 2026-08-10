@@ -18,20 +18,34 @@ const items = [
   { name: "Release", type: "docs", score: 5, detail: "Ship process docs" },
 ];
 
+function createCard(item) {
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = "card";
+
+  const name = document.createElement("b");
+  name.textContent = item.name;
+  const type = document.createElement("span");
+  type.style.color = "var(--muted)";
+  type.textContent = item.type;
+
+  button.append(name, document.createElement("br"), type);
+  button.addEventListener("click", () => showDetail(item.name));
+  return button;
+}
+
 function renderCards() {
   const q = document.getElementById("cardSearch").value.toLowerCase();
   const s = document.getElementById("cardSort").value;
-  document.getElementById("cards").innerHTML = items
-    .filter(x => JSON.stringify(x).toLowerCase().includes(q))
-    .sort((a, b) => (a[s] > b[s] ? 1 : -1))
-    .map(x => `<button class="card" onclick="showDetail('${x.name}')">
-      <b>${x.name}</b><br><span style="color:var(--muted)">${x.type}</span>
-    </button>`)
-    .join("");
+  const cards = items
+    .filter(item => JSON.stringify(item).toLowerCase().includes(q))
+    .sort((a, b) => (a[s] === b[s] ? 0 : a[s] > b[s] ? 1 : -1))
+    .map(createCard);
+  document.getElementById("cards").replaceChildren(...cards);
 }
 
-document.getElementById("cardSearch").oninput = renderCards;
-document.getElementById("cardSort").onchange = renderCards;
+document.getElementById("cardSearch").addEventListener("input", renderCards);
+document.getElementById("cardSort").addEventListener("change", renderCards);
 renderCards();
 </script>
 ```

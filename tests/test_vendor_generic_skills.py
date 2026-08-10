@@ -108,6 +108,28 @@ loose-mode callback can reach it.
 '''
 
 
+CARD_GRID_SOURCE = '''# Card Grid
+
+```html
+function renderCards() {
+  const q = document.getElementById("cardSearch").value.toLowerCase();
+  const s = document.getElementById("cardSort").value;
+  document.getElementById("cards").innerHTML = items
+    .filter(x => JSON.stringify(x).toLowerCase().includes(q))
+    .sort((a, b) => (a[s] > b[s] ? 1 : -1))
+    .map(x => `<button class="card" onclick="showDetail('${x.name}')">
+      <b>${x.name}</b><br><span style="color:var(--muted)">${x.type}</span>
+    </button>`)
+    .join("");
+}
+
+document.getElementById("cardSearch").oninput = renderCards;
+document.getElementById("cardSort").onchange = renderCards;
+renderCards();
+```
+'''
+
+
 class VendorGenericSkillsTests(unittest.TestCase):
     def setUp(self):
         self.temporary_directory = tempfile.TemporaryDirectory(
@@ -265,14 +287,19 @@ class VendorGenericSkillsTests(unittest.TestCase):
             "  index.md           # catalog of pages with one-line summaries\n"
             "  vocab.md           # project-wide terminology\n"
             "```\n\n"
-            "## Starter AGENTS.md\n"
+            "## Starter AGENTS.md\n\n"
+            "```markdown\n"
+            "## Validation\n\n"
+            "Use `/md-validation` for link checking and diagram validation before\n"
+            "committing.\n"
+            "```\n"
         )
         with patch(
             "scripts.vendor_generic_skills.vendored_skills",
             return_value=("knowledge-layers",),
         ), patch(
             "scripts.vendor_generic_skills.canonical_skills",
-            return_value={"knowledge-layers"},
+            return_value={"knowledge-layers", "md-validation"},
         ):
             render_from_checkout(self.checkout, self.output)
 
@@ -285,6 +312,75 @@ class VendorGenericSkillsTests(unittest.TestCase):
         )
         self.assertIn("## Starter instruction file", rendered)
         self.assertNotIn("AGENTS.md", rendered)
+        self.assertIn("Use `$md-validation` for link checking", rendered)
+        self.assertNotIn("Use `/md-validation` for link checking", rendered)
+
+    def test_bootstrap_semantic_adaptation_rejects_source_drift(self):
+        source = self.checkout / "cw" / "skills" / "knowledge-layers"
+        (source / "resources").mkdir(parents=True)
+        (source / "SKILL.md").write_text(
+            "---\nname: knowledge-layers\n---\nBody.\n"
+        )
+        (source / "resources/bootstrap.md").write_text(
+            "## Directory Layout\n\n"
+            "```\n"
+            "kb/\n"
+            "  AGENTS.md          # intent: what belongs here, key rules\n"
+            "  .context/\n"
+            "    CONTEXT.md       # governance depth: writing conventions, structure, validation\n"
+            "  index.md           # catalog of pages with one-line summaries\n"
+            "  vocab.md           # project-wide terminology\n"
+            "```\n\n"
+            "## Starter AGENTS.md\n\n"
+            "```markdown\nUse changed validation guidance before committing.\n```\n"
+        )
+        with patch(
+            "scripts.vendor_generic_skills.vendored_skills",
+            return_value=("knowledge-layers",),
+        ), patch(
+            "scripts.vendor_generic_skills.canonical_skills",
+            return_value={"knowledge-layers", "md-validation"},
+        ):
+            with self.assertRaisesRegex(
+                ValueError,
+                "expected licensed bootstrap validation instruction",
+            ):
+                render_from_checkout(self.checkout, self.output)
+
+    def test_bootstrap_semantic_adaptation_rejects_unknown_skill_reference(self):
+        source = self.checkout / "cw" / "skills" / "knowledge-layers"
+        (source / "resources").mkdir(parents=True)
+        (source / "SKILL.md").write_text(
+            "---\nname: knowledge-layers\n---\nBody.\n"
+        )
+        (source / "resources/bootstrap.md").write_text(
+            "## Directory Layout\n\n"
+            "```\n"
+            "kb/\n"
+            "  AGENTS.md          # intent: what belongs here, key rules\n"
+            "  .context/\n"
+            "    CONTEXT.md       # governance depth: writing conventions, structure, validation\n"
+            "  index.md           # catalog of pages with one-line summaries\n"
+            "  vocab.md           # project-wide terminology\n"
+            "```\n\n"
+            "## Starter AGENTS.md\n\n"
+            "```markdown\n"
+            "Use `/md-validation` for link checking and diagram validation before\n"
+            "committing.\n"
+            "```\n"
+        )
+        with patch(
+            "scripts.vendor_generic_skills.vendored_skills",
+            return_value=("knowledge-layers",),
+        ), patch(
+            "scripts.vendor_generic_skills.canonical_skills",
+            return_value={"knowledge-layers"},
+        ):
+            with self.assertRaisesRegex(
+                ValueError,
+                "unbundled skill reference /md-validation",
+            ):
+                render_from_checkout(self.checkout, self.output)
 
     def test_qi_adaptation_rejects_unrecognized_licensed_source(self):
         source = self.checkout / "cw" / "skills" / "qi-layer"
@@ -424,6 +520,7 @@ class VendorGenericSkillsTests(unittest.TestCase):
         (source / "SKILL.md").write_text("---\nname: structured-artifact\n---\nBody.\n")
         (source / "resources/tree-and-toc.md").write_text(TREE_SOURCE)
         (source / "resources/diagrams.md").write_text(DIAGRAM_SOURCE)
+        (source / "resources/card-grid.md").write_text(CARD_GRID_SOURCE)
         with patch(
             "scripts.vendor_generic_skills.vendored_skills",
             return_value=("structured-artifact",),
@@ -435,6 +532,7 @@ class VendorGenericSkillsTests(unittest.TestCase):
 
         tree = (self.output / "structured-artifact/resources/tree-and-toc.md").read_text()
         diagrams = (self.output / "structured-artifact/resources/diagrams.md").read_text()
+        cards = (self.output / "structured-artifact/resources/card-grid.md").read_text()
         self.assertNotIn("innerHTML", tree)
         self.assertNotIn("innerHTML", diagrams)
         self.assertIn("textContent", tree)
@@ -445,6 +543,38 @@ class VendorGenericSkillsTests(unittest.TestCase):
         self.assertIn("ALLOWED_DETAIL_KEYS", diagrams)
         self.assertNotIn("new Set(Object.keys(DETAIL))", diagrams)
         self.assertIn("const d = DETAIL[key];\n  if (!d) return;", diagrams)
+        self.assertNotIn("innerHTML", cards)
+        self.assertNotIn("onclick", cards)
+        self.assertIn("createElement", cards)
+        self.assertIn("textContent", cards)
+        self.assertIn("addEventListener", cards)
+        self.assertIn("replaceChildren", cards)
+        self.assertIn(
+            ".sort((a, b) => (a[s] === b[s] ? 0 : a[s] > b[s] ? 1 : -1))",
+            cards,
+        )
+
+    def test_card_grid_security_adaptation_rejects_source_drift(self):
+        source = self.checkout / "cw" / "skills" / "structured-artifact"
+        (source / "resources").mkdir(parents=True)
+        (source / "SKILL.md").write_text(
+            "---\nname: structured-artifact\n---\nBody.\n"
+        )
+        (source / "resources/card-grid.md").write_text(
+            CARD_GRID_SOURCE.replace("function renderCards()", "function drawCards()")
+        )
+        with patch(
+            "scripts.vendor_generic_skills.vendored_skills",
+            return_value=("structured-artifact",),
+        ), patch(
+            "scripts.vendor_generic_skills.canonical_skills",
+            return_value={"structured-artifact"},
+        ):
+            with self.assertRaisesRegex(
+                ValueError,
+                "expected licensed card-grid rendering example",
+            ):
+                render_from_checkout(self.checkout, self.output)
 
     def test_structured_artifact_security_adaptations_reject_source_drift(self):
         source = self.checkout / "cw" / "skills" / "structured-artifact"

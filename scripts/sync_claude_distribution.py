@@ -64,6 +64,14 @@ _CLAUDE_CONFIG_KEYS = {
     "marketplace",
     "disable_model_invocation",
 }
+_KNOWLEDGE_BOOTSTRAP_CANONICAL_VALIDATION = (
+    "Use `$md-validation` for link checking and diagram validation before\n"
+    "committing."
+)
+_KNOWLEDGE_BOOTSTRAP_CLAUDE_VALIDATION = (
+    "Use `/md-validation` for link checking and diagram validation before\n"
+    "committing."
+)
 
 
 class UnsupportedTransformError(ValueError):
@@ -516,6 +524,39 @@ def transform_skill(
     )
 
 
+def _transform_resource_markdown(
+    text: str,
+    skill_name: str,
+    relative_path: Path,
+    known_skills: set[str] | frozenset[str],
+) -> str:
+    rendered = _transform_markdown(
+        text,
+        f"{skill_name}/{relative_path.as_posix()}",
+        known_skills,
+    )
+    if (
+        skill_name == "knowledge-layers"
+        and relative_path == Path("resources/bootstrap.md")
+    ):
+        if _KNOWLEDGE_BOOTSTRAP_CANONICAL_VALIDATION not in rendered:
+            raise UnsupportedTransformError(
+                "knowledge-layers/resources/bootstrap.md: expected canonical "
+                "fenced validation instruction"
+            )
+        if "md-validation" not in known_skills:
+            raise UnsupportedTransformError(
+                "knowledge-layers/resources/bootstrap.md: unknown Claude skill "
+                "reference /md-validation"
+            )
+        rendered = rendered.replace(
+            _KNOWLEDGE_BOOTSTRAP_CANONICAL_VALIDATION,
+            _KNOWLEDGE_BOOTSTRAP_CLAUDE_VALIDATION,
+            1,
+        )
+    return rendered
+
+
 def render_agent(
     worker: dict[str, object],
     prompt: str,
@@ -585,9 +626,10 @@ def _copy_skill(
             )
         elif path.suffix.lower() == ".md":
             target.write_text(
-                _transform_markdown(
+                _transform_resource_markdown(
                     path.read_text(),
-                    f"{skill_name}/{relative.as_posix()}",
+                    skill_name,
+                    relative,
                     known_skills,
                 )
             )
