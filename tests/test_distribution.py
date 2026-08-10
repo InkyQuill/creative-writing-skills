@@ -171,6 +171,8 @@ class DistributionScaffoldTests(unittest.TestCase):
         self.assertIn("do not save", discovery.lower())
         self.assertIn("once approved", creation.lower())
         self.assertIn("Save any writing samples to `kb/samples/`", creation)
+        self.assertIn("draft project instructions for `AGENTS.md`", text)
+        self.assertNotIn("draft an `AGENTS.md`", text)
 
     def test_llm_writing_requires_an_authorized_artifact_path_for_disk_drafts(self):
         text = (PLUGIN_ROOT / "skills/llm-writing/SKILL.md").read_text()
@@ -188,6 +190,8 @@ class DistributionScaffoldTests(unittest.TestCase):
         self.assertIn("options", text.lower())
         self.assertIn("evidence", text.lower())
         self.assertIn("tradeoffs", text.lower())
+        self.assertIn("`Chapter 3: Scene where X discovers Y`", text)
+        self.assertIn("`magic-system.md`", text)
         for author_facing_owner in (
             "Brainstorm alongside the author",
             "Synthesize and present",
@@ -233,6 +237,7 @@ class DistributionScaffoldTests(unittest.TestCase):
         self.assertNotRegex(diagrams, r"(?m)^\s*click\s+\w+\s+\w+")
         self.assertIn("ALLOWED_DETAIL_KEYS", diagrams)
         self.assertNotIn("new Set(Object.keys(DETAIL))", diagrams)
+        self.assertIn("const d = DETAIL[key];\n  if (!d) return;", diagrams)
 
     def test_prose_analyzer_commands_use_packaged_path_and_python3(self):
         root = PLUGIN_ROOT / "skills/story-review/resources"
@@ -809,6 +814,104 @@ class ValidatorTests(unittest.TestCase):
         )
         self.assertNotIn(
             "story-memory: missing relative resource resources/guide.md",
+            validate(self.root),
+        )
+
+    def test_validator_rejects_unscoped_sibling_resource_collision(self):
+        resource = self.skills / "story-review" / "resources" / "guide.md"
+        resource.parent.mkdir()
+        resource.write_text("# Unrelated guide\n")
+        skill = self.skills / "story-memory" / "SKILL.md"
+        skill.write_text(
+            "---\nname: story-memory\ndescription: Demo.\n---\n"
+            "Read `resources/guide.md`.\n"
+        )
+
+        self.assertIn(
+            "story-memory: missing relative resource resources/guide.md",
+            validate(self.root),
+        )
+
+    def test_validator_requires_explicit_cross_skill_target_to_own_resource(self):
+        wrong = self.skills / "story-planning" / "resources" / "guide.md"
+        wrong.parent.mkdir()
+        wrong.write_text("# Wrong sibling guide\n")
+        skill = self.skills / "story-memory" / "SKILL.md"
+        skill.write_text(
+            "---\nname: story-memory\ndescription: Demo.\n---\n"
+            "Use $story-review → `resources/guide.md`.\n"
+        )
+
+        self.assertIn(
+            "story-memory: missing relative resource resources/guide.md",
+            validate(self.root),
+        )
+
+    def test_validator_does_not_reuse_skill_reference_from_another_context(self):
+        resource = self.skills / "story-review" / "resources" / "guide.md"
+        resource.parent.mkdir()
+        resource.write_text("# Review guide\n")
+        skill = self.skills / "story-memory" / "SKILL.md"
+        skill.write_text(
+            "---\nname: story-memory\ndescription: Demo.\n---\n"
+            "Use $story-review for critique.\n"
+            "Read `resources/guide.md`.\n"
+        )
+
+        self.assertIn(
+            "story-memory: missing relative resource resources/guide.md",
+            validate(self.root),
+        )
+
+    def test_validator_does_not_reuse_skill_reference_from_prior_list_item(self):
+        resource = self.skills / "story-review" / "resources" / "guide.md"
+        resource.parent.mkdir()
+        resource.write_text("# Review guide\n")
+        skill = self.skills / "story-memory" / "SKILL.md"
+        skill.write_text(
+            "---\nname: story-memory\ndescription: Demo.\n---\n"
+            "- Use $story-review for critique.\n"
+            "- Read `resources/guide.md`.\n"
+        )
+
+        self.assertIn(
+            "story-memory: missing relative resource resources/guide.md",
+            validate(self.root),
+        )
+
+    def test_validator_separates_nested_and_blockquoted_list_contexts(self):
+        resource = self.skills / "story-review" / "resources" / "guide.md"
+        resource.parent.mkdir()
+        resource.write_text("# Review guide\n")
+        skill = self.skills / "story-memory" / "SKILL.md"
+        cases = (
+            "- Use $story-review for critique.\n"
+            "    - Read `resources/guide.md`.\n",
+            "> - Use $story-review for critique.\n"
+            "> - Read `resources/guide.md`.\n",
+        )
+
+        for body in cases:
+            with self.subTest(body=body):
+                skill.write_text(
+                    "---\nname: story-memory\ndescription: Demo.\n---\n" + body
+                )
+                self.assertIn(
+                    "story-memory: missing relative resource resources/guide.md",
+                    validate(self.root),
+                )
+
+    def test_validator_rejects_explicit_cross_skill_resource_escape(self):
+        escaped = self.skills / "escape.md"
+        escaped.write_text("outside skill root\n")
+        skill = self.skills / "story-memory" / "SKILL.md"
+        skill.write_text(
+            "---\nname: story-memory\ndescription: Demo.\n---\n"
+            "Use $story-review → `resources/../../escape.md`.\n"
+        )
+
+        self.assertIn(
+            "story-memory: missing relative resource resources/../../escape.md",
             validate(self.root),
         )
 

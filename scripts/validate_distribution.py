@@ -9,7 +9,7 @@ from urllib.parse import unquote
 if __package__:
     from scripts.distribution import (
         REPO_ROOT,
-        extract_instructional_relative_paths,
+        extract_instructional_relative_path_contexts,
         extract_skill_references,
         iter_fenced_lines,
         map_outside_fences,
@@ -18,7 +18,7 @@ if __package__:
 else:
     from distribution import (
         REPO_ROOT,
-        extract_instructional_relative_paths,
+        extract_instructional_relative_path_contexts,
         extract_skill_references,
         iter_fenced_lines,
         map_outside_fences,
@@ -482,19 +482,22 @@ def _validate_markdown(
             display_target = target or "<empty>"
             problems.append(f"{skill_name}: missing relative resource {display_target}")
 
-    for target in sorted(extract_instructional_relative_paths(text)):
+    instructional_paths = extract_instructional_relative_path_contexts(text)
+    for target, context_references in sorted(
+        instructional_paths,
+        key=lambda item: (item[0], sorted(item[1])),
+    ):
         relative = _link_path(target)
         candidates = [skill_root]
-        try:
-            candidates.extend(
-                candidate
-                for candidate in sorted(skill_root.parent.iterdir())
-                if candidate != skill_root
-                and candidate.is_dir()
-                and not candidate.is_symlink()
+        explicit_targets = sorted(
+            (context_references & EXPECTED_SKILLS) - {skill_name}
+        )
+        if explicit_targets:
+            candidates = (
+                [skill_root.parent / explicit_targets[0]]
+                if len(explicit_targets) == 1
+                else []
             )
-        except OSError:
-            pass
         found = False
         if relative:
             for candidate_root in candidates:

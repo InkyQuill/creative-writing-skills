@@ -18,7 +18,8 @@ specific decision axis being explored.
 
 **Ground the space.** Identify relevant story facts, prior decisions,
 vocabulary, comparable works, and genuine unknowns. Cite supplied project
-evidence by path or chapter anchor. Do not invent missing context.
+evidence as `Chapter 3: Scene where X discovers Y` or by document path, such
+as `magic-system.md`. Do not invent missing context.
 
 **Develop distinct options.** Make each option differ in causal engine,
 meaning, or reader experience rather than surface detail. A short prose sketch

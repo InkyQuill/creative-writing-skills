@@ -7,7 +7,6 @@ from unittest.mock import patch
 from scripts.vendor_generic_skills import (
     SOURCE,
     VendorDriftError,
-    _replace_directory,
     check_checkout,
     normalize_codex_references,
     render_from_checkout,
@@ -111,7 +110,9 @@ loose-mode callback can reach it.
 
 class VendorGenericSkillsTests(unittest.TestCase):
     def setUp(self):
-        self.temporary_directory = tempfile.TemporaryDirectory()
+        self.temporary_directory = tempfile.TemporaryDirectory(
+            dir=Path(tempfile.gettempdir()).resolve()
+        )
         self.addCleanup(self.temporary_directory.cleanup)
         self.root = Path(self.temporary_directory.name)
         self.checkout = self.root / "checkout"
@@ -151,6 +152,22 @@ class VendorGenericSkillsTests(unittest.TestCase):
         (self.output / "demo" / "SKILL.md").write_text("changed\n")
         with self.assertRaisesRegex(VendorDriftError, "demo/SKILL.md"):
             check_checkout(self.checkout, self.output)
+
+    def test_check_reports_byte_identical_nested_output_symlink_as_type_drift(self):
+        render_from_checkout(self.checkout, self.output)
+        rendered = self.output / "demo" / "resources" / "guide.md"
+        external = self.root / "external-guide.md"
+        external.write_bytes(rendered.read_bytes())
+        rendered.unlink()
+        rendered.symlink_to(external)
+
+        with self.assertRaisesRegex(
+            VendorDriftError,
+            r"demo/resources/guide\.md.*expected file, found symlink",
+        ):
+            check_checkout(self.checkout, self.output)
+
+        self.assertEqual(b"Guide\n", external.read_bytes())
 
     def test_source_is_licensed_snapshot_not_meridian_base(self):
         self.assertEqual(SOURCE.license, "Apache-2.0")
@@ -410,6 +427,7 @@ class VendorGenericSkillsTests(unittest.TestCase):
         self.assertNotRegex(diagrams, r"(?m)^\s*click\s+\w+\s+\w+")
         self.assertIn("ALLOWED_DETAIL_KEYS", diagrams)
         self.assertNotIn("new Set(Object.keys(DETAIL))", diagrams)
+        self.assertIn("const d = DETAIL[key];\n  if (!d) return;", diagrams)
 
     def test_structured_artifact_security_adaptations_reject_source_drift(self):
         source = self.checkout / "cw" / "skills" / "structured-artifact"
@@ -466,6 +484,19 @@ class VendorGenericSkillsTests(unittest.TestCase):
             render_from_checkout(checkout_link, self.output)
         self.assertFalse(self.output.exists())
 
+    def test_render_rejects_symlinked_checkout_ancestor(self):
+        physical_parent = self.root / "physical-checkout-parent"
+        physical_parent.mkdir()
+        physical_checkout = physical_parent / "checkout"
+        self.checkout.rename(physical_checkout)
+        linked_parent = self.root / "linked-checkout-parent"
+        linked_parent.symlink_to(physical_parent, target_is_directory=True)
+
+        with self.assertRaisesRegex(ValueError, "checkout.*symlink"):
+            render_from_checkout(linked_parent / "checkout", self.output)
+
+        self.assertFalse(self.output.exists())
+
     def test_explicit_source_checkout_preserves_symlink_for_preflight(self):
         checkout_link = self.root / "checkout-option"
         checkout_link.symlink_to(self.checkout, target_is_directory=True)
@@ -517,6 +548,18 @@ class VendorGenericSkillsTests(unittest.TestCase):
             render_from_checkout(self.checkout, self.output)
         self.assertEqual(list(external.iterdir()), [])
 
+    def test_render_rejects_symlinked_output_ancestor_without_write_through(self):
+        physical_parent = self.root / "physical-output-parent"
+        physical_output_parent = physical_parent / "nested"
+        physical_output_parent.mkdir(parents=True)
+        linked_parent = self.root / "linked-output-parent"
+        linked_parent.symlink_to(physical_parent, target_is_directory=True)
+
+        with self.assertRaisesRegex(ValueError, "output parent.*symlink"):
+            render_from_checkout(self.checkout, linked_parent / "nested" / "output")
+
+        self.assertEqual(list(physical_output_parent.iterdir()), [])
+
     def test_late_invalid_skill_does_not_partially_apply_earlier_skill(self):
         self.output.mkdir()
         existing = self.output / "demo"
@@ -556,6 +599,324 @@ class VendorGenericSkillsTests(unittest.TestCase):
 
         self.assertIn("# Demo", (self.output / "demo/SKILL.md").read_text())
         self.assertIn("# Second", (self.output / "second/SKILL.md").read_text())
+
+    def test_batch_install_rolls_back_first_skill_when_second_install_fails(self):
+        second = self.checkout / "cw" / "skills" / "second"
+        second.mkdir()
+        (second / "SKILL.md").write_text("---\nname: second\n---\n\n# Second\n")
+        self.output.mkdir()
+        for name in ("demo", "second"):
+            destination = self.output / name
+            destination.mkdir()
+            (destination / "SKILL.md").write_text(f"old {name}\n")
+        real_replace = os.replace
+        failed = False
+
+        def fail_second_install(source, destination):
+            nonlocal failed
+            source = Path(source)
+            destination = Path(destination)
+            if (
+                not failed
+                and source.name == "second"
+                and destination == self.output / "second"
+            ):
+                failed = True
+                raise OSError("injected second install failure")
+            return real_replace(source, destination)
+
+        with patch(
+            "scripts.vendor_generic_skills.vendored_skills",
+            return_value=("demo", "second"),
+        ), patch(
+            "scripts.vendor_generic_skills.canonical_skills",
+            return_value={"demo", "second"},
+        ), patch(
+            "scripts.vendor_generic_skills.os.replace",
+            side_effect=fail_second_install,
+        ):
+            with self.assertRaisesRegex(OSError, "injected second install failure"):
+                render_from_checkout(self.checkout, self.output)
+
+        self.assertEqual("old demo\n", (self.output / "demo/SKILL.md").read_text())
+        self.assertEqual("old second\n", (self.output / "second/SKILL.md").read_text())
+
+    def test_batch_install_restores_present_and_absent_destinations(self):
+        second = self.checkout / "cw" / "skills" / "second"
+        second.mkdir()
+        (second / "SKILL.md").write_text("---\nname: second\n---\n\n# Second\n")
+        real_replace = os.replace
+
+        for demo_present in (False, True):
+            for second_present in (False, True):
+                with self.subTest(
+                    demo_present=demo_present,
+                    second_present=second_present,
+                ):
+                    output = self.root / f"output-{demo_present}-{second_present}"
+                    output.mkdir()
+                    for name, present in (
+                        ("demo", demo_present),
+                        ("second", second_present),
+                    ):
+                        if present:
+                            destination = output / name
+                            destination.mkdir()
+                            (destination / "SKILL.md").write_text(f"old {name}\n")
+                    failed = False
+
+                    def fail_second_install(source, destination):
+                        nonlocal failed
+                        source = Path(source)
+                        destination = Path(destination)
+                        if (
+                            not failed
+                            and source.name == "second"
+                            and destination == output / "second"
+                        ):
+                            failed = True
+                            raise OSError("injected second install failure")
+                        return real_replace(source, destination)
+
+                    with patch(
+                        "scripts.vendor_generic_skills.vendored_skills",
+                        return_value=("demo", "second"),
+                    ), patch(
+                        "scripts.vendor_generic_skills.canonical_skills",
+                        return_value={"demo", "second"},
+                    ), patch(
+                        "scripts.vendor_generic_skills.os.replace",
+                        side_effect=fail_second_install,
+                    ):
+                        with self.assertRaisesRegex(
+                            OSError,
+                            "injected second install failure",
+                        ):
+                            render_from_checkout(self.checkout, output)
+
+                    for name, present in (
+                        ("demo", demo_present),
+                        ("second", second_present),
+                    ):
+                        self.assertEqual(present, (output / name).exists())
+                        if present:
+                            self.assertEqual(
+                                f"old {name}\n",
+                                (output / name / "SKILL.md").read_text(),
+                            )
+
+    def test_batch_install_rolls_back_on_interrupt(self):
+        second = self.checkout / "cw" / "skills" / "second"
+        second.mkdir()
+        (second / "SKILL.md").write_text("---\nname: second\n---\n\n# Second\n")
+        self.output.mkdir()
+        for name in ("demo", "second"):
+            destination = self.output / name
+            destination.mkdir()
+            (destination / "SKILL.md").write_text(f"old {name}\n")
+        real_replace = os.replace
+        interrupted = False
+
+        def interrupt_second_install(source, destination):
+            nonlocal interrupted
+            source = Path(source)
+            destination = Path(destination)
+            if (
+                not interrupted
+                and source.name == "second"
+                and destination == self.output / "second"
+            ):
+                interrupted = True
+                raise KeyboardInterrupt("injected install interrupt")
+            return real_replace(source, destination)
+
+        with patch(
+            "scripts.vendor_generic_skills.vendored_skills",
+            return_value=("demo", "second"),
+        ), patch(
+            "scripts.vendor_generic_skills.canonical_skills",
+            return_value={"demo", "second"},
+        ), patch(
+            "scripts.vendor_generic_skills.os.replace",
+            side_effect=interrupt_second_install,
+        ):
+            with self.assertRaisesRegex(KeyboardInterrupt, "injected install interrupt"):
+                render_from_checkout(self.checkout, self.output)
+
+        self.assertEqual("old demo\n", (self.output / "demo/SKILL.md").read_text())
+        self.assertEqual("old second\n", (self.output / "second/SKILL.md").read_text())
+
+    def test_batch_install_reconciles_interrupt_after_completed_rename(self):
+        second = self.checkout / "cw" / "skills" / "second"
+        second.mkdir()
+        (second / "SKILL.md").write_text("---\nname: second\n---\n\n# Second\n")
+        real_replace = os.replace
+
+        for interrupted_operation in ("backup", "install"):
+            with self.subTest(interrupted_operation=interrupted_operation):
+                output = self.root / f"output-after-{interrupted_operation}"
+                output.mkdir()
+                for name in ("demo", "second"):
+                    destination = output / name
+                    destination.mkdir()
+                    (destination / "SKILL.md").write_text(f"old {name}\n")
+                interrupted = False
+
+                def interrupt_after_rename(source, destination):
+                    nonlocal interrupted
+                    source = Path(source)
+                    destination = Path(destination)
+                    result = real_replace(source, destination)
+                    is_second_backup = (
+                        source == output / "second"
+                        and destination.parent.name == "previous"
+                    )
+                    is_second_install = (
+                        source.name == "second"
+                        and destination == output / "second"
+                        and source.parent.name != "previous"
+                    )
+                    if not interrupted and (
+                        (interrupted_operation == "backup" and is_second_backup)
+                        or (interrupted_operation == "install" and is_second_install)
+                    ):
+                        interrupted = True
+                        raise KeyboardInterrupt(
+                            f"injected post-{interrupted_operation} interrupt"
+                        )
+                    return result
+
+                with patch(
+                    "scripts.vendor_generic_skills.vendored_skills",
+                    return_value=("demo", "second"),
+                ), patch(
+                    "scripts.vendor_generic_skills.canonical_skills",
+                    return_value={"demo", "second"},
+                ), patch(
+                    "scripts.vendor_generic_skills.os.replace",
+                    side_effect=interrupt_after_rename,
+                ):
+                    with self.assertRaisesRegex(
+                        KeyboardInterrupt,
+                        f"injected post-{interrupted_operation} interrupt",
+                    ):
+                        render_from_checkout(self.checkout, output)
+
+                self.assertEqual(
+                    "old demo\n",
+                    (output / "demo/SKILL.md").read_text(),
+                )
+                self.assertTrue((output / "second/SKILL.md").is_file())
+                self.assertEqual(
+                    "old second\n",
+                    (output / "second/SKILL.md").read_text(),
+                )
+                self.assertEqual(
+                    [],
+                    sorted(self.root.glob(".vendor-generic-skills-*")),
+                )
+
+    def test_batch_install_retains_recovery_backups_when_rollback_fails(self):
+        second = self.checkout / "cw" / "skills" / "second"
+        second.mkdir()
+        (second / "SKILL.md").write_text("---\nname: second\n---\n\n# Second\n")
+        self.output.mkdir()
+        for name in ("demo", "second"):
+            destination = self.output / name
+            destination.mkdir()
+            (destination / "SKILL.md").write_text(f"old {name}\n")
+        real_replace = os.replace
+        failed = False
+
+        def fail_install_and_demo_restore(source, destination):
+            nonlocal failed
+            source = Path(source)
+            destination = Path(destination)
+            if (
+                not failed
+                and source.name == "second"
+                and destination == self.output / "second"
+            ):
+                failed = True
+                raise OSError("injected second install failure")
+            if source.parent.name == "previous" and source.name == "demo":
+                raise OSError("injected demo restore failure")
+            return real_replace(source, destination)
+
+        with patch(
+            "scripts.vendor_generic_skills.vendored_skills",
+            return_value=("demo", "second"),
+        ), patch(
+            "scripts.vendor_generic_skills.canonical_skills",
+            return_value={"demo", "second"},
+        ), patch(
+            "scripts.vendor_generic_skills.os.replace",
+            side_effect=fail_install_and_demo_restore,
+        ):
+            with self.assertRaises(BaseException) as caught:
+                render_from_checkout(self.checkout, self.output)
+
+        self.assertIsInstance(caught.exception, ValueError)
+        self.assertRegex(
+            str(caught.exception),
+            "demo restore failure.*recovery files retained",
+        )
+
+        recovery_roots = sorted(self.root.glob(".vendor-generic-skills-*"))
+        self.assertEqual(1, len(recovery_roots))
+        self.assertEqual(
+            "old demo\n",
+            (recovery_roots[0] / "previous/demo/SKILL.md").read_text(),
+        )
+        self.assertEqual("old second\n", (self.output / "second/SKILL.md").read_text())
+
+    def test_batch_install_preserves_interrupt_when_rollback_fails(self):
+        second = self.checkout / "cw" / "skills" / "second"
+        second.mkdir()
+        (second / "SKILL.md").write_text("---\nname: second\n---\n\n# Second\n")
+        self.output.mkdir()
+        for name in ("demo", "second"):
+            destination = self.output / name
+            destination.mkdir()
+            (destination / "SKILL.md").write_text(f"old {name}\n")
+        real_replace = os.replace
+        interrupted = False
+
+        def interrupt_install_and_fail_demo_restore(source, destination):
+            nonlocal interrupted
+            source = Path(source)
+            destination = Path(destination)
+            if (
+                not interrupted
+                and source.name == "second"
+                and destination == self.output / "second"
+            ):
+                interrupted = True
+                raise KeyboardInterrupt("injected install interrupt")
+            if source.parent.name == "previous" and source.name == "demo":
+                raise OSError("injected demo restore failure")
+            return real_replace(source, destination)
+
+        with patch(
+            "scripts.vendor_generic_skills.vendored_skills",
+            return_value=("demo", "second"),
+        ), patch(
+            "scripts.vendor_generic_skills.canonical_skills",
+            return_value={"demo", "second"},
+        ), patch(
+            "scripts.vendor_generic_skills.os.replace",
+            side_effect=interrupt_install_and_fail_demo_restore,
+        ):
+            with self.assertRaises(KeyboardInterrupt) as caught:
+                render_from_checkout(self.checkout, self.output)
+
+        self.assertIn("demo restore failure", str(caught.exception))
+        recovery_roots = sorted(self.root.glob(".vendor-generic-skills-*"))
+        self.assertEqual(1, len(recovery_roots))
+        self.assertEqual(
+            "old demo\n",
+            (recovery_roots[0] / "previous/demo/SKILL.md").read_text(),
+        )
 
     def test_normalizer_preserves_commonmark_fenced_blocks(self):
         source = (
@@ -680,40 +1041,3 @@ class VendorGenericSkillsTests(unittest.TestCase):
         rendered = normalize_codex_references(source, {"story-memory"}, "demo")
 
         self.assertEqual(rendered, source)
-
-    def test_replace_preserves_preexisting_backup_collision(self):
-        destination = self.root / "demo"
-        destination.mkdir()
-        (destination / "value.txt").write_text("old\n")
-        staged = self.root / "staged"
-        staged.mkdir()
-        (staged / "value.txt").write_text("new\n")
-        collision = self.root / ".demo.vendor-backup"
-        collision.mkdir()
-        (collision / "keep.txt").write_text("keep\n")
-
-        _replace_directory(staged, destination)
-
-        self.assertEqual((destination / "value.txt").read_text(), "new\n")
-        self.assertEqual((collision / "keep.txt").read_text(), "keep\n")
-
-    def test_replace_rolls_back_when_install_rename_fails(self):
-        destination = self.root / "demo"
-        destination.mkdir()
-        (destination / "value.txt").write_text("old\n")
-        staged = self.root / "staged"
-        staged.mkdir()
-        (staged / "value.txt").write_text("new\n")
-        real_replace = os.replace
-
-        def fail_install(source, target):
-            if Path(source) == staged and Path(target) == destination:
-                raise OSError("injected install failure")
-            return real_replace(source, target)
-
-        with patch("scripts.vendor_generic_skills.os.replace", side_effect=fail_install):
-            with self.assertRaisesRegex(OSError, "injected install failure"):
-                _replace_directory(staged, destination)
-
-        self.assertEqual((destination / "value.txt").read_text(), "old\n")
-        self.assertTrue(staged.is_dir())

@@ -438,23 +438,54 @@ def extract_skill_references(text: str, sigil: str) -> set[str]:
     return references
 
 
-def extract_instructional_relative_paths(text: str) -> set[str]:
-    """Return standalone backticked skill-root resource paths outside fences."""
+def extract_instructional_relative_path_contexts(
+    text: str,
+) -> list[tuple[str, frozenset[str]]]:
+    """Return paths and their nearest preceding skill in the same sentence."""
 
-    paths: set[str] = set()
+    contexts: list[tuple[str, frozenset[str]]] = []
 
     def collect(segment: str) -> str:
-        for match in _INLINE_CODE_RE.finditer(segment):
-            if (
-                match.start() > 0
-                and segment[match.start() - 1] == "["
-                and segment[match.end():].startswith("](")
-            ):
-                continue
-            candidate = match.group(1)
-            if _INSTRUCTIONAL_RESOURCE_PATH_RE.fullmatch(candidate):
-                paths.add(candidate)
+        paragraphs = re.split(r"(?:\r?\n)[ \t]*(?:\r?\n)+", segment)
+        for paragraph in paragraphs:
+            list_items = re.split(
+                r"\r?\n(?=(?:[ \t]{0,3}>[ \t]?)*[ \t]*"
+                r"(?:[-+*]|\d{1,9}[.)])[ \t]+)",
+                paragraph,
+            )
+            for list_item in list_items:
+                sentences = re.split(
+                    r"(?<=[.!?])(?:[ \t]+|\r?\n)(?=[A-Z`$])",
+                    list_item,
+                )
+                for sentence in sentences:
+                    for match in _INLINE_CODE_RE.finditer(sentence):
+                        if (
+                            match.start() > 0
+                            and sentence[match.start() - 1] == "["
+                            and sentence[match.end():].startswith("](")
+                        ):
+                            continue
+                        candidate = match.group(1)
+                        if _INSTRUCTIONAL_RESOURCE_PATH_RE.fullmatch(candidate):
+                            preceding = list(
+                                _CODEX_SKILL_RE.finditer(sentence, 0, match.start())
+                            )
+                            references = (
+                                frozenset({preceding[-1].group(1)})
+                                if preceding
+                                else frozenset()
+                            )
+                            contexts.append((candidate, references))
         return segment
 
     map_outside_fences(text, collect)
-    return paths
+    return contexts
+
+
+def extract_instructional_relative_paths(text: str) -> set[str]:
+    """Return standalone backticked skill-root resource paths outside fences."""
+
+    return {
+        path for path, _ in extract_instructional_relative_path_contexts(text)
+    }

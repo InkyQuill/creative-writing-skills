@@ -268,6 +268,11 @@ class ClaudeDistributionRenderTests(unittest.TestCase):
             ).read_text()
             self.assertIn("CLAUDE.md", project_setup)
             self.assertNotIn("AGENTS.md", project_setup)
+            self.assertIn(
+                "draft project instructions for `CLAUDE.md`",
+                project_setup,
+            )
+            self.assertNotIn("draft an `CLAUDE.md`", project_setup)
             self.assertIn("Project conventions in `CLAUDE.md`", grill)
             self.assertNotIn("AGENTS.md", grill)
             for resource in (

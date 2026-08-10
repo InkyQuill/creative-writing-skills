@@ -73,6 +73,7 @@ const DETAIL = {
 function showDetail(key) {
   if (!ALLOWED_DETAIL_KEYS.has(key)) return;
   const d = DETAIL[key];
+  if (!d) return;
   document.getElementById('detail-title').textContent = d.title;
   document.getElementById('detail-desc').textContent = d.desc;
   const codeHost = document.getElementById('detail-code');

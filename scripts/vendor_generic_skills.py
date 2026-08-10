@@ -1,8 +1,14 @@
 #!/usr/bin/env python3
-"""Vendor the licensed generic skills used by the Codex plugin."""
+"""Vendor the licensed generic skills used by the Codex plugin.
+
+Path policy is intentionally strict: every lexical component of checkout,
+source, output, and destination boundaries is inspected with ``lstat``. A
+symlink is rejected even when it resolves inside the expected tree. Source and
+drift inventories never follow symlinks, and applying the configured set is one
+recoverable batch transaction rather than a sequence of independent installs.
+"""
 
 import argparse
-import filecmp
 import json
 import os
 import re
@@ -236,6 +242,7 @@ _DETAIL_RENDERING = '''function showDetail(key) {
 _DETAIL_RENDERING_ADAPTATION = '''function showDetail(key) {
   if (!ALLOWED_DETAIL_KEYS.has(key)) return;
   const d = DETAIL[key];
+  if (!d) return;
   document.getElementById('detail-title').textContent = d.title;
   document.getElementById('detail-desc').textContent = d.desc;
   const codeHost = document.getElementById('detail-code');
@@ -279,6 +286,51 @@ SOURCE = VendorSource(
 
 class VendorDriftError(RuntimeError):
     """Raised when generated vendored skills differ from their source snapshot."""
+
+
+class VendorTransactionError(ValueError):
+    def __init__(
+        self,
+        forward_error: BaseException,
+        rollback_errors: list[tuple[str, BaseException]],
+        recovery_path: Path,
+    ) -> None:
+        self.forward_error = forward_error
+        self.rollback_errors = tuple(rollback_errors)
+        self.recovery_path = recovery_path
+        details = "; ".join(
+            f"{label}: {error}" for label, error in rollback_errors
+        )
+        super().__init__(
+            f"vendor install failed ({forward_error}); rollback failures: {details}; "
+            f"recovery files retained at {recovery_path}"
+        )
+
+
+class VendorTransactionInterrupt(KeyboardInterrupt):
+    def __init__(
+        self,
+        forward_error: KeyboardInterrupt,
+        rollback_errors: list[tuple[str, BaseException]],
+        recovery_path: Path,
+    ) -> None:
+        self.forward_error = forward_error
+        self.rollback_errors = tuple(rollback_errors)
+        self.recovery_path = recovery_path
+        details = "; ".join(
+            f"{label}: {error}" for label, error in rollback_errors
+        )
+        super().__init__(
+            f"vendor install interrupted ({forward_error}); rollback failures: "
+            f"{details}; recovery files retained at {recovery_path}"
+        )
+
+
+@dataclass(frozen=True)
+class InventoryEntry:
+    kind: str
+    mode: int
+    payload: bytes | str | None = None
 
 
 def distribution() -> dict[str, object]:
@@ -438,21 +490,21 @@ def _require_safe_directory(
     allow_missing_leaf: bool = False,
     boundary: Path | None = None,
 ) -> Path:
+    """Return a contained real directory after checking every lexical component."""
+
     absolute = _absolute(path)
     if absolute == Path(absolute.anchor):
         raise ValueError(f"{label} must not be a filesystem root")
 
-    if boundary is None:
-        current = absolute.parent
-        parts = (absolute.name,)
-    else:
+    if boundary is not None:
         boundary = _absolute(boundary)
         try:
-            relative = absolute.relative_to(boundary)
+            absolute.relative_to(boundary)
         except ValueError as error:
             raise ValueError(f"{label} escapes its boundary: {absolute}") from error
-        current = boundary
-        parts = relative.parts
+
+    current = Path(absolute.anchor)
+    parts = absolute.parts[1:]
     for index, part in enumerate(parts):
         current = current / part
         is_leaf = index == len(parts) - 1
@@ -546,27 +598,87 @@ def _copy_skill(source: Path, destination: Path, skill_name: str, known_skills: 
         )
 
 
-def _replace_directory(staged: Path, destination: Path) -> None:
-    backup_root: Path | None = None
-    backup: Path | None = None
-    keep_backup = False
+def _remove_installed_tree(path: Path) -> None:
     try:
-        if destination.exists():
-            backup_root = Path(tempfile.mkdtemp(prefix=f".{destination.name}.vendor-backup-", dir=destination.parent))
-            backup = backup_root / "previous"
-            os.replace(destination, backup)
-        os.replace(staged, destination)
-    except BaseException:
-        if backup is not None and backup.exists():
+        mode = os.lstat(path).st_mode
+    except FileNotFoundError:
+        return
+    if stat.S_ISDIR(mode):
+        shutil.rmtree(path)
+    else:
+        path.unlink()
+
+
+def _path_exists_no_follow(path: Path) -> bool:
+    try:
+        os.lstat(path)
+    except FileNotFoundError:
+        return False
+    return True
+
+
+def _commit_vendor_batch(
+    staged_root: Path,
+    output_root: Path,
+    configured_skills: tuple[str, ...],
+    transaction_root: Path,
+) -> None:
+    """Install every configured skill as one exception/interrupt transaction.
+
+    Rollback failures retain recoverable backups in ``transaction_root``. Like
+    the Claude distribution transaction, this does not claim durability across
+    process termination, power loss, or an operating-system crash between
+    filesystem operations.
+    """
+
+    previous_root = transaction_root / "previous"
+    previous_root.mkdir()
+    try:
+        for skill_name in configured_skills:
+            destination = output_root / skill_name
+            previous = previous_root / skill_name
+            if _path_exists_no_follow(destination):
+                os.replace(destination, previous)
+            os.replace(staged_root / skill_name, destination)
+    except BaseException as forward_error:
+        rollback_errors: list[tuple[str, BaseException]] = []
+
+        def attempt(label: str, operation) -> None:
             try:
-                os.replace(backup, destination)
-            except BaseException:
-                keep_backup = True
-                raise
+                operation()
+            except BaseException as rollback_error:
+                rollback_errors.append((label, rollback_error))
+
+        for skill_name in reversed(configured_skills):
+            destination = output_root / skill_name
+            previous = previous_root / skill_name
+            candidate = staged_root / skill_name
+            if not _path_exists_no_follow(candidate):
+                attempt(
+                    f"{skill_name} cleanup failure",
+                    lambda destination=destination: _remove_installed_tree(destination),
+                )
+            if _path_exists_no_follow(previous):
+                attempt(
+                    f"{skill_name} restore failure",
+                    lambda previous=previous, destination=destination: os.replace(
+                        previous,
+                        destination,
+                    ),
+                )
+        if rollback_errors:
+            if isinstance(forward_error, KeyboardInterrupt):
+                raise VendorTransactionInterrupt(
+                    forward_error,
+                    rollback_errors,
+                    transaction_root,
+                ) from forward_error
+            raise VendorTransactionError(
+                forward_error,
+                rollback_errors,
+                transaction_root,
+            ) from forward_error
         raise
-    finally:
-        if backup_root is not None and not keep_backup:
-            shutil.rmtree(backup_root)
 
 
 def render_from_checkout(checkout: Path, output_root: Path) -> None:
@@ -620,25 +732,109 @@ def render_from_checkout(checkout: Path, output_root: Path) -> None:
                     f"{skill_name}: vendor output skill boundary is not a directory"
                 )
 
-    with tempfile.TemporaryDirectory(
-        prefix=".vendor-generic-skills-render-",
-        dir=output_root.parent,
-    ) as temporary:
-        staged_root = Path(temporary) / "skills"
+    transaction_root = Path(
+        tempfile.mkdtemp(
+            prefix=".vendor-generic-skills-",
+            dir=output_root.parent,
+        )
+    )
+    retain_recovery = False
+    try:
+        staged_root = transaction_root / "candidate-skills"
         staged_root.mkdir()
         for skill_name in configured_skills:
             staged = staged_root / skill_name
             _copy_skill(sources[skill_name], staged, skill_name, known_skills)
         output_root.mkdir(exist_ok=True)
-        for skill_name in configured_skills:
-            staged = staged_root / skill_name
-            _replace_directory(staged, output_root / skill_name)
+        _commit_vendor_batch(
+            staged_root,
+            output_root,
+            configured_skills,
+            transaction_root,
+        )
+    except (VendorTransactionError, VendorTransactionInterrupt):
+        retain_recovery = True
+        raise
+    except BaseException:
+        if not output_exists:
+            try:
+                output_root.rmdir()
+            except OSError:
+                pass
+        raise
+    finally:
+        if not retain_recovery and transaction_root.exists():
+            shutil.rmtree(transaction_root)
 
 
-def _relative_files(root: Path) -> set[Path]:
-    if not root.exists():
-        return set()
-    return {path.relative_to(root) for path in root.rglob("*") if path.is_file()}
+def _inventory_entry(path: Path) -> InventoryEntry | None:
+    try:
+        status = os.lstat(path)
+    except FileNotFoundError:
+        return None
+    mode = stat.S_IMODE(status.st_mode)
+    if stat.S_ISREG(status.st_mode):
+        flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)
+        descriptor = os.open(path, flags)
+        try:
+            opened_status = os.fstat(descriptor)
+            if not stat.S_ISREG(opened_status.st_mode):
+                return InventoryEntry("special", stat.S_IMODE(opened_status.st_mode))
+            with os.fdopen(descriptor, "rb", closefd=False) as stream:
+                payload = stream.read()
+        finally:
+            os.close(descriptor)
+        return InventoryEntry("file", mode, payload)
+    if stat.S_ISDIR(status.st_mode):
+        return InventoryEntry("directory", mode)
+    if stat.S_ISLNK(status.st_mode):
+        return InventoryEntry("symlink", mode, os.readlink(path))
+    return InventoryEntry("special", mode)
+
+
+def _typed_inventory(root: Path) -> dict[Path, InventoryEntry]:
+    root_entry = _inventory_entry(root)
+    if root_entry is None:
+        return {}
+    inventory = {Path(): root_entry}
+    if root_entry.kind != "directory":
+        return inventory
+
+    def walk(directory: Path) -> None:
+        for entry in sorted(os.scandir(directory), key=lambda item: item.name):
+            path = Path(entry.path)
+            relative = path.relative_to(root)
+            item = _inventory_entry(path)
+            if item is None:
+                continue
+            inventory[relative] = item
+            if item.kind == "directory":
+                walk(path)
+
+    walk(root)
+    return inventory
+
+
+def _drift_diagnostic(
+    label: str,
+    expected: InventoryEntry | None,
+    actual: InventoryEntry | None,
+) -> str | None:
+    if expected is None and actual is not None:
+        return f"{label} (unexpected {actual.kind})"
+    if expected is not None and actual is None:
+        return f"{label} (missing {expected.kind})"
+    if expected is None or actual is None:
+        return None
+    if expected.kind != actual.kind:
+        return f"{label} (expected {expected.kind}, found {actual.kind})"
+    if expected.payload != actual.payload:
+        return f"{label} ({expected.kind} content differs)"
+    if expected.mode != actual.mode:
+        return (
+            f"{label} (mode {expected.mode:04o} != {actual.mode:04o})"
+        )
+    return None
 
 
 def _drifted_files(expected_root: Path, output_root: Path) -> list[str]:
@@ -646,20 +842,42 @@ def _drifted_files(expected_root: Path, output_root: Path) -> list[str]:
     for skill_name in validated_vendored_skills():
         expected = expected_root / skill_name
         actual = output_root / skill_name
-        expected_files = _relative_files(expected)
-        actual_files = _relative_files(actual)
-        for relative in sorted(expected_files | actual_files):
-            expected_file = expected / relative
-            actual_file = actual / relative
-            if not expected_file.is_file() or not actual_file.is_file() or not filecmp.cmp(expected_file, actual_file, shallow=False):
-                changed.append((Path(skill_name) / relative).as_posix())
+        expected_inventory = _typed_inventory(expected)
+        actual_inventory = _typed_inventory(actual)
+        for relative in sorted(set(expected_inventory) | set(actual_inventory)):
+            label = (
+                skill_name
+                if relative == Path()
+                else (Path(skill_name) / relative).as_posix()
+            )
+            diagnostic = _drift_diagnostic(
+                label,
+                expected_inventory.get(relative),
+                actual_inventory.get(relative),
+            )
+            if diagnostic is not None:
+                changed.append(diagnostic)
     return changed
 
 
 def check_checkout(checkout: Path, output_root: Path) -> None:
     """Raise a concise drift error if the output differs from a source render."""
 
-    with tempfile.TemporaryDirectory(prefix="vendor-generic-skills-check-") as temporary:
+    output_root = _absolute(output_root)
+    _require_safe_directory(
+        output_root.parent,
+        "vendor output parent boundary",
+    )
+    _require_safe_directory(
+        output_root,
+        "vendor output root boundary",
+        allow_missing_leaf=True,
+        boundary=output_root.parent,
+    )
+    with tempfile.TemporaryDirectory(
+        prefix="vendor-generic-skills-check-",
+        dir=Path(tempfile.gettempdir()).resolve(),
+    ) as temporary:
         expected_root = Path(temporary) / "skills"
         render_from_checkout(checkout, expected_root)
         changed = _drifted_files(expected_root, output_root)
@@ -673,7 +891,10 @@ def source_checkout(source_checkout: Path | None) -> Iterator[Path]:
         yield _absolute(source_checkout)
         return
 
-    with tempfile.TemporaryDirectory(prefix="vendor-generic-skills-source-") as temporary:
+    with tempfile.TemporaryDirectory(
+        prefix="vendor-generic-skills-source-",
+        dir=Path(tempfile.gettempdir()).resolve(),
+    ) as temporary:
         checkout = Path(temporary) / "source"
         subprocess.run(
             ["git", "clone", "--filter=blob:none", "--no-checkout", SOURCE.url, str(checkout)],

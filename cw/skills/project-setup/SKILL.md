@@ -39,7 +39,7 @@ content so style files can be created from early drafts after approval.
 
 ## Propose and Iterate
 
-Based on what you learn, draft an `CLAUDE.md` section and show it to the
+Based on what you learn, draft project instructions for `CLAUDE.md` and show them to the
 author. Cover:
 
 - **Project overview**: what the project is, one paragraph
