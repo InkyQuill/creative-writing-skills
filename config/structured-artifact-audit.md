@@ -1,12 +1,13 @@
-# Structured-artifact executable audit
+# Structured-artifact resource audit
 
 `structured-artifact-audit.json` is a fail-closed review boundary. It lists
-every structured-artifact resource that contains executable HTML, JavaScript,
-SVG, Mermaid, or a corresponding executable fence and approves its exact
-SHA-256. Validation rejects changed bytes, an unlisted executable resource, a
-missing listed resource, unsafe paths, symlinks, and canonical/Claude drift.
+every regular file under the canonical structured-artifact skill and approves
+its exact SHA-256. Validation does not classify files by extension or content:
+any new file is unlisted until reviewed. It rejects changed bytes, missing or
+unlisted resources, unsafe paths, symlinks, incomplete inspection, and
+canonical/Claude drift for every approved file.
 
-After reviewing an intentional executable-example change, run:
+After reviewing an intentional structured-artifact resource change, run:
 
 ```bash
 python3 scripts/audit_structured_artifact_resources.py

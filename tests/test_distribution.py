@@ -26,6 +26,7 @@ from scripts.validate_distribution import (
     compute_structured_artifact_audit,
     validate,
 )
+from scripts.sync_claude_distribution import transform_skill
 
 
 EXPECTED_SKILLS = {
@@ -87,7 +88,7 @@ class DistributionScaffoldTests(unittest.TestCase):
             (root / "linked.js").symlink_to(target)
             with self.assertRaisesRegex(
                 ValueError,
-                "structured-artifact resource must be a regular file",
+                "resource must be a regular file",
             ):
                 compute_structured_artifact_audit(root)
 
@@ -885,6 +886,17 @@ class ValidatorTests(unittest.TestCase):
                 f"---\nname: {name}\ndescription: Demo.\n"
                 f"{invocation_metadata}---\n{name}\n"
             )
+        canonical_structured = self.skills / "structured-artifact/SKILL.md"
+        generated_structured = self.root / "cw/skills/structured-artifact/SKILL.md"
+        generated_structured.write_text(
+            transform_skill(
+                canonical_structured.read_text(),
+                "structured-artifact",
+                EXPECTED_SKILLS,
+                disable_model_invocation=True,
+            )
+        )
+        self.approve_structured_artifact_resources("SKILL.md")
         agents = EXPECTED_WORKERS | {"muse"}
         for name in agents:
             agent = self.root / "cw" / "agents" / f"{name}.md"
@@ -915,7 +927,7 @@ class ValidatorTests(unittest.TestCase):
     def approve_structured_artifact_resources(self, *relative_paths):
         resources = []
         root = self.skills / "structured-artifact"
-        for relative_path in sorted(relative_paths):
+        for relative_path in sorted(set(relative_paths) | {"SKILL.md"}):
             path = root / relative_path
             resources.append({
                 "path": relative_path,
@@ -1133,7 +1145,7 @@ class ValidatorTests(unittest.TestCase):
         )
 
         self.assertIn(
-            "structured-artifact audit: unlisted executable resource resources/unsafe.html",
+            "structured-artifact audit: unlisted resource resources/unsafe.html",
             validate(self.root, canonical_only=True),
         )
 
@@ -1147,7 +1159,7 @@ class ValidatorTests(unittest.TestCase):
         )
 
         self.assertIn(
-            "cw/skills/structured-artifact audit: unlisted executable resource "
+            "cw/skills/structured-artifact audit: unlisted resource "
             "resources/unsafe.html",
             validate(self.root),
         )
@@ -1166,11 +1178,175 @@ class ValidatorTests(unittest.TestCase):
                 path = resources / name
                 path.write_text(source)
                 self.assertIn(
-                    "structured-artifact audit: unlisted executable resource "
+                    "structured-artifact audit: unlisted resource "
                     f"resources/{name}",
                     validate(self.root, canonical_only=True),
                 )
                 path.unlink()
+
+    def test_validator_audits_every_structured_artifact_file_without_classifying_it(self):
+        resources = self.skills / "structured-artifact/resources"
+        nested = resources / "nested"
+        nested.mkdir(parents=True)
+        cases = {
+            "unsafe.xhtml": "<script>run()</script>\n",
+            "component.mdx": "export const Demo = () => <button />;\n",
+            "widget.vue": "<script>run()</script>\n",
+            "runner": "document.write?.(html);\n",
+            "nested/quoted.md": "> ```js\n> run();\n> ```\n",
+            "nested/list.md": "- ```html\n  <script>run()</script>\n  ```\n",
+            "nested/pandoc.md": "```{.js}\nrun();\n```\n",
+            "nested/node.md": "```node\nrun();\n```\n",
+        }
+        for relative, source in cases.items():
+            with self.subTest(relative=relative):
+                path = resources / relative
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text(source)
+                self.assertIn(
+                    "structured-artifact audit: unlisted resource "
+                    f"resources/{relative}",
+                    validate(self.root, canonical_only=True),
+                )
+                path.unlink()
+
+    def test_validator_rejects_differing_claude_bytes_for_arbitrary_suffix(self):
+        canonical = self.skills / "structured-artifact/resources/example.xhtml"
+        generated = self.root / "cw/skills/structured-artifact/resources/example.xhtml"
+        canonical.parent.mkdir(exist_ok=True)
+        generated.parent.mkdir(exist_ok=True)
+        canonical.write_text("<p>approved</p>\n")
+        generated.write_text("<p>different</p>\n")
+        self.approve_structured_artifact_resources("resources/example.xhtml")
+
+        self.assertIn(
+            "cw/skills/structured-artifact audit: SHA-256 mismatch for "
+            "resources/example.xhtml",
+            validate(self.root),
+        )
+
+    def test_validator_rejects_dot_audit_path_without_crashing(self):
+        self._write_json(
+            self.root / "config/structured-artifact-audit.json",
+            {
+                "schema_version": 1,
+                "hash_algorithm": "sha256",
+                "resources": [{"path": ".", "sha256": "0" * 64}],
+            },
+        )
+
+        self.assertIn(
+            "structured-artifact audit path is not a safe relative path: .",
+            validate(self.root, canonical_only=True),
+        )
+
+    def test_validator_matches_generator_crlf_markdown_semantics(self):
+        canonical = self.skills / "structured-artifact/resources/crlf.md"
+        generated = self.root / "cw/skills/structured-artifact/resources/crlf.md"
+        canonical.parent.mkdir(exist_ok=True)
+        generated.parent.mkdir(exist_ok=True)
+        canonical.write_bytes(
+            b"Use $story-memory.\r\n\r\n```js\r\nroot.replaceChildren(node);\r\n```\r\n"
+        )
+        generated.write_text(
+            "Use /story-memory.\n\n```js\nroot.replaceChildren(node);\n```\n"
+        )
+        self.approve_structured_artifact_resources("resources/crlf.md")
+
+        self.assertFalse(
+            [problem for problem in validate(self.root) if "crlf.md" in problem]
+        )
+
+    def test_validator_reports_audit_subtree_traversal_failure(self):
+        resources = self.skills / "structured-artifact/resources"
+        blocked = resources / "blocked"
+        blocked.mkdir(parents=True)
+        hidden = blocked / "hidden.xhtml"
+        hidden.write_text("<script>run()</script>\n")
+        real_scandir = os.scandir
+
+        def fail_subtree(path):
+            if Path(path) == blocked:
+                raise PermissionError("simulated subtree failure")
+            return real_scandir(path)
+
+        with mock.patch("scripts.validate_distribution.os.scandir", fail_subtree):
+            problems = validate(self.root, canonical_only=True)
+        self.assertTrue(
+            any("simulated subtree failure" in problem for problem in problems),
+            problems,
+        )
+
+    def test_validator_reports_audit_file_read_failure(self):
+        resources = self.skills / "structured-artifact/resources"
+        resources.mkdir(exist_ok=True)
+        approved = resources / "approved.js"
+        approved.write_text("safe();\n")
+        generated = self.root / "cw/skills/structured-artifact/resources/approved.js"
+        generated.parent.mkdir(exist_ok=True)
+        generated.write_text("safe();\n")
+        self.approve_structured_artifact_resources("resources/approved.js")
+        real_read_bytes = Path.read_bytes
+
+        def fail_approved(path):
+            if path == approved:
+                raise PermissionError("simulated audit read failure")
+            return real_read_bytes(path)
+
+        with mock.patch.object(Path, "read_bytes", fail_approved):
+            problems = validate(self.root)
+        self.assertTrue(
+            any("simulated audit read failure" in problem for problem in problems),
+            problems,
+        )
+
+    def test_validator_reports_audit_stat_failure(self):
+        target = self.skills / "structured-artifact/resources/stat-fail.bin"
+        target.parent.mkdir(exist_ok=True)
+        target.write_bytes(b"review me")
+        real_scandir = os.scandir
+
+        class EntryProxy:
+            def __init__(self, entry):
+                self._entry = entry
+                self.name = entry.name
+                self.path = entry.path
+
+            def stat(self, *, follow_symlinks=True):
+                if Path(self.path) == target:
+                    raise PermissionError("simulated stat failure")
+                return self._entry.stat(follow_symlinks=follow_symlinks)
+
+            def __getattr__(self, name):
+                return getattr(self._entry, name)
+
+        class ScandirProxy:
+            def __init__(self, path):
+                self._iterator = real_scandir(path)
+
+            def __iter__(self):
+                return (EntryProxy(entry) for entry in self._iterator)
+
+            def __enter__(self):
+                self._iterator.__enter__()
+                return self
+
+            def __exit__(self, *args):
+                return self._iterator.__exit__(*args)
+
+            def close(self):
+                self._iterator.close()
+
+        with mock.patch(
+            "scripts.validate_distribution.os.scandir",
+            side_effect=ScandirProxy,
+        ):
+            problems = validate(self.root, canonical_only=True)
+        self.assertIn(
+            "structured-artifact audit: cannot stat resource "
+            "resources/stat-fail.bin: simulated stat failure",
+            problems,
+        )
 
     def test_validator_rejects_invalid_audit_schema(self):
         audit = self.root / "config/structured-artifact-audit.json"

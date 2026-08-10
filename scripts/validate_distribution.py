@@ -117,90 +117,46 @@ TEXT_RUNTIME_SUFFIXES = {
     ".rs", ".rst", ".sass", ".scss", ".sh", ".sql", ".svg", ".toml",
     ".ts", ".tsx", ".txt", ".xml", ".yaml", ".yml", ".zsh",
 }
-STRUCTURED_ARTIFACT_EXECUTABLE_SUFFIXES = {
-    ".cjs", ".html", ".htm", ".js", ".jsx", ".mjs", ".svg", ".ts", ".tsx",
-}
-STRUCTURED_ARTIFACT_EXECUTABLE_FENCE_LANGUAGES = {
-    "cjs", "html", "htm", "javascript", "js", "jsx", "mermaid", "mjs",
-    "svg", "ts", "tsx", "typescript",
-}
-STRUCTURED_ARTIFACT_RAW_EXECUTABLE_RE = re.compile(
-    r"<\s*(?:script|svg)\b|<[^>]+\s+on[a-z]+\s*=",
-    re.IGNORECASE,
-)
 STRUCTURED_ARTIFACT_AUDIT_NAME = "structured-artifact-audit.json"
 
 
-def _has_executable_fence(text: str) -> bool:
-    for line in text.splitlines():
-        stripped = line.lstrip(" ")
-        if len(line) - len(stripped) > 3 or stripped[:1] not in {"`", "~"}:
-            continue
-        marker = stripped[0]
-        marker_length = len(stripped) - len(stripped.lstrip(marker))
-        if marker_length < 3:
-            continue
-        info = stripped[marker_length:].strip().split(maxsplit=1)
-        if info and info[0].lower() in STRUCTURED_ARTIFACT_EXECUTABLE_FENCE_LANGUAGES:
-            return True
-    return False
+def _regular_files_no_follow(root: Path, *, on_error=None):
+    def fail(message: str) -> None:
+        if on_error is None:
+            raise ValueError(message)
+        on_error(message)
 
-
-def _is_executable_artifact(path: Path, content: bytes) -> bool:
-    suffix = path.suffix.lower()
-    if suffix in STRUCTURED_ARTIFACT_EXECUTABLE_SUFFIXES:
-        return True
-    if suffix not in TEXT_RUNTIME_SUFFIXES:
-        return False
-    try:
-        text = content.decode("utf-8")
-    except UnicodeDecodeError:
-        return False
-    return _has_executable_fence(text) or bool(
-        STRUCTURED_ARTIFACT_RAW_EXECUTABLE_RE.search(text)
-    )
-
-
-def _regular_files_no_follow(root: Path, *, reject_unsafe: bool = False):
     try:
         root_mode = root.lstat().st_mode
     except OSError as error:
-        if reject_unsafe:
-            raise ValueError(f"cannot inspect structured-artifact root: {error}") from error
+        fail(f"cannot inspect root: {error}")
         return
     if not stat.S_ISDIR(root_mode):
-        if reject_unsafe:
-            raise ValueError("structured-artifact root must be a real directory")
+        fail("root must be a real directory")
         return
     pending = [root]
     while pending:
         directory = pending.pop()
+        relative_directory = directory.relative_to(root).as_posix()
         try:
             entries = sorted(os.scandir(directory), key=lambda entry: entry.name)
         except OSError as error:
-            if reject_unsafe:
-                raise ValueError(
-                    f"cannot inspect structured-artifact directory {directory}: {error}"
-                ) from error
+            fail(f"cannot inspect directory {relative_directory}: {error}")
             continue
         for entry in entries:
             path = Path(entry.path)
+            relative = path.relative_to(root).as_posix()
             try:
                 mode = entry.stat(follow_symlinks=False).st_mode
             except OSError as error:
-                if reject_unsafe:
-                    raise ValueError(
-                        f"cannot inspect structured-artifact resource {path}: {error}"
-                    ) from error
+                fail(f"cannot stat resource {relative}: {error}")
                 continue
             if stat.S_ISDIR(mode):
                 pending.append(path)
             elif stat.S_ISREG(mode):
                 yield path
-            elif reject_unsafe:
-                raise ValueError(
-                    f"structured-artifact resource must be a regular file: {path}"
-                )
+            else:
+                fail(f"resource must be a regular file: {relative}")
 
 
 def _lstat_relative_no_follow(root: Path, relative: str) -> os.stat_result | None:
@@ -221,13 +177,18 @@ def _lstat_relative_no_follow(root: Path, relative: str) -> os.stat_result | Non
 
 def compute_structured_artifact_audit(skill_root: Path) -> dict[str, object]:
     resources = []
-    for path in _regular_files_no_follow(skill_root, reject_unsafe=True):
-        content = path.read_bytes()
-        if _is_executable_artifact(path, content):
-            resources.append({
-                "path": path.relative_to(skill_root).as_posix(),
-                "sha256": hashlib.sha256(content).hexdigest(),
-            })
+    for path in _regular_files_no_follow(skill_root):
+        try:
+            content = path.read_bytes()
+        except OSError as error:
+            relative = path.relative_to(skill_root).as_posix()
+            raise ValueError(
+                f"cannot read structured-artifact resource {relative}: {error}"
+            ) from error
+        resources.append({
+            "path": path.relative_to(skill_root).as_posix(),
+            "sha256": hashlib.sha256(content).hexdigest(),
+        })
     resources.sort(key=lambda entry: entry["path"])
     return {
         "schema_version": 1,
@@ -299,6 +260,7 @@ def _load_structured_artifact_audit(
                 not pure.is_absolute()
                 and "\\" not in relative
                 and relative == pure.as_posix()
+                and bool(pure.parts)
                 and all(part not in {"", ".", ".."} for part in pure.parts)
             )
         if not safe_path:
@@ -334,17 +296,18 @@ def _validate_structured_artifact_audit_root(
     if approved is None or not skill_root.is_dir() or skill_root.is_symlink():
         return
     discovered: dict[str, str] = {}
-    for path in _regular_files_no_follow(skill_root):
+    report = lambda message: problems.append(f"{owner} audit: {message}")
+    for path in _regular_files_no_follow(skill_root, on_error=report):
+        relative = path.relative_to(skill_root).as_posix()
         try:
             content = path.read_bytes()
-        except OSError:
+        except OSError as error:
+            report(f"cannot read {relative}: {error}")
             continue
-        if _is_executable_artifact(path, content):
-            relative = path.relative_to(skill_root).as_posix()
-            discovered[relative] = hashlib.sha256(content).hexdigest()
+        discovered[relative] = hashlib.sha256(content).hexdigest()
 
     for relative in sorted(set(discovered) - set(approved)):
-        problems.append(f"{owner} audit: unlisted executable resource {relative}")
+        problems.append(f"{owner} audit: unlisted resource {relative}")
     for relative in sorted(approved):
         result = _lstat_relative_no_follow(skill_root, relative)
         if result is None:
@@ -356,9 +319,7 @@ def _validate_structured_artifact_audit_root(
             )
             continue
         if relative not in discovered:
-            problems.append(
-                f"{owner} audit: listed resource is not executable-bearing {relative}"
-            )
+            problems.append(f"{owner} audit: listed resource could not be audited {relative}")
             continue
         if discovered[relative] != approved[relative]:
             problems.append(f"{owner} audit: SHA-256 mismatch for {relative}")
@@ -374,15 +335,17 @@ def _validate_claude_structured_artifact_audit(
     if approved is None or not claude_root.is_dir() or claude_root.is_symlink():
         return
     discovered: dict[str, bytes] = {}
-    for path in _regular_files_no_follow(claude_root):
+    report = lambda message: problems.append(f"{owner} audit: {message}")
+    for path in _regular_files_no_follow(claude_root, on_error=report):
+        relative = path.relative_to(claude_root).as_posix()
         try:
             content = path.read_bytes()
-        except OSError:
+        except OSError as error:
+            report(f"cannot read {relative}: {error}")
             continue
-        if _is_executable_artifact(path, content):
-            discovered[path.relative_to(claude_root).as_posix()] = content
+        discovered[relative] = content
     for relative in sorted(set(discovered) - set(approved)):
-        problems.append(f"{owner} audit: unlisted executable resource {relative}")
+        problems.append(f"{owner} audit: unlisted resource {relative}")
 
     try:
         if __package__:
@@ -414,19 +377,29 @@ def _validate_claude_structured_artifact_audit(
                 f"{owner} audit: listed resource must be a regular file {relative}"
             )
             continue
-        canonical_bytes = canonical_path.read_bytes()
+        try:
+            canonical_bytes = canonical_path.read_bytes()
+        except OSError as error:
+            report(f"cannot read canonical {relative}: {error}")
+            continue
         if hashlib.sha256(canonical_bytes).hexdigest() != approved[relative]:
             continue
+        if relative == "SKILL.md" or canonical_path.suffix.lower() == ".md":
+            try:
+                canonical_text = canonical_path.read_text()
+            except (OSError, UnicodeError) as error:
+                report(f"cannot read canonical text {relative}: {error}")
+                continue
         if relative == "SKILL.md":
             expected = transform_skill(
-                canonical_bytes.decode("utf-8"),
+                canonical_text,
                 "structured-artifact",
                 EXPECTED_SKILLS,
                 disable_model_invocation=True,
             ).encode("utf-8")
         elif canonical_path.suffix.lower() == ".md":
             expected = _transform_resource_markdown(
-                canonical_bytes.decode("utf-8"),
+                canonical_text,
                 "structured-artifact",
                 PurePosixPath(relative),
                 EXPECTED_SKILLS,
