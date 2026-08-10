@@ -118,78 +118,113 @@ TEXT_RUNTIME_SUFFIXES = {
     ".ts", ".tsx", ".txt", ".xml", ".yaml", ".yml", ".zsh",
 }
 STRUCTURED_ARTIFACT_AUDIT_NAME = "structured-artifact-audit.json"
+ATOMIC_NOFOLLOW_SUPPORTED = (
+    hasattr(os, "O_NOFOLLOW")
+    and hasattr(os, "O_DIRECTORY")
+    and os.open in os.supports_dir_fd
+    and os.scandir in os.supports_fd
+)
 
 
-def _regular_files_no_follow(root: Path, *, on_error=None):
+def _read_regular_files_no_follow(root: Path, *, on_error=None) -> dict[str, bytes]:
     def fail(message: str) -> None:
         if on_error is None:
             raise ValueError(message)
         on_error(message)
 
+    if not ATOMIC_NOFOLLOW_SUPPORTED:
+        fail("atomic no-follow file access is unavailable on this platform")
+        return {}
+
+    directory_flags = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
+    entry_flags = os.O_RDONLY | os.O_NOFOLLOW | getattr(os, "O_NONBLOCK", 0)
+    if hasattr(os, "O_CLOEXEC"):
+        directory_flags |= os.O_CLOEXEC
+        entry_flags |= os.O_CLOEXEC
+
+    root_fd = None
+    current_fd = None
+    absolute = root.absolute()
     try:
-        root_mode = root.lstat().st_mode
-    except OSError as error:
-        fail(f"cannot inspect root: {error}")
-        return
-    if not stat.S_ISDIR(root_mode):
-        fail("root must be a real directory")
-        return
-    pending = [root]
-    while pending:
-        directory = pending.pop()
-        relative_directory = directory.relative_to(root).as_posix()
-        try:
-            entries = sorted(os.scandir(directory), key=lambda entry: entry.name)
-        except OSError as error:
-            fail(f"cannot inspect directory {relative_directory}: {error}")
-            continue
-        for entry in entries:
-            path = Path(entry.path)
-            relative = path.relative_to(root).as_posix()
+        current_fd = os.open(absolute.anchor, directory_flags)
+        if not stat.S_ISDIR(os.fstat(current_fd).st_mode):
+            raise NotADirectoryError(absolute.anchor)
+        for component in absolute.parts[1:]:
+            next_fd = os.open(component, directory_flags, dir_fd=current_fd)
             try:
-                mode = entry.stat(follow_symlinks=False).st_mode
-            except OSError as error:
-                fail(f"cannot stat resource {relative}: {error}")
-                continue
-            if stat.S_ISDIR(mode):
-                pending.append(path)
-            elif stat.S_ISREG(mode):
-                yield path
-            else:
-                fail(f"resource must be a regular file: {relative}")
+                next_mode = os.fstat(next_fd).st_mode
+            except OSError:
+                os.close(next_fd)
+                raise
+            if not stat.S_ISDIR(next_mode):
+                os.close(next_fd)
+                raise NotADirectoryError(component)
+            os.close(current_fd)
+            current_fd = next_fd
+        root_fd = current_fd
+        current_fd = None
+    except OSError as error:
+        if current_fd is not None:
+            os.close(current_fd)
+        fail(f"cannot open root directory: {error}")
+        return {}
 
+    discovered: dict[str, bytes] = {}
 
-def _lstat_relative_no_follow(root: Path, relative: str) -> os.stat_result | None:
-    current = root
-    parts = PurePosixPath(relative).parts
-    for index, part in enumerate(parts):
-        current = current / part
+    def walk(directory_fd: int, relative_directory: PurePosixPath) -> None:
         try:
-            result = current.lstat()
-        except OSError:
-            return None
-        if stat.S_ISLNK(result.st_mode):
-            return result
-        if index < len(parts) - 1 and not stat.S_ISDIR(result.st_mode):
-            return result
-    return result
+            entries = sorted(os.scandir(directory_fd), key=lambda entry: entry.name)
+        except OSError as error:
+            label = relative_directory.as_posix()
+            fail(f"cannot inspect directory {label}: {error}")
+            return
+        for entry in entries:
+            relative_path = relative_directory / entry.name
+            relative = relative_path.as_posix()
+            try:
+                entry_fd = os.open(entry.name, entry_flags, dir_fd=directory_fd)
+            except OSError as error:
+                fail(f"cannot open resource {relative}: {error}")
+                continue
+            try:
+                try:
+                    mode = os.fstat(entry_fd).st_mode
+                except OSError as error:
+                    fail(f"cannot stat resource {relative}: {error}")
+                    continue
+                if stat.S_ISDIR(mode):
+                    walk(entry_fd, relative_path)
+                    continue
+                if not stat.S_ISREG(mode):
+                    fail(f"resource must be a regular file: {relative}")
+                    continue
+                chunks = []
+                try:
+                    while True:
+                        chunk = os.read(entry_fd, 1024 * 1024)
+                        if not chunk:
+                            break
+                        chunks.append(chunk)
+                except OSError as error:
+                    fail(f"cannot read {relative}: {error}")
+                    continue
+                discovered[relative] = b"".join(chunks)
+            finally:
+                os.close(entry_fd)
+
+    try:
+        walk(root_fd, PurePosixPath("."))
+    finally:
+        os.close(root_fd)
+    return discovered
 
 
 def compute_structured_artifact_audit(skill_root: Path) -> dict[str, object]:
-    resources = []
-    for path in _regular_files_no_follow(skill_root):
-        try:
-            content = path.read_bytes()
-        except OSError as error:
-            relative = path.relative_to(skill_root).as_posix()
-            raise ValueError(
-                f"cannot read structured-artifact resource {relative}: {error}"
-            ) from error
-        resources.append({
-            "path": path.relative_to(skill_root).as_posix(),
-            "sha256": hashlib.sha256(content).hexdigest(),
-        })
-    resources.sort(key=lambda entry: entry["path"])
+    discovered = _read_regular_files_no_follow(skill_root)
+    resources = [
+        {"path": relative, "sha256": hashlib.sha256(content).hexdigest()}
+        for relative, content in sorted(discovered.items())
+    ]
     return {
         "schema_version": 1,
         "hash_algorithm": "sha256",
@@ -293,33 +328,20 @@ def _validate_structured_artifact_audit_root(
     approved: dict[str, str] | None,
     problems: list[str],
 ) -> None:
-    if approved is None or not skill_root.is_dir() or skill_root.is_symlink():
+    if approved is None:
         return
-    discovered: dict[str, str] = {}
     report = lambda message: problems.append(f"{owner} audit: {message}")
-    for path in _regular_files_no_follow(skill_root, on_error=report):
-        relative = path.relative_to(skill_root).as_posix()
-        try:
-            content = path.read_bytes()
-        except OSError as error:
-            report(f"cannot read {relative}: {error}")
-            continue
-        discovered[relative] = hashlib.sha256(content).hexdigest()
+    contents = _read_regular_files_no_follow(skill_root, on_error=report)
+    discovered = {
+        relative: hashlib.sha256(content).hexdigest()
+        for relative, content in contents.items()
+    }
 
     for relative in sorted(set(discovered) - set(approved)):
         problems.append(f"{owner} audit: unlisted resource {relative}")
     for relative in sorted(approved):
-        result = _lstat_relative_no_follow(skill_root, relative)
-        if result is None:
-            problems.append(f"{owner} audit: listed resource is missing {relative}")
-            continue
-        if not stat.S_ISREG(result.st_mode):
-            problems.append(
-                f"{owner} audit: listed resource must be a regular file {relative}"
-            )
-            continue
         if relative not in discovered:
-            problems.append(f"{owner} audit: listed resource could not be audited {relative}")
+            problems.append(f"{owner} audit: listed resource is missing {relative}")
             continue
         if discovered[relative] != approved[relative]:
             problems.append(f"{owner} audit: SHA-256 mismatch for {relative}")
@@ -332,18 +354,14 @@ def _validate_claude_structured_artifact_audit(
     problems: list[str],
 ) -> None:
     owner = "cw/skills/structured-artifact"
-    if approved is None or not claude_root.is_dir() or claude_root.is_symlink():
+    if approved is None:
         return
-    discovered: dict[str, bytes] = {}
     report = lambda message: problems.append(f"{owner} audit: {message}")
-    for path in _regular_files_no_follow(claude_root, on_error=report):
-        relative = path.relative_to(claude_root).as_posix()
-        try:
-            content = path.read_bytes()
-        except OSError as error:
-            report(f"cannot read {relative}: {error}")
-            continue
-        discovered[relative] = content
+    discovered = _read_regular_files_no_follow(claude_root, on_error=report)
+    canonical = _read_regular_files_no_follow(
+        canonical_root,
+        on_error=lambda message: report(f"canonical {message}"),
+    )
     for relative in sorted(set(discovered) - set(approved)):
         problems.append(f"{owner} audit: unlisted resource {relative}")
 
@@ -363,32 +381,22 @@ def _validate_claude_structured_artifact_audit(
         return
 
     for relative in sorted(approved):
-        canonical_path = canonical_root / PurePosixPath(relative)
-        canonical_result = _lstat_relative_no_follow(canonical_root, relative)
-        generated_result = _lstat_relative_no_follow(claude_root, relative)
-        if canonical_result is None or generated_result is None:
+        canonical_bytes = canonical.get(relative)
+        if canonical_bytes is None or relative not in discovered:
             problems.append(f"{owner} audit: listed resource is missing {relative}")
-            continue
-        if (
-            not stat.S_ISREG(canonical_result.st_mode)
-            or not stat.S_ISREG(generated_result.st_mode)
-        ):
-            problems.append(
-                f"{owner} audit: listed resource must be a regular file {relative}"
-            )
-            continue
-        try:
-            canonical_bytes = canonical_path.read_bytes()
-        except OSError as error:
-            report(f"cannot read canonical {relative}: {error}")
             continue
         if hashlib.sha256(canonical_bytes).hexdigest() != approved[relative]:
             continue
-        if relative == "SKILL.md" or canonical_path.suffix.lower() == ".md":
+        suffix = PurePosixPath(relative).suffix.lower()
+        if relative == "SKILL.md" or suffix == ".md":
             try:
-                canonical_text = canonical_path.read_text()
-            except (OSError, UnicodeError) as error:
-                report(f"cannot read canonical text {relative}: {error}")
+                canonical_text = (
+                    canonical_bytes.decode()
+                    .replace("\r\n", "\n")
+                    .replace("\r", "\n")
+                )
+            except UnicodeError as error:
+                report(f"cannot decode canonical text {relative}: {error}")
                 continue
         if relative == "SKILL.md":
             expected = transform_skill(
@@ -397,7 +405,7 @@ def _validate_claude_structured_artifact_audit(
                 EXPECTED_SKILLS,
                 disable_model_invocation=True,
             ).encode("utf-8")
-        elif canonical_path.suffix.lower() == ".md":
+        elif suffix == ".md":
             expected = _transform_resource_markdown(
                 canonical_text,
                 "structured-artifact",

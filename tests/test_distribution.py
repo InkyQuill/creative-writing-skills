@@ -82,15 +82,43 @@ class DistributionScaffoldTests(unittest.TestCase):
 
     def test_structured_artifact_audit_helper_rejects_symlinks(self):
         with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory)
+            root = Path(directory).resolve()
             target = root / "target.js"
             target.write_text("safe();\n")
             (root / "linked.js").symlink_to(target)
             with self.assertRaisesRegex(
                 ValueError,
-                "resource must be a regular file",
+                "cannot open resource linked.js",
             ):
                 compute_structured_artifact_audit(root)
+
+    def test_structured_artifact_audit_helper_rejects_directory_symlink_race(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory).resolve() / "skill"
+            nested = root / "nested"
+            nested.mkdir(parents=True)
+            (nested / "approved.bin").write_bytes(b"approved")
+            external = Path(directory) / "external"
+            external.mkdir()
+            (external / "approved.bin").write_bytes(b"external")
+            backup = root / "nested-backup"
+            real_open = os.open
+            raced = False
+
+            def replace_directory(path, flags, *args, dir_fd=None, **kwargs):
+                nonlocal raced
+                if path == "nested" and dir_fd is not None and not raced:
+                    raced = True
+                    nested.rename(backup)
+                    nested.symlink_to(external, target_is_directory=True)
+                return real_open(path, flags, *args, dir_fd=dir_fd, **kwargs)
+
+            with mock.patch(
+                "scripts.validate_distribution.os.open",
+                side_effect=replace_directory,
+            ):
+                with self.assertRaisesRegex(ValueError, "cannot open resource nested"):
+                    compute_structured_artifact_audit(root)
 
     def test_worker_registry_is_complete_and_resolvable(self):
         registry_path = PLUGIN_ROOT / "skills" / "creative-writing-muse" / "resources" / "workers" / "registry.json"
@@ -766,7 +794,7 @@ class ValidatorTests(unittest.TestCase):
     def setUp(self):
         self.temporary_directory = tempfile.TemporaryDirectory()
         self.addCleanup(self.temporary_directory.cleanup)
-        self.root = Path(self.temporary_directory.name)
+        self.root = Path(self.temporary_directory.name).resolve()
         self.plugin = self.root / "plugins" / "creative-writing-skills"
         self.skills = self.plugin / "skills"
         self.skills.mkdir(parents=True)
@@ -1263,14 +1291,26 @@ class ValidatorTests(unittest.TestCase):
         blocked.mkdir(parents=True)
         hidden = blocked / "hidden.xhtml"
         hidden.write_text("<script>run()</script>\n")
+        real_open = os.open
         real_scandir = os.scandir
+        blocked_fd = None
 
-        def fail_subtree(path):
-            if Path(path) == blocked:
+        def record_subtree(path, flags, *args, dir_fd=None, **kwargs):
+            nonlocal blocked_fd
+            descriptor = real_open(path, flags, *args, dir_fd=dir_fd, **kwargs)
+            if path == "blocked" and dir_fd is not None:
+                blocked_fd = descriptor
+            return descriptor
+
+        def fail_subtree(descriptor):
+            if descriptor == blocked_fd:
                 raise PermissionError("simulated subtree failure")
-            return real_scandir(path)
+            return real_scandir(descriptor)
 
-        with mock.patch("scripts.validate_distribution.os.scandir", fail_subtree):
+        with (
+            mock.patch("scripts.validate_distribution.os.open", record_subtree),
+            mock.patch("scripts.validate_distribution.os.scandir", fail_subtree),
+        ):
             problems = validate(self.root, canonical_only=True)
         self.assertTrue(
             any("simulated subtree failure" in problem for problem in problems),
@@ -1286,14 +1326,29 @@ class ValidatorTests(unittest.TestCase):
         generated.parent.mkdir(exist_ok=True)
         generated.write_text("safe();\n")
         self.approve_structured_artifact_resources("resources/approved.js")
-        real_read_bytes = Path.read_bytes
+        real_open = os.open
+        real_read = os.read
+        approved_fd = None
+        failed = False
 
-        def fail_approved(path):
-            if path == approved:
+        def record_approved(path, flags, *args, dir_fd=None, **kwargs):
+            nonlocal approved_fd
+            descriptor = real_open(path, flags, *args, dir_fd=dir_fd, **kwargs)
+            if path == "approved.js" and dir_fd is not None and approved_fd is None:
+                approved_fd = descriptor
+            return descriptor
+
+        def fail_approved(descriptor, size):
+            nonlocal failed
+            if descriptor == approved_fd and not failed:
+                failed = True
                 raise PermissionError("simulated audit read failure")
-            return real_read_bytes(path)
+            return real_read(descriptor, size)
 
-        with mock.patch.object(Path, "read_bytes", fail_approved):
+        with (
+            mock.patch("scripts.validate_distribution.os.open", record_approved),
+            mock.patch("scripts.validate_distribution.os.read", fail_approved),
+        ):
             problems = validate(self.root)
         self.assertTrue(
             any("simulated audit read failure" in problem for problem in problems),
@@ -1304,47 +1359,103 @@ class ValidatorTests(unittest.TestCase):
         target = self.skills / "structured-artifact/resources/stat-fail.bin"
         target.parent.mkdir(exist_ok=True)
         target.write_bytes(b"review me")
-        real_scandir = os.scandir
+        real_open = os.open
+        real_fstat = os.fstat
+        target_fd = None
+        failed = False
 
-        class EntryProxy:
-            def __init__(self, entry):
-                self._entry = entry
-                self.name = entry.name
-                self.path = entry.path
+        def record_target(path, flags, *args, dir_fd=None, **kwargs):
+            nonlocal target_fd
+            descriptor = real_open(path, flags, *args, dir_fd=dir_fd, **kwargs)
+            if path == "stat-fail.bin" and dir_fd is not None:
+                target_fd = descriptor
+            return descriptor
 
-            def stat(self, *, follow_symlinks=True):
-                if Path(self.path) == target:
-                    raise PermissionError("simulated stat failure")
-                return self._entry.stat(follow_symlinks=follow_symlinks)
+        def fail_target(descriptor):
+            nonlocal failed
+            if descriptor == target_fd and not failed:
+                failed = True
+                raise PermissionError("simulated stat failure")
+            return real_fstat(descriptor)
 
-            def __getattr__(self, name):
-                return getattr(self._entry, name)
-
-        class ScandirProxy:
-            def __init__(self, path):
-                self._iterator = real_scandir(path)
-
-            def __iter__(self):
-                return (EntryProxy(entry) for entry in self._iterator)
-
-            def __enter__(self):
-                self._iterator.__enter__()
-                return self
-
-            def __exit__(self, *args):
-                return self._iterator.__exit__(*args)
-
-            def close(self):
-                self._iterator.close()
-
-        with mock.patch(
-            "scripts.validate_distribution.os.scandir",
-            side_effect=ScandirProxy,
+        with (
+            mock.patch("scripts.validate_distribution.os.open", record_target),
+            mock.patch("scripts.validate_distribution.os.fstat", fail_target),
         ):
             problems = validate(self.root, canonical_only=True)
         self.assertIn(
             "structured-artifact audit: cannot stat resource "
             "resources/stat-fail.bin: simulated stat failure",
+            problems,
+        )
+
+    def test_validator_rejects_canonical_leaf_symlink_race(self):
+        resource = self.skills / "structured-artifact/resources/race.bin"
+        resource.parent.mkdir(exist_ok=True)
+        resource.write_bytes(b"approved")
+        self.approve_structured_artifact_resources("resources/race.bin")
+        external = self.root / "external.bin"
+        external.write_bytes(b"external")
+        backup = resource.with_name("race-backup.bin")
+        real_open = os.open
+        raced = False
+
+        def replace_leaf(path, flags, *args, dir_fd=None, **kwargs):
+            nonlocal raced
+            if path == "race.bin" and dir_fd is not None and not raced:
+                raced = True
+                resource.rename(backup)
+                resource.symlink_to(external)
+            return real_open(path, flags, *args, dir_fd=dir_fd, **kwargs)
+
+        with mock.patch(
+            "scripts.validate_distribution.os.open",
+            side_effect=replace_leaf,
+        ):
+            problems = validate(self.root, canonical_only=True)
+        self.assertTrue(
+            any(
+                "structured-artifact audit: cannot open resource resources/race.bin"
+                in problem
+                for problem in problems
+            ),
+            problems,
+        )
+
+    def test_validator_rejects_claude_leaf_symlink_race(self):
+        canonical = self.skills / "structured-artifact/resources/race.bin"
+        generated = self.root / "cw/skills/structured-artifact/resources/race.bin"
+        canonical.parent.mkdir(exist_ok=True)
+        generated.parent.mkdir(exist_ok=True)
+        canonical.write_bytes(b"approved")
+        generated.write_bytes(b"approved")
+        self.approve_structured_artifact_resources("resources/race.bin")
+        external = self.root / "external.bin"
+        external.write_bytes(b"external")
+        backup = generated.with_name("race-backup.bin")
+        real_open = os.open
+        race_opens = 0
+
+        def replace_generated_leaf(path, flags, *args, dir_fd=None, **kwargs):
+            nonlocal race_opens
+            if path == "race.bin" and dir_fd is not None:
+                race_opens += 1
+                if race_opens == 2:
+                    generated.rename(backup)
+                    generated.symlink_to(external)
+            return real_open(path, flags, *args, dir_fd=dir_fd, **kwargs)
+
+        with mock.patch(
+            "scripts.validate_distribution.os.open",
+            side_effect=replace_generated_leaf,
+        ):
+            problems = validate(self.root)
+        self.assertTrue(
+            any(
+                "cw/skills/structured-artifact audit: cannot open resource "
+                "resources/race.bin" in problem
+                for problem in problems
+            ),
             problems,
         )
 
@@ -1501,10 +1612,13 @@ class ValidatorTests(unittest.TestCase):
             "hash_algorithm": "sha256",
             "resources": [{"path": "resources/a.js", "sha256": digest}],
         })
-        self.assertIn(
-            "structured-artifact audit: listed resource must be a regular file "
-            "resources/a.js",
-            validate(self.root, canonical_only=True),
+        self.assertTrue(
+            any(
+                problem.startswith(
+                    "structured-artifact audit: cannot open resource resources/a.js"
+                )
+                for problem in validate(self.root, canonical_only=True)
+            )
         )
 
     def test_validator_rejects_symlinked_audit_path_ancestor_without_following_it(self):
@@ -1531,10 +1645,13 @@ class ValidatorTests(unittest.TestCase):
             "structured-artifact: runtime resource linked must not be a symlink",
             problems,
         )
-        self.assertIn(
-            "structured-artifact audit: listed resource must be a regular file "
-            "linked/audited.js",
-            problems,
+        self.assertTrue(
+            any(
+                problem.startswith(
+                    "structured-artifact audit: cannot open resource linked"
+                )
+                for problem in problems
+            )
         )
 
     def test_validator_rejects_invalid_claude_invocation_policy(self):
