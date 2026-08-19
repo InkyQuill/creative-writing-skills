@@ -16,6 +16,8 @@ from scripts.release import ReleaseError, bump_semver, main, run_command, run_re
 EXPECTED_RELEASE_STATUS = (
     " M .claude-plugin/marketplace.json\n"
     " M cw/.claude-plugin/plugin.json\n"
+    " M cw/.zcode-plugin/plugin.json\n"
+    " M marketplace.json\n"
     " M plugins/creative-writing-skills/.codex-plugin/plugin.json\n"
 )
 
@@ -97,6 +99,13 @@ class SideEffectFailureRunner:
                 marketplace = cwd / ".claude-plugin/marketplace.json"
                 marketplace.write_text(
                     json.dumps({"metadata": {"version": version}}) + "\n"
+                )
+                zcode_manifest = cwd / "cw/.zcode-plugin/plugin.json"
+                zcode_manifest.parent.mkdir(parents=True, exist_ok=True)
+                zcode_manifest.write_text(json.dumps({"version": version}) + "\n")
+                zcode_marketplace = cwd / "marketplace.json"
+                zcode_marketplace.write_text(
+                    json.dumps({"plugins": [{"version": version}]}) + "\n"
                 )
                 if self.residue_stage == "apply":
                     self._write_residue(cwd)
@@ -291,7 +300,9 @@ class ReleaseOrchestrationTests(unittest.TestCase):
                     "--",
                     "plugins/creative-writing-skills/.codex-plugin/plugin.json",
                     "cw/.claude-plugin/plugin.json",
+                    "cw/.zcode-plugin/plugin.json",
                     ".claude-plugin/marketplace.json",
+                    "marketplace.json",
                 ],
                 ["git", "commit", "-m", "Release v0.5.10"],
                 ["git", "tag", "v0.5.10"],
@@ -368,6 +379,7 @@ class ReleaseOrchestrationTests(unittest.TestCase):
                 "plugins/creative-writing-skills/.codex-plugin/plugin.json",
                 "cw",
                 ".claude-plugin/marketplace.json",
+                "marketplace.json",
             ],
             commands[-1],
         )
@@ -417,6 +429,13 @@ class ReleaseGitRecoveryTests(unittest.TestCase):
         marketplace.write_text(
             json.dumps({"metadata": {"version": "0.5.9"}}) + "\n"
         )
+        zcode_manifest = root / "cw/.zcode-plugin/plugin.json"
+        zcode_manifest.parent.mkdir(parents=True)
+        zcode_manifest.write_text(json.dumps({"version": "0.5.9"}) + "\n")
+        zcode_marketplace = root / "marketplace.json"
+        zcode_marketplace.write_text(
+            json.dumps({"plugins": [{"version": "0.5.9"}]}) + "\n"
+        )
         canonical_skill = (
             root / "plugins/creative-writing-skills/skills/demo/SKILL.md"
         )
@@ -438,17 +457,24 @@ class ReleaseGitRecoveryTests(unittest.TestCase):
                 manifest_path = root / "plugins/creative-writing-skills/.codex-plugin/plugin.json"
                 claude_manifest_path = root / "cw/.claude-plugin/plugin.json"
                 marketplace_path = root / ".claude-plugin/marketplace.json"
+                zcode_manifest_path = root / "cw/.zcode-plugin/plugin.json"
+                zcode_marketplace_path = root / "marketplace.json"
                 source_skill = root / "plugins/creative-writing-skills/skills/demo/SKILL.md"
                 claude_skill = root / "cw/skills/demo/SKILL.md"
                 version = json.loads(manifest_path.read_text())["version"]
                 if sys.argv[1] == "--apply":
                     claude_manifest_path.write_text(json.dumps({"version": version}) + "\\n")
                     marketplace_path.write_text(json.dumps({"metadata": {"version": version}}) + "\\n")
+                    zcode_manifest_path.parent.mkdir(parents=True, exist_ok=True)
+                    zcode_manifest_path.write_text(json.dumps({"version": version}) + "\\n")
+                    zcode_marketplace_path.write_text(json.dumps({"plugins": [{"version": version}]}) + "\\n")
                     claude_skill.write_bytes(source_skill.read_bytes())
                 elif sys.argv[1] == "--check":
                     matches = (
                         json.loads(claude_manifest_path.read_text())["version"] == version
                         and json.loads(marketplace_path.read_text())["metadata"]["version"] == version
+                        and json.loads(zcode_manifest_path.read_text())["version"] == version
+                        and json.loads(zcode_marketplace_path.read_text())["plugins"][0]["version"] == version
                         and claude_skill.read_bytes() == source_skill.read_bytes()
                     )
                     if not matches:
@@ -513,6 +539,16 @@ class ReleaseGitRecoveryTests(unittest.TestCase):
                 "metadata"
             ]["version"],
         )
+        self.assertEqual(
+            "0.5.9",
+            json.loads((root / "cw/.zcode-plugin/plugin.json").read_text())["version"],
+        )
+        self.assertEqual(
+            "0.5.9",
+            json.loads((root / "marketplace.json").read_text())["plugins"][0][
+                "version"
+            ],
+        )
         tags = self._git(root, "tag", "--list", "v0.5.10", capture_output=True).stdout
         if tag_target is None:
             self.assertEqual("", tags)
@@ -537,7 +573,9 @@ class ReleaseGitRecoveryTests(unittest.TestCase):
                 "--",
                 "plugins/creative-writing-skills/.codex-plugin/plugin.json",
                 "cw/.claude-plugin/plugin.json",
+                "cw/.zcode-plugin/plugin.json",
                 ".claude-plugin/marketplace.json",
+                "marketplace.json",
             ],
             "commit": ["git", "commit", "-m", "Release v0.5.10"],
             "tag": ["git", "tag", "v0.5.10"],
@@ -702,6 +740,8 @@ class ReleaseGitRecoveryTests(unittest.TestCase):
                 {
                     ".claude-plugin/marketplace.json",
                     "cw/.claude-plugin/plugin.json",
+                    "cw/.zcode-plugin/plugin.json",
+                    "marketplace.json",
                     "plugins/creative-writing-skills/.codex-plugin/plugin.json",
                 },
                 changed_paths,
@@ -715,11 +755,18 @@ class ReleaseGitRecoveryTests(unittest.TestCase):
                 ),
                 ("cw/.claude-plugin/plugin.json", ("version",)),
                 (".claude-plugin/marketplace.json", ("metadata", "version")),
+                ("cw/.zcode-plugin/plugin.json", ("version",)),
             ):
                 value = json.loads((root / path).read_text())
                 for key in keys:
                     value = value[key]
                 self.assertEqual("0.5.10", value)
+            self.assertEqual(
+                "0.5.10",
+                json.loads((root / "marketplace.json").read_text())["plugins"][0][
+                    "version"
+                ],
+            )
 
     def test_unexpected_post_generation_residue_blocks_release_and_is_preserved(self):
         cases = {

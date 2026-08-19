@@ -48,9 +48,9 @@ stances in the current conversation. It preserves the workflow and tells the
 author when the loss of fresh-context independence materially affects the
 result.
 
-## Claude Compatibility
+## Claude and ZCode Compatibility
 
-Claude Code and Cowork use the generated compatibility plugin in `cw/`.
+Claude Code, Cowork, and ZCode use the generated compatibility plugin in `cw/`.
 
 In Claude Code, add the marketplace and install the plugin:
 
@@ -63,6 +63,11 @@ In Cowork, open **Customize → Personal plugins → + → Add marketplace → A
 from repository**, enter `InkyQuill/creative-writing-skills`, and install
 **creative-writing-skills**. The generated Claude agents mirror the muse and
 specialist roles.
+
+In ZCode, open **Settings → Plugin Management → Discover**, click **+**, add
+`InkyQuill/creative-writing-skills` as a marketplace, and install
+**creative-writing-skills**. ZCode reads the generated root `marketplace.json`
+and the `cw/.zcode-plugin/plugin.json` manifest.
 
 ### Claude.ai skill archives
 

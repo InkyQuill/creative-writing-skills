@@ -434,6 +434,18 @@ class DistributionScaffoldTests(unittest.TestCase):
         self.assertEqual(manifest["skills"], "./skills/")
         self.assertEqual(marketplace["plugins"][0]["source"]["path"], "./plugins/creative-writing-skills")
 
+        zcode_marketplace = load_json(REPO_ROOT / "marketplace.json")
+        zcode_entry = zcode_marketplace["plugins"][0]
+        self.assertEqual(zcode_marketplace["name"], manifest["name"])
+        self.assertEqual(zcode_marketplace["description"], manifest["description"])
+        self.assertEqual(zcode_entry["name"], manifest["name"])
+        self.assertEqual(zcode_entry["description"], manifest["description"])
+        self.assertEqual(zcode_entry["version"], manifest["version"])
+        self.assertEqual(zcode_entry["source"], "./cw")
+        zcode_manifest = load_json(REPO_ROOT / "cw" / ".zcode-plugin" / "plugin.json")
+        self.assertEqual(zcode_manifest["name"], manifest["name"])
+        self.assertEqual(zcode_manifest["version"], manifest["version"])
+
     def test_canonical_runtime_has_no_mars_or_meridian_scaffolding(self):
         forbidden = re.compile(r"\b(?:Mars|Meridian)\b|meridian\s+(?:spawn|mars|context|work)|MERIDIAN_[A-Z_]+")
         for path in (PLUGIN_ROOT / "skills").rglob("*"):
@@ -549,6 +561,14 @@ class DistributionScaffoldTests(unittest.TestCase):
         self.assertEqual(
             ["reflect", "structured-artifact"],
             config["claude"]["disable_model_invocation"],
+        )
+        self.assertEqual(
+            config["zcode"],
+            {
+                "root": "cw",
+                "manifest": ".zcode-plugin/plugin.json",
+                "marketplace": "marketplace.json",
+            },
         )
 
     def test_canonical_codex_skills_do_not_disable_model_invocation(self):
@@ -859,6 +879,11 @@ class ValidatorTests(unittest.TestCase):
                     "structured-artifact",
                 ],
             },
+            "zcode": {
+                "root": "cw",
+                "manifest": ".zcode-plugin/plugin.json",
+                "marketplace": "marketplace.json",
+            },
         }
         self._write_json(self.root / "config" / "distribution.json", config)
         self._write_json(
@@ -944,6 +969,21 @@ class ValidatorTests(unittest.TestCase):
             }],
         }
         self._write_json(self.root / ".claude-plugin" / "marketplace.json", claude_marketplace)
+        self._write_json(
+            self.root / "cw" / ".zcode-plugin" / "plugin.json",
+            self.claude_manifest,
+        )
+        zcode_marketplace = {
+            "name": "creative-writing-skills",
+            "description": self.manifest["description"],
+            "plugins": [{
+                "name": "creative-writing-skills",
+                "description": self.manifest["description"],
+                "version": self.manifest["version"],
+                "source": "./cw",
+            }],
+        }
+        self._write_json(self.root / "marketplace.json", zcode_marketplace)
 
     def _write_json(self, path, value):
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -1144,6 +1184,80 @@ class ValidatorTests(unittest.TestCase):
         self.assertIn(
             "cw plugin version 0.0.0 != canonical version "
             f"{self.manifest['version']}",
+            validate(self.root),
+        )
+
+    def test_validator_rejects_zcode_marketplace_version_drift(self):
+        path = self.root / "marketplace.json"
+        marketplace = json.loads(path.read_text())
+        marketplace["plugins"][0]["version"] = "0.0.0"
+        self._write_json(path, marketplace)
+        self.assertIn(
+            "ZCode marketplace version 0.0.0 != canonical version "
+            f"{self.manifest['version']}",
+            validate(self.root),
+        )
+
+    def test_validator_rejects_zcode_marketplace_source_drift(self):
+        path = self.root / "marketplace.json"
+        marketplace = json.loads(path.read_text())
+        marketplace["plugins"][0]["source"] = "./plugins/creative-writing-skills"
+        self._write_json(path, marketplace)
+        self.assertIn(
+            "ZCode marketplace plugin source must be ./cw",
+            validate(self.root),
+        )
+
+    def test_validator_rejects_zcode_manifest_version_drift(self):
+        path = self.root / "cw" / ".zcode-plugin" / "plugin.json"
+        manifest = json.loads(path.read_text())
+        manifest["version"] = "0.0.0"
+        self._write_json(path, manifest)
+        self.assertIn(
+            "cw ZCode manifest version does not match canonical manifest",
+            validate(self.root),
+        )
+
+    def test_validator_rejects_missing_zcode_marketplace(self):
+        (self.root / "marketplace.json").unlink()
+        self.assertTrue(
+            any(
+                problem.startswith("missing ZCode marketplace")
+                for problem in validate(self.root)
+            )
+        )
+
+    def test_validator_rejects_non_canonical_zcode_config_paths(self):
+        path = self.root / "config" / "distribution.json"
+        config = json.loads(path.read_text())
+        config["zcode"]["marketplace"] = "zcode-marketplace.json"
+        self._write_json(path, config)
+        self.assertIn(
+            "distribution config ZCode paths are not canonical",
+            validate(self.root, canonical_only=True),
+        )
+
+    def test_validator_rejects_symlinked_zcode_control_paths(self):
+        marketplace = self.root / "marketplace.json"
+        marketplace_target = self.root / "external-zcode-marketplace.json"
+        marketplace.rename(marketplace_target)
+        marketplace.symlink_to(marketplace_target)
+        self.assertIn("ZCode marketplace must not traverse symlinks", validate(self.root))
+
+        manifest = self.root / "cw" / ".zcode-plugin" / "plugin.json"
+        manifest_target = manifest.parent / "manifest-target.json"
+        manifest.rename(manifest_target)
+        manifest.symlink_to(manifest_target.name)
+        self.assertIn("cw ZCode manifest must not traverse symlinks", validate(self.root))
+
+    def test_validator_rejects_zcode_path_through_symlink_loop(self):
+        (self.root / "zloop").symlink_to("zloop")
+        config_path = self.root / "config" / "distribution.json"
+        config = json.loads(config_path.read_text())
+        config["zcode"]["marketplace"] = "zloop/marketplace.json"
+        self._write_json(config_path, config)
+        self.assertIn(
+            "ZCode marketplace must not traverse symlinks",
             validate(self.root),
         )
 

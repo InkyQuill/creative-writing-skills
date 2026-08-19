@@ -56,6 +56,7 @@ _CONFIG_KEYS = {
     "vendored_skills",
     "workers",
     "claude",
+    "zcode",
 }
 _CLAUDE_PATH_CONFIG = {
     "root": "cw",
@@ -66,6 +67,17 @@ _CLAUDE_CONFIG_KEYS = {
     "marketplace",
     "disable_model_invocation",
 }
+_ZCODE_PATH_CONFIG = {
+    "root": "cw",
+    "manifest": ".zcode-plugin/plugin.json",
+    "marketplace": "marketplace.json",
+}
+_ZCODE_CONFIG_KEYS = {
+    "root",
+    "manifest",
+    "marketplace",
+}
+_ZCODE_PLUGIN_NAME_RE = re.compile(r"[a-z0-9][a-z0-9._-]{0,127}\Z")
 _KNOWLEDGE_BOOTSTRAP_CANONICAL_VALIDATION = (
     "Use `$md-validation` for link checking and diagram validation before\n"
     "committing."
@@ -128,6 +140,7 @@ class DistributionContext:
     workers_path: Path
     cw_root: Path
     marketplace_path: Path
+    zcode_marketplace_path: Path
     skill_names: tuple[str, ...]
     known_skills: frozenset[str]
     claude_disable_model_invocation: frozenset[str]
@@ -298,6 +311,13 @@ def _load_context(repo_root: Path) -> DistributionContext:
         raise ValueError("distribution Claude fields do not match schema")
     if any(claude.get(key) != value for key, value in _CLAUDE_PATH_CONFIG.items()):
         raise ValueError("distribution Claude paths are not canonical")
+    zcode = config.get("zcode")
+    if not isinstance(zcode, dict) or set(zcode) != _ZCODE_CONFIG_KEYS:
+        raise ValueError("distribution ZCode fields do not match schema")
+    if any(zcode.get(key) != value for key, value in _ZCODE_PATH_CONFIG.items()):
+        raise ValueError("distribution ZCode paths are not canonical")
+    if zcode.get("root") != claude.get("root"):
+        raise ValueError("distribution ZCode root must match the Claude root")
     disable_model_invocation = claude.get("disable_model_invocation")
     if not isinstance(disable_model_invocation, list) or any(
         not isinstance(skill, str) or _SKILL_NAME_RE.fullmatch(skill) is None
@@ -389,6 +409,12 @@ def _load_context(repo_root: Path) -> DistributionContext:
         "Claude marketplace",
         allow_leaf_symlink=True,
     )
+    zcode_marketplace_path = _require_contained_path(
+        repo_root / "marketplace.json",
+        repo_root,
+        "ZCode marketplace",
+        allow_leaf_symlink=True,
+    )
     context = DistributionContext(
         repo_root=repo_root,
         config=config,
@@ -398,6 +424,7 @@ def _load_context(repo_root: Path) -> DistributionContext:
         workers_path=workers_path,
         cw_root=cw_root,
         marketplace_path=marketplace_path,
+        zcode_marketplace_path=zcode_marketplace_path,
         skill_names=tuple(skill_values),
         known_skills=frozenset(skill_values),
         claude_disable_model_invocation=frozenset(disable_model_invocation),
@@ -760,6 +787,7 @@ def _render_distribution(
     )
     manifest = {field: canonical_manifest[field] for field in manifest_fields}
     _write_json(output_root / ".claude-plugin" / "plugin.json", manifest)
+    _write_json(output_root / ".zcode-plugin" / "plugin.json", manifest)
 
 
 def render_distribution(output_root: Path) -> None:
@@ -786,6 +814,36 @@ def _render_marketplace(repo_root: Path) -> dict[str, object]:
             {
                 "name": manifest["name"],
                 "description": manifest["description"],
+                "source": "./cw",
+            }
+        ],
+    }
+
+
+def _render_zcode_marketplace(repo_root: Path) -> dict[str, object]:
+    manifest = load_json(
+        repo_root
+        / "plugins"
+        / "creative-writing-skills"
+        / ".codex-plugin"
+        / "plugin.json"
+    )
+    name = manifest["name"]
+    if _ZCODE_PLUGIN_NAME_RE.fullmatch(name) is None:
+        raise UnsupportedTransformError(
+            f"plugin name {name!r} is not a valid ZCode plugin name"
+        )
+    # ZCode discovers marketplaces through a root marketplace.json whose
+    # plugin entry version is the update signal, so it must track the
+    # canonical manifest version exactly.
+    return {
+        "name": name,
+        "description": manifest["description"],
+        "plugins": [
+            {
+                "name": name,
+                "description": manifest["description"],
+                "version": manifest["version"],
                 "source": "./cw",
             }
         ],
@@ -905,42 +963,46 @@ def _remove_installed_tree(path: Path) -> None:
         shutil.rmtree(path)
 
 
+@dataclass
+class _InstallPlan:
+    label: str
+    candidate: Path
+    destination: Path
+    backup: Path
+    backed_up: bool = False
+    installed: bool = False
+
+
 def _commit_candidate(
-    candidate_cw: Path,
-    cw_root: Path,
-    candidate_marketplace: Path,
-    marketplace_path: Path,
+    artifacts: tuple[tuple[str, Path, Path], ...],
     transaction_root: Path,
 ) -> None:
-    """Install both outputs and roll back detected exceptions and interrupts.
+    """Install all outputs and roll back detected exceptions and interrupts.
 
     Failed restores retain their last recoverable backups in transaction_root. This
-    transaction does not claim durability across process termination, power loss, or
-    an operating-system crash between filesystem operations.
+    transaction does not claim durability across process termination, power loss, or an
+    operating-system crash between filesystem operations.
     """
-    if cw_root.is_symlink():
-        raise ValueError(f"refusing to replace symlink: {cw_root}")
-    if marketplace_path.is_symlink():
-        raise ValueError(f"refusing to replace symlink: {marketplace_path}")
-
-    previous_cw = transaction_root / "previous-cw"
-    previous_marketplace = transaction_root / "previous-marketplace.json"
-    cw_backed_up = False
-    cw_installed = False
-    marketplace_backed_up = False
-    marketplace_installed = False
-    marketplace_path.parent.mkdir(parents=True, exist_ok=True)
+    plans: list[_InstallPlan] = []
+    for label, candidate, destination in artifacts:
+        if destination.is_symlink():
+            raise ValueError(f"refusing to replace symlink: {destination}")
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        plans.append(
+            _InstallPlan(
+                label=label,
+                candidate=candidate,
+                destination=destination,
+                backup=transaction_root / f"previous-{label}",
+            )
+        )
     try:
-        if cw_root.exists():
-            os.replace(cw_root, previous_cw)
-            cw_backed_up = True
-        os.replace(candidate_cw, cw_root)
-        cw_installed = True
-        if marketplace_path.exists():
-            os.replace(marketplace_path, previous_marketplace)
-            marketplace_backed_up = True
-        os.replace(candidate_marketplace, marketplace_path)
-        marketplace_installed = True
+        for plan in plans:
+            if plan.destination.exists():
+                os.replace(plan.destination, plan.backup)
+                plan.backed_up = True
+            os.replace(plan.candidate, plan.destination)
+            plan.installed = True
     except BaseException as forward_error:
         rollback_errors: list[tuple[str, BaseException]] = []
 
@@ -950,23 +1012,17 @@ def _commit_candidate(
             except BaseException as rollback_error:
                 rollback_errors.append((label, rollback_error))
 
-        if marketplace_installed:
-            attempt(
-                "marketplace cleanup failure",
-                lambda: _remove_installed_tree(marketplace_path),
-            )
-        if marketplace_backed_up:
-            attempt(
-                "marketplace restore failure",
-                lambda: os.replace(previous_marketplace, marketplace_path),
-            )
-        if cw_installed:
-            attempt("cw cleanup failure", lambda: _remove_installed_tree(cw_root))
-        if cw_backed_up:
-            attempt(
-                "cw restore failure",
-                lambda: os.replace(previous_cw, cw_root),
-            )
+        for plan in reversed(plans):
+            if plan.installed:
+                attempt(
+                    f"{plan.label} cleanup failure",
+                    lambda plan=plan: _remove_installed_tree(plan.destination),
+                )
+            if plan.backed_up:
+                attempt(
+                    f"{plan.label} restore failure",
+                    lambda plan=plan: os.replace(plan.backup, plan.destination),
+                )
         if rollback_errors:
             if isinstance(forward_error, KeyboardInterrupt):
                 raise DistributionTransactionInterrupt(
@@ -992,15 +1048,20 @@ def _sync(apply: bool, repo_root: Path) -> int:
 
     cw_root = context.cw_root
     marketplace_path = context.marketplace_path
+    zcode_marketplace_path = context.zcode_marketplace_path
     transaction_root = Path(
         tempfile.mkdtemp(prefix=".claude-distribution-", dir=repo_root)
     )
     retain_recovery = False
     try:
         candidate_cw = transaction_root / "candidate-cw"
-        candidate_marketplace = transaction_root / "candidate-marketplace.json"
+        candidate_marketplace = transaction_root / "candidate-claude-marketplace.json"
+        candidate_zcode_marketplace = (
+            transaction_root / "candidate-zcode-marketplace.json"
+        )
         _render_distribution(candidate_cw, repo_root, context)
         _write_json(candidate_marketplace, _render_marketplace(repo_root))
+        _write_json(candidate_zcode_marketplace, _render_zcode_marketplace(repo_root))
 
         if not apply:
             problems = _distribution_drift(candidate_cw, cw_root, "cw")
@@ -1011,19 +1072,31 @@ def _sync(apply: bool, repo_root: Path) -> int:
                     ".claude-plugin/marketplace.json",
                 )
             )
+            problems.extend(
+                _single_path_drift(
+                    candidate_zcode_marketplace,
+                    zcode_marketplace_path,
+                    "marketplace.json",
+                )
+            )
             problems.sort(key=lambda problem: problem.split(": ", 1)[-1])
             if problems:
                 for problem in problems:
                     print(problem)
                 return 1
-            print("Claude distribution is in sync")
+            print("Claude and ZCode distributions are in sync")
             return 0
 
         _commit_candidate(
-            candidate_cw,
-            cw_root,
-            candidate_marketplace,
-            marketplace_path,
+            (
+                ("cw", candidate_cw, cw_root),
+                ("claude-marketplace", candidate_marketplace, marketplace_path),
+                (
+                    "zcode-marketplace",
+                    candidate_zcode_marketplace,
+                    zcode_marketplace_path,
+                ),
+            ),
             transaction_root,
         )
         for skill in skills:
@@ -1034,7 +1107,9 @@ def _sync(apply: bool, repo_root: Path) -> int:
             print(f"synced agent {worker['name']}")
         print("synced agent muse")
         print("synced cw/.claude-plugin/plugin.json")
+        print("synced cw/.zcode-plugin/plugin.json")
         print("synced .claude-plugin/marketplace.json")
+        print("synced marketplace.json")
         return 0
     except (DistributionTransactionError, DistributionTransactionInterrupt):
         retain_recovery = True
@@ -1046,7 +1121,7 @@ def _sync(apply: bool, repo_root: Path) -> int:
 
 def main(argv: list[str] | None = None, *, repo_root: Path = REPO_ROOT) -> int:
     parser = argparse.ArgumentParser(
-        description="Generate the Claude compatibility distribution"
+        description="Generate the Claude and ZCode compatibility distributions"
     )
     mode = parser.add_mutually_exclusive_group(required=True)
     mode.add_argument("--apply", action="store_true", help="replace generated output")
@@ -1055,7 +1130,7 @@ def main(argv: list[str] | None = None, *, repo_root: Path = REPO_ROOT) -> int:
     try:
         return _sync(args.apply, repo_root)
     except (OSError, UnicodeError, ValueError, KeyError) as error:
-        print(f"Claude distribution sync failed: {error}")
+        print(f"Distribution sync failed: {error}")
         return 1
 
 

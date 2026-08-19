@@ -3,6 +3,7 @@
 ## [Unreleased]
 
 ### Added
+- Added ZCode marketplace compatibility: the distribution generator now also emits the ZCode plugin manifest `cw/.zcode-plugin/plugin.json` and the repository-root `marketplace.json`, so `InkyQuill/creative-writing-skills` can be added directly as a ZCode marketplace and the plugin installed from it.
 - Added a Codex-primary repo marketplace and installable `creative-writing-skills` plugin containing exactly 25 canonical skills.
 - Added muse-owned worker prompts and a machine-readable worker registry for specialist delegation with a bounded single-agent fallback.
 - Added the standalone `world-creation` skill with dual-layout project discovery, one-decision-at-a-time recommendations, confirmation before canonization, and immutable manuscript prose.

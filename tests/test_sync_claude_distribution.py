@@ -1083,6 +1083,93 @@ class ClaudeDistributionCliTests(unittest.TestCase):
                 output.getvalue(),
             )
 
+    def test_check_reports_zcode_marketplace_drift(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            repo_root = Path(temporary)
+            self._copy_canonical_inputs(repo_root)
+            self.assertEqual(0, main(["--apply"], repo_root=repo_root))
+            zcode_marketplace = repo_root / "marketplace.json"
+            zcode_manifest = repo_root / "cw/.zcode-plugin/plugin.json"
+            self.assertTrue(zcode_marketplace.is_file())
+            self.assertEqual(
+                json.loads(zcode_manifest.read_text()),
+                json.loads((repo_root / "cw/.claude-plugin/plugin.json").read_text()),
+            )
+            canonical_manifest = json.loads(
+                (
+                    repo_root
+                    / "plugins/creative-writing-skills/.codex-plugin/plugin.json"
+                ).read_text()
+            )
+            generated = json.loads(zcode_marketplace.read_text())
+            self.assertEqual("creative-writing-skills", generated["name"])
+            self.assertEqual(
+                canonical_manifest["description"], generated["description"]
+            )
+            self.assertEqual(
+                canonical_manifest["version"],
+                generated["plugins"][0]["version"],
+            )
+            self.assertEqual("./cw", generated["plugins"][0]["source"])
+            zcode_marketplace.write_text("{}\n")
+
+            output = io.StringIO()
+            with redirect_stdout(output):
+                status = main(["--check"], repo_root=repo_root)
+
+            self.assertEqual(1, status)
+            self.assertEqual(
+                "changed generated file: marketplace.json\n",
+                output.getvalue(),
+            )
+
+    def test_apply_rejects_noncanonical_zcode_config_without_mutation(self):
+        cases = {
+            "absolute marketplace": lambda config, outside: config["zcode"].update(
+                {"marketplace": str(outside / "marketplace.json")}
+            ),
+            "parent-relative marketplace": lambda config, outside: config[
+                "zcode"
+            ].update({"marketplace": "../outside/marketplace.json"}),
+            "nonexistent manifest": lambda config, outside: config["zcode"].update(
+                {"manifest": ".zcode-marketplace/plugin.json"}
+            ),
+            "root mismatch": lambda config, outside: config["zcode"].update(
+                {"root": "cw-copy"}
+            ),
+            "extra ZCode key": lambda config, outside: config["zcode"].update(
+                {"extra": "value"}
+            ),
+        }
+        for label, mutate in cases.items():
+            with self.subTest(label=label), tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary)
+                repo_root = root / "repo"
+                outside = root / "outside"
+                repo_root.mkdir()
+                outside.mkdir()
+                self._copy_canonical_inputs(repo_root)
+                cw_root = repo_root / "cw"
+                cw_root.mkdir()
+                (cw_root / "sentinel.txt").write_text("original cw\n")
+                (outside / "marketplace.json").write_text("outside marketplace\n")
+                self._write_config(
+                    repo_root,
+                    lambda config: mutate(config, outside),
+                )
+
+                status = main(["--apply"], repo_root=repo_root)
+
+                self.assertEqual(1, status)
+                self.assertEqual(
+                    "original cw\n", (cw_root / "sentinel.txt").read_text()
+                )
+                self.assertFalse((repo_root / "marketplace.json").exists())
+                self.assertEqual(
+                    "outside marketplace\n",
+                    (outside / "marketplace.json").read_text(),
+                )
+
     def test_apply_leaves_existing_distribution_untouched_when_render_fails(self):
         with tempfile.TemporaryDirectory() as temporary:
             repo_root = Path(temporary)
@@ -1141,10 +1228,10 @@ class ClaudeDistributionCliTests(unittest.TestCase):
                     KeyboardInterrupt, "injected install interrupt"
                 ):
                     _commit_candidate(
-                        candidate_cw,
-                        cw_root,
-                        candidate_marketplace,
-                        marketplace_path,
+                        (
+                            ("cw", candidate_cw, cw_root),
+                            ("claude-marketplace", candidate_marketplace, marketplace_path),
+                        ),
                         transaction_root,
                     )
 
@@ -1167,7 +1254,7 @@ class ClaudeDistributionCliTests(unittest.TestCase):
             transaction_root = root / "transaction"
             transaction_root.mkdir()
             previous_cw = transaction_root / "previous-cw"
-            previous_marketplace = transaction_root / "previous-marketplace.json"
+            previous_marketplace = transaction_root / "previous-claude-marketplace"
             real_replace = os.replace
 
             def fail_forward_and_restores(source, destination):
@@ -1187,13 +1274,13 @@ class ClaudeDistributionCliTests(unittest.TestCase):
             ):
                 with self.assertRaisesRegex(
                     ValueError,
-                    "marketplace restore failure.*cw restore failure",
+                    "claude-marketplace restore failure.*cw restore failure",
                 ):
                     _commit_candidate(
-                        candidate_cw,
-                        cw_root,
-                        candidate_marketplace,
-                        marketplace_path,
+                        (
+                            ("cw", candidate_cw, cw_root),
+                            ("claude-marketplace", candidate_marketplace, marketplace_path),
+                        ),
                         transaction_root,
                     )
 
@@ -1235,10 +1322,10 @@ class ClaudeDistributionCliTests(unittest.TestCase):
             ):
                 with self.assertRaises(KeyboardInterrupt) as caught:
                     _commit_candidate(
-                        candidate_cw,
-                        cw_root,
-                        candidate_marketplace,
-                        marketplace_path,
+                        (
+                            ("cw", candidate_cw, cw_root),
+                            ("claude-marketplace", candidate_marketplace, marketplace_path),
+                        ),
                         transaction_root,
                     )
 
@@ -1248,7 +1335,7 @@ class ClaudeDistributionCliTests(unittest.TestCase):
             )
 
     def test_transaction_keeps_restoring_the_other_member_after_one_restore_fails(self):
-        for failed_restore in ("cw", "marketplace"):
+        for failed_restore in ("cw", "claude-marketplace"):
             with self.subTest(failed_restore=failed_restore), tempfile.TemporaryDirectory() as temporary:
                 root = Path(temporary)
                 cw_root = root / "cw"
@@ -1264,7 +1351,7 @@ class ClaudeDistributionCliTests(unittest.TestCase):
                 transaction_root = root / "transaction"
                 transaction_root.mkdir()
                 previous_cw = transaction_root / "previous-cw"
-                previous_marketplace = transaction_root / "previous-marketplace.json"
+                previous_marketplace = transaction_root / "previous-claude-marketplace"
                 real_replace = os.replace
 
                 def fail_install_and_one_restore(source, destination):
@@ -1274,7 +1361,7 @@ class ClaudeDistributionCliTests(unittest.TestCase):
                         raise OSError("injected marketplace install failure")
                     if failed_restore == "cw" and source == previous_cw:
                         raise OSError("injected cw restore failure")
-                    if failed_restore == "marketplace" and source == previous_marketplace:
+                    if failed_restore == "claude-marketplace" and source == previous_marketplace:
                         raise OSError("injected marketplace restore failure")
                     return real_replace(source, destination)
 
@@ -1286,10 +1373,10 @@ class ClaudeDistributionCliTests(unittest.TestCase):
                         ValueError, f"{failed_restore} restore failure"
                     ):
                         _commit_candidate(
-                            candidate_cw,
-                            cw_root,
-                            candidate_marketplace,
-                            marketplace_path,
+                            (
+                                ("cw", candidate_cw, cw_root),
+                                ("claude-marketplace", candidate_marketplace, marketplace_path),
+                            ),
                             transaction_root,
                         )
 
@@ -1322,12 +1409,12 @@ class ClaudeDistributionCliTests(unittest.TestCase):
                 source = Path(source)
                 destination = Path(destination)
                 if (
-                    source.name == "candidate-marketplace.json"
+                    source.name == "candidate-claude-marketplace.json"
                     and destination == marketplace_path
                 ):
                     raise OSError("injected marketplace install failure")
                 if (
-                    source.name == "previous-marketplace.json"
+                    source.name == "previous-claude-marketplace"
                     and destination == marketplace_path
                 ):
                     raise OSError("injected marketplace restore failure")
@@ -1348,7 +1435,7 @@ class ClaudeDistributionCliTests(unittest.TestCase):
                 if path.name.startswith(".claude-distribution-")
             )
             self.assertEqual(1, len(recovery_directories))
-            backup = recovery_directories[0] / "previous-marketplace.json"
+            backup = recovery_directories[0] / "previous-claude-marketplace"
             self.assertEqual("old marketplace\n", backup.read_text())
             self.assertIn(str(recovery_directories[0]), output.getvalue())
 
@@ -1386,7 +1473,7 @@ class ClaudeDistributionCliTests(unittest.TestCase):
                         transaction_root.mkdir()
                         previous_cw = transaction_root / "previous-cw"
                         previous_marketplace = (
-                            transaction_root / "previous-marketplace.json"
+                            transaction_root / "previous-claude-marketplace"
                         )
                         real_replace = os.replace
                         operation_paths = {
@@ -1416,10 +1503,10 @@ class ClaudeDistributionCliTests(unittest.TestCase):
                                 OSError, f"injected {failed_operation} failure"
                             ):
                                 _commit_candidate(
-                                    candidate_cw,
-                                    cw_root,
-                                    candidate_marketplace,
-                                    marketplace_path,
+                                    (
+                                        ("cw", candidate_cw, cw_root),
+                                        ("claude-marketplace", candidate_marketplace, marketplace_path),
+                                    ),
                                     transaction_root,
                                 )
 
