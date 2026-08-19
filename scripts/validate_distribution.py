@@ -52,6 +52,15 @@ CLAUDE_DISABLE_MODEL_INVOCATION = (
     "reflect",
     "structured-artifact",
 )
+ZCODE_MANIFEST_FIELDS = (
+    "name",
+    "version",
+    "description",
+    "author",
+    "homepage",
+    "repository",
+    "license",
+)
 EXPECTED_WORKERS = {
     "brainstormer", "character-sim", "continuity-checker", "critic", "editor",
     "outliner", "reader-sim", "style-creator", "web-researcher", "writer",
@@ -84,6 +93,7 @@ ALLOWED_FRONTMATTER_KEYS = {
 }
 WORKER_KEYS = {"name", "description", "prompt", "skills", "access", "claude"}
 SEMVER_RE = re.compile(r"^[0-9]+\.[0-9]+\.[0-9]+$")
+ZCODE_PLUGIN_NAME_RE = re.compile(r"^[a-z0-9][a-z0-9._-]{0,127}$")
 MARKDOWN_LINK_RE = re.compile(
     r"\[[^]]+\]\((?!https?://|#|mailto:)([^)]+)\)",
     re.IGNORECASE,
@@ -698,11 +708,14 @@ def _validate_config(repo_root: Path, problems: list[str]) -> dict[str, object] 
     config = _load_object(path, "distribution config", problems)
     if config is None:
         return None
-    expected_keys = {"canonical_skills", "authored_skills", "vendored_skills", "workers", "claude"}
+    expected_keys = {
+        "canonical_skills", "authored_skills", "vendored_skills", "workers",
+        "claude", "zcode",
+    }
     if set(config) != expected_keys:
         problems.append(
             "distribution config keys must be canonical_skills, authored_skills, "
-            "vendored_skills, workers, claude"
+            "vendored_skills, workers, claude, zcode"
         )
     inventories = (
         ("canonical skill registry", "canonical_skills", EXPECTED_SKILLS),
@@ -760,6 +773,21 @@ def _validate_config(repo_root: Path, problems: list[str]) -> dict[str, object] 
                 "distribution config Claude disable_model_invocation does not match "
                 "the compatibility policy"
             )
+    zcode = config.get("zcode")
+    expected_zcode_keys = {
+        "root",
+        "manifest",
+        "marketplace",
+    }
+    if not isinstance(zcode, dict) or set(zcode) != expected_zcode_keys:
+        problems.append("distribution config ZCode fields do not match schema")
+        return config
+    if (
+        zcode.get("root") != "cw"
+        or zcode.get("manifest") != ".zcode-plugin/plugin.json"
+        or zcode.get("marketplace") != "marketplace.json"
+    ):
+        problems.append("distribution config ZCode paths are not canonical")
     return config
 
 
@@ -1272,6 +1300,89 @@ def _validate_claude_distribution(
             problems.append(f"{label}: forbidden runtime vocabulary {match.group(0)}")
 
 
+def _validate_zcode_distribution(
+    repo_root: Path,
+    config: dict[str, object] | None,
+    canonical_manifest: dict[str, object] | None,
+    problems: list[str],
+) -> None:
+    zcode_root_value: object = "cw"
+    marketplace_value: object = "marketplace.json"
+    if config is not None and isinstance(config.get("zcode"), dict):
+        zcode_config = config["zcode"]
+        zcode_root_value = zcode_config.get("root", zcode_root_value)
+        marketplace_value = zcode_config.get("marketplace", marketplace_value)
+
+    marketplace_candidate = repo_root / Path(str(marketplace_value))
+    if _reject_control_symlink(
+        marketplace_candidate,
+        repo_root,
+        "ZCode marketplace",
+        problems,
+    ):
+        marketplace_path = None
+        marketplace_rejected = True
+    else:
+        marketplace_path = _resolve_relative(repo_root, marketplace_value, repo_root)
+        marketplace_rejected = False
+    if marketplace_path is None and not marketplace_rejected:
+        problems.append(f"ZCode marketplace path {marketplace_value} is not a safe relative path")
+    elif marketplace_path is not None:
+        marketplace = _load_object(marketplace_path, "ZCode marketplace", problems)
+        if marketplace is not None and canonical_manifest is not None:
+            canonical_version = canonical_manifest.get("version")
+            if (
+                not _nonempty_string(canonical_manifest.get("name"))
+                or ZCODE_PLUGIN_NAME_RE.fullmatch(str(canonical_manifest.get("name"))) is None
+            ):
+                problems.append(
+                    f"canonical plugin name {canonical_manifest.get('name')} is not a valid ZCode plugin name"
+                )
+            if marketplace.get("name") != PLUGIN_NAME:
+                problems.append(f"ZCode marketplace name {marketplace.get('name')} != {PLUGIN_NAME}")
+            if marketplace.get("description") != canonical_manifest.get("description"):
+                problems.append("ZCode marketplace description does not match canonical manifest")
+            entries = marketplace.get("plugins")
+            if not isinstance(entries, list) or len(entries) != 1 or not isinstance(entries[0], dict):
+                problems.append("ZCode marketplace must contain exactly one plugin entry")
+            else:
+                entry = entries[0]
+                if entry.get("name") != PLUGIN_NAME:
+                    problems.append(f"ZCode marketplace plugin name must be {PLUGIN_NAME}")
+                if entry.get("source") != "./cw":
+                    problems.append("ZCode marketplace plugin source must be ./cw")
+                if entry.get("description") != canonical_manifest.get("description"):
+                    problems.append(
+                        "ZCode marketplace plugin description does not match canonical manifest"
+                    )
+                if entry.get("version") != canonical_version:
+                    problems.append(
+                        f"ZCode marketplace version {entry.get('version')} "
+                        f"!= canonical version {canonical_version}"
+                    )
+
+    # The Claude validation owns symlink and existence reports for the shared
+    # cw root; only the ZCode manifest inside it is checked here.
+    zcode_root = _resolve_relative(repo_root, zcode_root_value, repo_root)
+    if zcode_root is None or not zcode_root.exists() or zcode_root.is_symlink():
+        return
+    manifest_path = zcode_root / ".zcode-plugin" / "plugin.json"
+    if _reject_control_symlink(
+        manifest_path,
+        zcode_root,
+        "cw ZCode manifest",
+        problems,
+    ):
+        return
+    manifest = _load_object(manifest_path, "cw ZCode manifest", problems)
+    if manifest is not None and canonical_manifest is not None:
+        for field in ZCODE_MANIFEST_FIELDS:
+            if manifest.get(field) != canonical_manifest.get(field):
+                problems.append(
+                    f"cw ZCode manifest {field} does not match canonical manifest"
+                )
+
+
 def validate(repo_root: Path, *, canonical_only: bool = False) -> list[str]:
     repo_root = Path(repo_root)
     problems: list[str] = []
@@ -1301,6 +1412,7 @@ def validate(repo_root: Path, *, canonical_only: bool = False) -> list[str]:
             structured_artifact_audit,
             problems,
         )
+        _validate_zcode_distribution(repo_root, config, manifest, problems)
     return list(dict.fromkeys(problems))
 
 

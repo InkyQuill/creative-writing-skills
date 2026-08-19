@@ -8,9 +8,9 @@ This is a Codex-first creative-writing plugin. The canonical installable
 runtime is `plugins/creative-writing-skills/` and the canonical manifest is
 `plugins/creative-writing-skills/.codex-plugin/plugin.json`.
 
-`cw/` is committed generated output for Claude Code, Cowork, and Claude.ai. It
-is never an independent source tree and must not be hand-edited. Make every
-runtime change in the canonical plugin first, then regenerate `cw/`.
+`cw/` is committed generated output for Claude Code, Cowork, Claude.ai, and
+ZCode. It is never an independent source tree and must not be hand-edited.
+Make every runtime change in the canonical plugin first, then regenerate `cw/`.
 
 The repository marketplace is `.agents/plugins/marketplace.json`. The exact
 25-skill inventory and authored/vendored partition are declared in
@@ -33,7 +33,7 @@ Vendored generic skills are pinned snapshots with attribution in
 Use `python3 scripts/vendor_generic_skills.py --check` to verify them and the
 script's apply mode only when intentionally updating the pinned inputs.
 
-## Generated Claude Distribution
+## Generated Claude and ZCode Distribution
 
 After editing canonical skills, worker resources, or the plugin manifest, run:
 
@@ -43,9 +43,13 @@ python3 scripts/sync_claude_distribution.py --check
 ```
 
 The generator derives `cw/skills/`, `cw/agents/`,
-`cw/.claude-plugin/plugin.json`, and `.claude-plugin/marketplace.json`. It
+`cw/.claude-plugin/plugin.json`, `cw/.zcode-plugin/plugin.json`,
+`.claude-plugin/marketplace.json`, and the ZCode root `marketplace.json`. It
 performs the supported Codex-to-Claude vocabulary transformations and fails on
-constructs it cannot translate. Never patch generated drift by editing `cw/`.
+constructs it cannot translate. ZCode reads the Claude-compatible `cw/` tree
+through its own manifest and repository-root marketplace. Never patch
+generated drift by editing `cw/`, `marketplace.json`, or the generated
+manifests.
 
 ## Validation
 
@@ -74,8 +78,8 @@ python3 scripts/release.py minor --push
 ```
 
 The release command requires a clean `main` branch, regenerates derived Claude
-metadata, runs tests and distribution checks, then commits and tags. It pushes
-only when `--push` is explicit.
+and ZCode metadata, runs tests and distribution checks, then commits and tags.
+It pushes only when `--push` is explicit.
 
 ## Writing Conventions
 

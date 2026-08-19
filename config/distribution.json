@@ -28,5 +28,10 @@
       "reflect",
       "structured-artifact"
     ]
+  },
+  "zcode": {
+    "root": "cw",
+    "manifest": ".zcode-plugin/plugin.json",
+    "marketplace": "marketplace.json"
   }
 }

@@ -17,15 +17,20 @@ MANIFEST_RELATIVE = Path(
 )
 CLAUDE_MANIFEST_RELATIVE = Path("cw/.claude-plugin/plugin.json")
 CLAUDE_MARKETPLACE_RELATIVE = Path(".claude-plugin/marketplace.json")
+ZCODE_MANIFEST_RELATIVE = Path("cw/.zcode-plugin/plugin.json")
+ZCODE_MARKETPLACE_RELATIVE = Path("marketplace.json")
 STAGED_RELEASE_PATHS = (
     MANIFEST_RELATIVE.as_posix(),
     CLAUDE_MANIFEST_RELATIVE.as_posix(),
+    ZCODE_MANIFEST_RELATIVE.as_posix(),
     CLAUDE_MARKETPLACE_RELATIVE.as_posix(),
+    ZCODE_MARKETPLACE_RELATIVE.as_posix(),
 )
 RESTORED_RELEASE_PATHS = (
     MANIFEST_RELATIVE.as_posix(),
     "cw",
     CLAUDE_MARKETPLACE_RELATIVE.as_posix(),
+    ZCODE_MARKETPLACE_RELATIVE.as_posix(),
 )
 STATUS_COMMAND = ("git", "status", "--porcelain", "--untracked-files=normal")
 EXPECTED_RELEASE_STATUS = {f" M {path}" for path in STAGED_RELEASE_PATHS}

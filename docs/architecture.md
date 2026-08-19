@@ -85,6 +85,7 @@ flowchart LR
     C --> G[sync_claude_distribution.py]
     G --> CW[Generated cw/ plugin]
     G --> CM[Generated Claude marketplace metadata]
+    G --> ZM[Generated ZCode marketplace metadata]
     CW --> Z[25 deterministic .skill archives]
 ```
 
@@ -93,7 +94,10 @@ Generated outputs are:
 - `cw/skills/` from canonical skills;
 - `cw/agents/` from the worker registry and prompts;
 - `cw/.claude-plugin/plugin.json` from canonical metadata;
+- `cw/.zcode-plugin/plugin.json`, the ZCode plugin manifest;
 - `.claude-plugin/marketplace.json` for Claude marketplace compatibility;
+- `marketplace.json` at the repository root for ZCode marketplace
+  compatibility;
 - `zips/*.skill` from the generated Claude skill tree.
 
 Do not hand-edit `cw/`. Change the canonical plugin, run
@@ -104,7 +108,7 @@ and regenerated results together.
 
 `plugins/creative-writing-skills/.codex-plugin/plugin.json` is the sole version
 source. `scripts/release.py` requires a clean `main` branch, rejects an
-existing next-version tag, updates the canonical manifest, regenerates Claude
-metadata, runs the complete verification chain, and only then commits and
-tags. It never pushes unless `--push` is supplied; that push sends the branch
-and tag atomically.
+existing next-version tag, updates the canonical manifest, regenerates the
+Claude and ZCode metadata, runs the complete verification chain, and only then
+commits and tags. It never pushes unless `--push` is supplied; that push sends
+the branch and tag atomically.

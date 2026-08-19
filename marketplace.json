@@ -1,0 +1,12 @@
+{
+  "name": "creative-writing-skills",
+  "description": "Composable skills for planning, drafting, and revising creative writing.",
+  "plugins": [
+    {
+      "name": "creative-writing-skills",
+      "description": "Composable skills for planning, drafting, and revising creative writing.",
+      "version": "0.5.9",
+      "source": "./cw"
+    }
+  ]
+}
