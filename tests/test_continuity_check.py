@@ -118,6 +118,12 @@ class ContinuityCheckTests(unittest.TestCase):
         )
         self.assertEqual(CHECKER.main([str(self.root)]), 0)
 
+    def test_full_chapter_scene_citation_is_parsed(self):
+        self.assertEqual(
+            CHECKER.parse_chapter("Chapter 12: Scene where Sera opens the letter"),
+            12,
+        )
+
     def test_dead_character_in_present_is_an_error_but_mentions_pass(self):
         self.write("state.md", GOOD_STATE)
         self.write_scene(
@@ -143,6 +149,7 @@ class ContinuityCheckTests(unittest.TestCase):
             "|---|---|---|---|---|---|\n"
             "| Early payoff | paid-off | Ch 5 | Ch 4 | reader | broken |\n"
             "| No plant | planted | — | — | reader | broken |\n"
+            "| Paid off without plant | paid-off | — | Ch 6 | reader | broken |\n"
             "| No payoff | paid-off | Ch 2 | — | reader | broken |\n"
             "| Odd status | forgotten | Ch 2 | Ch 3 | reader | broken |\n"
             "| planned drift | planned | Ch 2 | — | reader | broken |\n"
@@ -155,6 +162,10 @@ class ContinuityCheckTests(unittest.TestCase):
         )
         self.assertIn(
             "- [error] promises: \"No plant\" is planted but has no planted chapter",
+            findings,
+        )
+        self.assertIn(
+            "- [error] promises: \"Paid off without plant\" is paid-off but has no planted chapter",
             findings,
         )
         self.assertIn(
@@ -182,6 +193,8 @@ class ContinuityCheckTests(unittest.TestCase):
             "|---|---|---|---|---|\n"
             "| Early answer | answered | Ch 5 | Ch 4 | broken |\n"
             "| Missing answer | answered | Ch 2 | — | broken |\n"
+            "| Answered without introduction | answered | — | Ch 4 | broken |\n"
+            "| Partial without introduction | partially-answered | — | Ch 4 | broken |\n"
             "| Open with answer | open | Ch 2 | Ch 5 | broken |\n"
             "| Future question | open | Ch 9 | — | broken |\n",
         )
@@ -192,6 +205,16 @@ class ContinuityCheckTests(unittest.TestCase):
         )
         self.assertIn(
             "- [error] questions: \"Missing answer\" is answered but has no answered chapter",
+            findings,
+        )
+        self.assertIn(
+            "- [error] questions: \"Answered without introduction\" is answered "
+            "but has no introduced chapter",
+            findings,
+        )
+        self.assertIn(
+            "- [error] questions: \"Partial without introduction\" is "
+            "partially-answered but has no introduced chapter",
             findings,
         )
         self.assertIn(
@@ -345,6 +368,22 @@ class ContinuityCheckTests(unittest.TestCase):
         (scenes / "ch-07.md").write_text(GOOD_SCENES, encoding="utf-8")
         findings = CHECKER.check(self.root)
         self.assertEqual([line for line in findings if "[error]" in line], [])
+
+    def test_records_in_both_layout_roots_are_an_error(self):
+        self.write("timeline.md", GOOD_TIMELINE)
+        plot = self.root / "plot"
+        plot.mkdir()
+        (plot / "timeline.md").write_text(GOOD_TIMELINE, encoding="utf-8")
+        findings = CHECKER.check(self.root)
+        expected = (
+            "- [error] records: both plot/ and kb/ contain continuity records; "
+            + "configure exactly one continuity root in the project instructions"
+        )
+        self.assertEqual(
+            findings,
+            [expected],
+        )
+        self.assertEqual(CHECKER.main([str(self.root)]), 1)
 
 
 if __name__ == "__main__":

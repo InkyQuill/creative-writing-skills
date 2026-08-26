@@ -34,9 +34,9 @@ When the timeline grows beyond a single thread, maintain it as one connected sys
 - **Main storyline timeline** — the primary event sequence with order, durations, and gaps. Every other timeline anchors to it.
 - **Character and subplot sub-timelines** — one per character or subplot that runs partly off-page: where they are, what they know, and what they are doing between their appearances in the main storyline.
 
-Synchronize by anchoring. Every sub-timeline event that coincides with, or depends on, a main-timeline event carries the same anchor: the shared event with its established ordering and duration. Place off-page events relative to the anchors they touch — "while the crew crosses the strait", "three days before the hearing" — not as absolute dates unless the author uses absolute dates.
+Synchronize by anchoring. Reuse one anchor only when main- and sub-timeline rows describe the same event at the same timepoint. A dependent event that happens before or after the main event gets its own anchor and an explicit relative link — "while the crew crosses the strait", "three days before the hearing", "because the signal arrived" — so dependency does not collapse distinct events into one chapter anchor. Use absolute dates only when the author does.
 
-When a sub-timeline and the main timeline disagree — impossible order, overlapping durations, a character knowing something before its reveal — record it as a contradiction with both versions side by side. Do not silently re-time either side; the author decides canon.
+When a sub-timeline and the main timeline disagree — impossible order, overlapping durations, a character knowing something before its reveal — record it as a contradiction with both versions side by side. Preserve each event's stated order and dependency; do not silently re-time either side or force distinct events onto one anchor. The author decides canon.
 
 Build sub-timelines from what the author established: recorded facts and open questions, not invented filler between appearances. Undecided durations stay undecided.
 

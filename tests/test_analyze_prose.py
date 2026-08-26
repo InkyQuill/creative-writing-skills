@@ -68,6 +68,23 @@ class AnalyzeProseLanguageTests(unittest.TestCase):
         self.assertEqual(first_plural, 1)
         self.assertEqual(third_fem, 1)
 
+    def test_unaccented_russian_pronouns_are_grouped(self):
+        output = io.StringIO()
+        with redirect_stdout(output):
+            ANALYZE.print_pronouns("Мое решение, твое письмо и ее ответ.")
+        text = output.getvalue()
+        self.assertRegex(text, r"1st sing .*\s+1 \(")
+        self.assertRegex(text, r"2nd .*\s+1 \(")
+        self.assertRegex(text, r"3rd fem .*\s+1 \(")
+
+    def test_unaccented_russian_pronouns_are_sentence_openers(self):
+        output = io.StringIO()
+        with redirect_stdout(output):
+            ANALYZE.print_sentence_openers(
+                ["Мое решение принято.", "Твое письмо пришло.", "Ее ответ готов."]
+            )
+        self.assertIn("Pronoun starts:      3 (100%)", output.getvalue())
+
     def test_full_run_on_russian_markdown(self):
         with tempfile.TemporaryDirectory() as temporary:
             path = Path(temporary) / "chapter-01.md"
@@ -82,7 +99,7 @@ class AnalyzeProseLanguageTests(unittest.TestCase):
         self.assertIn("Total words:", text)
         self.assertNotIn("(no words found)", text)
         self.assertNotIn("(no sentences found)", text)
-        # Two dash-dialogue lines out of five dense lines must register.
+        # Both dash-dialogue lines must register.
         self.assertIn("Dialogue lines:   2", text)
         self.assertRegex(text, r"Mean:\s+\d+\.\d words")
 

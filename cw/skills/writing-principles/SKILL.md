@@ -73,24 +73,20 @@ Over-explaining breaks social simulation. Under-explaining breaks
 transportation. Generic style breaks aesthetic pleasure. Impenetrable style
 breaks flow.
 
-## Punctuation Tells
+## Punctuation Fit
 
-Readers increasingly associate em dashes with AI-generated prose, but the em
-dash is the most-publicized tell and the least reliable: many strong human
-writers use it heavily, and plenty of fluent non-native and formal writers
-naturally produce the plain, even prose that detectors mistake for machine
-output. Treat dash policy as a register choice, not detector evasion.
+Choose punctuation from the meaning and relationship of the clauses, the
+line's readability and rhythm, and the manuscript's documented voice. Use a
+sentence break for separation, a comma for continuity, a colon for
+development, a semicolon for balanced independence, parentheses for an aside,
+and a dash when interruption or suspension is the intended effect. Rewrite a
+sentence when its clause structure is unclear instead of mechanically swapping
+one mark for another.
 
-Default to punctuation that leaves less visible AI residue: sentence breaks,
-commas, colons, semicolons, parentheses, or dialogue beats. Rewrite the
-sentence around the actual relationship between clauses instead of
-substituting a hyphen. Use dashes only when a project style file or author
-instruction makes them part of the voice — an author's documented dash habit
-outranks this default. Never strip punctuation on a single signal; change it
-when a cluster of tells makes the passage read machine-made. On non-English
-manuscripts this default does not apply at all — see Language Register below.
-When a line needs interruption, prefer the project's documented interruption
-pattern and keep it consistent.
+The author's documented punctuation habits and the language's grammar outrank
+generic defaults. Do not normalize punctuation from frequency alone. When a
+line needs interruption, use the project's established interruption pattern
+and keep it consistent.
 
 ## Language Register
 

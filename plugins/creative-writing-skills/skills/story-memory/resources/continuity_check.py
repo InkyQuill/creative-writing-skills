@@ -2,13 +2,14 @@
 """
 Deterministic continuity checks for story continuity records.
 
-Usage:
+Usage (from the installed story-memory skill directory):
     python3 resources/continuity_check.py <project-root>
 
 Discovers timeline.md, promises.md, questions.md, state.md, and scenes/
-under the project's plot/ or kb/ continuity root and reports incomplete
-record sets, ordering violations, lifecycle mismatches, stale state, and
-anchor conflicts across the master timeline and embedded sub-timelines.
+under the project's plot/ or kb/ continuity root and reports ambiguous or
+incomplete record sets, ordering violations, lifecycle mismatches, stale
+state, and anchor conflicts across the master timeline and embedded
+sub-timelines.
 Exit status is 1 when errors are found, 0 otherwise.
 """
 
@@ -23,8 +24,16 @@ RECORD_NAMES = ("timeline.md", "promises.md", "questions.md", "state.md")
 CHEKHOV_GAP = 3
 PROMISE_STATUSES = {"planned", "planted", "paid-off", "dropped"}
 QUESTION_STATUSES = {"open", "answered", "partially-answered", "dropped"}
-CHAPTER_RE = re.compile(r"Ch\s*(\d+)(?:\.(\d+))?", re.IGNORECASE)
+CHAPTER_RE = re.compile(r"(?:Chapter|Ch)\s*(\d+)(?:\.(\d+))?", re.IGNORECASE)
 DECEASED_RE = re.compile(r"deceased\s*\(Ch\s*(\d+)\)", re.IGNORECASE)
+AMBIGUOUS_ROOT_FINDING = (
+    "- [error] records: both plot/ and kb/ contain continuity records; "
+    + "configure exactly one continuity root in the project instructions"
+)
+
+
+class AmbiguousContinuityRootError(ValueError):
+    """Raised when both supported layout roots contain continuity records."""
 
 
 def parse_chapter(value: str) -> int | None:
@@ -58,8 +67,8 @@ def split_tables(text: str, columns: list[str]) -> list[dict[str, str]]:
 
 
 def find_continuity_root(project_root: Path) -> tuple[Path, dict[str, Path]]:
-    """Locate the record files under plot/ or kb/, whichever is populated."""
-    best: tuple[int, Path] | None = None
+    """Locate the record files under the project's single populated layout root."""
+    populated: list[Path] = []
     for candidate in (project_root / "plot", project_root / "kb"):
         if not candidate.is_dir():
             continue
@@ -68,11 +77,13 @@ def find_continuity_root(project_root: Path) -> tuple[Path, dict[str, Path]]:
             for name in RECORD_NAMES
             if (candidate / name).is_file()
         ) + (1 if (candidate / "scenes").is_dir() else 0)
-        if hits and (best is None or hits > best[0]):
-            best = (hits, candidate)
-    if best is None:
+        if hits:
+            populated.append(candidate)
+    if len(populated) > 1:
+        raise AmbiguousContinuityRootError
+    if not populated:
         return project_root, {}
-    root = best[1]
+    root = populated[0]
     paths = {
         name: root / name
         for name in RECORD_NAMES
@@ -139,7 +150,10 @@ def timeline_sections(text: str) -> dict[str, list[dict[str, str]]]:
 
 def check(project_root: Path) -> list[str]:
     findings: list[str] = []
-    continuity_root, paths = find_continuity_root(project_root)
+    try:
+        continuity_root, paths = find_continuity_root(project_root)
+    except AmbiguousContinuityRootError:
+        return [AMBIGUOUS_ROOT_FINDING]
     if not paths:
         return ["- [warning] records: no continuity records found under plot/ or kb/"]
 
@@ -273,8 +287,11 @@ def check(project_root: Path) -> list[str]:
             if status not in PROMISE_STATUSES:
                 findings.append(f"- [error] promises: \"{name}\" has unknown status \"{status}\"")
                 continue
-            if status == "planted" and planted is None:
-                findings.append(f"- [error] promises: \"{name}\" is planted but has no planted chapter")
+            if status in {"planted", "paid-off"} and planted is None:
+                findings.append(
+                    f"- [error] promises: \"{name}\" is {status} "
+                    "but has no planted chapter"
+                )
             if status == "paid-off" and payoff is None:
                 findings.append(f"- [error] promises: \"{name}\" is paid-off but has no payoff chapter")
             if planted is not None and payoff is not None and payoff < planted:
@@ -314,6 +331,11 @@ def check(project_root: Path) -> list[str]:
                 continue
             if status in {"answered", "partially-answered"} and answered is None:
                 findings.append(f"- [error] questions: \"{name}\" is {status} but has no answered chapter")
+            if status in {"answered", "partially-answered"} and introduced is None:
+                findings.append(
+                    f"- [error] questions: \"{name}\" is {status} "
+                    "but has no introduced chapter"
+                )
             if introduced is not None and answered is not None and answered < introduced:
                 findings.append(
                     f"- [error] questions: \"{name}\" answered Ch {answered} precedes introduced Ch {introduced}"

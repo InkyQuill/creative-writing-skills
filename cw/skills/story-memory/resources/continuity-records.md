@@ -15,7 +15,10 @@ issue log or brainstorm notes instead.
 
 Follow the project layout: under `plot/` in Layout A projects and `kb/` in
 Layout B projects. Record the exact paths in the project instructions. The
-checker discovers the records by name, so keep the file names below.
+checker discovers the records by name, so keep the file names below. If both
+roots contain continuity records, stop and resolve the selected root in the
+project instructions; the checker treats the layout as ambiguous rather than
+silently choosing one.
 
 ## Timeline
 
@@ -34,8 +37,8 @@ checker discovers the records by name, so keep the file names below.
 
 | When | Event | Threads | Anchor | Chapter |
 |---|---|---|---|---|
-| Day 3, morning | The crew crosses the strait | main | strait-crossing | Ch 7 |
-| Day 3, morning | Kell signals the harbor | kell-thread | strait-crossing | Ch 7 |
+| Day 3, morning | The crew crosses the strait | main | strait-crossing | Chapter 7: Scene where the crew crosses the strait |
+| Day 3, morning | Kell signals the harbor | kell-thread | strait-crossing | Chapter 7: Scene where Kell signals the harbor |
 ```
 
 Rules: backstory events cite project documents; story events cite chapters.
@@ -54,14 +57,16 @@ carries that event's anchor.
 
 | Promise | Status | Planted | Payoff | POV knows | Evidence |
 |---|---|---|---|---|---|
-| The mentor's sealed letter gets opened | planted | Ch 3 | — | reader only | Chapter 3: Scene where the mentor seals the letter |
-| The harbor signal is answered | paid-off | Ch 5 | Ch 9 | Kell | Chapter 9: Scene where the answer arrives |
+| The mentor's sealed letter gets opened | planted | Chapter 3: Scene where the mentor seals the letter | — | reader only | Chapter 3: Scene where the mentor seals the letter |
+| The harbor signal is answered | paid-off | Chapter 5: Scene where Kell sends the signal | Chapter 9: Scene where the answer arrives | Kell | Chapter 9: Scene where the answer arrives |
 ```
 
 Status is `planned`, `planted`, `paid-off`, or `dropped`. `planned` means the
 author intends the promise but prose has not planted it yet. A dropped promise
 stays in the table with a one-line reason appended to its evidence — dropped
-is a decision, not a deletion.
+is a decision, not a deletion. Once prose exists, use the full `Chapter N:
+Scene where X discovers Y` citation in `Planted` and `Payoff`, never bare
+`Ch N` shorthand.
 
 ## Questions
 
@@ -72,18 +77,19 @@ is a decision, not a deletion.
 
 | Question | Status | Introduced | Answered | Evidence |
 |---|---|---|---|---|
-| Who paid the smugglers? | open | Ch 4 | — | Chapter 4: Scene where the payment surfaces |
+| Who paid the smugglers? | open | Chapter 4: Scene where the payment surfaces | — | Chapter 4: Scene where the payment surfaces |
 ```
 
 Status is `open`, `answered`, `partially-answered`, or `dropped`. Questions are
 distinct from promises: a promise is a payoff the reader anticipates; a
-question is an inconsistency or mystery the story raised.
+question is an inconsistency or mystery the story raised. Once prose exists,
+use the full chapter-scene citation in `Introduced` and `Answered`.
 
 ## State Snapshot
 
 `state.md` — the mutable present at the writing front. Rewritten as the story
-advances; the kb keeps the durable past, this file keeps only the current
-state.
+advances; the other records in the selected continuity root keep durable
+chronology and lifecycle history, while this file keeps only current state.
 
 ```markdown
 # State at the Writing Front
@@ -146,10 +152,14 @@ quietly re-time, re-cast, or resolve.
 
 ## Deterministic Check First
 
-Run the checker before judging continuity by reading:
+Run the checker before judging continuity by reading. Set the working directory
+to the installed `story-memory` skill directory, then pass the story project
+root as the argument:
 
 ```bash
-python3 resources/continuity_check.py <project-root>
+STORY_PROJECT_ROOT="$(cd "<project-root>" && pwd -P)"
+cd "<story-memory-skill-directory>"
+python3 resources/continuity_check.py "$STORY_PROJECT_ROOT"
 ```
 
 It reports ordering violations (payoff before plant, answer before question,
