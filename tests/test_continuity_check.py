@@ -41,7 +41,7 @@ GOOD_PROMISES = """# Promises
 
 | Promise | Status | Planted | Payoff | POV knows | Evidence |
 |---|---|---|---|---|---|
-| The sealed letter gets opened | paid-off | Ch 3 | Ch 9 | reader only | Chapter 3: Scene where the letter is sealed |
+| The sealed letter gets opened | paid-off | Ch 3 | Ch 7 | reader only | Chapter 3: Scene where the letter is sealed |
 | The harbor signal is answered | planted | Ch 5 | — | Kell | Chapter 5: Scene where the signal is sent |
 """
 
@@ -153,7 +153,8 @@ class ContinuityCheckTests(unittest.TestCase):
             "| No payoff | paid-off | Ch 2 | — | reader | broken |\n"
             "| Odd status | forgotten | Ch 2 | Ch 3 | reader | broken |\n"
             "| planned drift | planned | Ch 2 | — | reader | broken |\n"
-            "| Chekhov | planted | Ch 2 | — | reader | broken |\n",
+            "| Chekhov | planted | Ch 2 | — | reader | broken |\n"
+            "| Future payoff | paid-off | Ch 5 | Ch 9 | reader | broken |\n",
         )
         findings = CHECKER.check(self.root)
         self.assertIn(
@@ -184,6 +185,11 @@ class ContinuityCheckTests(unittest.TestCase):
             "- [warning] promises: \"Chekhov\" planted in Ch 2 with no payoff for 5 chapters",
             findings,
         )
+        self.assertIn(
+            "- [error] promises: \"Future payoff\" payoff in Ch 9 "
+            "beyond current-chapter 7",
+            findings,
+        )
 
     def test_question_lifecycle_violations(self):
         self.write("state.md", GOOD_STATE)
@@ -196,7 +202,8 @@ class ContinuityCheckTests(unittest.TestCase):
             "| Answered without introduction | answered | — | Ch 4 | broken |\n"
             "| Partial without introduction | partially-answered | — | Ch 4 | broken |\n"
             "| Open with answer | open | Ch 2 | Ch 5 | broken |\n"
-            "| Future question | open | Ch 9 | — | broken |\n",
+            "| Future question | open | Ch 9 | — | broken |\n"
+            "| Future answer | answered | Ch 5 | Ch 9 | broken |\n",
         )
         findings = CHECKER.check(self.root)
         self.assertIn(
@@ -223,6 +230,11 @@ class ContinuityCheckTests(unittest.TestCase):
         )
         self.assertIn(
             "- [error] questions: \"Future question\" introduced in Ch 9 "
+            "beyond current-chapter 7",
+            findings,
+        )
+        self.assertIn(
+            "- [error] questions: \"Future answer\" answered in Ch 9 "
             "beyond current-chapter 7",
             findings,
         )
@@ -377,7 +389,7 @@ class ContinuityCheckTests(unittest.TestCase):
         findings = CHECKER.check(self.root)
         expected = (
             "- [error] records: both plot/ and kb/ contain continuity records; "
-            + "configure exactly one continuity root in the project instructions"
+            "configure exactly one continuity root in the project instructions"
         )
         self.assertEqual(
             findings,

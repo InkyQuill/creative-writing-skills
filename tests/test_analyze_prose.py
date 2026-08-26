@@ -71,10 +71,12 @@ class AnalyzeProseLanguageTests(unittest.TestCase):
     def test_unaccented_russian_pronouns_are_grouped(self):
         output = io.StringIO()
         with redirect_stdout(output):
-            ANALYZE.print_pronouns("Мое решение, твое письмо и ее ответ.")
+            ANALYZE.print_pronouns(
+                "Мое решение в моем письме, твое мнение в твоем ответе и ее выбор."
+            )
         text = output.getvalue()
-        self.assertRegex(text, r"1st sing .*\s+1 \(")
-        self.assertRegex(text, r"2nd .*\s+1 \(")
+        self.assertRegex(text, r"1st sing .*\s+2 \(")
+        self.assertRegex(text, r"2nd .*\s+2 \(")
         self.assertRegex(text, r"3rd fem .*\s+1 \(")
 
     def test_unaccented_russian_pronouns_are_sentence_openers(self):

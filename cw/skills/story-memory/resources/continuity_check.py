@@ -298,6 +298,11 @@ def check(project_root: Path) -> list[str]:
                 findings.append(
                     f"- [error] promises: \"{name}\" payoff Ch {payoff} precedes planted Ch {planted}"
                 )
+            if payoff is not None and state_current is not None and payoff > state_current:
+                findings.append(
+                    f"- [error] promises: \"{name}\" payoff in Ch {payoff} "
+                    f"beyond current-chapter {state_current}"
+                )
             if status == "planned" and planted is not None:
                 findings.append(
                     f"- [warning] promises: \"{name}\" is still planned but planted in Ch {planted}"
@@ -339,6 +344,11 @@ def check(project_root: Path) -> list[str]:
             if introduced is not None and answered is not None and answered < introduced:
                 findings.append(
                     f"- [error] questions: \"{name}\" answered Ch {answered} precedes introduced Ch {introduced}"
+                )
+            if answered is not None and state_current is not None and answered > state_current:
+                findings.append(
+                    f"- [error] questions: \"{name}\" answered in Ch {answered} "
+                    f"beyond current-chapter {state_current}"
                 )
             if status == "open" and answered is not None:
                 findings.append(
