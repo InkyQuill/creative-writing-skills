@@ -77,7 +77,7 @@ Upload them under **Customize → Skills**, enable `creative-writing-muse`, and
 describe the writing task. Skills-only chat uses the muse's single-agent
 fallback.
 
-To build the same 25 archives locally:
+To build the same 26 archives locally:
 
 ```bash
 python3 scripts/sync_claude_distribution.py --check
@@ -95,13 +95,14 @@ The archives are written to `zips/` from the generated `cw/skills/` tree.
 | `creative-writing-modes` | Fresh drafts, revisions, bridges, alternatives, and polish |
 | `creative-writing-craft` | Prose, scene, style, voice, and genre technique |
 | `story-review` | Critique, editorial review, line work, and reader-signal synthesis |
+| `targeted-editing` | Locating, scoping, and ripple-checking edits to existing prose |
 | `reader-sim` | Persona-bound first-time reader simulation |
 | `character-sim` | In-character voice and relationship exploration |
 | `world-creation` | Context-first worldbuilding with confirmation before canonization |
-| `story-memory` | Durable facts, timeline, canon, terminology, and issue tracking |
+| `story-memory` | Durable facts, continuity records with a deterministic checker, canon, terminology, and issue tracking |
 | `writing-staffing` | Small, purpose-built specialist compositions |
 
-All 25 installed skills are listed in `config/distribution.json`.
+All 26 installed skills are listed in `config/distribution.json`.
 
 ## Story Project Layout
 

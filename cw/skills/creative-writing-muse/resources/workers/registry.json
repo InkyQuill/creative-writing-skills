@@ -76,7 +76,7 @@
       "name": "writer",
       "description": "Produces or revises fiction from an approved brief, context, and style references.",
       "prompt": "writer.md",
-      "skills": ["creative-writing-modes", "creative-writing-craft", "writing-principles", "story-memory", "llm-writing"],
+      "skills": ["creative-writing-modes", "creative-writing-craft", "targeted-editing", "writing-principles", "story-memory", "llm-writing"],
       "access": "workspace-write",
       "claude": {"model": "inherit", "background": false}
     }

@@ -12,6 +12,7 @@ Load the resource needed:
 
 - `resources/story-context.md` — what context to pass into handoffs for writers, critics, brainstormers, and knowledge agents.
 - `resources/fact-extraction.md` — extract durable facts from chapters: character state, timeline, reveals, terminology.
+- `resources/continuity-records.md` — machine-checkable continuity records: timeline, promises, questions, state snapshot, and scene records, plus the deterministic checker.
 - `resources/story-reference-writing.md` — wiki pages, vocab, decisions, summaries, issue logs.
 - `resources/writing-artifacts.md` — where work and kb artifacts live.
 - `resources/writing-issues.md` — persistent writing issue tracking across chapters.

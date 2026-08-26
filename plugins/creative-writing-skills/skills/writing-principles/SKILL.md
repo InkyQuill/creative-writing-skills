@@ -74,15 +74,57 @@ Over-explaining breaks social simulation. Under-explaining breaks
 transportation. Generic style breaks aesthetic pleasure. Impenetrable style
 breaks flow.
 
-## Punctuation Tells
+## Punctuation Fit
 
-Readers increasingly associate em dashes with AI-generated prose. Default to
-punctuation that leaves less visible AI residue: sentence breaks, commas,
-colons, semicolons, parentheses, or dialogue beats. Rewrite the sentence
-around the actual relationship between clauses instead of substituting a
-hyphen. Use dashes only when a project style file or author instruction makes
-them part of the voice. When a line needs interruption, prefer the project's
-documented interruption pattern and keep it consistent.
+Choose punctuation from the meaning and relationship of the clauses, the
+line's readability and rhythm, and the manuscript's documented voice. Use a
+sentence break for separation, a comma for continuity, a colon for
+development, a semicolon for balanced independence, parentheses for an aside,
+and a dash when interruption or suspension is the intended effect. Rewrite a
+sentence when its clause structure is unclear instead of mechanically swapping
+one mark for another.
+
+The author's documented punctuation habits and the language's grammar outrank
+generic defaults. Do not normalize punctuation from frequency alone. When a
+line needs interruption, use the project's established interruption pattern
+and keep it consistent.
+
+## Language Register
+
+All craft advice in this plugin applies *through the manuscript language's own
+norms*, never through English defaults. Punctuation heuristics, vocabulary
+tells, and rhythm baselines are calibrated on English prose; on a manuscript
+in another language they misfire silently. Russian is the working example —
+extend the same care to any language:
+
+- **Punctuation is structural, not stylistic.** The Russian тире (—) is
+  mandatory grammar: dialogue lines open with it, it stands where the copula
+  is omitted, it frames insertions. The em-dash-as-tell heuristic is
+  English-only and must never touch Russian punctuation. Quotes are
+  «ёлочки» with „лапки“ for nesting; there is no serial comma before «и»;
+  деепричастные обороты are always comma-bound. Fix punctuation against the
+  language's rules, not against AI-tell lists.
+- **Sentence length norms differ.** Russian literary prose breathes in longer
+  sentences; причастные and деепричастные обороты are texture, not bloat.
+  Machine-gun short sentences read as translation or AI filler. Split a
+  sentence only when the reader genuinely backtracks — never to hit an
+  English cadence ideal.
+- **Synonymy is the healthy norm.** Russian is rich in synonyms and
+  morphological variation; higher lexical variety is expected, and
+  lexical-variability metrics must be judged against a same-language
+  baseline. Variation that would flag as thesaurus-padding in English is
+  often simply good Russian.
+- **Interiority and subtext run deeper.** The tradition the author writes in
+  may carry long associative interior monologue and heavy subtext as native
+  register, not as "shallow interiority" or over-writing. Judge depth against
+  the tradition and the author's own accepted prose, not against an
+  Anglo-American directness ideal. Word order (инверсия), ты/вы distance, and
+  aspect choices carry emphasis English gets through other means — treat them
+  as voice, not error.
+
+When the guide and the language disagree, the language wins. When unsure of a
+norm, derive it from the author's accepted prose in that language rather than
+from this skill.
 
 ## Applying the Principles
 

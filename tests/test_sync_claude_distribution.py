@@ -48,6 +48,7 @@ EXPECTED_SKILLS = {
     "story-planning",
     "story-review",
     "structured-artifact",
+    "targeted-editing",
     "world-creation",
     "writing-principles",
     "writing-staffing",
@@ -1000,7 +1001,7 @@ class ClaudeDistributionCliTests(unittest.TestCase):
                 apply_status = main(["--apply"], repo_root=repo_root)
 
             self.assertEqual(0, apply_status)
-            self.assertEqual(25, apply_output.getvalue().count("synced skill "))
+            self.assertEqual(26, apply_output.getvalue().count("synced skill "))
             self.assertEqual(11, apply_output.getvalue().count("synced agent "))
             marketplace = json.loads(marketplace_path.read_text())
             canonical_manifest = json.loads(

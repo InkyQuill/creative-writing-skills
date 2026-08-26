@@ -27,6 +27,7 @@ revision and does not expect to reopen it.
 
 - typos, missing words, duplicated words
 - punctuation and capitalization slips
+- the manuscript language's own conventions: quotation marks («ёлочки», „лапки“, "..."), dash usage (structural тире in Russian, dash-opened dialogue lines), serial-comma policy, and the project's ё/е policy where relevant
 - spacing, indentation, paragraph breaks, chapter headings
 - formatting consistency: scene breaks, section markers, layout artifacts
 - wrong names, wrong homophones, accidental autocorrects
@@ -46,6 +47,23 @@ These patterns appear more frequently in AI-generated or AI-revised text:
   into existing text
 - Inconsistent formatting between AI-generated and human-written sections
 - Missing or doubled scene breaks at the edges of inserted passages
+
+## Near-Conclusive Pasted-In Artifacts
+
+A single instance of these in a manuscript is hard evidence that a passage
+was pasted from a chat session; flag on sight:
+
+- Leaked tool markup: `oaicite`, `turn0search0`, `【…】` brackets, citation
+  tokens, artifact fences around prose
+- Assistant scaffolding left in the text: "Here's the revised version:",
+  "Let me know if you'd like changes", "I hope this helps"
+- Unfilled placeholders: `[Your Name]`, `[insert example]` — but a deliberate
+  author's gap marker such as `[detail needed: harbor layout]` is a decision,
+  not residue; keep it
+- Tracking parameters on pasted URLs (`utm_source=chatgpt.com`)
+- Markdown formatting artifacts in plain-text destinations
+
+Absence proves nothing; presence settles it.
 
 ## Report
 

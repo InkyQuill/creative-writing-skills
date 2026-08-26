@@ -55,6 +55,9 @@ variation in intensity at every scale: within scenes, chapters, and arcs.
 - [`resources/story-architecture/chapter-and-scene.md`](story-architecture/chapter-and-scene.md): chapter
   design (internal completeness, external pull), scene design (earning
   presence), outline vs discovery writing.
+- [`resources/story-architecture/beat-sheets.md`](story-architecture/beat-sheets.md): positional
+  beat sheets for five structure models — Three-Act, Hero's Journey, Save the
+  Cat, Kishotenketsu, Five-Act — as diagnostic grids, not templates.
 - [`resources/story-architecture/structural-problems.md`](story-architecture/structural-problems.md):
   common problems (saggy middle, rushed ending, filler arcs, disconnected
   scenes, stakes plateau) and when to use diagrams.

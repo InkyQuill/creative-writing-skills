@@ -16,65 +16,64 @@ from collections import Counter
 from pathlib import Path
 
 
-WORD_RE = re.compile(r"[A-Za-z]+(?:'[A-Za-z]+)?")
-SENTENCE_SPLIT_RE = re.compile(r"(?<=[.!?])\s+")
-QUOTE_RE = re.compile(r'".+?"')
+WORD_RE = re.compile(r"[A-Za-zА-Яа-яЁё]+(?:['’][A-Za-zА-Яа-яЁё]+)?")
+SENTENCE_SPLIT_RE = re.compile(r"(?<=[.!?…])\s+")
+QUOTE_RE = re.compile(r'".+?"|«.+?»|„.+?“')
 
 PRONOUN_STARTS = {
-    "i",
-    "me",
-    "my",
-    "we",
-    "our",
-    "you",
-    "your",
-    "he",
-    "his",
-    "him",
-    "she",
-    "her",
-    "they",
-    "their",
-    "them",
-    "it",
-    "its",
+    "i", "me", "my", "we", "our", "you", "your",
+    "he", "his", "him", "she", "her", "they", "their", "them", "it", "its",
+    "я", "мы", "ты", "вы", "он", "она", "они", "оно",
+    "мой", "моя", "моё", "мое", "наш", "наша", "наше",
+    "твой", "твоя", "твоё", "твое", "ваш", "ваша", "ваше",
+    "его", "её", "ее", "их",
 }
 ARTICLE_STARTS = {"the", "a", "an", "this", "that", "these", "those"}
 CONJUNCTION_STARTS = {
-    "and",
-    "but",
-    "or",
-    "so",
-    "yet",
-    "for",
-    "nor",
-    "because",
-    "although",
-    "though",
-    "while",
-    "when",
-    "if",
-    "after",
-    "before",
-    "since",
-    "until",
-    "as",
-    "once",
+    "and", "but", "or", "so", "yet", "for", "nor", "because",
+    "although", "though", "while", "when", "if", "after",
+    "before", "since", "until", "as", "once",
+    "и", "но", "а", "или", "да", "зато", "однако", "чтобы",
+    "когда", "если", "хотя", "пока", "как", "что", "потому",
 }
 PRONOUN_GROUPS = {
-    "1st person singular (I/me/my)": {"i", "me", "my", "mine", "myself"},
-    "1st person plural (we/us/our)": {"we", "us", "our", "ours", "ourselves"},
-    "2nd person (you/your)": {"you", "your", "yours", "yourself", "yourselves"},
-    "3rd person masc (he/him/his)": {"he", "him", "his", "himself"},
-    "3rd person fem (she/her/hers)": {"she", "her", "hers", "herself"},
-    "3rd person plural (they/them)": {
-        "they",
-        "them",
-        "their",
-        "theirs",
-        "themselves",
+    "1st sing (I/me/my; я/меня/мой)": {
+        "i", "me", "my", "mine", "myself",
+        "я", "меня", "мне", "мной",
+        "мой", "моя", "моё", "мое", "моего", "моей", "моём", "моем", "мою", "моим",
+        "моими", "моих",
     },
-    "3rd person neuter (it/its)": {"it", "its", "itself"},
+    "1st plur (we/us/our; мы/нас/наш)": {
+        "we", "us", "our", "ours", "ourselves",
+        "мы", "нас", "нам", "нами",
+        "наш", "наша", "наше", "нашего", "нашей", "нашем", "наши", "нашим",
+        "нашими", "наших",
+    },
+    "2nd (you/your; ты/вы + forms)": {
+        "you", "your", "yours", "yourself", "yourselves",
+        "ты", "тебя", "тебе", "тобой",
+        "твой", "твоя", "твоё", "твое", "твоего", "твоей", "твоём", "твоем", "твою", "твоим",
+        "твоими", "твоих",
+        "вы", "вас", "вам", "вами",
+        "ваш", "ваша", "ваше", "вашего", "вашей", "вашем", "ваши", "вашим",
+        "вашими", "ваших",
+    },
+    "3rd masc (he/him/his; он/его/нему)": {
+        "he", "him", "his", "himself",
+        "он", "его", "него", "ему", "нему", "им", "ним",
+    },
+    "3rd fem (she/her; она/её/ей)": {
+        "she", "her", "hers", "herself",
+        "она", "её", "ее", "нее", "ей", "ней", "ею", "нею",
+    },
+    "3rd plur (they/them; они/их/ними)": {
+        "they", "them", "their", "theirs", "themselves",
+        "они", "их", "них", "им", "ним", "ими", "ними",
+    },
+    "3rd neuter (it/its; оно)": {
+        "it", "its", "itself",
+        "оно",
+    },
 }
 
 
@@ -207,7 +206,12 @@ def print_dialogue_ratio(dense_lines: list[str]) -> None:
         print()
         return
 
-    dialogue_lines = sum(1 for line in dense_lines if QUOTE_RE.search(line))
+    def is_dialogue(line: str) -> bool:
+        # Quoted dialogue ("...", «...», „...“) or dash-introduced lines
+        # (— реплика), the standard Russian and European dialogue layout.
+        return bool(QUOTE_RE.search(line)) or line.lstrip().startswith("—")
+
+    dialogue_lines = sum(1 for line in dense_lines if is_dialogue(line))
     narration_lines = total_lines - dialogue_lines
     print(
         f"  Dialogue lines:   {dialogue_lines} ({(dialogue_lines / total_lines) * 100:.0f}%)"

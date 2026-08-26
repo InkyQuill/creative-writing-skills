@@ -3,13 +3,21 @@
 ## [Unreleased]
 
 ### Added
+- Added multilingual prose support: `analyze.py` now tokenizes Cyrillic text, detects `«ёлочки»`/`„лапки“` quotation and dash-opened dialogue lines, and groups Russian pronouns; `writing-principles` gained a Language Register section (structural тире, longer subordinated sentences as the norm, synonymic variety as healthy register, deeper interiority/subtext traditions); tell catalogues, vocabulary tiers, cadence checks, proofreading, and project setup are now explicitly language-calibrated with Russian as the working example.
+- Added machine-checkable continuity records to `story-memory`: timeline, promises, questions, a rolling state snapshot, and per-chapter scene records (`resources/continuity-records.md`), plus a deterministic checker (`resources/continuity_check.py`) that reports ordering violations, lifecycle mismatches, stale state, anchor conflicts, and Chekhov gaps. The `continuity-checker` worker and `story-review` continuity critique now run it as the fixed floor before reader judgment, and `project-setup` proposes the record paths as author-confirmed items in both layouts. Continuity-ledger model adapted from `danjdewhurst/story-skills` (MIT).
+- Added positional beat sheets for five structure models (Three-Act, Hero's Journey, Save the Cat, Kishotenketsu, Five-Act) as a `story-planning` diagnostic resource.
+- Added a fiction structural-tell catalogue to `story-review` (`resources/prose-critique/tells.md`), a cluster-density vocabulary policy in `antipatterns.md`, line-edit structure checks with voice calibration, and a proofreading checklist for pasted chat artifacts — techniques adapted from `forjd/better-writing` (MIT) with original fiction examples.
+- Added the specificity ladder and honest-gap placeholder convention to `creative-writing-modes` line polish, and a post-edit continuity-record ripple checklist to `targeted-editing`.
+- Added the `targeted-editing` skill: locate the edit target on the outline and timeline, choose the smallest effective change level (line, beat, scene, new scene, structure), check ripple effects on flow, setup/payoff, timeline, and character state, and verify the joins after editing. The writer worker now carries it on every in-place prose pass.
+- Added full-timeline synchronization guidance: the timeline is maintained as a main storyline plus character/subplot sub-timelines anchored to shared events, with desynchronization flagged as a contradiction instead of silently re-timed, in story-planning and story-memory, plus a timeline-position continuity anchor for revisions and insertions in writer context handoffs.
 - Added ZCode marketplace compatibility: the distribution generator now also emits the ZCode plugin manifest `cw/.zcode-plugin/plugin.json` and the repository-root `marketplace.json`, so `InkyQuill/creative-writing-skills` can be added directly as a ZCode marketplace and the plugin installed from it.
-- Added a Codex-primary repo marketplace and installable `creative-writing-skills` plugin containing exactly 25 canonical skills.
+- Added a Codex-primary repo marketplace and installable `creative-writing-skills` plugin containing exactly 26 canonical skills.
 - Added muse-owned worker prompts and a machine-readable worker registry for specialist delegation with a bounded single-agent fallback.
 - Added the standalone `world-creation` skill with dual-layout project discovery, one-decision-at-a-time recommendations, confirmation before canonization, and immutable manuscript prose.
-- Added distribution validation, deterministic Claude compatibility generation, licensed-vendor drift checks, release safeguards, and deterministic archives for all 25 skills.
+- Added distribution validation, deterministic Claude compatibility generation, licensed-vendor drift checks, release safeguards, and deterministic archives for all 26 skills.
 
 ### Changed
+- Softened the `writing-principles` punctuation-tell guidance: dash policy is a register choice, not detector evasion, an author's documented habit outranks the default, and punctuation changes require a cluster of tells rather than a single signal.
 - Made `plugins/creative-writing-skills/` the canonical runtime and generate the committed `cw/` Claude Code, Cowork, and Claude.ai compatibility distribution from it.
 - Pinned the ten vendored generic skills to the Apache-2.0-covered `haowjy/creative-writing-skills` snapshot at `fd7a3ad9cd7697a0645ff6ff4bd5e809cf7673a3`; unlicensed `haowjy/meridian-base` is retained as provenance only and is not a permitted refresh source.
 

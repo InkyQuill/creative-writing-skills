@@ -2,6 +2,8 @@
 
 Prose metrics are meaningless in isolation. "Average sentence length: 14.2 words" tells you nothing without knowing what's normal for this project, this author, this genre. The baseline is the project's own published chapters: the prose the author has already approved as representative of their voice.
 
+Baselines are also language-specific. Sentence length, lexical variety, and dialogue formatting norms differ per language — Russian literary prose runs longer sentences with heavier subordination and richer synonymic variation than English — so only ever compare a draft against chapters in the same language, never against cross-language expectations.
+
 ## Building the Baseline
 
 Run `analyze.py` against each published chapter and record the results:

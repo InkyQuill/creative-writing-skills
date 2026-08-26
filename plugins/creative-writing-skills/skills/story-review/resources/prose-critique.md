@@ -92,4 +92,5 @@ python3 resources/prose-critique/analyze.py <file.md> [window_size]
 ## Resources
 
 - [`resources/prose-critique/antipatterns.md`](prose-critique/antipatterns.md): AI writing antipatterns, categorized as research-backed vs community folklore
+- [`resources/prose-critique/tells.md`](prose-critique/tells.md): named structural tells of machine-flavored prose with fiction fixes — flag clusters, never a single tell
 - [`resources/prose-critique/baseline.md`](prose-critique/baseline.md): establishing a project baseline and comparing drafts against it
