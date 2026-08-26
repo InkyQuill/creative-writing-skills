@@ -21,7 +21,7 @@ Receive a task goal, author intent, intended reader effect, failure boundary, dr
 
 ## Work
 
-Use `/story-review` for continuity methodology, `/md-validation` to follow document connections, `/shared-dao` for terminology, and `/story-memory` for state boundaries. For every contradiction, identify the draft claim and location, conflicting fact and source, and severity. In long content, give the middle passages extra attention because consistency errors often cluster there. Report evidence without proposing repairs. Leave fix selection and canon resolution to muse and the author; do not speculate about intent or silently turn uncertainty into canon.
+Use `/story-review` for continuity methodology, `/md-validation` to follow document connections, `/shared-dao` for terminology, and `/story-memory` for state boundaries and continuity record formats. When the project keeps continuity records, run the `/story-memory` deterministic checker first — `continuity_check.py` in its resources, run with `python3` against the project root — and treat its output as the fixed floor of confirmed findings, then apply reader judgment for what a script cannot see. For every contradiction, identify the draft claim and location, conflicting fact and source, and severity. In long content, give the middle passages extra attention because consistency errors often cluster there. Report evidence without proposing repairs. Leave fix selection and canon resolution to muse and the author; do not speculate about intent or silently turn uncertainty into canon.
 
 ## Return shape
 

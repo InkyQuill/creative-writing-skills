@@ -12,8 +12,13 @@ loses the character's way of seeing.
 
 Learn the voice before you touch it. Read enough of the project to know what
 "this writer's prose" sounds like — its characteristic rhythms, sentence
-tendencies, vocabulary range, and emotional register. A line edit that
-normalizes the author's voice into generic good prose has failed.
+tendencies, vocabulary range, and emotional register. Calibrate on: sentence
+length and paragraph rhythm; vocabulary level and favorite plain words;
+punctuation habits; how scenes and paragraphs open; how humor, asides,
+uncertainty, and interiority are handled; preferred compression. Match the
+patterns the sample actually shows instead of replacing them with generic
+"good prose." A line edit that normalizes the author's voice into generic
+good prose has failed.
 
 Name patterns, not every instance. A line edit that catalogs fifty individual
 sentences teaches the author nothing about what's going wrong. Find the
@@ -38,6 +43,34 @@ and let the author apply the insight across the manuscript.
   text already made the reader infer them? This is the single most common
   line-level failure in AI-generated prose: the text does the work, then a
   sentence explains what the work accomplished.
+
+## Structure Checks
+
+Run these before reporting; they catch flattening that item-by-item editing
+misses:
+
+- **Uniform cadence**: do short and long sentences both appear, or does
+  everything sit at the same length regardless of scene pressure? Vary the
+  length; do not invent content to do it. Judge cadence against the norms of
+  the manuscript's language and the author's baseline — prose that runs long
+  subordinated sentences (Russian literary prose, for example) is healthy
+  there and flattens badly if chopped to an English ideal.
+- **Paragraph reshuffle**: could the paragraphs of a scene reorder without
+  breaking anything? Then the scene lacks connective tissue — add the links
+  between movements rather than relabeling them.
+- **Friction-free tone**: does any passage carry a genuine spike of the
+  narrator's temperament — doubt, bluntness, irritation, humor — or does
+  everything sit at one pleasant altitude? Surface what the material already
+  contains; never invent opinions or asides the writer didn't have.
+- **Backtrack test**: any sentence the reader must re-read to parse gets
+  split — but only on genuine backtrack: in languages whose prose normally
+  carries long subordination, length alone is not a parsing failure.
+- **Read-aloud test**: where would a listener stumble, and where does a
+  sentence exist only to make the scene feel complete?
+
+Flatness is also a failure. Prose sanded to a uniform finish reads as
+machine-made too: if the writer is ambivalent, keep the ambivalence — leave a
+defensible rough edge rather than polishing the voice flat.
 
 ## Report
 

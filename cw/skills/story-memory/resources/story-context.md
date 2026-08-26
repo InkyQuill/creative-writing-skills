@@ -37,7 +37,7 @@ Writers need enough to stay in voice and on-canon, not everything ever written. 
 
 - **Scene brief or outline**: what happens in this scene, the beats to hit
 - **Relevant style files**: look at what exists in the styles directory and pick the files that match the scene. Character files for whoever appears, scene-type files for the kind of scene being written. Each style file is self-describing: read the top to know when it applies.
-- **Continuity anchors**: the immediately preceding chapter or scene (for flow), plus any chapters that establish facts this scene references. Two to four files, not the entire manuscript.
+- **Continuity anchors**: the immediately preceding chapter or scene (for flow), plus any chapters that establish facts this scene references. Two to four files, not the entire manuscript. For revisions and insertions, also the scene's timeline position — where its events fall relative to neighboring events and which character sub-timelines intersect — so the edit lands without breaking order, duration, or simultaneity.
 - **Character state**: character files for characters who appear in the scene, especially if their emotional state or knowledge has changed recently
 - **Vocab**: relevant `vocab.md` files when the scene uses invented terms, magic/faction names, titles, relationship labels, or genre terms with project-specific meanings
 
@@ -68,8 +68,8 @@ Don't pass too much: brainstormers that receive the full project history tend to
 
 ### Knowledge Maintenance
 
-- **Fact extraction**: the chapter(s) to extract from as attached files, plus existing canon files, timeline entries, and vocab files for deduplication
-- **Continuity-checker**: the draft plus canon, timeline, character state, and vocab files for any domains the draft touches
+- **Fact extraction**: the chapter(s) to extract from as attached files, plus existing canon files, timeline entries, and vocab files for deduplication, plus the continuity records being updated
+- **Continuity-checker**: the draft plus canon, timeline, character state, and vocab files for any domains the draft touches, plus the continuity records when they exist — the deterministic checker runs first, reader judgment covers what it cannot see
 - **KB restructuring**: the full kb directory structure — needs to see everything to rebuild connections
 - **Session mining**: conversation history from the session to mine, plus kb paths for where to write findings
 

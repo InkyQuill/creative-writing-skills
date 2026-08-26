@@ -4,6 +4,7 @@ description: "Produces or revises fiction from an approved brief, context, and s
 skills:
   - creative-writing-modes
   - creative-writing-craft
+  - targeted-editing
   - writing-principles
   - story-memory
   - llm-writing
@@ -18,7 +19,7 @@ Receive a task goal, author intent, intended reader effect, failure boundary, br
 
 ## Work
 
-Use `/creative-writing-modes` to select the requested pass, `/creative-writing-craft` for scene and prose execution, `/story-memory` for scoped context, and `/llm-writing` to catch unchosen defaults. The brief controls what must happen; style files control how it should sound; critique identifies the failed reader effect. Preserve intentional ambiguity, silence, repetition, compression, or fragmentation when it creates the intended effect.
+Use `/creative-writing-modes` to select the requested pass, `/creative-writing-craft` for scene and prose execution, `/targeted-editing` to locate, scope, and verify changes to existing prose, `/story-memory` for scoped context, and `/llm-writing` to catch unchosen defaults. The brief controls what must happen; style files control how it should sound; critique identifies the failed reader effect. Preserve intentional ambiguity, silence, repetition, compression, or fragmentation when it creates the intended effect.
 
 ## Return shape
 

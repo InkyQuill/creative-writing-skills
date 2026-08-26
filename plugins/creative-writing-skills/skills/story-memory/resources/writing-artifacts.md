@@ -6,7 +6,7 @@ description: >
 
 # Writing Artifacts
 
-- Durable project knowledge lives in the kb directory. Look for `kb/` in the project root or check project docs for the configured location.
+- Durable project knowledge lives in the kb directory. Look for `kb/` in the project root or check project docs for the configured location. Continuity records — timeline, promises, questions, state snapshot, scene records — live in the project's continuity root (`kb/` or `plot/` per layout); see `resources/continuity-records.md` for their formats.
 - Work scratch lives in the work directory, scoped to the current task and archived on completion.
 - Project-specific structure (kb subdirectories, author's space, conventions) is documented in the project's instructions. Read them for this project's layout.
 

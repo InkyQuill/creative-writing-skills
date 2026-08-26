@@ -53,6 +53,12 @@ Not every inconsistency is an error. The story might have:
 
 When flagging a potential break, note whether it could be intentional. "Character X states the attack was on Tuesday, but Chapter 3 established it was Thursday. If this is intentional (unreliable narrator, faulty memory), it should be signaled to the reader."
 
+## Deterministic Floor
+
+When the project keeps continuity records (`/story-memory` continuity-records format: timeline, promises, questions, state snapshot, scene records), run its checker first — `continuity_check.py` in `/story-memory`'s resources, run with `python3` against the project root.
+
+Its output — ordering violations, lifecycle mismatches, stale state, anchor conflicts, Chekhov gaps — is the confirmed floor. Verify each finding against the prose, then judge what the script cannot see: intentionality, context, and the items in this resource. Deterministic findings get reported, never auto-repaired.
+
 ## Working with Project Knowledge
 
 When available, cross-reference against:

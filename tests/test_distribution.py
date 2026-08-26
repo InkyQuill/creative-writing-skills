@@ -35,8 +35,9 @@ EXPECTED_SKILLS = {
     "information-hierarchy", "intent-modeling", "kb-management",
     "knowledge-layers", "llm-writing", "md-validation", "project-setup",
     "qi-layer", "reader-sim", "reflect", "shared-dao", "story-memory",
-    "story-planning", "story-review", "structured-artifact", "world-creation",
-    "writing-principles", "writing-staffing", "zoom-out",
+    "story-planning", "story-review", "structured-artifact",
+    "targeted-editing", "world-creation", "writing-principles",
+    "writing-staffing", "zoom-out",
 }
 
 EXPECTED_WORKERS = {
@@ -54,7 +55,7 @@ EXPECTED_WORKER_CONFIG = {
     "reader-sim": ("read-only", {"reader-sim", "writing-principles", "llm-writing"}),
     "style-creator": ("workspace-write", {"creative-writing-craft", "writing-principles", "llm-writing", "story-memory"}),
     "web-researcher": ("workspace-write", {"creative-research"}),
-    "writer": ("workspace-write", {"creative-writing-modes", "creative-writing-craft", "writing-principles", "story-memory", "llm-writing"}),
+    "writer": ("workspace-write", {"creative-writing-modes", "creative-writing-craft", "targeted-editing", "writing-principles", "story-memory", "llm-writing"}),
 }
 
 PRESSURE_RESULTS = REPO_ROOT / "tests" / "fixtures" / "muse-pressure" / "results.md"
@@ -556,7 +557,7 @@ class DistributionScaffoldTests(unittest.TestCase):
     def test_distribution_config_lists_exact_skill_set(self):
         config = load_json(REPO_ROOT / "config" / "distribution.json")
         self.assertEqual(set(config["canonical_skills"]), EXPECTED_SKILLS)
-        self.assertEqual(len(config["authored_skills"]), 15)
+        self.assertEqual(len(config["authored_skills"]), 16)
         self.assertEqual(len(config["vendored_skills"]), 10)
         self.assertEqual(
             ["reflect", "structured-artifact"],
@@ -863,8 +864,8 @@ class ValidatorTests(unittest.TestCase):
             "character-sim", "creative-research", "creative-writing-craft",
             "creative-writing-modes", "creative-writing-muse", "kb-management",
             "project-setup", "reader-sim", "shared-dao", "story-memory",
-            "story-planning", "story-review", "world-creation",
-            "writing-principles", "writing-staffing",
+            "story-planning", "story-review", "targeted-editing",
+            "world-creation", "writing-principles", "writing-staffing",
         }
         config = {
             "canonical_skills": sorted(EXPECTED_SKILLS),

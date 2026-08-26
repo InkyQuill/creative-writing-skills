@@ -34,3 +34,23 @@ that incorporates and adapts:
 
 The resulting integration is modified for this plugin, including its
 dual-layout discovery and immutable prose boundaries.
+
+## Continuity records, checker, beat sheets, tells, and preflight checks
+
+The `story-memory` continuity-record formats and deterministic checker
+(`resources/continuity-records.md`, `resources/continuity_check.py`), the
+`story-planning` beat sheets (`resources/story-architecture/beat-sheets.md`),
+and the `targeted-editing` post-edit ripple checklist are local InkyQuill
+work that adapts the continuity-ledger model and edit-ripple checklist of
+Daniel Dewhurst's
+[`danjdewhurst/story-skills`](https://github.com/danjdewhurst/story-skills)
+(MIT; see [`LICENSES/MIT-story-skills.txt`](LICENSES/MIT-story-skills.txt)).
+
+The `story-review` structural-tell catalogue (`resources/prose-critique/tells.md`),
+the cluster-density vocabulary policy in `resources/prose-critique/antipatterns.md`,
+the line-edit structure checks and voice calibration, the proofreading
+pasted-artifact checklist, the specificity ladder in `creative-writing-modes`,
+and the punctuation-tell nuance in `writing-principles` adapt techniques from
+Forjd's [`forjd/better-writing`](https://github.com/forjd/better-writing)
+(MIT; see [`LICENSES/MIT-better-writing.txt`](LICENSES/MIT-better-writing.txt)).
+All examples and prose in the adapted sections are original InkyQuill work.

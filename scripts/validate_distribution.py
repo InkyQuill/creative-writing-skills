@@ -37,14 +37,15 @@ EXPECTED_SKILLS = {
     "information-hierarchy", "intent-modeling", "kb-management",
     "knowledge-layers", "llm-writing", "md-validation", "project-setup",
     "qi-layer", "reader-sim", "reflect", "shared-dao", "story-memory",
-    "story-planning", "story-review", "structured-artifact", "world-creation",
-    "writing-principles", "writing-staffing", "zoom-out",
+    "story-planning", "story-review", "structured-artifact",
+    "targeted-editing", "world-creation", "writing-principles",
+    "writing-staffing", "zoom-out",
 }
 AUTHORED_SKILLS = {
     "character-sim", "creative-research", "creative-writing-craft",
     "creative-writing-modes", "creative-writing-muse", "kb-management",
     "project-setup", "reader-sim", "shared-dao", "story-memory",
-    "story-planning", "story-review", "world-creation",
+    "story-planning", "story-review", "targeted-editing", "world-creation",
     "writing-principles", "writing-staffing",
 }
 VENDORED_SKILLS = EXPECTED_SKILLS - AUTHORED_SKILLS
@@ -84,8 +85,8 @@ EXPECTED_WORKER_SKILLS = {
     },
     "web-researcher": {"creative-research"},
     "writer": {
-        "creative-writing-modes", "creative-writing-craft", "writing-principles",
-        "story-memory", "llm-writing",
+        "creative-writing-modes", "creative-writing-craft", "targeted-editing",
+        "writing-principles", "story-memory", "llm-writing",
     },
 }
 ALLOWED_FRONTMATTER_KEYS = {

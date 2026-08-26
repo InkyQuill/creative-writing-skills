@@ -23,6 +23,7 @@ skills:
   - story-planning
   - story-review
   - structured-artifact
+  - targeted-editing
   - world-creation
   - writing-principles
   - writing-staffing

@@ -27,6 +27,19 @@ Resolving contradictions for the author removes their creative agency. Maybe the
 
 **Parallel events**: what's happening simultaneously across storylines. Note parallel tracking when the author discusses it.
 
+## Full Timeline and Sub-Timelines
+
+When the timeline grows beyond a single thread, maintain it as one connected system rather than loose lists:
+
+- **Main storyline timeline** — the primary event sequence with order, durations, and gaps. Every other timeline anchors to it.
+- **Character and subplot sub-timelines** — one per character or subplot that runs partly off-page: where they are, what they know, and what they are doing between their appearances in the main storyline.
+
+Synchronize by anchoring. Every sub-timeline event that coincides with, or depends on, a main-timeline event carries the same anchor: the shared event with its established ordering and duration. Place off-page events relative to the anchors they touch — "while the crew crosses the strait", "three days before the hearing" — not as absolute dates unless the author uses absolute dates.
+
+When a sub-timeline and the main timeline disagree — impossible order, overlapping durations, a character knowing something before its reveal — record it as a contradiction with both versions side by side. Do not silently re-time either side; the author decides canon.
+
+Build sub-timelines from what the author established: recorded facts and open questions, not invented filler between appearances. Undecided durations stay undecided.
+
 ## Structure
 
 Use whatever format fits: chronological lists, knowledge-tracking tables, parallel storyline columns, question format. Structure serves clarity, not template compliance.

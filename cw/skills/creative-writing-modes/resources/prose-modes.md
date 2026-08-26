@@ -73,6 +73,15 @@ aloud internally for rhythm and pressure. Cut filler, sharpen images, vary
 sentence movement, and remove explanatory lines that pre-chew the reader's
 experience.
 
+When a line feels generic, climb the specificity ladder before cutting: name
+the actor, name the object or place, name the action, then add the one
+concrete detail — number, texture, smell, consequence — that only this story
+could supply. If the sentence still only says "this matters," cut it.
+
+Never invent a specific to fill a gap. Mark honest gaps in place —
+`[detail needed: harbor layout]` — and leave them for the author or research;
+a fabricated fact that reads vividly is worse than an honest gap.
+
 Do not polish away the point. Keep awkwardness, repetition, fragments,
 withholding, or rough rhythm when those choices express POV, pressure, or the
 scene's intended effect.

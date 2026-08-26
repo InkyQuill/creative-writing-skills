@@ -81,6 +81,9 @@ reorganize existing files.
 Cover:
 
 - the project overview and current stage;
+- the manuscript's language and its punctuation and quotation conventions
+  (quote style, dash and dialogue formatting, serial-comma policy), since
+  every later craft pass must respect the language's own norms;
 - where world lore, characters, canonical prose, drafts, and planning live;
 - voice, style, naming, chapter, POV, timeline, and spoiler conventions;
 - shared vocabulary, aliases, invented terms, and terms to avoid or
@@ -106,9 +109,12 @@ For selected Layout A, use `worldbuilding/`, `characters/`, `chapters/`,
 `drafts/`, and `plot/` for the five core roles. Do not create a `kb/`, `story/`,
 or `work/` counterpart. Add sample, style, or vocabulary paths only as
 author-confirmed auxiliary paths consistent with local conventions—for example
-an existing `samples/`, `style/`, `glossary/`, or `vocab.md` convention. Create
-or update an index only when the folder has multiple durable files and the
-author confirmed that index role.
+an existing `samples/`, `style/`, `glossary/`, or `vocab.md` convention.
+Continuity records (timeline, promises, questions, state snapshot, scene
+records, in the `$story-memory` continuity-records format) may live under
+`plot/`; propose them as separate author-confirmed items, never create them
+by default. Create or update an index only when the folder has multiple
+durable files and the author confirmed that index role.
 
 ### Layout B paths
 
@@ -118,7 +124,10 @@ For selected Layout B, use `kb/world/`, `kb/characters/`, `story/`,
 Create `kb/samples/` and `kb/styles/` only as author-confirmed auxiliary paths.
 Create `kb/vocab.md`, domain vocabulary files, `kb/index.md`, and additional
 work support such as `work/critique-reports/` or `work/brainstorm/` only when
-the author confirmed them and they match local conventions.
+the author confirmed them and they match local conventions. Continuity
+records (timeline, promises, questions, state snapshot, scene records, in the
+`$story-memory` continuity-records format) may live under `kb/`; propose them
+as separate author-confirmed items, never create them by default.
 
 Save samples or produce initial style analysis only at the exact approved path
 for the selected layout. Never infer approval for auxiliary files from approval
