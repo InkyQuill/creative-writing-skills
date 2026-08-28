@@ -144,8 +144,13 @@ class TransactionStore:
             return ()
         entries: list[dict[str, object]] = []
         for transaction_dir in self.root.iterdir():
-            if transaction_dir.name == "blobs":
-                _require_directory(transaction_dir, "transaction blob directory")
+            if transaction_dir.name in {"blobs", "revisions"}:
+                label = (
+                    "transaction blob directory"
+                    if transaction_dir.name == "blobs"
+                    else "revision store directory"
+                )
+                _require_directory(transaction_dir, label)
                 continue
             manifest_path = transaction_dir / "manifest.json"
             _require_directory(transaction_dir, "transaction directory")
@@ -213,6 +218,123 @@ class TransactionStore:
         self._write_bytes(destination, data)
         return identifier
 
+    def remember_revision(self, logical_hash_value: str, data: bytes) -> str:
+        """Persist the first exact-byte snapshot for one normalized revision."""
+
+        _validate_digest(logical_hash_value, "logical revision hash")
+        if not isinstance(data, bytes):
+            raise TypeError("revision data must be bytes")
+        try:
+            actual_logical_hash = logical_hash(data)
+        except (UnicodeDecodeError, UnicodeError) as error:
+            raise TransactionError("revision data must be valid UTF-8") from error
+        if actual_logical_hash != logical_hash_value:
+            raise ValueError("revision data does not match the supplied logical hash")
+
+        self._ensure_revision_layout()
+        destination = self.root / "revisions" / logical_hash_value
+        if _entry_exists(destination):
+            self._load_revision_entry(logical_hash_value)
+            return logical_hash_value
+
+        temporary = destination.parent / f".{logical_hash_value}.{uuid.uuid4().hex}.tmp"
+        try:
+            temporary.mkdir()
+            _require_directory(temporary, "temporary revision directory")
+            self.directory_sync_hook(temporary.parent)
+            exact_hash = hashlib.sha256(data).hexdigest()
+            self._write_bytes(temporary / "snapshot", data)
+            self._write_json(
+                temporary / "descriptor.json",
+                _render_json(
+                    {"byte_hash": exact_hash, "logical_hash": logical_hash_value}
+                ),
+            )
+            self.directory_sync_hook(temporary)
+            if _entry_exists(destination):
+                raise FileExistsError(f"revision already exists: {logical_hash_value}")
+            os.rename(temporary, destination)
+            self.directory_sync_hook(destination.parent)
+        except FileExistsError:
+            cleanup_error = _remove_internal_directory(
+                temporary, self.directory_sync_hook
+            )
+            if cleanup_error is not None:
+                raise TransactionError(
+                    f"revision collision cleanup failed: {_error_text(cleanup_error)}"
+                ) from cleanup_error
+            self._load_revision_entry(logical_hash_value)
+        except BaseException as error:
+            cleanup_error = _remove_internal_directory(
+                temporary, self.directory_sync_hook
+            )
+            if cleanup_error is not None:
+                raise TransactionError(
+                    f"{_error_text(error)}; temporary revision cleanup failed: "
+                    f"{_error_text(cleanup_error)}"
+                ) from error
+            raise
+        return logical_hash_value
+
+    def load_revision(self, logical_hash_value: str) -> bytes:
+        """Load and verify one exact revision snapshot without following links."""
+
+        _validate_digest(logical_hash_value, "logical revision hash")
+        self._require_transactions_directory()
+        revisions = self.root / "revisions"
+        _require_directory(revisions, "revision store directory")
+        return self._load_revision_entry(logical_hash_value)
+
+    def _load_revision_entry(self, logical_hash_value: str) -> bytes:
+        revision = self.root / "revisions" / logical_hash_value
+        _require_directory(revision, "revision snapshot directory")
+        try:
+            with _open_regular_file(
+                revision / "descriptor.json", "revision descriptor", text=True
+            ) as stream:
+                descriptor = json.load(stream)
+        except (json.JSONDecodeError, UnicodeError) as error:
+            raise TransactionError(
+                f"revision {logical_hash_value} has an invalid descriptor"
+            ) from error
+        if not isinstance(descriptor, dict) or set(descriptor) != {
+            "byte_hash",
+            "logical_hash",
+        }:
+            raise TransactionError(
+                f"revision {logical_hash_value} has an invalid descriptor"
+            )
+        byte_hash = descriptor.get("byte_hash")
+        recorded_logical_hash = descriptor.get("logical_hash")
+        try:
+            _validate_digest(byte_hash, "revision byte hash")
+            _validate_digest(recorded_logical_hash, "recorded logical revision hash")
+        except (TypeError, ValueError) as error:
+            raise TransactionError(
+                f"revision {logical_hash_value} has an invalid descriptor"
+            ) from error
+        if recorded_logical_hash != logical_hash_value:
+            raise TransactionError(
+                f"revision descriptor does not match {logical_hash_value}"
+            )
+        with _open_regular_file(revision / "snapshot", "revision snapshot") as stream:
+            data = stream.read()
+        if hashlib.sha256(data).hexdigest() != byte_hash:
+            raise TransactionError(
+                f"revision {logical_hash_value} exact-byte hash does not match"
+            )
+        try:
+            actual_logical_hash = logical_hash(data)
+        except (UnicodeDecodeError, UnicodeError) as error:
+            raise TransactionError(
+                f"revision {logical_hash_value} is not valid UTF-8"
+            ) from error
+        if actual_logical_hash != logical_hash_value:
+            raise TransactionError(
+                f"revision {logical_hash_value} logical hash does not match"
+            )
+        return data
+
     def _manifest_change(self, change: Change) -> dict[str, object]:
         return {
             "after": self._content_reference(change.after),
@@ -268,6 +390,10 @@ class TransactionStore:
         _mkdir_durable(protected, self.directory_sync_hook)
         _mkdir_durable(self.root, self.directory_sync_hook)
         _mkdir_durable(self.root / "blobs", self.directory_sync_hook)
+
+    def _ensure_revision_layout(self) -> None:
+        self._ensure_layout()
+        _mkdir_durable(self.root / "revisions", self.directory_sync_hook)
 
     def _require_transactions_directory(self, *, allow_missing: bool = False) -> bool:
         protected = self.project.root / ".creative-writing"
@@ -1094,6 +1220,20 @@ def _remove_internal_file(
     return None
 
 
+def _remove_internal_directory(
+    path: Path, sync_hook: Callable[[Path], object]
+) -> BaseException | None:
+    if not _entry_exists(path):
+        return None
+    try:
+        _require_directory(path, "internal temporary directory")
+        shutil.rmtree(path)
+        sync_hook(path.parent)
+    except BaseException as error:
+        return error
+    return None
+
+
 def _entry_exists(path: Path) -> bool:
     try:
         os.lstat(path)
@@ -1202,6 +1342,15 @@ def _validate_change_path(path: str) -> None:
     segments = path.split("/")
     if any(segment in {"", ".", ".."} for segment in segments):
         raise ValueError("change path must be a normalized project-relative identity")
+
+
+def _validate_digest(value: object, label: str) -> None:
+    if (
+        not isinstance(value, str)
+        or len(value) != 64
+        or any(character not in "0123456789abcdef" for character in value)
+    ):
+        raise ValueError(f"{label} must be a lowercase SHA-256 digest")
 
 
 def _change_action(change: Change) -> str:
