@@ -237,6 +237,7 @@ def plan_accept_draft(
     if store.project.root != project.root:
         raise DraftError("transaction store belongs to a different project")
     draft, source, document = _load_lifecycle_draft(project, draft_path)
+    _reject_hidden_material(source)
     if draft.status != "ready":
         raise DraftError(f"draft {draft_path} must have status ready before acceptance")
     archive_id = _archive_id(project, draft_path, transaction_id)
@@ -245,6 +246,19 @@ def plan_accept_draft(
         draft, target_path, store, draft_path=draft_path
     )
     manuscript_body = _strip_balanced_ai_wrappers(document.body)
+    if target_before is None:
+        manuscript_newline = document.newline
+        manuscript_bom = document.bom
+    else:
+        try:
+            current_target = parse_document(target_before)
+        except (UnicodeError, ValueError) as error:
+            raise DraftError(
+                f"cannot preserve target format for {draft.target}: {error}"
+            ) from error
+        manuscript_newline = current_target.newline
+        manuscript_bom = current_target.bom
+    manuscript_body = _normalize_newlines(manuscript_body, manuscript_newline)
 
     manuscript_metadata = {
         key: value
@@ -256,8 +270,8 @@ def plan_accept_draft(
         Document(
             metadata=manuscript_metadata,
             body=manuscript_body,
-            newline=document.newline,
-            bom=document.bom,
+            newline=manuscript_newline,
+            bom=manuscript_bom,
         )
     )
     archive = _render_archive(
@@ -401,9 +415,6 @@ def _render_archive(
 
 
 def _strip_balanced_ai_wrappers(body: str) -> str:
-    if "<hidden" in body or "</hidden" in body:
-        raise DraftError("draft contains unresolved <hidden> material")
-
     tags = list(_AI_TAG.finditer(body))
     without_valid_tags = _AI_TAG.sub("", body)
     if "<AI" in without_valid_tags or "</AI" in without_valid_tags:
@@ -420,6 +431,20 @@ def _strip_balanced_ai_wrappers(body: str) -> str:
     if depth:
         raise DraftError("draft contains unbalanced <AI> source tags")
     return without_valid_tags
+
+
+def _reject_hidden_material(source: bytes) -> None:
+    try:
+        text = source.decode("utf-8-sig")
+    except UnicodeDecodeError as error:
+        raise DraftError("draft contains invalid UTF-8") from error
+    if "<hidden" in text or "</hidden" in text:
+        raise DraftError("draft contains unresolved <hidden> material")
+
+
+def _normalize_newlines(text: str, newline: str) -> str:
+    normalized = text.replace("\r\n", "\n").replace("\r", "\n")
+    return normalized if newline == "\n" else normalized.replace("\n", newline)
 
 
 _BASE_REVISION_SCALAR = re.compile(

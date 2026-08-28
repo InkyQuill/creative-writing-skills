@@ -181,6 +181,60 @@ class DraftLifecycleTests(unittest.TestCase):
         )
         self.assertEqual(target_change.after, (self.root / target_change.path).read_bytes())
 
+    def test_existing_target_format_wins_when_logical_bytes_are_equal(self):
+        self.make_draft(body="Draft line one\nDraft line two\n")
+        target = self.root / "story/chapters/ch-004.md"
+        exact_current = target.read_bytes().replace(b"\n", b"\r\n")
+        exact_current = b"\xef\xbb\xbf" + exact_current
+        self.assertEqual(
+            documents.logical_hash(target.read_bytes()),
+            documents.logical_hash(exact_current),
+        )
+        target.write_bytes(exact_current)
+
+        plan = drafts.plan_accept_draft(
+            self.model, "work/drafts/ch-004.md", self.store, "tx-format"
+        )
+
+        target_change = next(
+            change
+            for change in plan.changes
+            if change.path == "story/chapters/ch-004.md"
+        )
+        self.assertEqual(exact_current, target_change.before)
+        self.assertTrue(target_change.after.startswith(b"\xef\xbb\xbf"))
+        self.assertNotIn(b"\n", target_change.after.replace(b"\r\n", b""))
+        accepted = documents.parse_document(target_change.after)
+        self.assertEqual("\r\n", accepted.newline)
+        self.assertTrue(accepted.bom)
+        self.assertEqual("Draft line one\r\nDraft line two\r\n", accepted.body)
+
+    def test_lifecycle_selected_indexes_ignore_malformed_unrelated_roots(self):
+        self.make_draft()
+        malformed_kb = self.root / "kb/canon/broken.md"
+        malformed_kb.write_bytes(b"---\ntitle: [unsupported]\n---\n")
+
+        accepted = drafts.plan_accept_draft(
+            self.model, "work/drafts/ch-004.md", self.store, "tx-scoped-accept"
+        )
+        self.assertTrue(accepted.changes)
+        with self.assertRaises(documents.DocumentError):
+            indexes.plan_reindex(self.model)
+
+        malformed_kb.unlink()
+        malformed_story = self.root / "story/chapters/broken.md"
+        malformed_story.write_bytes(b"---\ntitle: [unsupported]\n---\n")
+
+        abandoned = drafts.plan_abandon_draft(
+            self.model, "work/drafts/ch-004.md", "tx-scoped-abandon"
+        )
+        self.assertTrue(abandoned.changes)
+        self.assertFalse(
+            any(change.path.startswith("story/") for change in abandoned.changes)
+        )
+        with self.assertRaises(documents.DocumentError):
+            indexes.plan_reindex(self.model)
+
     def test_accept_rejects_status_stale_missing_base_and_new_target_collision(self):
         draft_path, target_path = self.make_draft(status="review")
         with self.assertRaisesRegex(drafts.DraftError, "status ready"):
@@ -256,6 +310,37 @@ class DraftLifecycleTests(unittest.TestCase):
                         "work/drafts/ch-004.md",
                         self.store,
                         "tx-tags",
+                    )
+
+    def test_accept_rejects_hidden_material_in_frontmatter(self):
+        draft_path, _ = self.make_draft()
+        hidden_values = (
+            "<hidden>secret</hidden>",
+            "<hidden>unclosed",
+            "orphan</hidden>",
+            "<hidden malformed",
+        )
+        for value in hidden_values:
+            with self.subTest(value=value):
+                document = documents.parse_document(draft_path.read_bytes())
+                metadata = dict(document.metadata)
+                metadata["note"] = value
+                draft_path.write_bytes(
+                    documents.render_document(
+                        documents.Document(
+                            metadata,
+                            document.body,
+                            document.newline,
+                            document.bom,
+                        )
+                    )
+                )
+                with self.assertRaisesRegex(drafts.DraftError, "hidden"):
+                    drafts.plan_accept_draft(
+                        self.model,
+                        "work/drafts/ch-004.md",
+                        self.store,
+                        "tx-hidden-metadata",
                     )
 
     def test_archive_ids_are_safe_and_collisions_refuse_overwrite(self):

@@ -51,9 +51,17 @@ def plan_reindex(
 ) -> TransactionPlan:
     """Plan exact replacements for every stale generated registry."""
 
+    selected = tuple(GENERATED_INDEX_FILES if index_ids is None else index_ids)
+    if len(set(selected)) != len(selected) or any(
+        index_id not in GENERATED_INDEX_FILES for index_id in selected
+    ):
+        raise ValueError("index_ids must contain unique generated index paths")
+
     documents: dict[str, Document] = {}
     for path in project.iter_managed_markdown():
         relative_id = project.relative_id(path)
+        if not _is_relevant_to_indexes(relative_id, selected):
+            continue
         if allowed_document_kind(relative_id) not in {
             "chapter",
             "work-artifact",
@@ -69,6 +77,8 @@ def plan_reindex(
 
     overlay_changes = tuple(overlay)
     for change in overlay_changes:
+        if not _is_relevant_to_indexes(change.path, selected):
+            continue
         if change.after is None:
             documents.pop(change.path, None)
             continue
@@ -82,11 +92,6 @@ def plan_reindex(
             documents.pop(change.path, None)
 
     ordered_documents = sorted(documents.items())
-    selected = tuple(GENERATED_INDEX_FILES if index_ids is None else index_ids)
-    if len(set(selected)) != len(selected) or any(
-        index_id not in GENERATED_INDEX_FILES for index_id in selected
-    ):
-        raise ValueError("index_ids must contain unique generated index paths")
 
     changes: list[Change] = []
     for index_id in selected:
@@ -108,6 +113,14 @@ def plan_reindex(
         command=("reindex",),
         changes=tuple(changes),
         metadata={"derived": True, "undoable": True},
+    )
+
+
+def _is_relevant_to_indexes(relative_id: str, index_ids: tuple[str, ...]) -> bool:
+    path = PurePosixPath(relative_id)
+    return any(
+        _is_beneath(path, PurePosixPath(index_id).parent)
+        for index_id in index_ids
     )
 
 
