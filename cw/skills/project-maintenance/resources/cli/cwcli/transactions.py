@@ -25,6 +25,10 @@ class TransactionError(RuntimeError):
     """Raised when a guarded transaction cannot be completed safely."""
 
 
+class TransactionConflict(TransactionError):
+    """Raised when current project bytes conflict with a requested transaction."""
+
+
 class _StateDurabilityError(TransactionError):
     """Raised when a journal state transition is not durably confirmed."""
 
@@ -124,6 +128,46 @@ class TransactionStore:
             state=manifest["state"],
             completed=tuple(manifest["completed"]),
         )
+
+    def history(self) -> tuple[dict[str, object], ...]:
+        """Return newest-first manifest summaries without loading content blobs."""
+
+        if not self.root.is_dir():
+            return ()
+        entries: list[dict[str, object]] = []
+        for transaction_dir in self.root.iterdir():
+            manifest_path = transaction_dir / "manifest.json"
+            if (
+                transaction_dir.is_symlink()
+                or not transaction_dir.is_dir()
+                or manifest_path.is_symlink()
+                or not manifest_path.is_file()
+            ):
+                continue
+            transaction_id = transaction_dir.name
+            manifest = self._read_manifest(transaction_id)
+            changes = manifest.get("changes")
+            entries.append(
+                {
+                    "id": transaction_id,
+                    "state": manifest.get("state"),
+                    "timestamp": manifest.get("timestamp"),
+                    "command": manifest.get("command"),
+                    "metadata": manifest.get("metadata"),
+                    "change_count": len(changes) if isinstance(changes, list) else 0,
+                }
+            )
+        entries.sort(
+            key=lambda entry: (str(entry.get("timestamp") or ""), str(entry["id"])),
+            reverse=True,
+        )
+        return tuple(entries)
+
+    def manifest(self, transaction_id: str) -> dict[str, object]:
+        """Return one stored manifest, including its review diffs but not blob bytes."""
+
+        manifest = self._read_manifest(transaction_id)
+        return {"id": transaction_id, **manifest}
 
     def write_state(
         self,
@@ -439,6 +483,39 @@ class TransactionEngine:
                 f"rolled-back state: {_error_text(error)}"
             ) from error
 
+    def inverse(self, transaction_id: str) -> TransactionPlan:
+        """Build an undo plan when the committed after-snapshots still match exactly."""
+
+        manifest = self.store.manifest(transaction_id)
+        if manifest.get("state") != "committed":
+            raise TransactionConflict(
+                f"cannot undo transaction {transaction_id} in state {manifest.get('state')}"
+            )
+        metadata = manifest.get("metadata")
+        if not isinstance(metadata, dict):
+            raise TransactionError(f"transaction {transaction_id} has invalid metadata")
+        if metadata.get("undoable", True) is not True:
+            raise TransactionConflict(f"transaction {transaction_id} is not undoable")
+
+        changes = tuple(
+            Change(change.path, change.after, change.before)
+            for change in self._persisted_changes(transaction_id)
+        )
+        inverse = TransactionPlan(
+            command=("undo", transaction_id),
+            changes=changes,
+            metadata={"undo-of": transaction_id, "undoable": True},
+        )
+        try:
+            self._validate_plan(inverse)
+        except TransactionError as error:
+            if "stale precondition" in str(error):
+                raise TransactionConflict(
+                    f"cannot undo transaction {transaction_id}: {error}"
+                ) from error
+            raise
+        return inverse
+
     def _validate_plan(self, plan: TransactionPlan) -> None:
         changes = self._resolve_changes(plan.changes)
         for change, target in changes:
@@ -478,7 +555,7 @@ class TransactionEngine:
             ) from error
 
         if actual != change.before:
-            raise TransactionError(f"stale precondition for {change.path}")
+            raise TransactionConflict(f"stale precondition for {change.path}")
 
     def _install_change(self, transaction_id: str, change: Change) -> None:
         target = self.project.resolve(change.path, for_write=True)
@@ -1017,6 +1094,7 @@ def _error_text(error: BaseException) -> str:
 
 __all__ = [
     "Change",
+    "TransactionConflict",
     "TransactionEngine",
     "TransactionError",
     "TransactionPlan",
