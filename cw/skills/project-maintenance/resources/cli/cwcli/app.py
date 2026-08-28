@@ -239,16 +239,16 @@ def _run_undo(args: argparse.Namespace, *, cwd: Path, stdout: TextIO, stderr: Te
 
 def _single_edit_target(cwd: Path, value: str) -> tuple[Project, str]:
     target = _from_cwd(cwd, value).absolute()
-    project = discover_project(target if target.exists() else cwd)
+    project = discover_project(cwd)
     if Path(value).is_absolute() and (not target.is_file() or target.is_symlink()):
         raise EditPlanError("absolute edit target must be an existing regular file inside the project")
     try:
         relative = project.relative_id(target)
         resolved = project.resolve(relative, for_write=True)
     except ProjectPathError as error:
-        raise EditPlanError(str(error)) from error
+        raise EditConflict(str(error)) from error
     if resolved != target or not target.is_file() or target.is_symlink():
-        raise EditPlanError("edit target must be an existing regular file inside the project")
+        raise EditConflict("edit target must be an existing regular file inside the project")
     return project, relative
 
 

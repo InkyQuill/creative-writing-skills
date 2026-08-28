@@ -156,6 +156,53 @@ class EditCommandTests(unittest.TestCase):
         self.assertEqual("conflict", json.loads(output)["status"])
         self.assertEqual(b"manual\n", self.target.read_bytes())
 
+    def test_single_edit_rejects_absolute_and_relative_sibling_targets(self):
+        sibling = Path(self.directory.name) / "sibling.md"
+        sibling.write_text("---\nnumber: 2\n---\nRain.\n", encoding="utf-8")
+        before = sibling.read_bytes()
+        old = self.content_file("sibling-old.txt", "Rain.")
+        new = self.content_file("sibling-new.txt", "Snow.")
+
+        targets = (str(sibling), "../sibling.md")
+        for target in targets:
+            with self.subTest(target=target):
+                status, output, error = self.run_cli(
+                    [
+                        "edit", "replace", target, "--old-file", old,
+                        "--new-file", new, "--format", "json", "--apply",
+                    ]
+                )
+                self.assertEqual(1, status)
+                self.assertEqual("", error)
+                self.assertEqual("conflict", json.loads(output)["status"])
+                self.assertEqual(before, sibling.read_bytes())
+
+    def test_single_edit_rejects_target_inside_nested_project(self):
+        nested = self.root / "story" / "nested"
+        nested_target = nested / "story" / "chapters" / "ch-001.md"
+        nested_target.parent.mkdir(parents=True)
+        (nested / "project.md").write_text(
+            "---\nschema-version: 1\ntitle: Nested\nlanguage: en\nstatus: drafting\n---\n",
+            encoding="utf-8",
+        )
+        nested_target.write_text("---\nnumber: 1\n---\nRain.\n", encoding="utf-8")
+        before = nested_target.read_bytes()
+
+        status, output, error = self.run_cli(
+            [
+                "edit", "replace", str(nested_target),
+                "--old-file", self.content_file("nested-old.txt", "Rain."),
+                "--new-file", self.content_file("nested-new.txt", "Snow."),
+                "--format", "json", "--apply",
+            ]
+        )
+
+        self.assertEqual(1, status)
+        self.assertEqual("", error)
+        self.assertEqual("conflict", json.loads(output)["status"])
+        self.assertIn("nested project", json.loads(output)["message"])
+        self.assertEqual(before, nested_target.read_bytes())
+
 
 if __name__ == "__main__":
     unittest.main()
