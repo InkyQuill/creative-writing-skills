@@ -29,6 +29,15 @@ class _StateDurabilityError(TransactionError):
     """Raised when a journal state transition is not durably confirmed."""
 
 
+class _TerminalStateInstalledError(_StateDurabilityError):
+    """Raised when a terminal journal state must be treated as authoritative."""
+
+    def __init__(self, message: str, state: str, *, observed: bool):
+        super().__init__(message)
+        self.state = state
+        self.observed = observed
+
+
 @dataclass(frozen=True)
 class Change:
     """One exact-byte replacement planned for a project-relative file."""
@@ -315,6 +324,17 @@ class TransactionEngine:
                 completed=tuple(completed),
                 intents=tuple(intents),
             )
+        except _TerminalStateInstalledError as error:
+            reconciliation_errors = self._honor_terminal_state(
+                prepared.id, plan.changes, error.state
+            )
+            outcome = self._terminal_reconciliation_outcome(
+                error, reconciliation_errors
+            )
+            raise TransactionError(
+                f"transaction {prepared.id} could not confirm its terminal state: "
+                f"{_error_text(error)}; {outcome}"
+            ) from error
         except BaseException as error:
             state_durability_failed = isinstance(error, _StateDurabilityError)
             rollback_intents, progress_errors = self._rollback_intents(
@@ -336,6 +356,17 @@ class TransactionEngine:
                         completed=tuple(completed),
                         intents=rollback_intents,
                     )
+                except _TerminalStateInstalledError as state_error:
+                    reconciliation_errors = self._honor_terminal_state(
+                        prepared.id, plan.changes, state_error.state
+                    )
+                    outcome = self._terminal_reconciliation_outcome(
+                        state_error, reconciliation_errors
+                    )
+                    raise TransactionError(
+                        f"transaction {prepared.id} failed: {_error_text(error)}; "
+                        f"{_error_text(state_error)}; {outcome}"
+                    ) from error
                 except BaseException as state_error:
                     rollback_errors.append(_error_text(state_error))
 
@@ -391,6 +422,17 @@ class TransactionEngine:
                 completed=record.completed,
                 intents=intents,
             )
+        except _TerminalStateInstalledError as error:
+            reconciliation_errors = self._honor_terminal_state(
+                transaction_id, changes, error.state
+            )
+            outcome = self._terminal_reconciliation_outcome(
+                error, reconciliation_errors
+            )
+            raise TransactionError(
+                f"recovery of transaction {transaction_id} could not confirm its "
+                f"terminal state: {_error_text(error)}; {outcome}"
+            ) from error
         except BaseException as error:
             raise TransactionError(
                 f"recovery of transaction {transaction_id} could not durably record "
@@ -516,6 +558,62 @@ class TransactionEngine:
             ) != change.before:
                 raise
 
+    def _honor_terminal_state(
+        self, transaction_id: str, changes: tuple[Change, ...], state: str
+    ) -> list[str]:
+        errors: list[str] = []
+        for change in changes:
+            try:
+                self._reconcile_terminal_change(transaction_id, change, state)
+            except BaseException as error:
+                errors.append(f"{change.path}: {_error_text(error)}")
+        errors.extend(self._cleanup_temporaries(transaction_id, changes))
+        return errors
+
+    def _reconcile_terminal_change(
+        self, transaction_id: str, change: Change, state: str
+    ) -> None:
+        if state not in {"committed", "rolled-back"}:
+            raise TransactionError(f"unknown terminal state {state}")
+        target = self.project.resolve(change.path, for_write=True)
+        desired = change.after if state == "committed" else change.before
+        opposite = change.before if state == "committed" else change.after
+        current = self._current_bytes(change.path, target)
+        if current == desired:
+            return
+        if current != opposite:
+            raise TransactionError(
+                f"terminal reconciliation conflict: current bytes match neither "
+                f"the {state} snapshot nor its opposite"
+            )
+
+        self._remove_temporary(transaction_id, change.path)
+        if desired is None:
+            self._mutate_and_sync(lambda: self.unlink_hook(target), target.parent)
+            return
+        self._write_staged_bytes(transaction_id, change.path, desired)
+        temporary = self._temporary_path(transaction_id, change.path)
+        self._mutate_and_sync(
+            lambda: self.replace_hook(temporary, target), target.parent
+        )
+
+    @staticmethod
+    def _terminal_reconciliation_outcome(
+        error: _TerminalStateInstalledError, errors: list[str]
+    ) -> str:
+        if error.observed:
+            outcome = f"{error.state} state is terminal and was honored"
+        else:
+            outcome = (
+                f"{error.state} state could not be ruled out and its filesystem "
+                f"snapshot was preserved"
+            )
+        if errors:
+            outcome += "; terminal filesystem reconciliation failed: " + "; ".join(
+                errors
+            )
+        return outcome
+
     def _current_bytes(self, path: str, target: Path) -> bytes | None:
         try:
             if not target.exists():
@@ -638,9 +736,11 @@ class TransactionEngine:
             )
         except BaseException as error:
             revert_errors: list[str] = []
+            terminal_observed = False
             try:
                 observed = self.store.load(transaction_id)
                 if observed.state == state:
+                    terminal_observed = True
                     self.store.write_state(
                         transaction_id,
                         previous.state,
@@ -651,7 +751,33 @@ class TransactionEngine:
                 revert_errors.append(
                     f"could not restore nonterminal journal state: {_error_text(revert_error)}"
                 )
+
+            final_record: TransactionRecord | None = None
+            try:
+                final_record = self.store.load(transaction_id)
+            except BaseException as observation_error:
+                revert_errors.append(
+                    f"could not observe final journal state: {_error_text(observation_error)}"
+                )
+
             suffix = "" if not revert_errors else "; " + "; ".join(revert_errors)
+            if final_record is not None and final_record.state in {
+                "committed",
+                "rolled-back",
+            }:
+                raise _TerminalStateInstalledError(
+                    f"could not durably persist terminal {state} state for transaction "
+                    f"{transaction_id}: {_error_text(error)}{suffix}",
+                    final_record.state,
+                    observed=True,
+                ) from error
+            if final_record is None:
+                raise _TerminalStateInstalledError(
+                    f"could not durably persist terminal {state} state for transaction "
+                    f"{transaction_id}: {_error_text(error)}{suffix}",
+                    state,
+                    observed=terminal_observed,
+                ) from error
             raise _StateDurabilityError(
                 f"could not durably persist terminal {state} state for transaction "
                 f"{transaction_id}: {_error_text(error)}{suffix}"

@@ -403,6 +403,50 @@ class TransactionEngineTests(unittest.TestCase):
             "rolled-back", engine.recover("tx-committed-state-fail").state
         )
 
+    def test_committed_state_reversion_failure_honors_installed_terminal_state(self):
+        root, engine = self.make_engine({"story/a.md": b"A\n"})
+        plan = transactions.TransactionPlan(
+            ("edit", "apply"),
+            (transactions.Change("story/a.md", b"A\n", b"A2\n"),),
+            {},
+        )
+        write_state = engine.store.write_state
+        terminal_installed = False
+
+        def fail_committed_and_reversion(
+            transaction_id: str,
+            state: str,
+            *,
+            completed: tuple[str, ...] = (),
+            intents: tuple[str, ...] | None = None,
+        ) -> transactions.TransactionRecord:
+            nonlocal terminal_installed
+            if terminal_installed and state == "applying":
+                raise OSError("committed reversion injected")
+            kwargs: dict[str, object] = {"completed": completed}
+            if intents is not None:
+                kwargs["intents"] = intents
+            record = write_state(transaction_id, state, **kwargs)
+            if state == "committed":
+                terminal_installed = True
+                raise OSError("committed installed then raised")
+            return record
+
+        engine.store.write_state = fail_committed_and_reversion
+
+        with self.assertRaises(transactions.TransactionError) as raised:
+            engine.apply(plan, transaction_id="tx-committed-reversion-fail")
+
+        self.assertIn("committed installed then raised", str(raised.exception))
+        self.assertIn("committed state is terminal and was honored", str(raised.exception))
+        self.assertNotIn("remains recoverable", str(raised.exception))
+        self.assertEqual(b"A2\n", (root / "story/a.md").read_bytes())
+        self.assertEqual(
+            "committed", engine.store.load("tx-committed-reversion-fail").state
+        )
+        with self.assertRaisesRegex(transactions.TransactionError, "cannot recover"):
+            engine.recover("tx-committed-reversion-fail")
+
     def test_rolled_back_state_failure_stays_nonterminal_and_retryable(self):
         root, engine = self.make_engine({"story/a.md": b"A\n"})
         plan = transactions.TransactionPlan(
@@ -444,6 +488,53 @@ class TransactionEngineTests(unittest.TestCase):
         self.assertEqual(
             "rolled-back", engine.recover("tx-rolled-back-state-fail").state
         )
+
+    def test_rolled_back_state_reversion_failure_honors_installed_terminal_state(self):
+        root, engine = self.make_engine({"story/a.md": b"A\n"})
+        plan = transactions.TransactionPlan(
+            ("edit", "apply"),
+            (transactions.Change("story/a.md", b"A\n", b"A2\n"),),
+            {},
+        )
+        write_state = engine.store.write_state
+        terminal_installed = False
+
+        def fail_rolled_back_and_reversion(
+            transaction_id: str,
+            state: str,
+            *,
+            completed: tuple[str, ...] = (),
+            intents: tuple[str, ...] | None = None,
+        ) -> transactions.TransactionRecord:
+            nonlocal terminal_installed
+            if terminal_installed and state == "applying":
+                raise OSError("rolled-back reversion injected")
+            kwargs: dict[str, object] = {"completed": completed}
+            if intents is not None:
+                kwargs["intents"] = intents
+            record = write_state(transaction_id, state, **kwargs)
+            if state == "rolled-back":
+                terminal_installed = True
+                raise OSError("rolled-back installed then raised")
+            return record
+
+        engine.store.write_state = fail_rolled_back_and_reversion
+        engine.replace_hook = lambda _source, _destination: (_ for _ in ()).throw(
+            OSError("forward injected")
+        )
+
+        with self.assertRaises(transactions.TransactionError) as raised:
+            engine.apply(plan, transaction_id="tx-rolled-back-reversion-fail")
+
+        self.assertIn("rolled-back installed then raised", str(raised.exception))
+        self.assertIn("rolled-back state is terminal and was honored", str(raised.exception))
+        self.assertNotIn("remains recoverable", str(raised.exception))
+        self.assertEqual(b"A\n", (root / "story/a.md").read_bytes())
+        self.assertEqual(
+            "rolled-back", engine.store.load("tx-rolled-back-reversion-fail").state
+        )
+        with self.assertRaisesRegex(transactions.TransactionError, "cannot recover"):
+            engine.recover("tx-rolled-back-reversion-fail")
 
     def test_cleanup_failure_keeps_transaction_nonterminal_for_retry(self):
         root, engine = self.make_engine({"story/a.md": b"A\n"})
@@ -644,6 +735,57 @@ class TransactionEngineTests(unittest.TestCase):
         self.assertEqual(
             "rolled-back", engine.recover("tx-recovery-state-fail").state
         )
+
+    def test_recover_rolled_back_reversion_failure_honors_installed_terminal_state(self):
+        root, engine = self.make_engine({"story/a.md": b"A\n"})
+        plan = transactions.TransactionPlan(
+            ("edit", "apply"),
+            (transactions.Change("story/a.md", b"A\n", b"A2\n"),),
+            {},
+        )
+        engine.store.prepare(plan, transaction_id="tx-recovery-reversion-fail")
+        engine.store.write_state(
+            "tx-recovery-reversion-fail", "applying", intents=("story/a.md",)
+        )
+        (root / "story/a.md").write_bytes(b"A2\n")
+        write_state = engine.store.write_state
+        terminal_installed = False
+
+        def fail_rolled_back_and_reversion(
+            transaction_id: str,
+            state: str,
+            *,
+            completed: tuple[str, ...] = (),
+            intents: tuple[str, ...] | None = None,
+        ) -> transactions.TransactionRecord:
+            nonlocal terminal_installed
+            if terminal_installed and state == "applying":
+                raise OSError("recovery reversion injected")
+            kwargs: dict[str, object] = {"completed": completed}
+            if intents is not None:
+                kwargs["intents"] = intents
+            record = write_state(transaction_id, state, **kwargs)
+            if state == "rolled-back":
+                terminal_installed = True
+                raise OSError("recovery rolled-back installed then raised")
+            return record
+
+        engine.store.write_state = fail_rolled_back_and_reversion
+
+        with self.assertRaises(transactions.TransactionError) as raised:
+            engine.recover("tx-recovery-reversion-fail")
+
+        self.assertIn(
+            "recovery rolled-back installed then raised", str(raised.exception)
+        )
+        self.assertIn("rolled-back state is terminal and was honored", str(raised.exception))
+        self.assertNotIn("remains recoverable", str(raised.exception))
+        self.assertEqual(b"A\n", (root / "story/a.md").read_bytes())
+        self.assertEqual(
+            "rolled-back", engine.store.load("tx-recovery-reversion-fail").state
+        )
+        with self.assertRaisesRegex(transactions.TransactionError, "cannot recover"):
+            engine.recover("tx-recovery-reversion-fail")
 
     def test_target_directory_sync_failure_after_mutation_is_rolled_back(self):
         root, engine = self.make_engine({"story/a.md": b"A\n"})
