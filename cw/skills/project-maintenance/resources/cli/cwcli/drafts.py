@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import re
 import stat
 import unicodedata
 from dataclasses import dataclass
@@ -10,7 +11,13 @@ from pathlib import Path, PurePosixPath
 
 from .documents import Document, Scalar, logical_hash, parse_document, render_document
 from .project import Project, ProjectPathError
-from .transactions import Change, TransactionPlan, TransactionStore
+from .rebase import RebaseConflict, three_way_rebase
+from .transactions import (
+    Change,
+    TransactionError,
+    TransactionPlan,
+    TransactionStore,
+)
 
 
 ACTIVE_STATUSES = frozenset({"working", "review", "ready"})
@@ -19,6 +26,14 @@ _CLI_MANAGED_METADATA = frozenset({"target", "base-revision", "status"})
 
 class DraftError(ValueError):
     """Raised when a draft cannot be interpreted or planned safely."""
+
+
+class DraftConflict(DraftError):
+    """Raised when a draft and its accepted target cannot be merged safely."""
+
+    def __init__(self, conflicts: tuple[RebaseConflict, ...]):
+        super().__init__(f"draft rebase has {len(conflicts)} competing fragment(s)")
+        self.conflicts = conflicts
 
 
 @dataclass(frozen=True)
@@ -123,6 +138,103 @@ def plan_create_draft(
     )
 
 
+def plan_rebase_draft(
+    project: Project,
+    draft_path: str,
+    store: TransactionStore,
+) -> TransactionPlan:
+    """Plan a conservative rebase of one draft onto its current target."""
+
+    if store.project.root != project.root:
+        raise DraftError("transaction store belongs to a different project")
+    draft = load_draft(project, draft_path)
+    if draft.base_revision is None:
+        raise DraftError(f"draft {draft_path} has no base-revision to rebase")
+
+    try:
+        draft_source = _read_regular_file(
+            project.resolve(draft_path, for_write=True), f"draft {draft_path}"
+        )
+        draft_document = parse_document(draft_source)
+        if draft_document.metadata != draft.metadata:
+            raise DraftError(f"draft {draft_path} changed while planning its rebase")
+        base_source = store.load_revision(draft.base_revision)
+        base_document = parse_document(base_source)
+        target_path = _resolve_target(project, draft.target)
+        current_source = _read_regular_file(target_path, f"target {draft.target}")
+        current_document = parse_document(current_source)
+    except (OSError, UnicodeError, ValueError, TransactionError) as error:
+        raise DraftError(
+            f"cannot load recoverable rebase inputs for {draft_path}: {error}"
+        ) from error
+
+    current_revision = logical_hash(current_source)
+    if current_revision == draft.base_revision:
+        return TransactionPlan(
+            command=("draft", "rebase", draft_path),
+            changes=(),
+            metadata={
+                "draft": draft_path,
+                "target": draft.target,
+                "base-revision": current_revision,
+                "undoable": True,
+            },
+        )
+
+    result = three_way_rebase(
+        base_document.body, draft_document.body, current_document.body
+    )
+    if result.conflicts:
+        raise DraftConflict(result.conflicts)
+    assert result.text is not None
+
+    after = _render_rebased_draft(
+        draft_source, draft_document, result.text, current_revision
+    )
+    # Save the exact target revision only after the complete conflict scan. A
+    # subsequent rebase must be able to recover the new base named by the
+    # applied draft metadata.
+    store.remember_revision(current_revision, current_source)
+    return TransactionPlan(
+        command=("draft", "rebase", draft_path),
+        changes=(Change(draft_path, draft_source, after),),
+        metadata={
+            "draft": draft_path,
+            "target": draft.target,
+            "base-revision": current_revision,
+            "undoable": True,
+        },
+    )
+
+
+_BASE_REVISION_LINE = re.compile(br"(?m)^(base-revision:)[ \t]*[^\r\n]*")
+
+
+def _render_rebased_draft(
+    source: bytes,
+    document: Document,
+    body: str,
+    base_revision: str,
+) -> bytes:
+    original_body = document.body.encode("utf-8")
+    if not source.endswith(original_body):
+        raise DraftError("cannot identify the draft body without rewriting frontmatter")
+    prefix = source[: len(source) - len(original_body)] if original_body else source
+    replacement = rb"\1 " + base_revision.encode("ascii")
+    updated_prefix, count = _BASE_REVISION_LINE.subn(replacement, prefix)
+    if count != 1:
+        raise DraftError("draft must contain exactly one base-revision field")
+    normalized_body = body.replace("\r\n", "\n").replace("\r", "\n")
+    rendered_body = normalized_body.replace("\n", document.newline).encode("utf-8")
+    rendered = updated_prefix + rendered_body
+    reparsed = parse_document(rendered)
+    expected_metadata = dict(document.metadata)
+    expected_metadata["base-revision"] = base_revision
+    if reparsed.metadata != expected_metadata or reparsed.body != rendered_body.decode("utf-8"):
+        raise DraftError("rebased draft could not be rendered safely")
+    return rendered
+
+
 def _reject_duplicate_target(project: Project, target: str) -> None:
     directory = project.root / "work" / "drafts"
     if directory.is_symlink():
@@ -205,7 +317,9 @@ def _read_regular_file(path: os.PathLike[str], label: str) -> bytes:
 __all__ = [
     "ACTIVE_STATUSES",
     "Draft",
+    "DraftConflict",
     "DraftError",
     "load_draft",
     "plan_create_draft",
+    "plan_rebase_draft",
 ]
