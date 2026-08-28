@@ -1,11 +1,21 @@
 import io
 import unittest
+from contextlib import redirect_stderr
 from pathlib import Path
 
 from .helpers import app, findings
 
 
 class AppTests(unittest.TestCase):
+    def test_invalid_arguments_use_injected_stderr_and_return_failure(self):
+        stderr = io.StringIO()
+        global_stderr = io.StringIO()
+        with redirect_stderr(global_stderr):
+            status = app.run(["--format", "invalid"], cwd=Path.cwd(), stdout=io.StringIO(), stderr=stderr)
+        self.assertEqual(status, 2)
+        self.assertIn("cw: error:", stderr.getvalue())
+        self.assertEqual("", global_stderr.getvalue())
+
     def test_version_is_machine_readable(self):
         stdout = io.StringIO()
         status = app.run(["--version", "--format", "json"], cwd=Path.cwd(), stdout=stdout, stderr=io.StringIO())
