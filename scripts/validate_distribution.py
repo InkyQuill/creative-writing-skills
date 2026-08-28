@@ -473,7 +473,7 @@ def _resolve_relative(base: Path, value: object, boundary: Path) -> Path | None:
 
 def _is_within(path: Path, boundary: Path) -> bool:
     try:
-        path.resolve().relative_to(boundary.resolve())
+        path.resolve(strict=True).relative_to(boundary.resolve(strict=True))
     except (OSError, RuntimeError, ValueError):
         return False
     return True
