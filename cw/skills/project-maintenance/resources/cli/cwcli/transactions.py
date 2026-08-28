@@ -2,16 +2,18 @@
 
 from __future__ import annotations
 
-import copy
 import difflib
 import hashlib
 import json
 import os
+import shutil
 import tempfile
 import uuid
+from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from pathlib import Path
+from pathlib import Path, PurePosixPath, PureWindowsPath
+from types import MappingProxyType
 
 from .documents import logical_hash
 from .project import Project
@@ -25,6 +27,9 @@ class Change:
     before: bytes | None
     after: bytes | None
 
+    def __post_init__(self) -> None:
+        _validate_change_path(self.path)
+
 
 @dataclass(frozen=True)
 class TransactionPlan:
@@ -32,7 +37,12 @@ class TransactionPlan:
 
     command: tuple[str, ...]
     changes: tuple[Change, ...]
-    metadata: dict[str, object]
+    metadata: Mapping[str, object]
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "command", tuple(self.command))
+        object.__setattr__(self, "changes", tuple(self.changes))
+        object.__setattr__(self, "metadata", _freeze_metadata(self.metadata))
 
 
 @dataclass(frozen=True)
@@ -59,21 +69,27 @@ class TransactionStore:
         if transaction_dir.exists():
             raise FileExistsError(f"transaction already exists: {identifier}")
 
+        manifest = {
+            "changes": [self._manifest_change(change) for change in plan.changes],
+            "command": list(plan.command),
+            "completed": [],
+            "metadata": _jsonable(plan.metadata),
+            "state": "prepared",
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        }
+        rendered_manifest = _render_json(manifest)
+
         transaction_dir.parent.mkdir(parents=True, exist_ok=True)
         try:
             transaction_dir.mkdir()
         except FileExistsError as error:
             raise FileExistsError(f"transaction already exists: {identifier}") from error
 
-        manifest = {
-            "changes": [self._manifest_change(change) for change in plan.changes],
-            "command": list(plan.command),
-            "completed": [],
-            "metadata": copy.deepcopy(plan.metadata),
-            "state": "prepared",
-            "timestamp": datetime.now(timezone.utc).isoformat(),
-        }
-        self._write_json(transaction_dir / "manifest.json", manifest)
+        try:
+            self._write_json(transaction_dir / "manifest.json", rendered_manifest)
+        except BaseException:
+            shutil.rmtree(transaction_dir)
+            raise
         return TransactionRecord(identifier, "prepared", ())
 
     def load(self, transaction_id: str) -> TransactionRecord:
@@ -95,7 +111,7 @@ class TransactionStore:
         manifest = self._read_manifest(transaction_id)
         manifest["state"] = state
         manifest["completed"] = list(completed)
-        self._write_json(manifest_path, manifest)
+        self._write_json(manifest_path, _render_json(manifest))
         return TransactionRecord(transaction_id, state, tuple(completed))
 
     def blob(self, data: bytes) -> str:
@@ -147,7 +163,7 @@ class TransactionStore:
         return self.root / transaction_id
 
     @staticmethod
-    def _write_json(destination: Path, value: dict[str, object]) -> None:
+    def _write_json(destination: Path, rendered: str) -> None:
         with tempfile.NamedTemporaryFile(
             mode="w",
             encoding="utf-8",
@@ -158,8 +174,7 @@ class TransactionStore:
         ) as stream:
             temporary = Path(stream.name)
             try:
-                json.dump(value, stream, ensure_ascii=False, indent=2, sort_keys=True)
-                stream.write("\n")
+                stream.write(rendered)
                 stream.flush()
                 os.fsync(stream.fileno())
                 os.replace(temporary, destination)
@@ -200,6 +215,50 @@ def _unified_diff(path: str, before: bytes | None, after: bytes | None) -> str:
             tofile=path,
         )
     )
+
+
+def _freeze_metadata(metadata: Mapping[str, object]) -> Mapping[str, object]:
+    if not isinstance(metadata, Mapping):
+        raise TypeError("transaction metadata must be a mapping")
+    return MappingProxyType({key: _freeze_jsonlike(value) for key, value in metadata.items()})
+
+
+def _freeze_jsonlike(value: object) -> object:
+    if isinstance(value, Mapping):
+        return MappingProxyType({key: _freeze_jsonlike(item) for key, item in value.items()})
+    if isinstance(value, (list, tuple)):
+        return tuple(_freeze_jsonlike(item) for item in value)
+    if isinstance(value, (set, frozenset)):
+        return frozenset(_freeze_jsonlike(item) for item in value)
+    return value
+
+
+def _jsonable(value: object) -> object:
+    if isinstance(value, Mapping):
+        return {key: _jsonable(item) for key, item in value.items()}
+    if isinstance(value, tuple):
+        return [_jsonable(item) for item in value]
+    return value
+
+
+def _render_json(value: object) -> str:
+    return json.dumps(value, ensure_ascii=False, indent=2, sort_keys=True) + "\n"
+
+
+def _validate_change_path(path: str) -> None:
+    if not isinstance(path, str) or not path:
+        raise ValueError("change path must be a non-empty project-relative POSIX path")
+    if "\\" in path:
+        raise ValueError("change path must use forward slashes")
+
+    posix = PurePosixPath(path)
+    windows = PureWindowsPath(path)
+    if posix.is_absolute() or windows.is_absolute() or windows.drive or windows.root:
+        raise ValueError("change path must be project-relative")
+
+    segments = path.split("/")
+    if any(segment in {"", ".", ".."} for segment in segments):
+        raise ValueError("change path must be a normalized project-relative identity")
 
 
 __all__ = ["Change", "TransactionPlan", "TransactionRecord", "TransactionStore"]

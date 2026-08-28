@@ -75,6 +75,116 @@ class TransactionStoreTests(unittest.TestCase):
         with self.assertRaises(FileExistsError):
             store.prepare(plan, transaction_id="tx-test")
 
+    def test_plan_metadata_is_an_immutable_snapshot_of_nested_json_data(self):
+        metadata = {"nested": {"items": ["first"]}}
+        plan = transactions.TransactionPlan(
+            command=("edit", "replace"),
+            changes=(transactions.Change("story/chapters/ch-001.md", b"old\n", b"new\n"),),
+            metadata=metadata,
+        )
+        metadata["nested"]["items"].append("later")
+
+        with self.assertRaises(TypeError):
+            plan.metadata["new"] = "value"
+        with self.assertRaises(TypeError):
+            plan.metadata["nested"]["new"] = "value"
+        with self.assertRaises(AttributeError):
+            plan.metadata["nested"]["items"].append("later")
+
+        store = self.make_store()
+        store.prepare(plan, transaction_id="tx-metadata")
+        manifest = json.loads((store.root / "tx-metadata" / "manifest.json").read_text(encoding="utf-8"))
+        self.assertEqual({"nested": {"items": ["first"]}}, manifest["metadata"])
+
+    def test_change_rejects_non_project_relative_paths(self):
+        paths = (
+            "",
+            "/story/chapters/ch-001.md",
+            "C:/story/chapters/ch-001.md",
+            "story\\chapter.md",
+            ".",
+            "..",
+            "story/./chapter.md",
+            "story/../chapter.md",
+            "story//chapter.md",
+            "story/chapter.md/",
+        )
+        for path in paths:
+            with self.subTest(path=path), self.assertRaises(ValueError):
+                transactions.Change(path, b"old\n", b"new\n")
+
+    def test_prepare_failure_before_manifest_write_leaves_transaction_id_reusable(self):
+        store = self.make_store()
+        invalid_plan = transactions.TransactionPlan(
+            command=("edit", "replace"),
+            changes=(transactions.Change("story/chapters/ch-001.md", b"old\n", b"new\n"),),
+            metadata={"unsupported": object()},
+        )
+
+        with self.assertRaises(TypeError):
+            store.prepare(invalid_plan, transaction_id="tx-retry")
+        self.assertFalse((store.root / "tx-retry").exists())
+
+        record = store.prepare(
+            transactions.TransactionPlan(
+                command=("edit", "replace"),
+                changes=(transactions.Change("story/chapters/ch-001.md", b"old\n", b"new\n"),),
+                metadata={},
+            ),
+            transaction_id="tx-retry",
+        )
+        self.assertEqual(transactions.TransactionRecord("tx-retry", "prepared", ()), record)
+
+    def test_prepare_records_create_and_delete_with_null_snapshot_references(self):
+        store = self.make_store()
+        created = b"created\n"
+        deleted = b"deleted\n"
+        store.prepare(
+            transactions.TransactionPlan(
+                command=("edit", "apply"),
+                changes=(
+                    transactions.Change("story/chapters/new.md", None, created),
+                    transactions.Change("story/chapters/old.md", deleted, None),
+                ),
+                metadata={},
+            ),
+            transaction_id="tx-create-delete",
+        )
+        manifest = json.loads(
+            (store.root / "tx-create-delete" / "manifest.json").read_text(encoding="utf-8")
+        )
+
+        null_reference = {"blob": None, "byte_hash": None, "logical_hash": None}
+        created_id = hashlib.sha256(created).hexdigest()
+        deleted_id = hashlib.sha256(deleted).hexdigest()
+        self.assertEqual(null_reference, manifest["changes"][0]["before"])
+        self.assertEqual(
+            {
+                "blob": created_id,
+                "byte_hash": created_id,
+                "logical_hash": documents.logical_hash(created),
+            },
+            manifest["changes"][0]["after"],
+        )
+        self.assertEqual(
+            "--- story/chapters/new.md\n+++ story/chapters/new.md\n@@ -0,0 +1 @@\n+created\n",
+            manifest["changes"][0]["diff"],
+        )
+        self.assertEqual(
+            {
+                "blob": deleted_id,
+                "byte_hash": deleted_id,
+                "logical_hash": documents.logical_hash(deleted),
+            },
+            manifest["changes"][1]["before"],
+        )
+        self.assertEqual(null_reference, manifest["changes"][1]["after"])
+        self.assertEqual(
+            "--- story/chapters/old.md\n+++ story/chapters/old.md\n@@ -1 +0,0 @@\n-deleted\n",
+            manifest["changes"][1]["diff"],
+        )
+        self.assertEqual(2, len(list((store.root / "blobs").iterdir())))
+
     def test_write_state_preserves_prepared_manifest_content(self):
         store = self.make_store()
         plan = transactions.TransactionPlan(
