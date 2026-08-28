@@ -8,6 +8,7 @@ from typing import TextIO
 
 from . import __version__
 from .checks.structure import check_structure
+from .documents import DocumentError
 from .findings import Report
 from .project import ProjectDiscoveryError, discover_project
 from .scaffold import render_scaffold
@@ -81,7 +82,7 @@ def run(argv: list[str], *, cwd: Path, stdout: TextIO, stderr: TextIO) -> int:
         try:
             target = _from_cwd(cwd, args.path)
             report = Report(check_structure(discover_project(target)))
-        except ProjectDiscoveryError as error:
+        except (DocumentError, OSError, ProjectDiscoveryError) as error:
             stderr.write(f"cw: error: {error}\n")
             return 2
         return _write_report(report, output_format=args.format, strict=args.strict, stdout=stdout)

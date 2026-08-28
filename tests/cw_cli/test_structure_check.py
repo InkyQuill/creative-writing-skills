@@ -2,7 +2,9 @@ import io
 import json
 import tempfile
 import unittest
+from contextlib import redirect_stderr
 from pathlib import Path
+from unittest.mock import patch
 
 from . import helpers  # Adds the canonical CLI directory to sys.path.
 from cwcli import app, project, scaffold, schema
@@ -132,6 +134,55 @@ class StructureCheckTests(unittest.TestCase):
                 "warning",
                 {finding["severity"] for finding in report["findings"] if finding["code"] == "CW-STRUCT-010"},
             )
+
+    def test_check_command_contains_malformed_manifest_as_an_execution_error(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory) / "project"
+            root.mkdir()
+            (root / "project.md").write_bytes(b"---\ntitle: Broken\n")
+            stderr = io.StringIO()
+            global_stderr = io.StringIO()
+
+            with redirect_stderr(global_stderr):
+                status = app.run(
+                    ["check", "structure", str(root)],
+                    cwd=root.parent,
+                    stdout=io.StringIO(),
+                    stderr=stderr,
+                )
+
+            self.assertIsInstance(status, int)
+            self.assertEqual(2, status)
+            self.assertIn("cw: error: line 3: unterminated frontmatter", stderr.getvalue())
+            self.assertEqual("", global_stderr.getvalue())
+
+    def test_check_command_contains_manifest_read_failures_as_execution_errors(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory) / "project"
+            root.mkdir()
+            manifest = root / "project.md"
+            manifest.write_text("---\nschema-version: 1\n---\n", encoding="utf-8")
+            stderr = io.StringIO()
+            global_stderr = io.StringIO()
+            original_read_bytes = Path.read_bytes
+
+            def fail_only_for_manifest(path: Path) -> bytes:
+                if path == manifest.resolve():
+                    raise OSError("simulated manifest read failure")
+                return original_read_bytes(path)
+
+            with redirect_stderr(global_stderr), patch("cwcli.project.Path.read_bytes", new=fail_only_for_manifest):
+                status = app.run(
+                    ["check", "structure", str(root)],
+                    cwd=root.parent,
+                    stdout=io.StringIO(),
+                    stderr=stderr,
+                )
+
+            self.assertIsInstance(status, int)
+            self.assertEqual(2, status)
+            self.assertIn("cw: error: simulated manifest read failure", stderr.getvalue())
+            self.assertEqual("", global_stderr.getvalue())
 
     def test_init_only_previews_sorted_file_and_protected_directory_creates(self):
         with tempfile.TemporaryDirectory() as directory:
