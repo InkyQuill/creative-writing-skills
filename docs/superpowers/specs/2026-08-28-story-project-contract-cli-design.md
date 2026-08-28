@@ -336,6 +336,7 @@ cw migrate --plan
 cw migrate --apply <plan.json>
 
 cw draft create
+cw draft set-status
 cw draft rebase
 cw draft accept
 cw draft abandon
@@ -353,6 +354,11 @@ cw undo <transaction-id>
 cw cli-doctor
 cw clean-context
 ```
+
+`cw draft set-status <draft> <working|review|ready>` is the safe journaled
+way for an agent to advance or return an active draft. The author may still
+edit a draft file directly; the command exists so agent workflows do not need
+to rewrite lifecycle frontmatter through a generic text primitive.
 
 Mutating commands produce a preview by default. Non-interactive application
 requires an explicit `--apply`; no workflow depends on an interactive prompt.
