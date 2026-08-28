@@ -35,8 +35,8 @@ EXPECTED_SKILLS = {
     "character-sim", "creative-research", "creative-writing-craft",
     "creative-writing-modes", "creative-writing-muse", "grill-with-docs",
     "information-hierarchy", "intent-modeling", "kb-management",
-    "knowledge-layers", "llm-writing", "md-validation", "project-setup",
-    "qi-layer", "reader-sim", "reflect", "shared-dao", "story-memory",
+    "knowledge-layers", "llm-writing", "md-validation", "project-maintenance",
+    "project-setup", "qi-layer", "reader-sim", "reflect", "shared-dao", "story-memory",
     "story-planning", "story-review", "structured-artifact",
     "targeted-editing", "world-creation", "writing-principles",
     "writing-staffing", "zoom-out",
@@ -44,7 +44,7 @@ EXPECTED_SKILLS = {
 AUTHORED_SKILLS = {
     "character-sim", "creative-research", "creative-writing-craft",
     "creative-writing-modes", "creative-writing-muse", "kb-management",
-    "project-setup", "reader-sim", "shared-dao", "story-memory",
+    "project-maintenance", "project-setup", "reader-sim", "shared-dao", "story-memory",
     "story-planning", "story-review", "targeted-editing", "world-creation",
     "writing-principles", "writing-staffing",
 }
@@ -1295,8 +1295,9 @@ def _validate_claude_distribution(
         for reference in sorted(extract_skill_references(text, "/")):
             if reference not in EXPECTED_SKILLS:
                 problems.append(f"{label}: dangling Claude skill reference /{reference}")
-        for reference in sorted(_worker_references(visible) - worker_names):
-            problems.append(f"{label}: dangling worker reference @{reference}")
+        if path.suffix.lower() == ".md":
+            for reference in sorted(_worker_references(visible) - worker_names):
+                problems.append(f"{label}: dangling worker reference @{reference}")
         for match in PLATFORM_VOCABULARY_RE.finditer(text):
             problems.append(f"{label}: forbidden runtime vocabulary {match.group(0)}")
 

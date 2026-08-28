@@ -39,6 +39,7 @@ EXPECTED_SKILLS = {
     "knowledge-layers",
     "llm-writing",
     "md-validation",
+    "project-maintenance",
     "project-setup",
     "qi-layer",
     "reader-sim",
@@ -342,6 +343,19 @@ class ClaudeTransformTests(unittest.TestCase):
 
 
 class ClaudeDistributionRenderTests(unittest.TestCase):
+    def test_render_distribution_preserves_project_maintenance_cli_bytes(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            output_root = Path(temporary) / "cw"
+
+            render_distribution(output_root)
+
+            for relative in ("resources/cli/cw.py", "resources/cli/cwcli/app.py"):
+                source = Path(
+                    "plugins/creative-writing-skills/skills/project-maintenance"
+                ) / relative
+                rendered = output_root / "skills/project-maintenance" / relative
+                self.assertEqual(source.read_bytes(), rendered.read_bytes(), relative)
+
     def test_render_distribution_materializes_complete_claude_tree(self):
         with tempfile.TemporaryDirectory() as temporary:
             output_root = Path(temporary) / "cw"
@@ -1001,7 +1015,7 @@ class ClaudeDistributionCliTests(unittest.TestCase):
                 apply_status = main(["--apply"], repo_root=repo_root)
 
             self.assertEqual(0, apply_status)
-            self.assertEqual(26, apply_output.getvalue().count("synced skill "))
+            self.assertEqual(27, apply_output.getvalue().count("synced skill "))
             self.assertEqual(11, apply_output.getvalue().count("synced agent "))
             marketplace = json.loads(marketplace_path.read_text())
             canonical_manifest = json.loads(

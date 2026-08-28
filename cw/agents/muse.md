@@ -14,6 +14,7 @@ skills:
   - knowledge-layers
   - llm-writing
   - md-validation
+  - project-maintenance
   - project-setup
   - qi-layer
   - reader-sim

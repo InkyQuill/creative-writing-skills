@@ -77,7 +77,7 @@ Upload them under **Customize → Skills**, enable `creative-writing-muse`, and
 describe the writing task. Skills-only chat uses the muse's single-agent
 fallback.
 
-To build the same 26 archives locally:
+To build the same 27 archives locally:
 
 ```bash
 python3 scripts/sync_claude_distribution.py --check
@@ -102,7 +102,7 @@ The archives are written to `zips/` from the generated `cw/skills/` tree.
 | `story-memory` | Durable facts, continuity records with a deterministic checker, canon, terminology, and issue tracking |
 | `writing-staffing` | Small, purpose-built specialist compositions |
 
-All 26 installed skills are listed in `config/distribution.json`.
+All 27 installed skills are listed in `config/distribution.json`.
 
 ## Story Project Layout
 

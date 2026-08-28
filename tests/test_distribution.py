@@ -33,8 +33,8 @@ EXPECTED_SKILLS = {
     "character-sim", "creative-research", "creative-writing-craft",
     "creative-writing-modes", "creative-writing-muse", "grill-with-docs",
     "information-hierarchy", "intent-modeling", "kb-management",
-    "knowledge-layers", "llm-writing", "md-validation", "project-setup",
-    "qi-layer", "reader-sim", "reflect", "shared-dao", "story-memory",
+    "knowledge-layers", "llm-writing", "md-validation", "project-maintenance",
+    "project-setup", "qi-layer", "reader-sim", "reflect", "shared-dao", "story-memory",
     "story-planning", "story-review", "structured-artifact",
     "targeted-editing", "world-creation", "writing-principles",
     "writing-staffing", "zoom-out",
@@ -557,7 +557,7 @@ class DistributionScaffoldTests(unittest.TestCase):
     def test_distribution_config_lists_exact_skill_set(self):
         config = load_json(REPO_ROOT / "config" / "distribution.json")
         self.assertEqual(set(config["canonical_skills"]), EXPECTED_SKILLS)
-        self.assertEqual(len(config["authored_skills"]), 16)
+        self.assertEqual(len(config["authored_skills"]), 17)
         self.assertEqual(len(config["vendored_skills"]), 10)
         self.assertEqual(
             ["reflect", "structured-artifact"],
@@ -863,7 +863,7 @@ class ValidatorTests(unittest.TestCase):
         authored = {
             "character-sim", "creative-research", "creative-writing-craft",
             "creative-writing-modes", "creative-writing-muse", "kb-management",
-            "project-setup", "reader-sim", "shared-dao", "story-memory",
+            "project-maintenance", "project-setup", "reader-sim", "shared-dao", "story-memory",
             "story-planning", "story-review", "targeted-editing",
             "world-creation", "writing-principles", "writing-staffing",
         }
@@ -2326,6 +2326,27 @@ class ValidatorTests(unittest.TestCase):
             "view-transition", "when", "else", "supports-condition", "url-worker",
         ):
             self.assertNotIn(f"story-memory: dangling worker reference @{token}", problems)
+
+    def test_validator_does_not_treat_python_decorators_as_worker_references(self):
+        generated = (
+            self.root
+            / "cw/skills/project-maintenance/resources/cli/cwcli/example.py"
+        )
+        generated.parent.mkdir(parents=True, exist_ok=True)
+        generated.write_text(
+            "from dataclasses import dataclass\n\n"
+            "@dataclass(frozen=True)\n"
+            "class Example:\n"
+            "    value: str\n"
+        )
+
+        problems = validate(self.root)
+
+        self.assertNotIn(
+            "cw/skills/project-maintenance/resources/cli/cwcli/example.py: "
+            "dangling worker reference @dataclass",
+            problems,
+        )
 
     def test_validator_reports_symlink_loops_without_crashing(self):
         skill = self.skills / "story-memory"
