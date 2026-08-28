@@ -152,6 +152,21 @@ class MigrationPlanningTests(unittest.TestCase):
             self.assertEqual((), plan.operations)
             self.assertNotIn("asset.png", repr(plan.unresolved))
 
+    def test_schema_one_canonical_b_role_still_detects_mixed_layout_a_evidence(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            materialize(
+                root,
+                {
+                    "project.md": "---\nschema-version: 1\n---\n",
+                    "chapters/a.md": "# Legacy A\n",
+                    "kb/world/b.md": "# Canonical overlap from B\n",
+                },
+            )
+            plan = migration.plan_migration(root)
+            mixed = next(item for item in plan.unresolved if item["reason"] == "mixed-layout")
+            self.assertEqual(("chapters/a.md", "kb/world/b.md"), mixed["sources"])
+
     def test_destination_collision_is_never_guessed(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -183,7 +198,7 @@ class MigrationPlanningTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             materialize(root, {"chapters/CON.md": "Reserved\n"})
-            with self.assertRaisesRegex(migration.MigrationPlanError, "cannot represent"):
+            with self.assertRaisesRegex(migration.MigrationPlanError, "Windows reserved"):
                 migration.plan_migration(root)
 
     def test_planning_is_stable_unicode_safe_and_read_only(self):
@@ -205,6 +220,15 @@ class MigrationPlanningTests(unittest.TestCase):
                 before,
                 {path.relative_to(root).as_posix(): path.read_bytes() for path in root.rglob("*") if path.is_file()},
             )
+            loaded = migration.load_migration_plan(write_plan(root, first.to_payload()))
+            self.assertEqual(first, loaded)
+
+    def test_nonportable_unknown_path_fails_before_plan_hashing(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            materialize(root, {"unknown\nrole.md": "# Unknown\n"})
+            with self.assertRaisesRegex(migration.MigrationPlanError, "control character"):
+                migration.plan_migration(root)
 
     @unittest.skipUnless(hasattr(os, "symlink"), "symlinks are unavailable")
     def test_planning_does_not_follow_links_or_nested_projects(self):
@@ -272,7 +296,16 @@ class MigrationPlanLoadingTests(unittest.TestCase):
                 migration.load_migration_plan(write_plan(Path(directory), payload, rehash=False))
 
     def test_loader_rejects_nonportable_absolute_and_traversal_paths(self):
-        invalid = ("../one.md", "/one.md", "C:/one.md", "story\\one.md", "story/CON.md", "story/trailing. ")
+        invalid = (
+            "../one.md",
+            "/one.md",
+            "C:/one.md",
+            "story\\one.md",
+            "story/CON.md",
+            "story/trailing. ",
+            "story/nul\0name.md",
+            "story/new\nline.md",
+        )
         for value in invalid:
             with self.subTest(value=value), tempfile.TemporaryDirectory() as directory:
                 payload = self.base_payload()
@@ -307,7 +340,7 @@ class MigrationPlanLoadingTests(unittest.TestCase):
                 {"source": "nested/chapter.md", "destination": "story/chapters/chapter.md", "action": "move"}
             ]
             with self.assertRaisesRegex(migration.MigrationPlanError, "nested project boundary"):
-                migration.load_migration_plan(write_plan(root, payload))
+                migration.load_migration_plan(write_plan(root, payload), root=root)
 
     @unittest.skipUnless(hasattr(os, "symlink"), "symlinks are unavailable")
     def test_loader_refuses_symlink_plan(self):
@@ -318,6 +351,18 @@ class MigrationPlanLoadingTests(unittest.TestCase):
             linked.symlink_to(real)
             with self.assertRaisesRegex(migration.MigrationPlanError, "real file"):
                 migration.load_migration_plan(linked)
+
+    @unittest.skipUnless(hasattr(os, "symlink"), "symlinks are unavailable")
+    def test_loader_refuses_plan_through_symlinked_parent(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            real_parent = root / "real"
+            real_parent.mkdir()
+            plan = write_plan(real_parent, self.base_payload())
+            linked_parent = root / "linked"
+            linked_parent.symlink_to(real_parent, target_is_directory=True)
+            with self.assertRaisesRegex(migration.MigrationPlanError, "directory link"):
+                migration.load_migration_plan(linked_parent / plan.name)
 
     @unittest.skipUnless(hasattr(os, "symlink"), "symlinks are unavailable")
     def test_loader_does_not_follow_operation_parent_links(self):
@@ -331,7 +376,27 @@ class MigrationPlanLoadingTests(unittest.TestCase):
                 {"source": "linked/one.md", "destination": "story/chapters/one.md", "action": "move"}
             ]
             with self.assertRaisesRegex(migration.MigrationPlanError, "symlink boundary"):
-                migration.load_migration_plan(write_plan(root, payload))
+                migration.load_migration_plan(write_plan(root, payload), root=root)
+
+    def test_explicit_root_controls_nested_boundary_not_plan_storage_location(self):
+        with tempfile.TemporaryDirectory() as directory, tempfile.TemporaryDirectory() as external_directory:
+            root = Path(directory)
+            materialize(root, {"nested/project.md": "---\nschema-version: 1\n---\n"})
+            payload = self.base_payload()
+            payload["operations"] = [
+                {"source": "nested/chapter.md", "destination": "story/chapters/chapter.md", "action": "move"}
+            ]
+
+            storage = root / "plans"
+            storage.mkdir()
+            stored_inside = write_plan(storage, payload)
+            self.assertEqual("nested/chapter.md", migration.load_migration_plan(stored_inside).operations[0].source)
+            with self.assertRaisesRegex(migration.MigrationPlanError, "nested project boundary"):
+                migration.load_migration_plan(stored_inside, root=root)
+
+            stored_external = write_plan(Path(external_directory), payload)
+            with self.assertRaisesRegex(migration.MigrationPlanError, "nested project boundary"):
+                migration.load_migration_plan(stored_external, root=root)
 
 
 if __name__ == "__main__":

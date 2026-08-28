@@ -124,15 +124,15 @@ def plan_migration(root: Path) -> MigrationPlan:
     root = Path(root).absolute()
     _require_real_directory(root, "migration root")
     paths = _walk_markdown(root)
+    for path in paths:
+        _strict_path(path, "discovered migration path")
     path_set = set(paths)
     source_schema = _source_schema(root)
     if source_schema > TARGET_SCHEMA:
         raise MigrationPlanError(f"cannot plan a downgrade from schema {source_schema}")
 
     layout_a_evidence = tuple(path for path in paths if _is_layout_a(path))
-    layout_b_evidence = tuple(
-        path for path in paths if _is_layout_b(path, include_legacy_core=source_schema != TARGET_SCHEMA)
-    )
+    layout_b_evidence = tuple(path for path in paths if _is_layout_b(path))
     mixed_layout = bool(layout_a_evidence and layout_b_evidence)
 
     operations: list[MigrationOperation] = []
@@ -189,6 +189,7 @@ def plan_migration(root: Path) -> MigrationPlan:
     unresolved.extend(collision_records)
     operations.sort(key=lambda item: (_path_sort_key(item.destination), _path_sort_key(item.source), item.action))
     unresolved.sort(key=_unresolved_sort_key)
+    _validate_generated_plan(operations, unresolved)
 
     payload: dict[str, object] = {
         "plan-version": PLAN_VERSION,
@@ -210,13 +211,12 @@ def plan_migration(root: Path) -> MigrationPlan:
     )
 
 
-def load_migration_plan(path: Path) -> MigrationPlan:
-    """Load and fully validate a migration plan before any source is resolved."""
+def load_migration_plan(path: Path, root: Path | None = None) -> MigrationPlan:
+    """Load a plan, checking filesystem boundaries only against an explicit root."""
 
     path = Path(path).absolute()
-    _require_real_file(path, "migration plan")
     try:
-        raw = path.read_bytes()
+        raw = _read_regular_file_no_follow(path, "migration plan")
         payload = json.loads(raw.decode("utf-8"), object_pairs_hook=_unique_object)
     except (UnicodeDecodeError, json.JSONDecodeError) as error:
         raise MigrationPlanError("migration plan must be valid UTF-8 JSON") from error
@@ -291,10 +291,12 @@ def load_migration_plan(path: Path) -> MigrationPlan:
             raise MigrationPlanError(f"unresolved[{index}].reason must be a non-empty string")
         unresolved.append(_unresolved(tuple(validated_sources), destination, reason))
 
-    root = path.parent
-    for operation in operations:
-        _reject_nested_boundary(root, operation.source)
-        _reject_nested_boundary(root, operation.destination)
+    if root is not None:
+        migration_root = Path(root).absolute()
+        _require_real_directory(migration_root, "migration root")
+        for operation in operations:
+            _reject_nested_boundary(migration_root, operation.source)
+            _reject_nested_boundary(migration_root, operation.destination)
 
     return MigrationPlan(
         plan_version=plan_version,
@@ -423,7 +425,7 @@ def _is_layout_a(path: str) -> bool:
     return bool(parts and parts[0] in _A_ROOTS)
 
 
-def _is_layout_b(path: str, *, include_legacy_core: bool) -> bool:
+def _is_layout_b(path: str) -> bool:
     parts = _parts(path)
     return (
         (len(parts) == 2 and parts[0] == "story" and parts[1] != "_index.md")
@@ -431,8 +433,7 @@ def _is_layout_b(path: str, *, include_legacy_core: bool) -> bool:
         or (len(parts) == 2 and parts[0] == "kb" and parts[1] in _CONTINUITY_NAMES)
         or (len(parts) >= 3 and parts[:2] in {("kb", "timeline"), ("kb", "scenes")})
         or (
-            include_legacy_core
-            and len(parts) == 3
+            len(parts) == 3
             and parts[:2]
             in {
                 ("kb", "world"),
@@ -489,8 +490,8 @@ def _source_schema(root: Path) -> int:
     if not stat.S_ISREG(mode):
         return 0
     try:
-        text = manifest.read_text(encoding="utf-8-sig")
-    except (OSError, UnicodeError):
+        text = _read_regular_file_no_follow(manifest, "project manifest").decode("utf-8-sig")
+    except UnicodeError:
         return 0
     lines = text.splitlines()
     if not lines or lines[0].strip() != "---":
@@ -511,6 +512,12 @@ def _source_schema(root: Path) -> int:
 def _strict_path(value: object, label: str) -> str:
     if not isinstance(value, str) or not value:
         raise MigrationPlanError(f"{label} must be a non-empty string")
+    if any(ord(character) < 32 for character in value):
+        raise MigrationPlanError(f"{label} contains an ASCII control character")
+    try:
+        value.encode("utf-8")
+    except UnicodeEncodeError as error:
+        raise MigrationPlanError(f"{label} must contain valid Unicode") from error
     if "\\" in value:
         raise MigrationPlanError(f"{label} must use forward slashes")
     posix = PurePosixPath(value)
@@ -531,24 +538,75 @@ def _strict_path(value: object, label: str) -> str:
 
 
 def _reject_nested_boundary(root: Path, relative: str) -> None:
-    current = root
-    for part in PurePosixPath(relative).parts[:-1]:
-        current /= part
-        try:
-            current_mode = current.lstat().st_mode
-        except FileNotFoundError:
-            current_mode = None
-        if current_mode is not None and stat.S_ISLNK(current_mode):
-            raise MigrationPlanError(f"operation crosses symlink boundary: {relative}")
-        if current_mode is not None and not stat.S_ISDIR(current_mode):
-            break
-        manifest = current / "project.md"
-        try:
-            mode = manifest.lstat().st_mode
-        except FileNotFoundError:
-            continue
-        if stat.S_ISREG(mode):
-            raise MigrationPlanError(f"operation crosses nested project boundary: {relative}")
+    descriptor = _open_directory_no_follow(root, "migration root")
+    try:
+        for part in PurePosixPath(relative).parts[:-1]:
+            try:
+                entry = os.stat(part, dir_fd=descriptor, follow_symlinks=False)
+            except FileNotFoundError:
+                return
+            except (NotImplementedError, TypeError) as error:
+                raise MigrationPlanError("safe nested-project inspection is unsupported") from error
+            except OSError as error:
+                raise MigrationPlanError(f"cannot inspect operation parent for {relative}") from error
+            if stat.S_ISLNK(entry.st_mode):
+                raise MigrationPlanError(f"operation crosses symlink boundary: {relative}")
+            if not stat.S_ISDIR(entry.st_mode):
+                raise MigrationPlanError(f"operation parent is not a directory: {relative}")
+
+            child_descriptor = _open_child_directory(descriptor, part, f"operation parent for {relative}")
+            os.close(descriptor)
+            descriptor = child_descriptor
+
+            try:
+                manifest = os.stat("project.md", dir_fd=descriptor, follow_symlinks=False)
+            except FileNotFoundError:
+                continue
+            except (NotImplementedError, TypeError) as error:
+                raise MigrationPlanError("safe nested-project inspection is unsupported") from error
+            except OSError as error:
+                raise MigrationPlanError(f"cannot inspect nested project for {relative}") from error
+            if stat.S_ISREG(manifest.st_mode):
+                raise MigrationPlanError(f"operation crosses nested project boundary: {relative}")
+    finally:
+        os.close(descriptor)
+
+
+def _validate_generated_plan(
+    operations: list[MigrationOperation], unresolved: list[dict[str, object]]
+) -> None:
+    source_identities: set[tuple[str, ...]] = set()
+    destination_identities: set[tuple[str, ...]] = set()
+    for index, operation in enumerate(operations):
+        source = _strict_path(operation.source, f"operations[{index}].source")
+        destination = _strict_path(operation.destination, f"operations[{index}].destination")
+        if operation.action not in {"move", "preserve"}:
+            raise MigrationPlanError(f"operations[{index}].action must be move or preserve")
+        if (source == destination) != (operation.action == "preserve"):
+            raise MigrationPlanError("source=destination is valid only for preserve operations")
+        source_identity = _portable_path_identity(source)
+        destination_identity = _portable_path_identity(destination)
+        if source_identity in source_identities:
+            raise MigrationPlanError(f"duplicate or case-colliding source: {source}")
+        if destination_identity in destination_identities:
+            raise MigrationPlanError(f"duplicate or case-colliding destination: {destination}")
+        source_identities.add(source_identity)
+        destination_identities.add(destination_identity)
+
+    for index, item in enumerate(unresolved):
+        _require_exact_keys(item, _UNRESOLVED_KEYS, f"unresolved[{index}]")
+        sources = item["sources"]
+        if not isinstance(sources, list) or not sources:
+            raise MigrationPlanError(f"unresolved[{index}].sources must be a non-empty array")
+        validated_sources = [_strict_path(value, f"unresolved[{index}].sources") for value in sources]
+        if len(set(validated_sources)) != len(validated_sources):
+            raise MigrationPlanError(f"unresolved[{index}].sources contains duplicates")
+        destination = item["destination"]
+        if destination is not None:
+            _strict_path(destination, f"unresolved[{index}].destination")
+        reason = item["reason"]
+        if not isinstance(reason, str) or not reason:
+            raise MigrationPlanError(f"unresolved[{index}].reason must be a non-empty string")
 
 
 def _strict_integer(value: object, label: str, *, minimum: int = 1) -> int:
@@ -583,13 +641,97 @@ def _require_real_directory(path: Path, label: str) -> None:
         raise MigrationPlanError(f"{label} must be a real directory: {path}")
 
 
-def _require_real_file(path: Path, label: str) -> None:
+def _read_regular_file_no_follow(path: Path, label: str) -> bytes:
+    parent_descriptor = _open_directory_no_follow(path.parent, f"{label} parent")
     try:
-        mode = path.lstat().st_mode
-    except FileNotFoundError as error:
-        raise MigrationPlanError(f"{label} does not exist: {path}") from error
-    if not stat.S_ISREG(mode):
-        raise MigrationPlanError(f"{label} must be a real file: {path}")
+        try:
+            entry = os.stat(path.name, dir_fd=parent_descriptor, follow_symlinks=False)
+        except (NotImplementedError, TypeError) as error:
+            raise MigrationPlanError("safe file loading is unsupported") from error
+        except OSError as error:
+            raise MigrationPlanError(f"{label} must be a real file without links: {path}") from error
+        if not stat.S_ISREG(entry.st_mode):
+            raise MigrationPlanError(f"{label} must be a real file without links: {path}")
+
+        try:
+            descriptor = os.open(
+                path.name,
+                os.O_RDONLY | os.O_NOFOLLOW | getattr(os, "O_CLOEXEC", 0),
+                dir_fd=parent_descriptor,
+            )
+        except (NotImplementedError, TypeError) as error:
+            raise MigrationPlanError("safe file loading is unsupported") from error
+        except OSError as error:
+            raise MigrationPlanError(f"{label} must be a real file without links: {path}") from error
+        try:
+            if not stat.S_ISREG(os.fstat(descriptor).st_mode):
+                raise MigrationPlanError(f"{label} must be a real file without links: {path}")
+            with os.fdopen(descriptor, "rb") as stream:
+                descriptor = -1
+                return stream.read()
+        finally:
+            if descriptor >= 0:
+                os.close(descriptor)
+    finally:
+        os.close(parent_descriptor)
+
+
+def _open_directory_no_follow(path: Path, label: str) -> int:
+    _require_secure_dirfd_support()
+    absolute = Path(os.path.abspath(path))
+    anchor = Path(absolute.anchor)
+    flags = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | getattr(os, "O_CLOEXEC", 0)
+    try:
+        descriptor = os.open(anchor, flags)
+    except OSError as error:
+        raise MigrationPlanError(f"{label} has an unsafe filesystem boundary: {path}") from error
+    try:
+        if not stat.S_ISDIR(os.fstat(descriptor).st_mode):
+            raise MigrationPlanError(f"{label} must be a real directory without links: {path}")
+        for component in absolute.relative_to(anchor).parts:
+            child_descriptor = _open_child_directory(descriptor, component, label)
+            os.close(descriptor)
+            descriptor = child_descriptor
+        return descriptor
+    except BaseException:
+        os.close(descriptor)
+        raise
+
+
+def _open_child_directory(parent_descriptor: int, name: str, label: str) -> int:
+    try:
+        entry = os.stat(name, dir_fd=parent_descriptor, follow_symlinks=False)
+    except (NotImplementedError, TypeError) as error:
+        raise MigrationPlanError("safe directory traversal is unsupported") from error
+    except OSError as error:
+        raise MigrationPlanError(f"{label} has an unsafe or missing directory component") from error
+    if not stat.S_ISDIR(entry.st_mode):
+        raise MigrationPlanError(f"{label} has a directory link or non-directory component")
+    try:
+        descriptor = os.open(
+            name,
+            os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | getattr(os, "O_CLOEXEC", 0),
+            dir_fd=parent_descriptor,
+        )
+    except (NotImplementedError, TypeError) as error:
+        raise MigrationPlanError("safe directory traversal is unsupported") from error
+    except OSError as error:
+        raise MigrationPlanError(f"{label} has an unsafe or missing directory component") from error
+    if not stat.S_ISDIR(os.fstat(descriptor).st_mode):
+        os.close(descriptor)
+        raise MigrationPlanError(f"{label} must contain only real directories")
+    return descriptor
+
+
+def _require_secure_dirfd_support() -> None:
+    if (
+        not getattr(os, "O_NOFOLLOW", 0)
+        or not getattr(os, "O_DIRECTORY", 0)
+        or os.open not in os.supports_dir_fd
+        or os.stat not in os.supports_dir_fd
+        or os.stat not in os.supports_follow_symlinks
+    ):
+        raise MigrationPlanError("safe no-follow file loading is unsupported on this platform")
 
 
 def _unresolved(sources: tuple[str, ...], destination: str | None, reason: str) -> dict[str, object]:
