@@ -224,11 +224,12 @@ class MigrationPlanningTests(unittest.TestCase):
             self.assertEqual(first, loaded)
 
     def test_nonportable_unknown_path_fails_before_plan_hashing(self):
-        with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory)
-            materialize(root, {"unknown\nrole.md": "# Unknown\n"})
-            with self.assertRaisesRegex(migration.MigrationPlanError, "control character"):
-                migration.plan_migration(root)
+        for name in ("unknown\nrole.md", "unknown\x7frole.md"):
+            with self.subTest(name=name), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                materialize(root, {name: "# Unknown\n"})
+                with self.assertRaisesRegex(migration.MigrationPlanError, "control character"):
+                    migration.plan_migration(root)
 
     @unittest.skipUnless(hasattr(os, "symlink"), "symlinks are unavailable")
     def test_planning_does_not_follow_links_or_nested_projects(self):
@@ -305,6 +306,7 @@ class MigrationPlanLoadingTests(unittest.TestCase):
             "story/trailing. ",
             "story/nul\0name.md",
             "story/new\nline.md",
+            "story/delete\x7fname.md",
         )
         for value in invalid:
             with self.subTest(value=value), tempfile.TemporaryDirectory() as directory:

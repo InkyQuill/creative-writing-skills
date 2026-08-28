@@ -512,7 +512,7 @@ def _source_schema(root: Path) -> int:
 def _strict_path(value: object, label: str) -> str:
     if not isinstance(value, str) or not value:
         raise MigrationPlanError(f"{label} must be a non-empty string")
-    if any(ord(character) < 32 for character in value):
+    if any(ord(character) < 32 or ord(character) == 127 for character in value):
         raise MigrationPlanError(f"{label} contains an ASCII control character")
     try:
         value.encode("utf-8")
