@@ -22,6 +22,9 @@ from .documents import logical_hash
 from .project import Project
 
 
+_DIRECTORY_TOKEN_PREFIX = "@directory:"
+
+
 class TransactionError(RuntimeError):
     """Raised when a guarded transaction cannot be completed safely."""
 
@@ -523,18 +526,26 @@ class TransactionEngine:
         prepared = self.store.prepare(plan, transaction_id=identifier)
         completed: list[str] = []
         intents: list[str] = []
+        create_directories, remove_directories = self._directory_changes(plan.metadata)
 
         try:
+            self._write_nonterminal_state(
+                prepared.id, "applying", completed=(), intents=()
+            )
+            for path in create_directories:
+                self._apply_directory_intent(
+                    prepared.id,
+                    _directory_token("create", path),
+                    completed,
+                    intents,
+                )
             for change in plan.changes:
                 if change.after is not None:
                     self._write_staged_bytes(prepared.id, change.path, change.after)
 
             # Staging may take time. Re-resolve and re-read every target before
             # allowing the first externally visible replacement.
-            self._validate_plan(plan)
-            self._write_nonterminal_state(
-                prepared.id, "applying", completed=(), intents=()
-            )
+            self._validate_changes(plan.changes)
 
             for change in plan.changes:
                 intents.append(change.path)
@@ -551,6 +562,14 @@ class TransactionEngine:
                     "applying",
                     completed=tuple(completed),
                     intents=tuple(intents),
+                )
+
+            for path in reversed(remove_directories):
+                self._apply_directory_intent(
+                    prepared.id,
+                    _directory_token("remove", path),
+                    completed,
+                    intents,
                 )
 
             return self._write_terminal_state(
@@ -576,6 +595,9 @@ class TransactionEngine:
                 prepared.id, tuple(intents), tuple(completed)
             )
             rollback_errors = progress_errors
+            rollback_errors.extend(
+                self._cleanup_temporaries(prepared.id, plan.changes)
+            )
             rollback_errors.extend(
                 self._restore_intents(prepared.id, plan.changes, rollback_intents)
             )
@@ -634,8 +656,9 @@ class TransactionEngine:
         if len(by_path) != len(changes):
             raise TransactionError(f"transaction {transaction_id} contains duplicate paths")
         intents = self._manifest_intents(transaction_id, record.completed)
+        directory_tokens = set(self._persisted_directory_tokens(transaction_id))
         if len(set(intents)) != len(intents) or any(
-            path not in by_path for path in intents
+            path not in by_path and path not in directory_tokens for path in intents
         ):
             raise TransactionError(
                 f"transaction {transaction_id} has invalid intent paths"
@@ -643,7 +666,8 @@ class TransactionEngine:
 
         # Resolve the complete persisted target set before touching any file.
         self._resolve_changes(changes)
-        recovery_errors = self._restore_intents(transaction_id, changes, intents)
+        recovery_errors = self._cleanup_temporaries(transaction_id, changes)
+        recovery_errors.extend(self._restore_intents(transaction_id, changes, intents))
         recovery_errors.extend(self._cleanup_temporaries(transaction_id, changes))
         if recovery_errors:
             raise TransactionError(
@@ -692,10 +716,15 @@ class TransactionEngine:
             Change(change.path, change.after, change.before)
             for change in self._persisted_changes(transaction_id)
         )
+        created, removed = self._persisted_directory_changes(transaction_id)
         inverse = TransactionPlan(
             command=("undo", transaction_id),
             changes=changes,
-            metadata={"undo-of": transaction_id, "undoable": True},
+            metadata={
+                "directory-changes": {"create": removed, "remove": created},
+                "undo-of": transaction_id,
+                "undoable": True,
+            },
         )
         try:
             self._validate_plan(inverse)
@@ -708,9 +737,107 @@ class TransactionEngine:
         return inverse
 
     def _validate_plan(self, plan: TransactionPlan) -> None:
-        changes = self._resolve_changes(plan.changes)
+        self._validate_directories(plan.metadata)
+        self._validate_changes(plan.changes)
+
+    def _validate_changes(self, planned: tuple[Change, ...]) -> None:
+        changes = self._resolve_changes(planned)
         for change, target in changes:
             self._validate_target(change, target)
+
+    def _validate_directories(self, metadata: Mapping[str, object]) -> None:
+        created, removed = self._directory_changes(metadata)
+        created_set = set(created)
+        if created_set.intersection(removed):
+            raise TransactionError("directory cannot be both created and removed")
+        for path in created:
+            target = self._directory_target(path)
+            if _entry_exists(target):
+                raise TransactionConflict(f"stale directory precondition for {path}")
+            parent = target.parent
+            journal_parent_bootstrapped = False
+            while parent != self.project.root and not _entry_exists(parent):
+                relative_parent = parent.relative_to(self.project.root).as_posix()
+                # TransactionStore.prepare() durably bootstraps its protected
+                # journal root before any planned directory intent is applied.
+                if relative_parent == ".creative-writing":
+                    journal_parent_bootstrapped = True
+                    break
+                if relative_parent not in created_set:
+                    raise TransactionError(
+                        f"directory parent is neither present nor planned: {path}"
+                    )
+                parent = parent.parent
+            if not journal_parent_bootstrapped:
+                _require_directory(parent, "transaction directory parent")
+        for path in removed:
+            _require_directory(self._directory_target(path), "transaction removed directory")
+
+    def _directory_changes(
+        self, metadata: Mapping[str, object]
+    ) -> tuple[tuple[str, ...], tuple[str, ...]]:
+        rendered = metadata.get("directory-changes")
+        if rendered is None:
+            return (), ()
+        if not isinstance(rendered, Mapping) or set(rendered) != {"create", "remove"}:
+            raise TransactionError("directory-changes must contain exactly create and remove")
+        groups: list[tuple[str, ...]] = []
+        for action in ("create", "remove"):
+            values = rendered[action]
+            if not isinstance(values, (list, tuple)) or any(
+                not isinstance(path, str) for path in values
+            ):
+                raise TransactionError(f"directory-changes.{action} must be a path array")
+            paths = tuple(values)
+            if len(set(paths)) != len(paths):
+                raise TransactionError(f"directory-changes.{action} contains duplicates")
+            for path in paths:
+                self._directory_target(path)
+            groups.append(tuple(sorted(paths, key=lambda path: (len(PurePosixPath(path).parts), path))))
+        return groups[0], groups[1]
+
+    def _directory_target(self, path: str) -> Path:
+        _validate_change_path(path)
+        if path == ".creative-writing/context":
+            return self.project.root / ".creative-writing" / "context"
+        try:
+            return self.project.resolve(path, for_write=True)
+        except (OSError, ValueError) as error:
+            raise TransactionError(
+                f"unsafe transaction directory {path}: {_error_text(error)}"
+            ) from error
+
+    def _apply_directory_intent(
+        self,
+        transaction_id: str,
+        token: str,
+        completed: list[str],
+        intents: list[str],
+    ) -> None:
+        intents.append(token)
+        self._write_nonterminal_state(
+            transaction_id,
+            "applying",
+            completed=tuple(completed),
+            intents=tuple(intents),
+        )
+        action, path = _parse_directory_token(token)
+        target = self._directory_target(path)
+        if action == "create":
+            _require_directory(target.parent, "transaction directory parent")
+            target.mkdir()
+            self.directory_sync_hook(target.parent)
+        else:
+            _require_directory(target, "transaction removed directory")
+            target.rmdir()
+            self.directory_sync_hook(target.parent)
+        completed.append(token)
+        self._write_nonterminal_state(
+            transaction_id,
+            "applying",
+            completed=tuple(completed),
+            intents=tuple(intents),
+        )
 
     def _resolve_changes(self, changes: tuple[Change, ...]) -> tuple[tuple[Change, Path], ...]:
         seen: set[str] = set()
@@ -784,6 +911,12 @@ class TransactionEngine:
         by_path = {change.path: change for change in changes}
         errors: list[str] = []
         for path in reversed(intents):
+            if path.startswith(_DIRECTORY_TOKEN_PREFIX):
+                try:
+                    self._restore_directory_intent(path)
+                except BaseException as error:
+                    errors.append(f"{path}: {_error_text(error)}")
+                continue
             change = by_path.get(path)
             if change is None:
                 errors.append(f"{path}: intent has no persisted change")
@@ -793,6 +926,23 @@ class TransactionEngine:
             except BaseException as error:
                 errors.append(f"{path}: {_error_text(error)}")
         return errors
+
+    def _restore_directory_intent(self, token: str) -> None:
+        action, path = _parse_directory_token(token)
+        target = self._directory_target(path)
+        if action == "create":
+            if not _entry_exists(target):
+                return
+            _require_directory(target, "rollback created directory")
+            target.rmdir()
+            self.directory_sync_hook(target.parent)
+            return
+        if _entry_exists(target):
+            _require_directory(target, "rollback removed directory")
+            return
+        _require_directory(target.parent, "rollback directory parent")
+        target.mkdir()
+        self.directory_sync_hook(target.parent)
 
     def _restore_if_needed(self, transaction_id: str, change: Change) -> None:
         target = self.project.resolve(change.path, for_write=True)
@@ -830,12 +980,35 @@ class TransactionEngine:
         self, transaction_id: str, changes: tuple[Change, ...], state: str
     ) -> list[str]:
         errors: list[str] = []
+        created, removed = self._persisted_directory_changes(transaction_id)
+        present = created if state == "committed" else removed
+        absent = removed if state == "committed" else created
+        for path in present:
+            try:
+                target = self._directory_target(path)
+                if not _entry_exists(target):
+                    _require_directory(target.parent, "terminal directory parent")
+                    target.mkdir()
+                    self.directory_sync_hook(target.parent)
+                else:
+                    _require_directory(target, "terminal directory")
+            except BaseException as error:
+                errors.append(f"{path}: {_error_text(error)}")
         for change in changes:
             try:
                 self._reconcile_terminal_change(transaction_id, change, state)
             except BaseException as error:
                 errors.append(f"{change.path}: {_error_text(error)}")
         errors.extend(self._cleanup_temporaries(transaction_id, changes))
+        for path in reversed(absent):
+            try:
+                target = self._directory_target(path)
+                if _entry_exists(target):
+                    _require_directory(target, "terminal removed directory")
+                    target.rmdir()
+                    self.directory_sync_hook(target.parent)
+            except BaseException as error:
+                errors.append(f"{path}: {_error_text(error)}")
         return errors
 
     def _reconcile_terminal_change(
@@ -1080,6 +1253,22 @@ class TransactionEngine:
                 f"transaction {transaction_id} has duplicate or invalid progress paths"
             )
         return _ordered_union(rendered_intents, completed)
+
+    def _persisted_directory_changes(
+        self, transaction_id: str
+    ) -> tuple[tuple[str, ...], tuple[str, ...]]:
+        manifest = self.store._read_manifest(transaction_id)
+        metadata = manifest.get("metadata")
+        if not isinstance(metadata, dict):
+            raise TransactionError(f"transaction {transaction_id} has invalid metadata")
+        return self._directory_changes(metadata)
+
+    def _persisted_directory_tokens(self, transaction_id: str) -> tuple[str, ...]:
+        created, removed = self._persisted_directory_changes(transaction_id)
+        return tuple(
+            [*(_directory_token("create", path) for path in created),
+             *(_directory_token("remove", path) for path in removed)]
+        )
 
     def _temporary_path(self, transaction_id: str, path: str) -> Path:
         self.store._transaction_dir(transaction_id)
@@ -1351,6 +1540,27 @@ def _validate_digest(value: object, label: str) -> None:
         or any(character not in "0123456789abcdef" for character in value)
     ):
         raise ValueError(f"{label} must be a lowercase SHA-256 digest")
+
+
+def _directory_token(action: str, path: str) -> str:
+    if action not in {"create", "remove"}:
+        raise ValueError("directory action must be create or remove")
+    _validate_change_path(path)
+    return f"{_DIRECTORY_TOKEN_PREFIX}{action}:{path}"
+
+
+def _parse_directory_token(token: str) -> tuple[str, str]:
+    if not isinstance(token, str) or not token.startswith(_DIRECTORY_TOKEN_PREFIX):
+        raise TransactionError("invalid directory intent token")
+    rendered = token[len(_DIRECTORY_TOKEN_PREFIX) :]
+    try:
+        action, path = rendered.split(":", 1)
+    except ValueError as error:
+        raise TransactionError("invalid directory intent token") from error
+    if action not in {"create", "remove"}:
+        raise TransactionError("invalid directory intent action")
+    _validate_change_path(path)
+    return action, path
 
 
 def _change_action(change: Change) -> str:

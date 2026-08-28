@@ -70,6 +70,8 @@ class MigrationApplyTests(unittest.TestCase):
         self.assertEqual(legacy, self.legacy.read_bytes())
         self.assertFalse(destination.exists())
         self.assertEqual(unknown, (self.root / "notes.bin").read_bytes())
+        for relative in ("story", "work", "kb"):
+            self.assertFalse((self.root / relative).exists())
 
     def test_tamper_hash_unresolved_and_destination_collision_are_conflicts_without_mutation(self):
         plan_path, shown_hash = self.preview()
@@ -81,6 +83,7 @@ class MigrationApplyTests(unittest.TestCase):
             ["migrate", "--apply", str(plan_path), "--expect-plan-hash", shown_hash, "--format", "json"]
         )
         self.assertEqual(1, status)
+
         self.assertEqual("conflict", result["status"])
         self.assertEqual(original, self.legacy.read_bytes())
 
@@ -159,6 +162,77 @@ class MigrationApplyTests(unittest.TestCase):
         )
         self.assertEqual(1, status)
 
+    def test_apply_rejects_noncanonical_destinations_before_source_reads(self):
+        planned = migration.plan_migration(self.root)
+        for destination in (
+            "story/chapters/_index.md",
+            "story/chapters/project.md",
+            "work/unsafe.md",
+            ".creative-writing/owned.md",
+        ):
+            with self.subTest(destination=destination):
+                payload = planned.to_payload(include_hash=False)
+                payload["operations"] = [
+                    {"source": "chapters/ch-001.md", "destination": destination, "action": "move"}
+                ]
+                payload["plan-hash"] = migration.canonical_plan_hash(payload)
+                candidate = migration.MigrationPlan(
+                    1, 0, 1,
+                    (migration.MigrationOperation("chapters/ch-001.md", destination, "move"),),
+                    (), payload["plan-hash"],
+                )
+                with mock.patch.object(
+                    migration, "_read_regular_file_no_follow", side_effect=AssertionError("source read")
+                ) as reader:
+                    with self.assertRaises(migration.MigrationPlanError):
+                        migration.plan_apply_migration(self.root, candidate, candidate.plan_hash)
+                reader.assert_not_called()
+
+    def test_apply_requires_actual_source_schema_before_operation_reads(self):
+        planned = migration.plan_migration(self.root)
+        (self.root / "project.md").write_text(
+            "---\nschema-version: 1\ntitle: Changed\nlanguage: en\nstatus: drafting\n---\n",
+            encoding="utf-8",
+        )
+        with mock.patch.object(
+            migration, "_require_source_entry", side_effect=AssertionError("operation inspected")
+        ) as source_probe:
+            with self.assertRaisesRegex(migration.MigrationPlanError, "source schema"):
+                migration.plan_apply_migration(self.root, planned, planned.plan_hash)
+        source_probe.assert_not_called()
+
+        payload = planned.to_payload(include_hash=False)
+        payload["source-schema"] = 1
+        payload["plan-hash"] = migration.canonical_plan_hash(payload)
+        stale = migration.MigrationPlan(1, 1, 1, planned.operations, (), payload["plan-hash"])
+        (self.root / "project.md").write_text("---\nschema-version: 2\n---\n", encoding="utf-8")
+        with self.assertRaisesRegex(migration.MigrationPlanError, "newer"):
+            migration.plan_apply_migration(self.root, stale, stale.plan_hash)
+
+    def test_cli_integrity_gate_precedes_explicit_root_boundary_inspection(self):
+        plan_path, _ = self.preview()
+        with mock.patch.object(
+            migration, "_reject_nested_boundary", side_effect=AssertionError("root inspected")
+        ) as boundary:
+            status, payload, _ = self.run_cli(
+                [
+                    "migrate", "--apply", str(plan_path),
+                    "--expect-plan-hash", "0" * 64, "--format", "json",
+                ]
+            )
+        self.assertEqual(1, status)
+        self.assertEqual("conflict", payload["status"])
+        boundary.assert_not_called()
+
+    def test_portable_destination_collision_precedes_source_read(self):
+        planned = migration.plan_migration(self.root)
+        (self.root / "Story").mkdir()
+        with mock.patch.object(
+            migration, "_read_regular_file_no_follow", side_effect=AssertionError("source read")
+        ) as reader:
+            with self.assertRaisesRegex(migration.MigrationPlanError, "collid"):
+                migration.plan_apply_migration(self.root, planned, planned.plan_hash)
+        reader.assert_not_called()
 
 if __name__ == "__main__":
     unittest.main()

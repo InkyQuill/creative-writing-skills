@@ -11,7 +11,7 @@ from typing import TextIO
 from . import __version__
 from .checks.structure import check_structure
 from .checks.drafts import check_drafts
-from .documents import DocumentError
+from .documents import DocumentError, logical_hash
 from .drafts import (
     DraftConflict,
     DraftError,
@@ -26,7 +26,6 @@ from .findings import ExecutionError, Report
 from .indexes import plan_reindex
 from .migration import (
     MigrationPlanError,
-    ensure_migration_directories,
     load_migration_plan,
     migration_project,
     plan_apply_migration,
@@ -39,11 +38,35 @@ from .transactions import (
     TransactionEngine,
     TransactionError,
     TransactionPlan,
+    TransactionStore,
 )
 
 
 class _ArgumentError(ValueError):
     """An argparse error that can be reported through the caller's streams."""
+
+
+class _PreviewRevisionStore:
+    """A validating in-memory revision view for mutation-free draft previews."""
+
+    def __init__(self, backing: TransactionStore):
+        self._backing = backing
+        self.project = backing.project
+        self._revisions: dict[str, bytes] = {}
+
+    def remember_revision(self, revision: str, data: bytes) -> str:
+        if logical_hash(data) != revision:
+            raise ValueError("revision data does not match the supplied logical hash")
+        existing = self._revisions.get(revision)
+        if existing is not None and existing != data:
+            raise ValueError("revision identity has conflicting exact bytes")
+        self._revisions[revision] = data
+        return revision
+
+    def load_revision(self, revision: str) -> bytes:
+        if revision in self._revisions:
+            return self._revisions[revision]
+        return self._backing.load_revision(revision)
 
 
 class _Parser(argparse.ArgumentParser):
@@ -371,14 +394,15 @@ def _run_draft(args: argparse.Namespace, *, cwd: Path, stdout: TextIO, stderr: T
     try:
         project = discover_project(cwd)
         engine = TransactionEngine(project)
+        planning_store = engine.store if args.apply else _PreviewRevisionStore(engine.store)
         if args.draft_command == "create":
-            plan = plan_create_draft(project, args.target, args.draft_path, engine.store)
+            plan = plan_create_draft(project, args.target, args.draft_path, planning_store)
             transaction_id = None
         elif args.draft_command == "set-status":
             plan = plan_set_draft_status(project, args.draft, args.status)
             transaction_id = None
         elif args.draft_command == "rebase":
-            plan = plan_rebase_draft(project, args.draft, engine.store)
+            plan = plan_rebase_draft(project, args.draft, planning_store)
             transaction_id = None
         else:
             transaction_id = uuid.uuid4().hex
@@ -427,15 +451,11 @@ def _run_migrate(args: argparse.Namespace, *, cwd: Path, stdout: TextIO, stderr:
             return 0
         if args.expect_plan_hash is None:
             raise MigrationPlanError("--expect-plan-hash is required with --apply")
-        loaded = load_migration_plan(_from_cwd(cwd, args.apply), root=root)
+        loaded = load_migration_plan(_from_cwd(cwd, args.apply))
         plan = plan_apply_migration(root, loaded, args.expect_plan_hash)
         project = migration_project(root)
         engine = TransactionEngine(project)
         preview = engine.preview(plan)
-        # Migration --apply is itself the explicit mutation command. Create only
-        # missing parent directories after the complete diff has validated, then
-        # apply the already-previewed transaction exactly once.
-        ensure_migration_directories(root)
         record = engine.apply(plan)
         _write_command_data(
             {

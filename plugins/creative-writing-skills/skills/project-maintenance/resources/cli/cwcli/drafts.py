@@ -167,6 +167,7 @@ def plan_rebase_draft(
     if store.project.root != project.root:
         raise DraftError("transaction store belongs to a different project")
     draft = load_draft(project, draft_path)
+    _reject_other_duplicate_target(project, draft)
     if draft.base_revision is None:
         raise DraftError(f"draft {draft_path} has no base-revision to rebase")
 
@@ -332,6 +333,7 @@ def _load_lifecycle_draft(
     project: Project, draft_path: str
 ) -> tuple[Draft, bytes, Document]:
     draft = load_draft(project, draft_path)
+    _reject_other_duplicate_target(project, draft)
     source = _read_regular_file(
         project.resolve(draft_path, for_write=True), f"draft {draft_path}"
     )
@@ -465,6 +467,7 @@ def plan_set_draft_status(
     if status not in ACTIVE_STATUSES:
         raise DraftError("draft status must be one of working, review, or ready")
     draft = load_draft(project, draft_path)
+    _reject_other_duplicate_target(project, draft)
     source = _read_regular_file(
         project.resolve(draft_path, for_write=True), f"draft {draft_path}"
     )
@@ -584,6 +587,39 @@ def _reject_duplicate_target(project: Project, target: str) -> None:
         draft = load_draft(project, relative)
         if _portable_identity(draft.target) == _portable_identity(target):
             raise DraftError(f"active draft already targets {target}: {relative}")
+
+
+def _reject_other_duplicate_target(project: Project, draft: Draft) -> None:
+    """Reject a portable target identity shared by another active draft."""
+
+    directory = project.root / "work" / "drafts"
+    if directory.is_symlink() or not directory.is_dir():
+        raise DraftError("work/drafts must be an ordinary directory without links")
+    identity = _portable_identity(draft.target)
+    duplicates: list[str] = []
+    for path in sorted(directory.iterdir(), key=lambda candidate: candidate.name):
+        if path.name == "_index.md" or path.suffix.casefold() != ".md":
+            continue
+        relative = project.relative_id(path)
+        if relative == draft.path:
+            continue
+        try:
+            document = parse_document(_read_regular_file(path, f"draft {relative}"))
+        except (OSError, UnicodeError, ValueError):
+            continue
+        target = document.metadata.get("target")
+        status = document.metadata.get("status")
+        if (
+            isinstance(target, str)
+            and status in ACTIVE_STATUSES
+            and _portable_identity(target) == identity
+        ):
+            duplicates.append(relative)
+    if duplicates:
+        raise DraftError(
+            f"active drafts have duplicate target {draft.target}: "
+            + ", ".join(duplicates)
+        )
 
 
 def _resolve_target(project: Project, target: str) -> Path:

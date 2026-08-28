@@ -578,6 +578,52 @@ class TransactionEngineTests(unittest.TestCase):
         self.assertEqual(b"new\n", (root / "story/new.md").read_bytes())
         self.assertFalse((root / "story/old.md").exists())
 
+    def test_transactional_directories_apply_rollback_recover_and_undo_exactly(self):
+        root, engine = self.make_engine({})
+        (root / "story").mkdir()
+        parent = root / "story/new/deep"
+        plan = transactions.TransactionPlan(
+            command=("migrate", "apply"),
+            changes=(transactions.Change("story/new/deep/chapter.md", None, b"chapter\n"),),
+            metadata={
+                "directory-changes": {"create": ["story/new", "story/new/deep"], "remove": []},
+                "undoable": True,
+            },
+        )
+
+        record = engine.apply(plan, transaction_id="tx-directories")
+        self.assertEqual(b"chapter\n", (parent / "chapter.md").read_bytes())
+
+        inverse = engine.inverse(record.id)
+        self.assertEqual(
+            {"create": (), "remove": ("story/new", "story/new/deep")},
+            dict(inverse.metadata["directory-changes"]),
+        )
+        engine.apply(inverse, transaction_id="tx-directories-undo")
+        self.assertFalse(root.joinpath("story/new").exists())
+
+        original_install = engine._install_change
+
+        def fail_install(transaction_id, change):
+            raise OSError("injected after directory creation")
+
+        engine._install_change = fail_install
+        with self.assertRaisesRegex(transactions.TransactionError, "injected"):
+            engine.apply(plan, transaction_id="tx-directory-rollback")
+        engine._install_change = original_install
+        self.assertFalse(root.joinpath("story/new").exists())
+
+        prepared = engine.store.prepare(plan, transaction_id="tx-directory-recover")
+        root.joinpath("story/new/deep").mkdir(parents=True)
+        engine.store.write_state(
+            prepared.id,
+            "applying",
+            intents=("@directory:create:story/new", "@directory:create:story/new/deep"),
+        )
+        recovered = engine.recover(prepared.id)
+        self.assertEqual("rolled-back", recovered.state)
+        self.assertFalse(root.joinpath("story/new").exists())
+
     def test_failure_after_create_and_delete_restores_both_in_reverse(self):
         root, engine = self.make_engine(
             {"story/old.md": b"old\n", "story/final.md": b"before\n"}

@@ -10,7 +10,7 @@ from pathlib import Path
 from ..documents import logical_hash, parse_document
 from ..drafts import ACTIVE_STATUSES
 from ..findings import Finding
-from ..project import Project
+from ..project import Project, ProjectPathError
 from ..transactions import TransactionError, TransactionStore
 
 
@@ -87,6 +87,7 @@ def check_drafts(project: Project, store: TransactionStore) -> list[Finding]:
             )
 
         target = document.metadata.get("target")
+        target_path: Path | None = None
         if not isinstance(target, str) or not _valid_target(target):
             findings.append(
                 _warning(
@@ -96,10 +97,30 @@ def check_drafts(project: Project, store: TransactionStore) -> list[Finding]:
                 )
             )
         else:
-            targets.setdefault(_identity(target), []).append(relative)
+            try:
+                target_path = project.resolve(target, for_write=True)
+            except (OSError, ProjectPathError, TypeError, ValueError) as error:
+                findings.append(
+                    _warning(
+                        INVALID_TARGET,
+                        f"draft target is unsafe in this project: {error}",
+                        relative,
+                    )
+                )
+            else:
+                targets.setdefault(_identity(target), []).append(relative)
 
         base = document.metadata.get("base-revision")
-        if base is not None:
+        if base is None:
+            if target_path is not None and os.path.lexists(target_path):
+                findings.append(
+                    _warning(
+                        UNRECOVERABLE_BASE,
+                        "an existing target requires a recoverable base-revision",
+                        relative,
+                    )
+                )
+        else:
             if not _digest(base):
                 findings.append(
                     _warning(UNRECOVERABLE_BASE, "draft base-revision is invalid", relative)
@@ -107,7 +128,7 @@ def check_drafts(project: Project, store: TransactionStore) -> list[Finding]:
             else:
                 try:
                     store.load_revision(base)
-                except (OSError, TransactionError, ValueError) as error:
+                except (OSError, TransactionError, UnicodeError, ValueError) as error:
                     findings.append(
                         _warning(
                             UNRECOVERABLE_BASE,
@@ -116,11 +137,11 @@ def check_drafts(project: Project, store: TransactionStore) -> list[Finding]:
                         )
                     )
                 else:
-                    if isinstance(target, str) and _valid_target(target):
-                        target_path = project.root / target
+                    if target_path is not None:
                         try:
                             current = _read_regular(target_path)
-                        except OSError:
+                            current_hash = logical_hash(current)
+                        except (OSError, UnicodeError, ValueError):
                             findings.append(
                                 _warning(
                                     STALE_DRAFT,
@@ -129,7 +150,7 @@ def check_drafts(project: Project, store: TransactionStore) -> list[Finding]:
                                 )
                             )
                         else:
-                            if logical_hash(current) != base:
+                            if current_hash != base:
                                 findings.append(
                                     _warning(
                                         STALE_DRAFT,

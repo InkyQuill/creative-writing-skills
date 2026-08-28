@@ -36,12 +36,14 @@ class DraftCommandTests(unittest.TestCase):
         return self.root / "work/drafts/ch-001.md"
 
     def test_create_preview_apply_and_status_preserve_exact_format(self):
+        protected_before = self.protected_snapshot()
         status, preview, error = self.run_cli(
             ["draft", "create", "story/chapters/ch-001.md", "--format", "json"]
         )
         self.assertEqual((0, ""), (status, error))
         self.assertEqual("preview", preview["status"])
         self.assertFalse((self.root / "work/drafts/ch-001.md").exists())
+        self.assertEqual(protected_before, self.protected_snapshot())
 
         draft_path = self.apply_create()
         source = draft_path.read_bytes().replace(b"status: working", b"status:\t'working'")
@@ -88,6 +90,61 @@ class DraftCommandTests(unittest.TestCase):
         self.assertEqual(["Draft\n"], payload["conflicts"][0]["draft"])
         self.assertEqual(["Author\n"], payload["conflicts"][0]["current"])
         self.assertEqual(before, draft_path.read_bytes())
+
+    def test_clean_rebase_preview_does_not_persist_new_base_revision(self):
+        draft_path = self.apply_create()
+        document = documents.parse_document(draft_path.read_bytes())
+        draft_path.write_bytes(
+            documents.render_document(
+                documents.Document(dict(document.metadata), "Draft change\n", document.newline, document.bom)
+            )
+        )
+        self.target.write_bytes(
+            b"---\nnumber: 1\ntitle: One\n---\nBase\nAuthor addition\n"
+        )
+        protected_before = self.protected_snapshot()
+        status, payload, _ = self.run_cli(
+            ["draft", "rebase", "work/drafts/ch-001.md", "--format", "json"]
+        )
+        self.assertEqual(0, status)
+        self.assertEqual("preview", payload["status"])
+        self.assertEqual(protected_before, self.protected_snapshot())
+
+    def test_lifecycle_commands_reject_duplicate_active_target_identity(self):
+        draft_path = self.apply_create()
+        document = documents.parse_document(draft_path.read_bytes())
+        metadata = dict(document.metadata)
+        metadata["status"] = "ready"
+        draft_path.write_bytes(
+            documents.render_document(
+                documents.Document(
+                    metadata, document.body, document.newline, document.bom
+                )
+            )
+        )
+        duplicate = self.root / "work/drafts/duplicate.md"
+        duplicate.write_bytes(
+            documents.render_document(
+                documents.Document(
+                    {**metadata, "target": "story/chapters/CH-001.md"},
+                    document.body,
+                    document.newline,
+                    document.bom,
+                )
+            )
+        )
+        for command in ("accept", "rebase"):
+            with self.subTest(command=command):
+                status, payload, _ = self.run_cli(
+                    ["draft", command, "work/drafts/ch-001.md", "--format", "json"]
+                )
+                self.assertEqual(1, status)
+                self.assertEqual("conflict", payload["status"])
+        status, payload, _ = self.run_cli(
+            ["draft", "set-status", "work/drafts/ch-001.md", "review", "--format", "json"]
+        )
+        self.assertEqual(1, status)
+        self.assertEqual("conflict", payload["status"])
 
     def test_accept_allocates_archive_id_before_preview_and_reuses_it_on_apply(self):
         draft_path = self.apply_create()
@@ -137,6 +194,40 @@ class DraftCommandTests(unittest.TestCase):
         status, report, error = self.run_cli(["check", "drafts", "--format", "json"])
         self.assertEqual((0, ""), (status, error))
         self.assertEqual(["drafts"], report["checks"])
+
+    def test_checker_reports_unsafe_missing_base_and_invalid_utf8_without_stopping(self):
+        (self.root / "work/drafts/unsafe.md").write_bytes(
+            b"---\ntarget: story/chapters/con.md\nstatus: working\n---\nBody\n"
+        )
+        (self.root / "work/drafts/no-base.md").write_bytes(
+            b"---\ntarget: story/chapters/ch-001.md\nstatus: working\n---\nBody\n"
+        )
+        valid_target = b"Valid target\n"
+        valid_revision = documents.logical_hash(valid_target)
+        (self.root / "work/drafts/invalid-target.md").write_bytes(
+            b"---\ntarget: story/chapters/invalid.md\nbase-revision: "
+            + valid_revision.encode("ascii")
+            + b"\nstatus: working\n---\nBody\n"
+        )
+        model = project.discover_project(self.root)
+        store = transactions.TransactionStore(model)
+        store.remember_revision(valid_revision, valid_target)
+        (self.root / "story/chapters/invalid.md").write_bytes(b"\xff")
+        findings = draft_checks.check_drafts(model, store)
+        by_path = {(finding.path, finding.code) for finding in findings}
+        self.assertIn(("work/drafts/unsafe.md", draft_checks.INVALID_TARGET), by_path)
+        self.assertIn(("work/drafts/no-base.md", draft_checks.UNRECOVERABLE_BASE), by_path)
+        self.assertTrue(
+            any(path == "work/drafts/invalid-target.md" for path, _ in by_path)
+        )
+
+    def protected_snapshot(self) -> dict[str, bytes]:
+        protected = self.root / ".creative-writing"
+        return {
+            path.relative_to(protected).as_posix(): path.read_bytes()
+            for path in protected.rglob("*")
+            if path.is_file()
+        }
 
 
 if __name__ == "__main__":
