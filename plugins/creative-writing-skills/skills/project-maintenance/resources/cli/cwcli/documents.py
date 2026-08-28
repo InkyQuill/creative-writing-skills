@@ -277,6 +277,7 @@ def _render_string(value: str) -> str:
         and "\n" not in value
         and "\r" not in value
         and not value.startswith(("'", '"'))
+        and not value.startswith(_UNSUPPORTED_YAML_VALUE_PREFIXES)
     ):
         return value
     return json.dumps(value, ensure_ascii=False)

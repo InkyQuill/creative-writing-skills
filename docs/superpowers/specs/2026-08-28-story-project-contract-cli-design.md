@@ -126,6 +126,26 @@ managed roots produces an informational finding because it is not validated
 or selected as context; non-Markdown files are ignored unless a managed file
 references them.
 
+Schema v1 has this explicit allowed-location map for Markdown:
+
+- `project.md` is the single root manifest;
+- generated `_index.md` files exist only at the authored directories shown in
+  the canonical tree;
+- chapter files are direct children of `story/chapters/`;
+- work artifacts are direct children of `work/drafts/`, `work/plans/`,
+  `work/reviews/`, `work/brainstorm/`, or `work/archive/`;
+- KB entity and content files are direct children of `kb/characters/`,
+  `kb/world/`, `kb/canon/`, `kb/styles/`, `kb/samples/`, or `kb/issues/`, with
+  the fixed vocabulary file at `kb/vocab.md`; and
+- continuity content consists of the fixed `timeline.md`, `state.md`,
+  `promises.md`, and `questions.md` records plus direct scene entries below
+  `kb/continuity/scenes/`.
+
+Other Markdown inside a managed root is illegal placement and produces a
+repairable structure finding. Every canonical file and directory must have its
+expected filesystem kind. Kind checks use the directory entry itself and do
+not follow symlinks.
+
 The nearest ancestor containing `project.md` is the project root. Nested
 projects are allowed. Managed links may not escape the nearest root or descend
 into another nested project. A filesystem link outside the boundary is
@@ -157,9 +177,7 @@ document type is inferred from its directory and its stable identifier is its
 project-relative path. Frontmatter does not repeat `type` or `id`. Character
 identity is the file stem below `kb/characters/`; continuity rows and
 `character:<id>` context requests use that identifier, while aliases are
-resolved through `kb/vocab.md`. Pages below `kb/world/` use a required `class`
-field such as `location`, `faction`, `system`, or `artifact` because their
-directory alone cannot express the entity class.
+resolved through `kb/vocab.md`.
 
 The supported YAML subset contains strings, integers, booleans, empty values,
 flat lists of strings, and ISO dates represented as strings. Nested mappings,
@@ -169,36 +187,23 @@ Python standard library, this is deliberately a small custom parser rather
 than an incomplete claim of general YAML support; parser properties and
 round-trips are tested directly.
 
-Required fields vary by artifact type:
+Schema v1 deliberately does not define type-specific semantic frontmatter
+contracts or required Markdown table columns. It structurally enforces the
+manifest fields above, path-inferred identity and placement, supported
+frontmatter syntax, `generated: true` on derived indexes, and a positive
+non-boolean integer chapter `number` used only for deterministic ordering and
+duplicate detection. Missing or invalid repairable metadata is a warning with
+an agent-facing next action.
 
-- manuscript chapters have `number` and `title`, with optional status
-  `accepted` or `final` and optional explicit references for POV, characters,
-  locations, and arcs; missing status means `accepted`;
-- working drafts have `target`, `base-revision`, and `status`;
-- plans, reviews, and brainstorm artifacts have `subject`, `status`, and
-  explicit related paths where applicable;
-- KB entity pages use the fields for their entity class and a flat `sources`
-  list;
-- vocab, styles, issues, canon summaries, and continuity records each have a
-  small type-specific schema.
-
-`sources` on durable KB pages may refer to accepted `story/` evidence, other
-live `kb/` pages, external research URLs, or an explicit author-confirmed
-decision recorded as `decision:<transaction-id>` by knowledge promotion. A
-`work/` artifact may be useful context, but cannot be the sole durable source.
-The KB checker reports that case for agent repair and knowledge promotion
-refuses it until the agent supplies durable evidence or records the author's
-confirmation.
-
-`base-revision` is absent when a draft creates a new manuscript chapter.
-Otherwise it is a CLI-managed SHA-256 identifier for the accepted manuscript
-target's complete normalized text, including frontmatter, on which the draft
-is based; drafts cannot target KB or work files.
-`cw draft create` stores the corresponding base bytes in the content-addressed
-store even when the target was written manually. Authors may edit Markdown
-bodies freely and never need to update a hash by hand. If the base bytes cannot
-be recovered, rebase reports an unresolvable base and leaves both versions
-untouched.
+Fields such as chapter title or lifecycle status, draft `target` and
+`base-revision`, work-artifact subject, KB entity class and `sources`, explicit
+related paths, and the columns of vocab, style, issue, canon, and continuity
+tables remain semantically unconstrained in schema v1. The CLI preserves
+representable unknown values rather than guessing a contract. The provenance
+and lifecycle descriptions later in this design express intended future
+services, not additional schema-v1 validation. Any command that tightens these
+field or table contracts must introduce a new schema version and migration;
+it cannot silently reinterpret schema v1.
 
 `_index.md` files are fully derived registries. They contain no unique author
 knowledge. `cw reindex` reports drift, shows a diff, and rebuilds them only

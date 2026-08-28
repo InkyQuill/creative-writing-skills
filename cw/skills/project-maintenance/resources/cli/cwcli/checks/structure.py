@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import stat
 import unicodedata
 from pathlib import Path
 from typing import Iterator
@@ -9,17 +10,24 @@ from typing import Iterator
 from ..documents import DocumentError, parse_document
 from ..findings import Finding
 from ..project import MANAGED_ROOTS, Project
-from ..schema import SCHEMA_VERSION, SCAFFOLD_FILES, validate_metadata
+from ..schema import (
+    SCHEMA_VERSION,
+    SCAFFOLD_DIRECTORIES,
+    SCAFFOLD_FILES,
+    allowed_document_kind,
+    validate_metadata,
+)
 
 NEWER_SCHEMA = "CW-STRUCT-001"
 MISSING_PATH = "CW-STRUCT-010"
+WRONG_PATH_KIND = "CW-STRUCT-011"
 INVALID_FRONTMATTER = "CW-STRUCT-020"
+MISSING_FRONTMATTER = "CW-STRUCT-021"
 DUPLICATE_CHAPTER = "CW-STRUCT-030"
 MIXED_NEWLINES = "CW-STRUCT-040"
 CASE_COLLISION = "CW-STRUCT-050"
+ILLEGAL_LOCATION = "CW-STRUCT-060"
 UNMANAGED_MARKDOWN = "CW-STRUCT-090"
-
-_PROTECTED_DIRECTORIES = (".creative-writing/context", ".creative-writing/transactions")
 
 
 def check_structure(project: Project) -> list[Finding]:
@@ -41,44 +49,66 @@ def check_structure(project: Project) -> list[Finding]:
         ]
 
     findings: list[Finding] = []
-    for relative_id in (*SCAFFOLD_FILES, *_PROTECTED_DIRECTORIES):
-        if not project.resolve(relative_id).exists():
-            findings.append(
-                Finding(
-                    code=MISSING_PATH,
-                    severity="warning",
-                    message="canonical scaffold path is missing",
-                    path=relative_id,
-                    next_action="Preview cw init or restore the missing scaffold path.",
-                )
-            )
+    for relative_id in SCAFFOLD_DIRECTORIES:
+        finding = _expected_path_finding(project, relative_id, expected_kind="directory")
+        if finding is not None:
+            findings.append(finding)
+    for relative_id in SCAFFOLD_FILES:
+        finding = _expected_path_finding(project, relative_id, expected_kind="regular file")
+        if finding is not None:
+            findings.append(finding)
 
     manifest_path = project.root / "project.md"
-    findings.extend(validate_metadata("project.md", project.manifest))
-    findings.extend(_newline_findings(manifest_path, "project.md"))
+    manifest_data = manifest_path.read_bytes()
+    findings.extend(_newline_findings(manifest_path, "project.md", data=manifest_data))
+    if _has_frontmatter(manifest_data):
+        findings.extend(validate_metadata("project.md", project.manifest))
+    else:
+        findings.append(_missing_frontmatter_finding("project.md"))
 
     chapters: dict[int, list[str]] = {}
     for path in project.iter_managed_markdown():
         relative_id = project.relative_id(path)
+        if allowed_document_kind(relative_id) is None:
+            findings.append(
+                Finding(
+                    code=ILLEGAL_LOCATION,
+                    severity="warning",
+                    message="Markdown is not in a schema-v1 allowed managed location",
+                    path=relative_id,
+                    next_action=(
+                        "Identify this artifact's role, then move it to an allowed managed directory "
+                        "without overwriting existing content."
+                    ),
+                )
+            )
         try:
             data = path.read_bytes()
             document = parse_document(data)
-        except (DocumentError, OSError) as error:
+        except DocumentError as error:
             findings.append(
                 Finding(
                     code=INVALID_FRONTMATTER,
                     severity="error",
                     message=f"frontmatter could not be interpreted safely: {error}",
                     path=relative_id,
-                    next_action="Repair the document's supported frontmatter.",
+                    next_action="Preserve the body and repair the document to use only supported flat frontmatter.",
                 )
             )
             continue
 
         findings.extend(_newline_findings(path, relative_id, data=data))
+        if not _has_frontmatter(data):
+            findings.append(_missing_frontmatter_finding(relative_id))
+            continue
         findings.extend(validate_metadata(relative_id, document))
         number = document.metadata.get("number")
-        if relative_id.startswith("story/chapters/") and isinstance(number, int) and not isinstance(number, bool):
+        if (
+            allowed_document_kind(relative_id) == "chapter"
+            and isinstance(number, int)
+            and not isinstance(number, bool)
+            and number >= 1
+        ):
             chapters.setdefault(number, []).append(relative_id)
 
     for number, paths in sorted(chapters.items()):
@@ -93,7 +123,7 @@ def check_structure(project: Project) -> list[Finding]:
                     severity="error",
                     message=f"chapter number {number} is also used by: {others}",
                     path=relative_id,
-                    next_action="Assign each manuscript chapter a unique number.",
+                    next_action="After confirming the intended order, assign each manuscript chapter a unique number.",
                 )
             )
 
@@ -104,6 +134,7 @@ def check_structure(project: Project) -> list[Finding]:
                 severity="info",
                 message="Markdown outside managed roots is not validated or selected as story context",
                 path=project.relative_id(path),
+                next_action="Leave it unmanaged, or move it only after confirming it belongs to the story contract.",
             )
         )
     findings.extend(_case_collision_findings(project))
@@ -112,10 +143,7 @@ def check_structure(project: Project) -> list[Finding]:
 
 def _newline_findings(path: Path, relative_id: str, *, data: bytes | None = None) -> list[Finding]:
     if data is None:
-        try:
-            data = path.read_bytes()
-        except OSError:
-            return []
+        data = path.read_bytes()
     if len(_newline_styles(data)) < 2:
         return []
     return [
@@ -147,6 +175,74 @@ def _newline_styles(data: bytes) -> set[bytes]:
     return styles
 
 
+def _expected_path_finding(project: Project, relative_id: str, *, expected_kind: str) -> Finding | None:
+    actual_kind = _path_kind_without_following(project.root, relative_id)
+    if actual_kind == "blocked":
+        return None
+    if actual_kind == "missing":
+        return Finding(
+            code=MISSING_PATH,
+            severity="warning",
+            message=f"canonical scaffold {expected_kind} is missing",
+            path=relative_id,
+            next_action="Preview cw init or restore the missing scaffold path without overwriting content.",
+        )
+    if actual_kind == expected_kind:
+        return None
+    return Finding(
+        code=WRONG_PATH_KIND,
+        severity="error",
+        message=f"canonical scaffold path must be a {expected_kind}, not a {actual_kind}",
+        path=relative_id,
+        next_action=(
+            "Move the conflicting entry aside without following it, then restore the expected scaffold path kind."
+        ),
+    )
+
+
+def _path_kind_without_following(root: Path, relative_id: str) -> str:
+    current = root
+    parts = Path(relative_id).parts
+    for index, part in enumerate(parts):
+        current /= part
+        try:
+            mode = current.lstat().st_mode
+        except FileNotFoundError:
+            return "missing"
+        except NotADirectoryError:
+            return "blocked"
+
+        is_last = index == len(parts) - 1
+        if not is_last:
+            if stat.S_ISLNK(mode) or not stat.S_ISDIR(mode):
+                return "blocked"
+            continue
+        if stat.S_ISLNK(mode):
+            return "symlink"
+        if stat.S_ISREG(mode):
+            return "regular file"
+        if stat.S_ISDIR(mode):
+            return "directory"
+        return "other filesystem entry"
+    return "directory"
+
+
+def _has_frontmatter(data: bytes) -> bool:
+    text = data.decode("utf-8-sig")
+    lines = text.splitlines()
+    return bool(lines and lines[0] == "---")
+
+
+def _missing_frontmatter_finding(relative_id: str) -> Finding:
+    return Finding(
+        code=MISSING_FRONTMATTER,
+        severity="warning",
+        message="managed Markdown is missing frontmatter",
+        path=relative_id,
+        next_action="Preserve the body and add supported flat frontmatter appropriate to this path.",
+    )
+
+
 def _iter_unmanaged_markdown(project: Project) -> Iterator[Path]:
     yield from _iter_unmanaged_markdown_in(project.root, project.root)
 
@@ -159,7 +255,8 @@ def _iter_unmanaged_markdown_in(root: Path, directory: Path) -> Iterator[Path]:
         if path.is_dir():
             if relative.parts[0] in (*MANAGED_ROOTS, ".creative-writing"):
                 continue
-            if path != root and (path / "project.md").is_file() and not (path / "project.md").is_symlink():
+            manifest = path / "project.md"
+            if path != root and not manifest.is_symlink() and manifest.is_file():
                 continue
             yield from _iter_unmanaged_markdown_in(root, path)
         elif path.is_file() and path.suffix.casefold() == ".md" and relative.as_posix() != "project.md":
@@ -195,18 +292,16 @@ def _case_collision_findings(project: Project) -> list[Finding]:
 def _iter_directories(root: Path, directory: Path) -> Iterator[Path]:
     yield directory
     for path in _sorted_children(directory):
-        if not path.is_dir() or path.is_symlink():
+        if path.is_symlink() or not path.is_dir():
             continue
-        if path != root and (path / "project.md").is_file() and not (path / "project.md").is_symlink():
+        manifest = path / "project.md"
+        if path != root and not manifest.is_symlink() and manifest.is_file():
             continue
         yield from _iter_directories(root, path)
 
 
 def _sorted_children(directory: Path) -> list[Path]:
-    try:
-        return sorted(directory.iterdir(), key=lambda path: (_portable_identity(path.name), path.name))
-    except OSError:
-        return []
+    return sorted(directory.iterdir(), key=lambda path: (_portable_identity(path.name), path.name))
 
 
 def _portable_identity(name: str) -> str:
@@ -221,9 +316,12 @@ __all__ = [
     "CASE_COLLISION",
     "DUPLICATE_CHAPTER",
     "INVALID_FRONTMATTER",
+    "ILLEGAL_LOCATION",
+    "MISSING_FRONTMATTER",
     "MISSING_PATH",
     "MIXED_NEWLINES",
     "NEWER_SCHEMA",
     "UNMANAGED_MARKDOWN",
+    "WRONG_PATH_KIND",
     "check_structure",
 ]

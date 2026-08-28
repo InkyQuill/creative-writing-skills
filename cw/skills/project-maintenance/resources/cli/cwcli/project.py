@@ -59,10 +59,10 @@ class Project:
 
         for root_name in MANAGED_ROOTS:
             managed_root = self.root / root_name
-            if not managed_root.is_dir() or managed_root.is_symlink():
+            if managed_root.is_symlink() or not managed_root.is_dir():
                 continue
             manifest = managed_root / "project.md"
-            if manifest.is_file() and not manifest.is_symlink():
+            if not manifest.is_symlink() and manifest.is_file():
                 continue
             yield from _iter_markdown(managed_root)
 
@@ -148,7 +148,7 @@ def _validate_portable_name(name: str) -> None:
 
 
 def _ensure_no_portable_collision(parent: Path, name: str) -> None:
-    if not parent.is_dir() or parent.is_symlink():
+    if parent.is_symlink() or not parent.is_dir():
         return
 
     identity = _portable_name_identity(name)
@@ -178,7 +178,7 @@ def _nested_project_root(root: Path, target: Path) -> Path | None:
     for part in directory.relative_to(root).parts:
         current /= part
         manifest = current / "project.md"
-        if manifest.is_file() and not manifest.is_symlink():
+        if not manifest.is_symlink() and manifest.is_file():
             return current
     return None
 
@@ -191,7 +191,7 @@ def _iter_markdown(directory: Path) -> Iterator[Path]:
             continue
         if path.is_dir():
             manifest = path / "project.md"
-            if manifest.is_file() and not manifest.is_symlink():
+            if not manifest.is_symlink() and manifest.is_file():
                 continue
             yield from _iter_markdown(path)
         elif path.is_file() and path.suffix.casefold() == ".md":

@@ -1,6 +1,6 @@
 """Stable finding and report models used by the story-project CLI."""
 
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from typing import Literal
 
 Severity = Literal["info", "warning", "error"]
@@ -17,10 +17,20 @@ class Finding:
 
 
 @dataclass(frozen=True)
+class ExecutionError:
+    check: str
+    message: str
+
+
+@dataclass(frozen=True)
 class Report:
     findings: list[Finding]
+    checks: list[str] = field(default_factory=list)
+    execution_errors: list[ExecutionError] = field(default_factory=list)
 
     def exit_status(self, *, strict: bool = False) -> int:
+        if self.execution_errors:
+            return 2
         return int(
             any(item.severity == "error" for item in self.findings)
             or (strict and any(item.severity == "warning" for item in self.findings))
@@ -29,7 +39,9 @@ class Report:
     def as_json(self, *, strict: bool = False) -> dict[str, object]:
         has_error = any(item.severity == "error" for item in self.findings)
         return {
+            "checks": self.checks,
             "findings": [asdict(item) for item in self.findings],
+            "execution_errors": [asdict(item) for item in self.execution_errors],
             "strict_failure": strict and self.exit_status(strict=True) == 1 and not has_error,
         }
 

@@ -1,8 +1,8 @@
-"""Schema v1 metadata validation for story projects."""
+"""Schema-v1 structural validation for story projects."""
 
 from __future__ import annotations
 
-import re
+from pathlib import PurePosixPath
 
 from .documents import Document
 from .findings import Finding
@@ -10,24 +10,16 @@ from .findings import Finding
 
 SCHEMA_VERSION = 1
 PROJECT_STATUSES = frozenset({"planning", "drafting", "revising", "complete", "archived"})
-DRAFT_STATUSES = frozenset({"working", "review", "ready"})
-WORLD_CLASSES = frozenset({"location", "faction", "system", "artifact", "concept"})
-SCAFFOLD_FILES: tuple[str, ...] = (
+GENERATED_INDEX_FILES: tuple[str, ...] = (
     "kb/_index.md",
     "kb/canon/_index.md",
     "kb/characters/_index.md",
     "kb/continuity/_index.md",
-    "kb/continuity/promises.md",
-    "kb/continuity/questions.md",
     "kb/continuity/scenes/_index.md",
-    "kb/continuity/state.md",
-    "kb/continuity/timeline.md",
     "kb/issues/_index.md",
     "kb/samples/_index.md",
     "kb/styles/_index.md",
-    "kb/vocab.md",
     "kb/world/_index.md",
-    "project.md",
     "story/_index.md",
     "story/chapters/_index.md",
     "work/_index.md",
@@ -38,132 +30,224 @@ SCAFFOLD_FILES: tuple[str, ...] = (
     "work/reviews/_index.md",
 )
 
-_DRAFT_TARGET = re.compile(r"story/chapters/[^/]+\.md\Z")
-_SHA256 = re.compile(r"[0-9a-f]{64}\Z")
+CONTINUITY_RECORD_FILES = frozenset(
+    {
+        "kb/continuity/promises.md",
+        "kb/continuity/questions.md",
+        "kb/continuity/state.md",
+        "kb/continuity/timeline.md",
+    }
+)
+
+SCAFFOLD_FILES: tuple[str, ...] = tuple(
+    sorted((*GENERATED_INDEX_FILES, *CONTINUITY_RECORD_FILES, "kb/vocab.md", "project.md"))
+)
+
+SCAFFOLD_DIRECTORIES: tuple[str, ...] = (
+    ".creative-writing",
+    ".creative-writing/context",
+    ".creative-writing/transactions",
+    "kb",
+    "kb/canon",
+    "kb/characters",
+    "kb/continuity",
+    "kb/continuity/scenes",
+    "kb/issues",
+    "kb/samples",
+    "kb/styles",
+    "kb/world",
+    "story",
+    "story/chapters",
+    "work",
+    "work/archive",
+    "work/brainstorm",
+    "work/drafts",
+    "work/plans",
+    "work/reviews",
+)
+
+WORK_ARTIFACT_DIRECTORIES = frozenset(
+    {"work/archive", "work/brainstorm", "work/drafts", "work/plans", "work/reviews"}
+)
+KB_CONTENT_DIRECTORIES = frozenset(
+    {"kb/canon", "kb/characters", "kb/issues", "kb/samples", "kb/styles", "kb/world"}
+)
+
+INVALID_SCHEMA_VERSION = "CW-SCHEMA-001"
+INVALID_TITLE = "CW-SCHEMA-010"
+INVALID_LANGUAGE = "CW-SCHEMA-011"
+INVALID_PROJECT_STATUS = "CW-SCHEMA-012"
+REPEATED_DOCUMENT_ID = "CW-SCHEMA-020"
+REPEATED_DOCUMENT_TYPE = "CW-SCHEMA-021"
+INVALID_CHAPTER_NUMBER = "CW-SCHEMA-030"
+INVALID_GENERATED_MARKER = "CW-SCHEMA-040"
+
+
+def allowed_document_kind(relative_id: str) -> str | None:
+    """Return the schema-v1 path-inferred kind for an allowed Markdown path."""
+
+    if relative_id == "project.md":
+        return "manifest"
+    if relative_id in GENERATED_INDEX_FILES:
+        return "generated-index"
+    if relative_id == "kb/vocab.md":
+        return "vocabulary"
+    if relative_id in CONTINUITY_RECORD_FILES:
+        return "continuity-record"
+
+    path = PurePosixPath(relative_id)
+    if path.suffix != ".md" or path.name == "_index.md":
+        return None
+    parent = path.parent.as_posix()
+    if parent == "story/chapters":
+        return "chapter"
+    if parent in WORK_ARTIFACT_DIRECTORIES:
+        return "work-artifact"
+    if parent in KB_CONTENT_DIRECTORIES:
+        return "kb-content"
+    if parent == "kb/continuity/scenes":
+        return "continuity-scene"
+    return None
 
 
 def validate_metadata(relative_id: str, document: Document) -> list[Finding]:
-    """Return schema-v1 findings for one project-relative Markdown document."""
+    """Return findings for structurally defined schema-v1 metadata only.
 
-    if relative_id == "project.md":
+    Artifact-specific semantic fields and Markdown table columns are deliberately
+    unconstrained in schema v1. Tightening them requires a future schema version.
+    """
+
+    kind = allowed_document_kind(relative_id)
+    if kind == "manifest":
         return _validate_manifest(document.metadata, relative_id)
 
     findings = _validate_document_identity(document.metadata, relative_id)
-    if relative_id.endswith("/_index.md"):
-        return findings
-    if relative_id.startswith("story/chapters/"):
-        findings.extend(_validate_chapter(document.metadata, relative_id))
-    elif relative_id.startswith("work/drafts/"):
-        findings.extend(_validate_draft(document.metadata, relative_id))
-    elif relative_id.startswith(("work/plans/", "work/reviews/", "work/brainstorm/")):
-        findings.extend(_validate_work_artifact(document.metadata, relative_id))
-    elif relative_id.startswith("kb/world/"):
-        findings.extend(_validate_world_page(document.metadata, relative_id))
-    elif relative_id.startswith("kb/"):
-        findings.extend(_validate_sources(document.metadata, relative_id, required=False))
+    if kind == "generated-index":
+        if document.metadata.get("generated") is not True:
+            findings.append(
+                _warning(
+                    INVALID_GENERATED_MARKER,
+                    "generated index frontmatter must contain generated: true",
+                    relative_id,
+                    "Regenerate this index from the authored files in its directory.",
+                )
+            )
+    elif kind == "chapter":
+        number = document.metadata.get("number")
+        if not isinstance(number, int) or isinstance(number, bool) or number < 1:
+            findings.append(
+                _warning(
+                    INVALID_CHAPTER_NUMBER,
+                    "number must be a positive non-boolean integer for deterministic chapter ordering",
+                    relative_id,
+                    "Set number to a unique positive integer after confirming the intended chapter order.",
+                )
+            )
     return findings
 
 
 def _validate_manifest(metadata: dict[str, object], relative_id: str) -> list[Finding]:
-    findings = []
-    if metadata.get("schema-version") != SCHEMA_VERSION:
-        findings.append(_error("invalid-schema-version", "schema-version must be 1", relative_id))
-    findings.extend(_validate_non_empty_string(metadata, "title", relative_id))
-    findings.extend(_validate_non_empty_string(metadata, "language", relative_id))
+    findings: list[Finding] = []
+    schema_version = metadata.get("schema-version")
+    if not isinstance(schema_version, int) or isinstance(schema_version, bool) or schema_version != SCHEMA_VERSION:
+        findings.append(
+            Finding(
+                code=INVALID_SCHEMA_VERSION,
+                severity="error",
+                message="schema-version must be the actual non-boolean integer 1",
+                path=relative_id,
+                next_action=(
+                    "Inspect or migrate the project contract, then set schema-version to integer 1 only "
+                    "when it follows schema v1."
+                ),
+            )
+        )
+    findings.extend(
+        _validate_non_empty_string(
+            metadata,
+            "title",
+            INVALID_TITLE,
+            relative_id,
+            "Set title to the author's non-empty project title without changing manuscript content.",
+        )
+    )
+    findings.extend(
+        _validate_non_empty_string(
+            metadata,
+            "language",
+            INVALID_LANGUAGE,
+            relative_id,
+            "Set language to the non-empty language identifier used by this project.",
+        )
+    )
     if metadata.get("status") not in PROJECT_STATUSES:
         statuses = ", ".join(sorted(PROJECT_STATUSES))
-        findings.append(_error("invalid-project-status", f"status must be one of: {statuses}", relative_id))
+        findings.append(
+            _warning(
+                INVALID_PROJECT_STATUS,
+                f"status must be one of: {statuses}",
+                relative_id,
+                f"After confirming the project lifecycle, set status to one of: {statuses}.",
+            )
+        )
     return findings
 
 
 def _validate_document_identity(metadata: dict[str, object], relative_id: str) -> list[Finding]:
-    findings = []
+    findings: list[Finding] = []
     if "id" in metadata:
         findings.append(
-            _error("repeated-document-id", "document identity is inferred from its project-relative path", relative_id)
+            _warning(
+                REPEATED_DOCUMENT_ID,
+                "document identity is inferred from its project-relative path",
+                relative_id,
+                "Remove the redundant id field; keep the file at the same path to preserve its identity.",
+            )
         )
     if "type" in metadata:
         findings.append(
-            _error("repeated-document-type", "document type is inferred from its directory", relative_id)
-        )
-    return findings
-
-
-def _validate_chapter(metadata: dict[str, object], relative_id: str) -> list[Finding]:
-    findings = []
-    number = metadata.get("number")
-    if not isinstance(number, int) or isinstance(number, bool) or number < 1:
-        findings.append(_error("invalid-chapter-number", "number must be a positive integer", relative_id))
-    findings.extend(_validate_non_empty_string(metadata, "title", relative_id))
-    status = metadata.get("status")
-    if status is not None and status not in {"accepted", "final"}:
-        findings.append(_error("invalid-chapter-status", "status must be accepted or final", relative_id))
-    return findings
-
-
-def _validate_draft(metadata: dict[str, object], relative_id: str) -> list[Finding]:
-    findings = []
-    target = metadata.get("target")
-    target_is_manuscript_chapter = isinstance(target, str) and bool(_DRAFT_TARGET.fullmatch(target))
-    if not target_is_manuscript_chapter:
-        findings.append(
-            _error("invalid-draft-target", "target must be a story/chapters/*.md path", relative_id)
-        )
-
-    if metadata.get("status") not in DRAFT_STATUSES:
-        statuses = ", ".join(sorted(DRAFT_STATUSES))
-        findings.append(_error("invalid-draft-status", f"status must be one of: {statuses}", relative_id))
-
-    if "base-revision" not in metadata:
-        if target_is_manuscript_chapter:
-            findings.append(
-                Finding(
-                    code="needs-context-draft-target",
-                    severity="info",
-                    message="NEEDS_CONTEXT: target existence determines whether base-revision is required",
-                    path=relative_id,
-                    next_action="Use a project-aware draft checker to inspect the target.",
-                )
+            _warning(
+                REPEATED_DOCUMENT_TYPE,
+                "document type is inferred from its allowed directory",
+                relative_id,
+                "Remove the redundant type field after confirming the file is in its intended directory.",
             )
-    elif not isinstance(metadata["base-revision"], str) or not _SHA256.fullmatch(metadata["base-revision"]):
-        findings.append(
-            _error("invalid-base-revision", "base-revision must be a lowercase SHA-256 identifier", relative_id)
         )
     return findings
 
 
-def _validate_work_artifact(metadata: dict[str, object], relative_id: str) -> list[Finding]:
-    findings = _validate_non_empty_string(metadata, "subject", relative_id)
-    findings.extend(_validate_non_empty_string(metadata, "status", relative_id))
-    return findings
-
-
-def _validate_world_page(metadata: dict[str, object], relative_id: str) -> list[Finding]:
-    findings = []
-    if metadata.get("class") not in WORLD_CLASSES:
-        classes = ", ".join(sorted(WORLD_CLASSES))
-        findings.append(_error("invalid-world-class", f"class must be one of: {classes}", relative_id))
-    findings.extend(_validate_sources(metadata, relative_id, required=True))
-    return findings
-
-
-def _validate_sources(
-    metadata: dict[str, object], relative_id: str, *, required: bool
+def _validate_non_empty_string(
+    metadata: dict[str, object],
+    key: str,
+    code: str,
+    relative_id: str,
+    next_action: str,
 ) -> list[Finding]:
-    if "sources" not in metadata:
-        return [_error("missing-sources", "sources must be a list of strings", relative_id)] if required else []
-    sources = metadata["sources"]
-    if not isinstance(sources, list) or not all(isinstance(source, str) for source in sources):
-        return [_error("invalid-sources", "sources must be a list of strings", relative_id)]
-    return []
-
-
-def _validate_non_empty_string(metadata: dict[str, object], key: str, relative_id: str) -> list[Finding]:
     value = metadata.get(key)
     if not isinstance(value, str) or not value.strip():
-        return [_error(f"invalid-{key}", f"{key} must be a non-empty string", relative_id)]
+        return [_warning(code, f"{key} must be a non-empty string", relative_id, next_action)]
     return []
 
 
-def _error(code: str, message: str, relative_id: str) -> Finding:
-    return Finding(code=code, severity="error", message=message, path=relative_id)
+def _warning(code: str, message: str, relative_id: str, next_action: str) -> Finding:
+    return Finding(
+        code=code,
+        severity="warning",
+        message=message,
+        path=relative_id,
+        next_action=next_action,
+    )
+
+
+__all__ = [
+    "CONTINUITY_RECORD_FILES",
+    "GENERATED_INDEX_FILES",
+    "KB_CONTENT_DIRECTORIES",
+    "PROJECT_STATUSES",
+    "SCAFFOLD_DIRECTORIES",
+    "SCAFFOLD_FILES",
+    "SCHEMA_VERSION",
+    "WORK_ARTIFACT_DIRECTORIES",
+    "allowed_document_kind",
+    "validate_metadata",
+]

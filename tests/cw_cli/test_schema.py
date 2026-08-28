@@ -128,15 +128,35 @@ class MetadataValidationTests(unittest.TestCase):
 
         self.assertEqual(
             [
-                ("invalid-schema-version", "schema-version must be 1"),
-                ("invalid-title", "title must be a non-empty string"),
-                ("invalid-language", "language must be a non-empty string"),
-                ("invalid-project-status", "status must be one of: archived, complete, drafting, planning, revising"),
+                ("CW-SCHEMA-001", "error"),
+                ("CW-SCHEMA-010", "warning"),
+                ("CW-SCHEMA-011", "warning"),
+                ("CW-SCHEMA-012", "warning"),
             ],
-            [(finding.code, finding.message) for finding in findings],
+            [(finding.code, finding.severity) for finding in findings],
         )
+        self.assertTrue(all(finding.next_action for finding in findings))
 
-    def test_document_metadata_rejects_repeated_identity_and_invalid_type_specific_fields(self):
+    def test_boolean_schema_versions_are_not_integers(self):
+        for schema_version in (True, False):
+            with self.subTest(schema_version=schema_version):
+                findings = schema.validate_metadata(
+                    "project.md",
+                    document(
+                        {
+                            "schema-version": schema_version,
+                            "title": "Second Light",
+                            "language": "ru",
+                            "status": "planning",
+                        }
+                    ),
+                )
+
+                self.assertEqual([("CW-SCHEMA-001", "error")], [(item.code, item.severity) for item in findings])
+                self.assertIn("integer 1", findings[0].message)
+                self.assertIsNotNone(findings[0].next_action)
+
+    def test_structural_metadata_drift_is_warning_first_and_actionable(self):
         findings = schema.validate_metadata(
             "story/chapters/chapter-01.md",
             document({"id": "chapter-01", "type": "chapter", "number": "one", "title": "", "status": "draft"}),
@@ -144,59 +164,30 @@ class MetadataValidationTests(unittest.TestCase):
 
         self.assertEqual(
             [
-                "repeated-document-id",
-                "repeated-document-type",
-                "invalid-chapter-number",
-                "invalid-title",
-                "invalid-chapter-status",
+                "CW-SCHEMA-020",
+                "CW-SCHEMA-021",
+                "CW-SCHEMA-030",
             ],
             [finding.code for finding in findings],
         )
-        findings = schema.validate_metadata("kb/world/harbor.md", document({"class": "city", "sources": "chapter"}))
-        self.assertEqual(["invalid-world-class", "invalid-sources"], [finding.code for finding in findings])
+        self.assertTrue(all(finding.severity == "warning" for finding in findings))
+        self.assertTrue(all(finding.next_action for finding in findings))
 
-    def test_draft_for_an_existing_chapter_has_an_active_status_and_sha256_base_revision(self):
-        findings = schema.validate_metadata(
-            "work/drafts/chapter-01-revision.md",
-            document(
-                {
-                    "target": "story/chapters/chapter-01.md",
-                    "base-revision": "a" * 64,
-                    "status": "review",
-                }
-            ),
-        )
+        index_findings = schema.validate_metadata("work/_index.md", document({"generated": False}))
+        self.assertEqual([("CW-SCHEMA-040", "warning")], [(item.code, item.severity) for item in index_findings])
+        self.assertIsNotNone(index_findings[0].next_action)
 
-        self.assertEqual([], findings)
-
-    def test_new_chapter_draft_without_a_base_revision_requires_target_existence_context(self):
-        findings = schema.validate_metadata(
-            "work/drafts/chapter-02.md",
-            document({"target": "story/chapters/chapter-02.md", "status": "working"}),
-        )
-
-        self.assertEqual(["needs-context-draft-target"], [finding.code for finding in findings])
-
-    def test_draft_metadata_rejects_non_manuscript_target_inactive_status_and_malformed_hash(self):
+    def test_schema_v1_does_not_invent_type_specific_semantic_contracts(self):
         cases = {
-            "target outside manuscript": (
-                {"target": "kb/characters/iris.md", "base-revision": "b" * 64, "status": "working"},
-                "invalid-draft-target",
-            ),
-            "inactive status": (
-                {"target": "story/chapters/chapter-01.md", "base-revision": "b" * 64, "status": "abandoned"},
-                "invalid-draft-status",
-            ),
-            "malformed hash": (
-                {"target": "story/chapters/chapter-01.md", "base-revision": "not-a-sha256", "status": "ready"},
-                "invalid-base-revision",
-            ),
+            "work/drafts/revision.md": {"future-field": "draft value", "status": "project-defined"},
+            "work/plans/arc.md": {"columns": ["custom", "shape"]},
+            "kb/world/harbor.md": {"class": "project-defined", "sources": "project-defined"},
+            "kb/continuity/state.md": {"table-contract": "project-defined"},
         }
 
-        for name, (metadata, expected_code) in cases.items():
-            with self.subTest(name=name):
-                findings = schema.validate_metadata("work/drafts/revision.md", document(metadata))
-                self.assertIn(expected_code, [finding.code for finding in findings])
+        for relative_id, metadata in cases.items():
+            with self.subTest(relative_id=relative_id):
+                self.assertEqual([], schema.validate_metadata(relative_id, document(metadata)))
 
 
 if __name__ == "__main__":

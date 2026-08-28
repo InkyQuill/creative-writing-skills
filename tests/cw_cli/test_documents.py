@@ -103,6 +103,21 @@ class DocumentTests(unittest.TestCase):
 
         self.assertEqual({"title": "Notes & memory [draft]!"}, documents.parse_document(raw).metadata)
 
+    def test_rendered_parser_reserved_prefixes_round_trip_in_scalars_and_lists(self):
+        for prefix in ("&", "*", "!", "{", "["):
+            with self.subTest(prefix=prefix):
+                value = f"{prefix}reserved"
+                document = documents.Document(
+                    metadata={"scalar": value, "items": [value]},
+                    body="Body\n",
+                    newline="\n",
+                    bom=False,
+                )
+
+                parsed = documents.parse_document(documents.render_document(document))
+
+                self.assertEqual({"scalar": value, "items": [value]}, parsed.metadata)
+
     def test_rejects_duplicate_key_with_line_number(self):
         with self.assertRaisesRegex(documents.DocumentError, r"line 3.*duplicate key"):
             documents.parse_document(b"---\ntitle: First\ntitle: Second\n---\n")

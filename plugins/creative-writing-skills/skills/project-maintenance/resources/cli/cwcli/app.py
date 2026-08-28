@@ -9,7 +9,7 @@ from typing import TextIO
 from . import __version__
 from .checks.structure import check_structure
 from .documents import DocumentError
-from .findings import Report
+from .findings import ExecutionError, Report
 from .project import ProjectDiscoveryError, discover_project
 from .scaffold import render_scaffold
 
@@ -57,8 +57,11 @@ def _report_options(parser: argparse.ArgumentParser) -> None:
 
 def run(argv: list[str], *, cwd: Path, stdout: TextIO, stderr: TextIO) -> int:
     """Run the CLI with explicit process context and output streams."""
+    parser = _parser(error_stream=stderr)
     try:
-        args = _parser(error_stream=stderr).parse_args(argv)
+        args = parser.parse_args(argv)
+        if not args.version and args.command is None:
+            parser.error("the following arguments are required: command")
     except _ArgumentError:
         return 2
     if args.version:
@@ -81,8 +84,15 @@ def run(argv: list[str], *, cwd: Path, stdout: TextIO, stderr: TextIO) -> int:
     if args.command == "check" and args.check_command == "structure":
         try:
             target = _from_cwd(cwd, args.path)
-            report = Report(check_structure(discover_project(target)))
+            report = Report(check_structure(discover_project(target)), checks=["structure"])
         except (DocumentError, OSError, ProjectDiscoveryError) as error:
+            if args.format == "json":
+                report = Report(
+                    [],
+                    checks=["structure"],
+                    execution_errors=[ExecutionError(check="structure", message=str(error))],
+                )
+                return _write_report(report, output_format=args.format, strict=args.strict, stdout=stdout)
             stderr.write(f"cw: error: {error}\n")
             return 2
         return _write_report(report, output_format=args.format, strict=args.strict, stdout=stdout)
@@ -93,6 +103,7 @@ def run(argv: list[str], *, cwd: Path, stdout: TextIO, stderr: TextIO) -> int:
 def _write_report(report: Report, *, output_format: str, strict: bool, stdout: TextIO) -> int:
     if output_format == "json":
         json.dump(report.as_json(strict=strict), stdout)
+        stdout.write("\n")
     else:
         stdout.write(report.as_text())
         if report.findings:
