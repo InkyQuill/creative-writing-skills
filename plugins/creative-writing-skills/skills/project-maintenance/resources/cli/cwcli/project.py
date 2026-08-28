@@ -61,6 +61,9 @@ class Project:
             managed_root = self.root / root_name
             if not managed_root.is_dir() or managed_root.is_symlink():
                 continue
+            manifest = managed_root / "project.md"
+            if manifest.is_file() and not manifest.is_symlink():
+                continue
             yield from _iter_markdown(managed_root)
 
     def relative_id(self, path: Path) -> str:

@@ -60,6 +60,18 @@ class ProjectDiscoveryTests(unittest.TestCase):
             with self.assertRaisesRegex(project.ProjectPathError, "case-colliding"):
                 story_project.resolve("story/chapter.md", for_write=True)
 
+    def test_managed_root_that_is_a_nested_project_is_omitted(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            for root_name in ("story", "work", "kb"):
+                with self.subTest(root_name=root_name):
+                    story_project = make_project(root / root_name)
+                    nested_root = story_project.root / root_name
+                    write_manifest(nested_root)
+                    (nested_root / "nested.md").write_text("Nested\n", encoding="utf-8")
+
+                    self.assertEqual([], list(story_project.iter_managed_markdown()))
+
     @unittest.skipUnless(hasattr(os, "symlink"), "symlinks are unavailable on this platform")
     def test_managed_iteration_and_writes_do_not_follow_symlinks_or_nested_projects(self):
         with tempfile.TemporaryDirectory() as directory:
