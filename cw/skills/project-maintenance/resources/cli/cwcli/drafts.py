@@ -4,8 +4,9 @@ from __future__ import annotations
 
 import os
 import stat
+import unicodedata
 from dataclasses import dataclass
-from pathlib import PurePosixPath
+from pathlib import Path, PurePosixPath
 
 from .documents import Document, Scalar, logical_hash, parse_document, render_document
 from .project import Project, ProjectPathError
@@ -47,7 +48,7 @@ def load_draft(project: Project, path: str) -> Draft:
     target = document.metadata.get("target")
     if not isinstance(target, str):
         raise DraftError(f"draft {path} must have a string target")
-    _validate_target_path(target)
+    _resolve_target(project, target)
     base_revision = document.metadata.get("base-revision")
     if base_revision is not None and not _is_digest(base_revision):
         raise DraftError(f"draft {path} has an invalid base-revision")
@@ -67,13 +68,16 @@ def plan_create_draft(
 ) -> TransactionPlan:
     """Plan a new working draft while preserving any accepted target exactly."""
 
-    _validate_target_path(target)
+    target_path = _resolve_target(project, target)
     if store.project.root != project.root:
         raise DraftError("transaction store belongs to a different project")
-    destination_id = draft_path or f"work/drafts/{PurePosixPath(target).name}"
+    destination_id = (
+        f"work/drafts/{PurePosixPath(target).name}"
+        if draft_path is None
+        else draft_path
+    )
     _validate_draft_path(destination_id)
     try:
-        target_path = project.resolve(target, for_write=True)
         destination = project.resolve(destination_id, for_write=True)
     except (ProjectPathError, TypeError) as error:
         raise DraftError(f"unsafe draft or target path: {error}") from error
@@ -132,8 +136,16 @@ def _reject_duplicate_target(project: Project, target: str) -> None:
             continue
         relative = project.relative_id(path)
         draft = load_draft(project, relative)
-        if draft.target == target:
+        if _portable_identity(draft.target) == _portable_identity(target):
             raise DraftError(f"active draft already targets {target}: {relative}")
+
+
+def _resolve_target(project: Project, target: str) -> Path:
+    _validate_target_path(target)
+    try:
+        return project.resolve(target, for_write=True)
+    except (ProjectPathError, TypeError) as error:
+        raise DraftError(f"unsafe draft target {target!r}: {error}") from error
 
 
 def _validate_target_path(path: str) -> None:
@@ -168,6 +180,10 @@ def _is_digest(value: object) -> bool:
         and len(value) == 64
         and all(character in "0123456789abcdef" for character in value)
     )
+
+
+def _portable_identity(path: str) -> str:
+    return unicodedata.normalize("NFC", path).casefold()
 
 
 def _read_regular_file(path: os.PathLike[str], label: str) -> bytes:

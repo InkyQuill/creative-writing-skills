@@ -22,7 +22,7 @@ class DraftCreateTests(unittest.TestCase):
 
     def test_existing_target_copies_content_and_records_recoverable_base(self):
         root, model, store = self.make_project()
-        accepted = b"---\r\nnumber: 4\r\ntitle: Harbor\r\nstatus: accepted\r\n---\r\nOld\r\n"
+        accepted = b"\xef\xbb\xbf---\r\nnumber: 4\r\ntitle: Harbor\r\nstatus: accepted\r\n---\r\nOld\r\n"
         target = root / "story/chapters/ch-004.md"
         target.write_bytes(accepted)
 
@@ -34,6 +34,8 @@ class DraftCreateTests(unittest.TestCase):
         self.assertEqual("work/drafts/ch-004.md", change.path)
         self.assertIsNone(change.before)
         created = documents.parse_document(change.after)
+        self.assertTrue(created.bom)
+        self.assertTrue(change.after.startswith(b"\xef\xbb\xbf"))
         self.assertEqual(4, created.metadata["number"])
         self.assertEqual("Harbor", created.metadata["title"])
         self.assertEqual("working", created.metadata["status"])
@@ -81,6 +83,61 @@ class DraftCreateTests(unittest.TestCase):
             drafts.plan_create_draft(
                 model, "story/chapters/ch-006.md", "work/drafts/existing.md", store
             )
+
+        with self.assertRaisesRegex(drafts.DraftError, "work/drafts"):
+            drafts.plan_create_draft(
+                model, "story/chapters/ch-007.md", "", store
+            )
+
+    def test_duplicate_targets_use_portable_casefolded_identity(self):
+        root, model, store = self.make_project()
+        first = drafts.plan_create_draft(
+            model, "story/chapters/Harbor.md", "work/drafts/harbor-first.md", store
+        )
+        (root / first.changes[0].path).write_bytes(first.changes[0].after)
+
+        with self.assertRaisesRegex(drafts.DraftError, "already targets"):
+            drafts.plan_create_draft(
+                model, "story/chapters/harbor.md", "work/drafts/harbor-second.md", store
+            )
+
+    def test_load_draft_rejects_targets_that_project_cannot_safely_resolve(self):
+        root, model, _store = self.make_project()
+        draft = root / "work/drafts/ch-unsafe.md"
+
+        for target in (
+            "story/chapters/CON.md",
+            "story/chapters/not<portable.md",
+            "story/chapters/back\\slash.md",
+            "story/chapters/e\u0301.md",
+        ):
+            with self.subTest(target=target):
+                draft.write_text(
+                    f"---\ntarget: {target}\nstatus: working\n---\n",
+                    encoding="utf-8",
+                )
+                with self.assertRaisesRegex(drafts.DraftError, "unsafe draft target"):
+                    drafts.load_draft(model, "work/drafts/ch-unsafe.md")
+
+        outside = root.parent / "outside.md"
+        outside.write_text("outside\n", encoding="utf-8")
+        linked_target = root / "story/chapters/linked.md"
+        linked_target.symlink_to(outside)
+        draft.write_text(
+            "---\ntarget: story/chapters/linked.md\nstatus: working\n---\n",
+            encoding="utf-8",
+        )
+        with self.assertRaisesRegex(drafts.DraftError, "symlink"):
+            drafts.load_draft(model, "work/drafts/ch-unsafe.md")
+
+        nested_manifest = root / "story/chapters/project.md"
+        nested_manifest.write_text("---\ntitle: Nested\n---\n", encoding="utf-8")
+        draft.write_text(
+            "---\ntarget: story/chapters/new.md\nstatus: working\n---\n",
+            encoding="utf-8",
+        )
+        with self.assertRaisesRegex(drafts.DraftError, "nested project"):
+            drafts.load_draft(model, "work/drafts/ch-unsafe.md")
 
     def test_load_draft_is_strict_about_location_target_base_and_status(self):
         root, model, _store = self.make_project()
