@@ -243,6 +243,12 @@ class TransactionStore:
     def read_blob(self, identifier: str) -> bytes:
         """Read one snapshot without following any protected journal link."""
 
+        if (
+            not isinstance(identifier, str)
+            or len(identifier) != 64
+            or any(character not in "0123456789abcdef" for character in identifier)
+        ):
+            raise ValueError("blob identifier must be a lowercase SHA-256 digest")
         self._require_transactions_directory()
         blobs = self.root / "blobs"
         _require_directory(blobs, "transaction blob directory")

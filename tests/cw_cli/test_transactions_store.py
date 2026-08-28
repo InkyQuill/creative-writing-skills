@@ -156,6 +156,31 @@ class TransactionStoreTests(unittest.TestCase):
             store.read_blob(blob_id)
         self.assertEqual(b"outside secret", external_blob.read_bytes())
 
+    def test_blob_read_requires_digest_before_constructing_a_path(self):
+        store = self.make_store()
+        payload = b"valid snapshot\n"
+        blob_id = store.blob(payload)
+        outside_relative = store.root / "outside"
+        outside_relative.write_bytes(b"relative escape")
+        outside_absolute = Path(self.directory.name) / "absolute-escape"
+        outside_absolute.write_bytes(b"absolute escape")
+
+        self.assertEqual(payload, store.read_blob(blob_id))
+        for identifier in (
+            "../outside",
+            str(outside_absolute),
+            "0" * 63,
+            "A" * 64,
+            "g" * 64,
+        ):
+            with self.subTest(identifier=identifier), self.assertRaisesRegex(
+                ValueError, "lowercase SHA-256 digest"
+            ):
+                store.read_blob(identifier)
+
+        self.assertEqual(b"relative escape", outside_relative.read_bytes())
+        self.assertEqual(b"absolute escape", outside_absolute.read_bytes())
+
     def test_history_rejects_symlinked_transaction_entry(self):
         store = self.make_store()
         (store.project.root / ".creative-writing/transactions/blobs").mkdir(parents=True)
