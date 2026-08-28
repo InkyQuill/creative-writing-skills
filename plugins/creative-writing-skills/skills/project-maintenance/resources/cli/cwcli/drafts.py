@@ -207,7 +207,10 @@ def plan_rebase_draft(
     )
 
 
-_BASE_REVISION_LINE = re.compile(br"(?m)^(base-revision:)[ \t]*[^\r\n]*")
+_BASE_REVISION_SCALAR = re.compile(
+    br"base-revision:[ \t]*(?P<quote>['\"]?)(?P<value>[0-9a-f]{64})"
+    br"(?P=quote)(?P<suffix>[ \t]*(?:\#.*)?)"
+)
 
 
 def _render_rebased_draft(
@@ -220,10 +223,7 @@ def _render_rebased_draft(
     if not source.endswith(original_body):
         raise DraftError("cannot identify the draft body without rewriting frontmatter")
     prefix = source[: len(source) - len(original_body)] if original_body else source
-    replacement = rb"\1 " + base_revision.encode("ascii")
-    updated_prefix, count = _BASE_REVISION_LINE.subn(replacement, prefix)
-    if count != 1:
-        raise DraftError("draft must contain exactly one base-revision field")
+    updated_prefix = _replace_base_revision_value(prefix, base_revision)
     normalized_body = body.replace("\r\n", "\n").replace("\r", "\n")
     rendered_body = normalized_body.replace("\n", document.newline).encode("utf-8")
     rendered = updated_prefix + rendered_body
@@ -233,6 +233,33 @@ def _render_rebased_draft(
     if reparsed.metadata != expected_metadata or reparsed.body != rendered_body.decode("utf-8"):
         raise DraftError("rebased draft could not be rendered safely")
     return rendered
+
+
+def _replace_base_revision_value(prefix: bytes, base_revision: str) -> bytes:
+    """Replace only the raw scalar token, retaining all surrounding bytes."""
+
+    replacement = base_revision.encode("ascii")
+    rendered: list[bytes] = []
+    matches = 0
+    for source_line in prefix.splitlines(keepends=True):
+        if source_line.endswith(b"\r\n"):
+            content, ending = source_line[:-2], b"\r\n"
+        elif source_line.endswith((b"\n", b"\r")):
+            content, ending = source_line[:-1], source_line[-1:]
+        else:
+            content, ending = source_line, b""
+        match = _BASE_REVISION_SCALAR.fullmatch(content)
+        if match is not None:
+            matches += 1
+            content = (
+                content[: match.start("value")]
+                + replacement
+                + content[match.end("value") :]
+            )
+        rendered.append(content + ending)
+    if matches != 1:
+        raise DraftError("draft must contain exactly one base-revision field")
+    return b"".join(rendered)
 
 
 def _reject_duplicate_target(project: Project, target: str) -> None:

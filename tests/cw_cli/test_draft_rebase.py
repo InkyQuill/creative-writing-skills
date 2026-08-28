@@ -156,6 +156,64 @@ class DraftRebasePlanTests(unittest.TestCase):
         self.assertEqual("one\r\nCURRENT\r\n", rebased.body)
         self.assertEqual("Harbor", rebased.metadata["title"])
 
+    def test_bare_cr_frontmatter_and_body_support_disjoint_rebase(self):
+        base = b"---\rnumber: 1\rtitle: Harbor\r---\rone\rtwo\rthree\r"
+        _root, model, store, target, _draft_path = self.make_draft(
+            base, "one\rTWO\rthree\r"
+        )
+        target.write_bytes(
+            b"---\rnumber: 1\rtitle: Changed\r---\rone\rtwo\rTHREE\r"
+        )
+
+        plan = drafts.plan_rebase_draft(model, "work/drafts/ch-001.md", store)
+
+        rebased = documents.parse_document(plan.changes[0].after)
+        self.assertEqual("\r", rebased.newline)
+        self.assertEqual("one\rTWO\rTHREE\r", rebased.body)
+        self.assertEqual("working", rebased.metadata["status"])
+
+    def test_rebase_replaces_only_quoted_tab_spaced_revision_scalar(self):
+        base = b"---\nnumber: 1\ntitle: Harbor\n---\none\ntwo\nthree\n"
+        _root, model, store, target, draft_path = self.make_draft(
+            base, "one\nTWO\nthree\n"
+        )
+        old_revision = documents.logical_hash(base)
+        raw_field = b'base-revision:\t  "' + old_revision.encode("ascii") + b'"\t'
+        draft_source = draft_path.read_bytes().replace(
+            b"base-revision: " + old_revision.encode("ascii"), raw_field
+        )
+        draft_path.write_bytes(draft_source)
+        target.write_bytes(
+            b"---\nnumber: 1\ntitle: Changed\n---\none\ntwo\nTHREE\n"
+        )
+        new_revision = documents.logical_hash(target.read_bytes())
+
+        plan = drafts.plan_rebase_draft(model, "work/drafts/ch-001.md", store)
+
+        expected_field = (
+            b'base-revision:\t  "' + new_revision.encode("ascii") + b'"\t'
+        )
+        after = plan.changes[0].after
+        self.assertIn(expected_field + b"\n", after)
+        self.assertEqual(
+            draft_source.replace(raw_field, expected_field).replace(
+                b"one\nTWO\nthree\n", b"one\nTWO\nTHREE\n"
+            ),
+            after,
+        )
+
+    def test_raw_revision_replacement_preserves_comment_suffix_and_line_ending(self):
+        old_revision = b"1" * 64
+        new_revision = "2" * 64
+        prefix = b"---\rbase-revision:  '" + old_revision + b"' \t# retained\r---\r"
+
+        rendered = drafts._replace_base_revision_value(prefix, new_revision)
+
+        self.assertEqual(
+            b"---\rbase-revision:  '" + new_revision.encode("ascii") + b"' \t# retained\r---\r",
+            rendered,
+        )
+
     def test_conflict_reports_fragments_and_writes_nothing(self):
         base = b"---\nnumber: 1\n---\none\ntwo\n"
         root, model, store, target, draft_path = self.make_draft(
