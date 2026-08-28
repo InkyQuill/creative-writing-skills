@@ -100,6 +100,43 @@ class IndexTests(unittest.TestCase):
             self.assertEqual("committed", json.loads(applied.getvalue())["status"])
             self.assertIn("kb/characters/aria.md", (root / "kb/characters/_index.md").read_text())
 
+    def test_reindex_preserves_existing_crlf_convention(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            story = make_project(root)
+            index_path = root / "story/chapters/_index.md"
+            index_path.write_bytes(index_path.read_bytes().replace(b"\n", b"\r\n"))
+            (root / "story/chapters/one.md").write_text(
+                "---\nnumber: 1\ntitle: One\n---\n", encoding="utf-8"
+            )
+
+            change = next(
+                change
+                for change in indexes.plan_reindex(story).changes
+                if change.path == "story/chapters/_index.md"
+            )
+
+            assert change.after is not None
+            self.assertIn(b"story/chapters/one.md", change.after)
+            self.assertNotIn(b"\n", change.after.replace(b"\r\n", b""))
+
+    def test_reindex_can_repair_malformed_index_without_losing_its_newlines(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            story = make_project(root)
+            index_path = root / "story/chapters/_index.md"
+            index_path.write_bytes(b"---\r\ngenerated: [unsupported]\r\n---\r\nstale\r\n")
+
+            change = next(
+                change
+                for change in indexes.plan_reindex(story).changes
+                if change.path == "story/chapters/_index.md"
+            )
+
+            assert change.after is not None
+            self.assertIn(b"generated: true\r\n", change.after)
+            self.assertNotIn(b"\n", change.after.replace(b"\r\n", b""))
+
 
 if __name__ == "__main__":
     unittest.main()

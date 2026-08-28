@@ -5,6 +5,7 @@ from __future__ import annotations
 import os
 import shutil
 import tempfile
+from dataclasses import dataclass
 from pathlib import Path
 
 from .documents import Document, parse_document, render_document
@@ -56,6 +57,14 @@ class InitError(RuntimeError):
     """Raised when initialization would overwrite or reinterpret managed content."""
 
 
+@dataclass(frozen=True)
+class AppliedInit:
+    """A committed bootstrap plus any durability diagnostic for the caller."""
+
+    record: TransactionRecord
+    diagnostics: tuple[str, ...] = ()
+
+
 def plan_init(target: Path, title: str, language: str) -> TransactionPlan:
     """Plan missing scaffold files for an absent or existing ordinary folder."""
 
@@ -64,6 +73,11 @@ def plan_init(target: Path, title: str, language: str) -> TransactionPlan:
     rendered = render_scaffold(title, language)
     created_directories = tuple(
         relative for relative in SCAFFOLD_DIRECTORIES if not (root / relative).is_dir()
+    )
+    protected_directories = tuple(
+        relative
+        for relative in (".creative-writing/context", ".creative-writing/transactions")
+        if not (root / relative).is_dir()
     )
     changes: list[Change] = []
     for relative_id, after in rendered.items():
@@ -77,23 +91,20 @@ def plan_init(target: Path, title: str, language: str) -> TransactionPlan:
         metadata={
             "bootstrap": True,
             "created-directories": created_directories,
-            "protected-directories": (
-                ".creative-writing/context",
-                ".creative-writing/transactions",
-            ),
+            "protected-directories": protected_directories,
             "undoable": False,
         },
     )
 
 
-def apply_init(target: Path, title: str, language: str) -> TransactionRecord:
+def apply_init(target: Path, title: str, language: str) -> AppliedInit:
     """Apply bootstrap atomically for an absent target or transactionally in-place."""
 
     root = Path(target).absolute()
     if root.exists() or root.is_symlink():
         plan = plan_init(root, title, language)
         _create_scaffold_directories(root)
-        return TransactionEngine(_bootstrap_project(root, title, language)).apply(plan)
+        return AppliedInit(TransactionEngine(_bootstrap_project(root, title, language)).apply(plan))
     return _apply_absent_init(root, title, language)
 
 
@@ -137,6 +148,13 @@ def _validate_init_target(root: Path) -> None:
         candidate = root / relative
         if candidate.is_symlink() or (candidate.exists() and not candidate.is_dir()):
             raise InitError(_migration_message(f"scaffold path {relative} has an incompatible kind"))
+
+    for relative in (".creative-writing/context", ".creative-writing/transactions"):
+        protected = root / relative
+        if protected.is_dir() and any(protected.iterdir()):
+            raise InitError(
+                _migration_message(f"protected directory {relative} is populated")
+            )
 
 
 def _has_symlink_component(path: Path) -> bool:
@@ -187,7 +205,7 @@ def _create_scaffold_directories(root: Path) -> None:
         _fsync_directory(directory.parent)
 
 
-def _apply_absent_init(root: Path, title: str, language: str) -> TransactionRecord:
+def _apply_absent_init(root: Path, title: str, language: str) -> AppliedInit:
     temporary = Path(tempfile.mkdtemp(prefix=f".{root.name}.cw-init-", dir=root.parent))
     installed = False
     try:
@@ -199,8 +217,21 @@ def _apply_absent_init(root: Path, title: str, language: str) -> TransactionReco
             raise InitError("initialization target appeared while bootstrap was being prepared")
         os.rename(temporary, root)
         installed = True
-        _fsync_directory(root.parent)
-        return record
+        try:
+            parent_synced = _fsync_directory(root.parent)
+        except OSError as error:
+            diagnostic = (
+                "project bootstrap is committed and installed, but parent directory "
+                f"durability could not be confirmed: {error}"
+            )
+            return AppliedInit(record, (diagnostic,))
+        if parent_synced is False:
+            diagnostic = (
+                "project bootstrap is committed and installed, but this platform "
+                "cannot confirm parent directory durability"
+            )
+            return AppliedInit(record, (diagnostic,))
+        return AppliedInit(record)
     finally:
         if not installed and temporary.exists():
             shutil.rmtree(temporary)
@@ -237,4 +268,11 @@ def _render_document(metadata: dict[str, str | int | bool], body: str) -> bytes:
     return render_document(Document(metadata=metadata, body=body, newline="\n", bom=False))
 
 
-__all__ = ["InitError", "apply_init", "plan_init", "preview_init", "render_scaffold"]
+__all__ = [
+    "AppliedInit",
+    "InitError",
+    "apply_init",
+    "plan_init",
+    "preview_init",
+    "render_scaffold",
+]

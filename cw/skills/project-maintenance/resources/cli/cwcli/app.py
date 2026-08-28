@@ -247,7 +247,8 @@ def _run_init(args: argparse.Namespace, *, cwd: Path, stdout: TextIO, stderr: Te
             stdout.write("\n")
             return 0
 
-        record = apply_init(target, args.title, args.language)
+        applied = apply_init(target, args.title, args.language)
+        record = applied.record
         _write_command_data(
             {
                 "status": record.state,
@@ -261,6 +262,7 @@ def _run_init(args: argparse.Namespace, *, cwd: Path, stdout: TextIO, stderr: Te
                     for change in plan.changes
                 ],
                 "metadata": dict(plan.metadata),
+                "diagnostics": list(applied.diagnostics),
             },
             output_format=args.format,
             stdout=stdout,

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 from collections.abc import Iterable
 from pathlib import PurePosixPath
 
@@ -61,9 +62,18 @@ def plan_reindex(project: Project) -> TransactionPlan:
 
     changes: list[Change] = []
     for index_id in GENERATED_INDEX_FILES:
-        rendered = render_index(index_id, documents)
         target = project.resolve(index_id, for_write=True)
         before = target.read_bytes() if target.is_file() and not target.is_symlink() else None
+        if before is None:
+            rendered = render_index(index_id, documents)
+        else:
+            newline, bom = _source_format(before)
+            rendered = render_index(
+                index_id,
+                documents,
+                newline=newline,
+                bom=bom,
+            )
         if before != rendered:
             changes.append(Change(index_id, before, rendered))
     return TransactionPlan(
@@ -73,7 +83,13 @@ def plan_reindex(project: Project) -> TransactionPlan:
     )
 
 
-def render_index(index_id: str, documents: Iterable[tuple[str, Document]] = ()) -> bytes:
+def render_index(
+    index_id: str,
+    documents: Iterable[tuple[str, Document]] = (),
+    *,
+    newline: str = "\n",
+    bom: bool = False,
+) -> bytes:
     """Render one registry from documents beneath its authored directory."""
 
     title = _INDEX_TITLES[index_id]
@@ -86,8 +102,10 @@ def render_index(index_id: str, documents: Iterable[tuple[str, Document]] = ()) 
     body = f"# {title}\n\n<!-- generated registry -->\n"
     if entries:
         body += "\n" + "\n".join(entries) + "\n"
+    if newline != "\n":
+        body = body.replace("\n", newline)
     return render_document(
-        Document(metadata={"generated": True}, body=body, newline="\n", bom=False)
+        Document(metadata={"generated": True}, body=body, newline=newline, bom=bom)
     )
 
 
@@ -109,6 +127,12 @@ def _render_entry(relative_id: str, document: Document) -> str:
     ]
     suffix = "" if not details else " — " + "; ".join(details)
     return f"- `{relative_id}`{suffix}"
+
+
+def _source_format(data: bytes) -> tuple[str, bool]:
+    text = data.decode("utf-8-sig")
+    match = re.search(r"\r\n|\n|\r", text)
+    return (match.group(0) if match else "\n", data.startswith(b"\xef\xbb\xbf"))
 
 
 __all__ = ["plan_reindex", "render_index"]

@@ -78,6 +78,32 @@ class InitCommandTests(unittest.TestCase):
             self.assertEqual("", error)
             self.assertTrue((root / "story/chapters/_index.md").is_file())
 
+    def test_existing_protected_content_requires_migration_without_adoption(self):
+        for relative, content_name in (
+            (".creative-writing/context", "stale.json"),
+            (".creative-writing/transactions", "corrupt-journal"),
+        ):
+            with self.subTest(relative=relative), tempfile.TemporaryDirectory() as directory:
+                parent = Path(directory)
+                root = parent / "existing"
+                protected = root / relative
+                protected.mkdir(parents=True)
+                (protected / content_name).write_text("mine\n", encoding="utf-8")
+
+                status, output, error = self.run_cli(
+                    parent,
+                    [
+                        "init", str(root), "--title", "Mine", "--language", "ru",
+                        "--apply", "--format", "json",
+                    ],
+                )
+
+                self.assertEqual(2, status)
+                self.assertEqual("", error)
+                self.assertIn("cw migrate --plan", json.loads(output)["message"])
+                self.assertEqual("mine\n", (protected / content_name).read_text())
+                self.assertFalse((root / "project.md").exists())
+
     def test_populated_managed_root_uses_migration_guidance_without_writes(self):
         with tempfile.TemporaryDirectory() as directory:
             parent = Path(directory)
@@ -146,6 +172,47 @@ class InitCommandTests(unittest.TestCase):
             self.assertFalse(root.exists())
             self.assertEqual([], list(parent.glob(".story-project.cw-init-*")))
 
+    def test_parent_fsync_failure_reports_installed_success_and_retry_is_non_destructive(self):
+        with tempfile.TemporaryDirectory() as directory:
+            parent = Path(directory)
+            root = parent / "story-project"
+            original_sync = scaffold._fsync_directory
+
+            def fail_installed_parent(path: Path) -> bool:
+                if path == parent and root.exists():
+                    raise OSError("injected parent fsync failure")
+                return original_sync(path)
+
+            with mock.patch.object(scaffold, "_fsync_directory", side_effect=fail_installed_parent):
+                status, output, error = self.run_cli(
+                    parent,
+                    [
+                        "init", str(root), "--title", "Mine", "--language", "ru",
+                        "--apply", "--format", "json",
+                    ],
+                )
+
+            result = json.loads(output)
+            self.assertEqual(0, status)
+            self.assertEqual("", error)
+            self.assertEqual("committed", result["status"])
+            self.assertIn("durability could not be confirmed", result["diagnostics"][0])
+            manifest = root / ".creative-writing/transactions" / result["transaction_id"] / "manifest.json"
+            self.assertEqual("committed", json.loads(manifest.read_text())["state"])
+            project_bytes = (root / "project.md").read_bytes()
+
+            retry_status, retry_output, retry_error = self.run_cli(
+                parent,
+                [
+                    "init", str(root), "--title", "Mine", "--language", "ru",
+                    "--apply", "--format", "json",
+                ],
+            )
+            self.assertEqual(2, retry_status)
+            self.assertEqual("", retry_error)
+            self.assertIn("cw migrate --plan", json.loads(retry_output)["message"])
+            self.assertEqual(project_bytes, (root / "project.md").read_bytes())
+
     def test_plan_init_has_bootstrap_directory_metadata_and_does_not_write(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory) / "story-project"
@@ -158,6 +225,27 @@ class InitCommandTests(unittest.TestCase):
                 (".creative-writing/context", ".creative-writing/transactions"),
                 plan.metadata["protected-directories"],
             )
+
+    def test_existing_preview_lists_only_missing_protected_directories(self):
+        with tempfile.TemporaryDirectory() as directory:
+            parent = Path(directory)
+            root = parent / "existing"
+            (root / ".creative-writing/context").mkdir(parents=True)
+
+            status, output, error = self.run_cli(
+                parent,
+                ["init", str(root), "--title", "Mine", "--language", "ru"],
+            )
+
+            self.assertEqual(0, status)
+            self.assertEqual("", error)
+            protected = {
+                operation["path"]
+                for operation in json.loads(output)
+                if operation["op"] == "create-directory"
+            }
+            self.assertEqual({".creative-writing/transactions"}, protected)
+            self.assertFalse((root / "project.md").exists())
 
     def test_preview_rejects_symlinked_target_ancestor(self):
         with tempfile.TemporaryDirectory() as directory:
