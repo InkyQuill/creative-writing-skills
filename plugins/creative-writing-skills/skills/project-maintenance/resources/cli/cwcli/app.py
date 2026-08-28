@@ -1,17 +1,37 @@
 """Command-line entrypoint for the story-project CLI foundation."""
 
 import argparse
+from dataclasses import asdict
 import json
 import sys
+import uuid
 from pathlib import Path
 from typing import TextIO
 
 from . import __version__
 from .checks.structure import check_structure
+from .checks.drafts import check_drafts
 from .documents import DocumentError
+from .drafts import (
+    DraftConflict,
+    DraftError,
+    plan_abandon_draft,
+    plan_accept_draft,
+    plan_create_draft,
+    plan_rebase_draft,
+    plan_set_draft_status,
+)
 from .edits import EditConflict, EditPlanError, load_operations, plan_edits
 from .findings import ExecutionError, Report
 from .indexes import plan_reindex
+from .migration import (
+    MigrationPlanError,
+    ensure_migration_directories,
+    load_migration_plan,
+    migration_project,
+    plan_apply_migration,
+    plan_migration,
+)
 from .project import Project, ProjectDiscoveryError, ProjectPathError, discover_project
 from .scaffold import InitError, apply_init, preview_init
 from .transactions import (
@@ -49,6 +69,9 @@ def _parser(*, error_stream: TextIO) -> argparse.ArgumentParser:
     structure = check_commands.add_parser("structure", error_stream=error_stream)
     structure.add_argument("path", nargs="?", default=".")
     _report_options(structure)
+    drafts_check = check_commands.add_parser("drafts", error_stream=error_stream)
+    drafts_check.add_argument("path", nargs="?", default=".")
+    _report_options(drafts_check)
 
     init = commands.add_parser("init", error_stream=error_stream)
     init.add_argument("path", nargs="?", default=".")
@@ -58,6 +81,28 @@ def _parser(*, error_stream: TextIO) -> argparse.ArgumentParser:
 
     reindex = commands.add_parser("reindex", error_stream=error_stream)
     _mutation_options(reindex)
+
+    draft = commands.add_parser("draft", error_stream=error_stream)
+    draft_commands = draft.add_subparsers(dest="draft_command", required=True, parser_class=_Parser)
+    draft_create = draft_commands.add_parser("create", error_stream=error_stream)
+    draft_create.add_argument("target")
+    draft_create.add_argument("--draft-path")
+    _mutation_options(draft_create)
+    draft_status = draft_commands.add_parser("set-status", error_stream=error_stream)
+    draft_status.add_argument("draft")
+    draft_status.add_argument("status")
+    _mutation_options(draft_status)
+    for name in ("rebase", "accept", "abandon"):
+        command = draft_commands.add_parser(name, error_stream=error_stream)
+        command.add_argument("draft")
+        _mutation_options(command)
+
+    migrate = commands.add_parser("migrate", error_stream=error_stream)
+    migrate_mode = migrate.add_mutually_exclusive_group(required=True)
+    migrate_mode.add_argument("--plan", action="store_true")
+    migrate_mode.add_argument("--apply", metavar="PLAN")
+    migrate.add_argument("--expect-plan-hash")
+    _format_option(migrate)
 
     edit = commands.add_parser("edit", error_stream=error_stream)
     edit_commands = edit.add_subparsers(dest="edit_command", required=True, parser_class=_Parser)
@@ -126,6 +171,12 @@ def run(argv: list[str], *, cwd: Path, stdout: TextIO, stderr: TextIO) -> int:
     if args.command == "init":
         return _run_init(args, cwd=cwd, stdout=stdout, stderr=stderr)
 
+    if args.command == "draft":
+        return _run_draft(args, cwd=cwd, stdout=stdout, stderr=stderr)
+
+    if args.command == "migrate":
+        return _run_migrate(args, cwd=cwd, stdout=stdout, stderr=stderr)
+
     if args.command == "check" and args.check_command == "structure":
         try:
             target = _from_cwd(cwd, args.path)
@@ -136,6 +187,26 @@ def run(argv: list[str], *, cwd: Path, stdout: TextIO, stderr: TextIO) -> int:
                     [],
                     checks=["structure"],
                     execution_errors=[ExecutionError(check="structure", message=str(error))],
+                )
+                return _write_report(report, output_format=args.format, strict=args.strict, stdout=stdout)
+            stderr.write(f"cw: error: {error}\n")
+            return 2
+        return _write_report(report, output_format=args.format, strict=args.strict, stdout=stdout)
+
+    if args.command == "check" and args.check_command == "drafts":
+        try:
+            target = _from_cwd(cwd, args.path)
+            project = discover_project(target)
+            report = Report(
+                check_drafts(project, TransactionEngine(project).store),
+                checks=["drafts"],
+            )
+        except (DocumentError, OSError, ProjectDiscoveryError, TransactionError) as error:
+            if args.format == "json":
+                report = Report(
+                    [],
+                    checks=["drafts"],
+                    execution_errors=[ExecutionError(check="drafts", message=str(error))],
                 )
                 return _write_report(report, output_format=args.format, strict=args.strict, stdout=stdout)
             stderr.write(f"cw: error: {error}\n")
@@ -296,6 +367,97 @@ def _run_reindex(args: argparse.Namespace, *, cwd: Path, stdout: TextIO, stderr:
         )
 
 
+def _run_draft(args: argparse.Namespace, *, cwd: Path, stdout: TextIO, stderr: TextIO) -> int:
+    try:
+        project = discover_project(cwd)
+        engine = TransactionEngine(project)
+        if args.draft_command == "create":
+            plan = plan_create_draft(project, args.target, args.draft_path, engine.store)
+            transaction_id = None
+        elif args.draft_command == "set-status":
+            plan = plan_set_draft_status(project, args.draft, args.status)
+            transaction_id = None
+        elif args.draft_command == "rebase":
+            plan = plan_rebase_draft(project, args.draft, engine.store)
+            transaction_id = None
+        else:
+            transaction_id = uuid.uuid4().hex
+            if args.draft_command == "accept":
+                plan = plan_accept_draft(project, args.draft, engine.store, transaction_id)
+            else:
+                plan = plan_abandon_draft(project, args.draft, transaction_id)
+        return _preview_or_apply(
+            engine,
+            plan,
+            apply=args.apply,
+            output_format=args.format,
+            stdout=stdout,
+            transaction_id=transaction_id,
+        )
+    except DraftConflict as error:
+        facts = {
+            "status": "conflict",
+            "exit_status": 1,
+            "message": str(error),
+            "conflicts": [asdict(conflict) for conflict in error.conflicts],
+        }
+        if args.format == "json":
+            _write_command_data(facts, output_format=args.format, stdout=stdout)
+        else:
+            stderr.write(json.dumps(facts, ensure_ascii=False, indent=2, sort_keys=True) + "\n")
+        return 1
+    except (DraftError, TransactionConflict) as error:
+        return _write_command_error(
+            error, conflict=True, output_format=args.format, stdout=stdout, stderr=stderr
+        )
+    except (DocumentError, OSError, ProjectDiscoveryError, ProjectPathError, TransactionError, UnicodeError, ValueError) as error:
+        return _write_command_error(
+            error, conflict=False, output_format=args.format, stdout=stdout, stderr=stderr
+        )
+
+
+def _run_migrate(args: argparse.Namespace, *, cwd: Path, stdout: TextIO, stderr: TextIO) -> int:
+    root = Path(cwd).absolute()
+    try:
+        if args.plan:
+            if args.expect_plan_hash is not None:
+                raise MigrationPlanError("--expect-plan-hash is valid only with --apply")
+            planned = plan_migration(root)
+            _write_command_data(planned.to_payload(), output_format=args.format, stdout=stdout)
+            return 0
+        if args.expect_plan_hash is None:
+            raise MigrationPlanError("--expect-plan-hash is required with --apply")
+        loaded = load_migration_plan(_from_cwd(cwd, args.apply), root=root)
+        plan = plan_apply_migration(root, loaded, args.expect_plan_hash)
+        project = migration_project(root)
+        engine = TransactionEngine(project)
+        preview = engine.preview(plan)
+        # Migration --apply is itself the explicit mutation command. Create only
+        # missing parent directories after the complete diff has validated, then
+        # apply the already-previewed transaction exactly once.
+        ensure_migration_directories(root)
+        record = engine.apply(plan)
+        _write_command_data(
+            {
+                "status": record.state,
+                "transaction_id": record.id,
+                "plan_hash": loaded.plan_hash,
+                **preview,
+            },
+            output_format=args.format,
+            stdout=stdout,
+        )
+        return 0
+    except (MigrationPlanError, TransactionConflict) as error:
+        return _write_command_error(
+            error, conflict=True, output_format=args.format, stdout=stdout, stderr=stderr
+        )
+    except (DocumentError, OSError, ProjectPathError, TransactionError, UnicodeError, ValueError) as error:
+        return _write_command_error(
+            error, conflict=False, output_format=args.format, stdout=stdout, stderr=stderr
+        )
+
+
 def _single_edit_target(cwd: Path, value: str) -> tuple[Project, str]:
     target = _from_cwd(cwd, value).absolute()
     project = discover_project(cwd)
@@ -326,15 +488,16 @@ def _preview_or_apply(
     apply: bool,
     output_format: str,
     stdout: TextIO,
+    transaction_id: str | None = None,
 ) -> int:
     preview = engine.preview(plan)
     result: dict[str, object] = {
         "status": "preview",
-        "transaction_id": None,
+        "transaction_id": transaction_id,
         **preview,
     }
     if apply:
-        record = engine.apply(plan)
+        record = engine.apply(plan, transaction_id=transaction_id)
         result["status"] = record.state
         result["transaction_id"] = record.id
     _write_command_data(result, output_format=output_format, stdout=stdout)

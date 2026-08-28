@@ -12,6 +12,13 @@ from pathlib import Path, PurePosixPath, PureWindowsPath
 from types import MappingProxyType
 from typing import Mapping
 
+from .documents import parse_document
+from .indexes import plan_reindex
+from .project import Project
+from .scaffold import render_scaffold
+from .schema import GENERATED_INDEX_FILES, SCAFFOLD_DIRECTORIES
+from .transactions import Change, TransactionPlan
+
 
 PLAN_VERSION = 1
 TARGET_SCHEMA = 1
@@ -306,6 +313,180 @@ def load_migration_plan(path: Path, root: Path | None = None) -> MigrationPlan:
         unresolved=tuple(unresolved),
         plan_hash=stored_hash,
     )
+
+
+def plan_apply_migration(
+    root: Path, plan: MigrationPlan, expected_hash: str
+) -> TransactionPlan:
+    """Convert one fully validated migration mapping into an undoable transaction."""
+
+    # Plan integrity is deliberately checked before inspecting the filesystem or
+    # resolving a single source. A caller cannot use a malformed plan as a path
+    # probing primitive, even when it was assembled without load_migration_plan().
+    _validate_apply_plan(plan, expected_hash)
+
+    migration_root = Path(root).absolute()
+    _require_real_directory(migration_root, "migration root")
+    for operation in plan.operations:
+        _reject_nested_boundary(migration_root, operation.source)
+        _reject_nested_boundary(migration_root, operation.destination)
+
+    moving = tuple(operation for operation in plan.operations if operation.action == "move")
+    for operation in plan.operations:
+        _require_source_entry(migration_root, operation.source)
+    for operation in moving:
+        _require_absent_destination(migration_root, operation.destination)
+
+    scaffold = render_scaffold(migration_root.name or "Migrated Story", "und")
+    project = migration_project(migration_root, scaffold["project.md"])
+    _validate_scaffold_destinations(project)
+
+    # Only after every destination, source kind, and project boundary succeeds do
+    # we read source bytes. This makes all validation failures mutation-free and
+    # prevents a partially readable plan from influencing the transaction.
+    primary: list[Change] = []
+    for operation in moving:
+        source = _read_regular_file_no_follow(
+            migration_root / PurePosixPath(operation.source),
+            f"migration source {operation.source}",
+        )
+        primary.append(Change(operation.source, source, None))
+        primary.append(Change(operation.destination, None, source))
+
+    occupied = {change.path for change in primary}
+    for relative_id, after in scaffold.items():
+        if relative_id in GENERATED_INDEX_FILES or relative_id in occupied:
+            continue
+        target = migration_root / PurePosixPath(relative_id)
+        if os.path.lexists(target):
+            if target.is_symlink() or not target.is_file():
+                raise MigrationPlanError(
+                    f"canonical scaffold destination is not a real file: {relative_id}"
+                )
+            continue
+        primary.append(Change(relative_id, None, after))
+        occupied.add(relative_id)
+
+    derived = plan_reindex(project, overlay=tuple(primary)).changes
+    changes = tuple(primary) + tuple(derived)
+    return TransactionPlan(
+        command=("migrate", "apply"),
+        changes=changes,
+        metadata={
+            "plan-hash": plan.plan_hash,
+            "source-schema": plan.source_schema,
+            "target-schema": plan.target_schema,
+            "protected-directories": SCAFFOLD_DIRECTORIES,
+            "undoable": True,
+        },
+    )
+
+
+def migration_project(root: Path, manifest: bytes | None = None) -> Project:
+    """Return the project boundary used to preview/apply a legacy migration."""
+
+    root = Path(root).absolute()
+    if manifest is None:
+        manifest_path = root / "project.md"
+        if manifest_path.is_file() and not manifest_path.is_symlink():
+            manifest = manifest_path.read_bytes()
+        else:
+            manifest = render_scaffold(root.name or "Migrated Story", "und")["project.md"]
+    return Project(root=root, manifest=parse_document(manifest))
+
+
+def ensure_migration_directories(root: Path) -> tuple[Path, ...]:
+    """Create only missing canonical directories needed by transaction staging."""
+
+    root = Path(root).absolute()
+    created: list[Path] = []
+    for relative in SCAFFOLD_DIRECTORIES:
+        directory = root / PurePosixPath(relative)
+        if os.path.lexists(directory):
+            if directory.is_symlink() or not directory.is_dir():
+                raise MigrationPlanError(
+                    f"canonical scaffold destination is not a real directory: {relative}"
+                )
+            continue
+        directory.mkdir()
+        created.append(directory)
+    return tuple(created)
+
+
+def _validate_apply_plan(plan: MigrationPlan, expected_hash: str) -> None:
+    if not isinstance(plan, MigrationPlan):
+        raise MigrationPlanError("migration apply requires a loaded migration plan")
+    if (
+        not isinstance(expected_hash, str)
+        or len(expected_hash) != 64
+        or any(character not in "0123456789abcdef" for character in expected_hash)
+    ):
+        raise MigrationPlanError("expected plan hash must be a lowercase SHA-256 digest")
+    payload = plan.to_payload()
+    _require_exact_keys(payload, _PLAN_KEYS, "migration plan")
+    if plan.plan_version != PLAN_VERSION or plan.target_schema != TARGET_SCHEMA:
+        raise MigrationPlanError("migration plan schema is unsupported")
+    if plan.source_schema < 0 or plan.source_schema > TARGET_SCHEMA:
+        raise MigrationPlanError("migration source schema is unsupported")
+    unresolved = [
+        {
+            "sources": list(item["sources"]),
+            "destination": item["destination"],
+            "reason": item["reason"],
+        }
+        for item in plan.unresolved
+    ]
+    _validate_generated_plan(list(plan.operations), unresolved)
+    recomputed = canonical_plan_hash(payload)
+    if recomputed != plan.plan_hash or expected_hash != plan.plan_hash:
+        raise MigrationPlanError("migration plan hash mismatch")
+    if plan.unresolved:
+        raise MigrationPlanError("migration plan contains unresolved entries")
+
+
+def _require_source_entry(root: Path, relative: str) -> None:
+    path = root / PurePosixPath(relative)
+    parent_descriptor = _open_directory_no_follow(path.parent, f"migration source parent {relative}")
+    try:
+        try:
+            entry = os.stat(path.name, dir_fd=parent_descriptor, follow_symlinks=False)
+        except OSError as error:
+            raise MigrationPlanError(f"migration source is missing: {relative}") from error
+        if not stat.S_ISREG(entry.st_mode):
+            raise MigrationPlanError(f"migration source must be a real file: {relative}")
+    finally:
+        os.close(parent_descriptor)
+
+
+def _require_absent_destination(root: Path, relative: str) -> None:
+    path = root / PurePosixPath(relative)
+    current = root
+    for part in path.relative_to(root).parts[:-1]:
+        current /= part
+        if os.path.lexists(current) and (current.is_symlink() or not current.is_dir()):
+            raise MigrationPlanError(f"migration destination has an unsafe parent: {relative}")
+    if os.path.lexists(path):
+        raise MigrationPlanError(f"migration destination already exists: {relative}")
+
+
+def _validate_scaffold_destinations(project: Project) -> None:
+    for relative in SCAFFOLD_DIRECTORIES:
+        directory = project.root / PurePosixPath(relative)
+        if os.path.lexists(directory) and (directory.is_symlink() or not directory.is_dir()):
+            raise MigrationPlanError(
+                f"canonical scaffold destination is not a real directory: {relative}"
+            )
+    for relative in render_scaffold(project.root.name or "Migrated Story", "und"):
+        try:
+            target = project.resolve(relative, for_write=True)
+        except (OSError, ValueError) as error:
+            raise MigrationPlanError(
+                f"unsafe canonical scaffold destination {relative}: {error}"
+            ) from error
+        if os.path.lexists(target) and (target.is_symlink() or not target.is_file()):
+            raise MigrationPlanError(
+                f"canonical scaffold destination is not a real file: {relative}"
+            )
 
 
 def _walk_markdown(root: Path) -> tuple[str, ...]:
@@ -769,5 +950,8 @@ __all__ = [
     "MigrationPlanError",
     "canonical_plan_hash",
     "load_migration_plan",
+    "ensure_migration_directories",
+    "migration_project",
+    "plan_apply_migration",
     "plan_migration",
 ]

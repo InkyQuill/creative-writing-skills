@@ -451,6 +451,73 @@ _BASE_REVISION_SCALAR = re.compile(
     br"base-revision:[ \t]*(?P<quote>['\"]?)(?P<value>[0-9a-f]{64})"
     br"(?P=quote)(?P<suffix>[ \t]*(?:\#.*)?)"
 )
+_STATUS_SCALAR = re.compile(
+    br"status:[ \t]*(?P<quote>['\"]?)(?P<value>working|review|ready)"
+    br"(?P=quote)(?P<suffix>[ \t]*(?:\#.*)?)"
+)
+
+
+def plan_set_draft_status(
+    project: Project, draft_path: str, status: str
+) -> TransactionPlan:
+    """Plan an exact-format lifecycle transition for one active draft."""
+
+    if status not in ACTIVE_STATUSES:
+        raise DraftError("draft status must be one of working, review, or ready")
+    draft = load_draft(project, draft_path)
+    source = _read_regular_file(
+        project.resolve(draft_path, for_write=True), f"draft {draft_path}"
+    )
+    if draft.status == status:
+        return TransactionPlan(
+            command=("draft", "set-status", draft_path, status),
+            changes=(),
+            metadata={"draft": draft_path, "status": status, "undoable": True},
+        )
+
+    original_body = parse_document(source).body.encode("utf-8")
+    if not source.endswith(original_body):
+        raise DraftError("cannot identify the draft body without rewriting frontmatter")
+    prefix = source[: len(source) - len(original_body)] if original_body else source
+    after = _replace_status_value(prefix, status) + original_body
+    try:
+        rendered = parse_document(after)
+    except (UnicodeError, ValueError) as error:
+        raise DraftError(f"cannot render draft status safely: {error}") from error
+    expected = dict(draft.metadata)
+    expected["status"] = status
+    if rendered.metadata != expected:
+        raise DraftError("draft status transition changed unrelated metadata")
+    return TransactionPlan(
+        command=("draft", "set-status", draft_path, status),
+        changes=(Change(draft_path, source, after),),
+        metadata={"draft": draft_path, "status": status, "undoable": True},
+    )
+
+
+def _replace_status_value(source: bytes, status: str) -> bytes:
+    replacement = status.encode("ascii")
+    rendered: list[bytes] = []
+    matches = 0
+    for source_line in source.splitlines(keepends=True):
+        if source_line.endswith(b"\r\n"):
+            content, ending = source_line[:-2], b"\r\n"
+        elif source_line.endswith((b"\n", b"\r")):
+            content, ending = source_line[:-1], source_line[-1:]
+        else:
+            content, ending = source_line, b""
+        match = _STATUS_SCALAR.fullmatch(content)
+        if match is not None:
+            matches += 1
+            content = (
+                content[: match.start("value")]
+                + replacement
+                + content[match.end("value") :]
+            )
+        rendered.append(content + ending)
+    if matches != 1:
+        raise DraftError("draft must contain exactly one active status field")
+    return b"".join(rendered)
 
 
 def _render_rebased_draft(
@@ -591,4 +658,5 @@ __all__ = [
     "plan_accept_draft",
     "plan_create_draft",
     "plan_rebase_draft",
+    "plan_set_draft_status",
 ]
