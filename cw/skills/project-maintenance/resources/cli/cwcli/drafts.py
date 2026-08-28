@@ -10,6 +10,7 @@ from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 
 from .documents import Document, Scalar, logical_hash, parse_document, render_document
+from .indexes import plan_reindex
 from .project import Project, ProjectPathError
 from .rebase import RebaseConflict, three_way_rebase
 from .transactions import (
@@ -22,6 +23,24 @@ from .transactions import (
 
 ACTIVE_STATUSES = frozenset({"working", "review", "ready"})
 _CLI_MANAGED_METADATA = frozenset({"target", "base-revision", "status"})
+_ARCHIVE_TRANSACTION_METADATA = frozenset(
+    {"accepted-transaction", "abandoned-transaction"}
+)
+_TRANSACTION_ID = re.compile(r"[A-Za-z0-9][A-Za-z0-9_-]{0,127}")
+_AI_TAG = re.compile(r"</?AI>")
+
+_ACCEPT_INDEXES = (
+    "story/_index.md",
+    "story/chapters/_index.md",
+    "work/_index.md",
+    "work/archive/_index.md",
+    "work/drafts/_index.md",
+)
+_ABANDON_INDEXES = (
+    "work/_index.md",
+    "work/archive/_index.md",
+    "work/drafts/_index.md",
+)
 
 
 class DraftError(ValueError):
@@ -207,6 +226,202 @@ def plan_rebase_draft(
     )
 
 
+def plan_accept_draft(
+    project: Project,
+    draft_path: str,
+    store: TransactionStore,
+    transaction_id: str,
+) -> TransactionPlan:
+    """Plan acceptance of a ready draft and archival of its working artifact."""
+
+    if store.project.root != project.root:
+        raise DraftError("transaction store belongs to a different project")
+    draft, source, document = _load_lifecycle_draft(project, draft_path)
+    if draft.status != "ready":
+        raise DraftError(f"draft {draft_path} must have status ready before acceptance")
+    archive_id = _archive_id(project, draft_path, transaction_id)
+    target_path = _resolve_target(project, draft.target)
+    target_before = _validate_acceptance_base(
+        draft, target_path, store, draft_path=draft_path
+    )
+    manuscript_body = _strip_balanced_ai_wrappers(document.body)
+
+    manuscript_metadata = {
+        key: value
+        for key, value in document.metadata.items()
+        if key not in _CLI_MANAGED_METADATA
+        and key not in _ARCHIVE_TRANSACTION_METADATA
+    }
+    manuscript = render_document(
+        Document(
+            metadata=manuscript_metadata,
+            body=manuscript_body,
+            newline=document.newline,
+            bom=document.bom,
+        )
+    )
+    archive = _render_archive(
+        document, status="accepted", transaction_id=transaction_id
+    )
+    primary = (
+        Change(draft.target, target_before, manuscript),
+        Change(archive_id, None, archive),
+        Change(draft_path, source, None),
+    )
+    derived = plan_reindex(
+        project, overlay=primary, index_ids=_ACCEPT_INDEXES
+    ).changes
+    return TransactionPlan(
+        command=("draft", "accept", draft_path),
+        changes=primary + derived,
+        metadata={
+            "draft": draft_path,
+            "target": draft.target,
+            "archive": archive_id,
+            "undoable": True,
+        },
+    )
+
+
+def plan_abandon_draft(
+    project: Project,
+    draft_path: str,
+    transaction_id: str,
+) -> TransactionPlan:
+    """Plan abandonment without creating or changing manuscript content."""
+
+    draft, source, document = _load_lifecycle_draft(project, draft_path)
+    archive_id = _archive_id(project, draft_path, transaction_id)
+    archive = _render_archive(
+        document, status="abandoned", transaction_id=transaction_id
+    )
+    primary = (
+        Change(archive_id, None, archive),
+        Change(draft_path, source, None),
+    )
+    derived = plan_reindex(
+        project, overlay=primary, index_ids=_ABANDON_INDEXES
+    ).changes
+    return TransactionPlan(
+        command=("draft", "abandon", draft_path),
+        changes=primary + derived,
+        metadata={
+            "draft": draft_path,
+            "target": draft.target,
+            "archive": archive_id,
+            "undoable": True,
+        },
+    )
+
+
+def _load_lifecycle_draft(
+    project: Project, draft_path: str
+) -> tuple[Draft, bytes, Document]:
+    draft = load_draft(project, draft_path)
+    source = _read_regular_file(
+        project.resolve(draft_path, for_write=True), f"draft {draft_path}"
+    )
+    try:
+        document = parse_document(source)
+    except (UnicodeError, ValueError) as error:
+        raise DraftError(f"cannot parse draft {draft_path}: {error}") from error
+    if document.metadata != draft.metadata:
+        raise DraftError(f"draft {draft_path} changed while planning its lifecycle")
+    return draft, source, document
+
+
+def _validate_acceptance_base(
+    draft: Draft,
+    target_path: Path,
+    store: TransactionStore,
+    *,
+    draft_path: str,
+) -> bytes | None:
+    target_exists = os.path.lexists(target_path)
+    if draft.base_revision is None:
+        if target_exists:
+            raise DraftError(
+                f"new target {draft.target} appeared after draft creation"
+            )
+        return None
+    if not target_exists:
+        raise DraftError(
+            f"draft {draft_path} has a base-revision but target {draft.target} is missing"
+        )
+    try:
+        store.load_revision(draft.base_revision)
+        target = _read_regular_file(target_path, f"target {draft.target}")
+        current_revision = logical_hash(target)
+    except (OSError, UnicodeError, ValueError, TransactionError) as error:
+        raise DraftError(
+            f"draft {draft_path} has an invalid or unrecoverable base-revision: {error}"
+        ) from error
+    if current_revision != draft.base_revision:
+        raise DraftError(
+            f"draft {draft_path} is stale; rebase it before acceptance"
+        )
+    return target
+
+
+def _archive_id(project: Project, draft_path: str, transaction_id: str) -> str:
+    if (
+        not isinstance(transaction_id, str)
+        or _TRANSACTION_ID.fullmatch(transaction_id) is None
+    ):
+        raise DraftError("transaction ID must be a safe ASCII identifier")
+    stem = PurePosixPath(draft_path).stem
+    archive_id = f"work/archive/{stem}--{transaction_id}.md"
+    try:
+        archive = project.resolve(archive_id, for_write=True)
+    except (ProjectPathError, TypeError) as error:
+        raise DraftError(f"unsafe archive path {archive_id!r}: {error}") from error
+    if os.path.lexists(archive):
+        raise DraftError(f"archive path already exists: {archive_id}")
+    return archive_id
+
+
+def _render_archive(
+    document: Document, *, status: str, transaction_id: str
+) -> bytes:
+    metadata = {
+        key: value
+        for key, value in document.metadata.items()
+        if key not in _ARCHIVE_TRANSACTION_METADATA and key != "status"
+    }
+    metadata["status"] = status
+    metadata[f"{status}-transaction"] = transaction_id
+    return render_document(
+        Document(
+            metadata=metadata,
+            body=document.body,
+            newline=document.newline,
+            bom=document.bom,
+        )
+    )
+
+
+def _strip_balanced_ai_wrappers(body: str) -> str:
+    if "<hidden" in body or "</hidden" in body:
+        raise DraftError("draft contains unresolved <hidden> material")
+
+    tags = list(_AI_TAG.finditer(body))
+    without_valid_tags = _AI_TAG.sub("", body)
+    if "<AI" in without_valid_tags or "</AI" in without_valid_tags:
+        raise DraftError("draft contains malformed <AI> source tags")
+
+    depth = 0
+    for tag in tags:
+        if tag.group(0) == "<AI>":
+            depth += 1
+        else:
+            depth -= 1
+            if depth < 0:
+                raise DraftError("draft contains unbalanced <AI> source tags")
+    if depth:
+        raise DraftError("draft contains unbalanced <AI> source tags")
+    return without_valid_tags
+
+
 _BASE_REVISION_SCALAR = re.compile(
     br"base-revision:[ \t]*(?P<quote>['\"]?)(?P<value>[0-9a-f]{64})"
     br"(?P=quote)(?P<suffix>[ \t]*(?:\#.*)?)"
@@ -347,6 +562,8 @@ __all__ = [
     "DraftConflict",
     "DraftError",
     "load_draft",
+    "plan_abandon_draft",
+    "plan_accept_draft",
     "plan_create_draft",
     "plan_rebase_draft",
 ]

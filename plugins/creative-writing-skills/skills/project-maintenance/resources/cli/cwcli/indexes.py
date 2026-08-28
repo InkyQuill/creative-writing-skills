@@ -43,14 +43,18 @@ _FRONTMATTER_FIELDS = {
 }
 
 
-def plan_reindex(project: Project) -> TransactionPlan:
+def plan_reindex(
+    project: Project,
+    *,
+    overlay: Iterable[Change] = (),
+    index_ids: Iterable[str] | None = None,
+) -> TransactionPlan:
     """Plan exact replacements for every stale generated registry."""
 
-    documents: list[tuple[str, Document]] = []
+    documents: dict[str, Document] = {}
     for path in project.iter_managed_markdown():
         relative_id = project.relative_id(path)
-        kind = allowed_document_kind(relative_id)
-        if kind not in {
+        if allowed_document_kind(relative_id) not in {
             "chapter",
             "work-artifact",
             "kb-content",
@@ -59,25 +63,42 @@ def plan_reindex(project: Project) -> TransactionPlan:
             "vocabulary",
         }:
             continue
-        if relative_id.startswith("work/archive/"):
-            continue
         document = parse_document(path.read_bytes())
-        if document.metadata.get("status") == "archived":
+        if _is_indexable(relative_id, document):
+            documents[relative_id] = document
+
+    overlay_changes = tuple(overlay)
+    for change in overlay_changes:
+        if change.after is None:
+            documents.pop(change.path, None)
             continue
-        documents.append((relative_id, document))
-    documents.sort(key=lambda item: item[0])
+        kind = allowed_document_kind(change.path)
+        if kind == "generated-index":
+            continue
+        document = parse_document(change.after)
+        if _is_indexable(change.path, document):
+            documents[change.path] = document
+        else:
+            documents.pop(change.path, None)
+
+    ordered_documents = sorted(documents.items())
+    selected = tuple(GENERATED_INDEX_FILES if index_ids is None else index_ids)
+    if len(set(selected)) != len(selected) or any(
+        index_id not in GENERATED_INDEX_FILES for index_id in selected
+    ):
+        raise ValueError("index_ids must contain unique generated index paths")
 
     changes: list[Change] = []
-    for index_id in GENERATED_INDEX_FILES:
+    for index_id in selected:
         target = project.resolve(index_id, for_write=True)
         before = target.read_bytes() if target.is_file() and not target.is_symlink() else None
         if before is None:
-            rendered = render_index(index_id, documents)
+            rendered = render_index(index_id, ordered_documents)
         else:
             newline, bom = _source_format(before)
             rendered = render_index(
                 index_id,
-                documents,
+                ordered_documents,
                 newline=newline,
                 bom=bom,
             )
@@ -88,6 +109,25 @@ def plan_reindex(project: Project) -> TransactionPlan:
         changes=tuple(changes),
         metadata={"derived": True, "undoable": True},
     )
+
+
+def _is_indexable(relative_id: str, document: Document) -> bool:
+    kind = allowed_document_kind(relative_id)
+    if kind not in {
+        "chapter",
+        "work-artifact",
+        "kb-content",
+        "continuity-scene",
+        "continuity-record",
+        "vocabulary",
+    }:
+        return False
+    status = document.metadata.get("status")
+    if status == "archived":
+        return False
+    if relative_id.startswith("work/archive/"):
+        return status in {"accepted", "abandoned"}
+    return True
 
 
 def render_index(
