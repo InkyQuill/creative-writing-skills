@@ -353,7 +353,7 @@ class StructureCheckTests(unittest.TestCase):
                 {operation["op"] for operation in operations if not operation["path"].startswith(".creative-writing/")},
             )
 
-    def test_init_apply_is_guarded_without_writing(self):
+    def test_init_apply_bootstraps_project(self):
         with tempfile.TemporaryDirectory() as directory:
             target = Path(directory) / "new-project"
             stderr = io.StringIO()
@@ -365,12 +365,9 @@ class StructureCheckTests(unittest.TestCase):
                 stderr=stderr,
             )
 
-            self.assertEqual(2, status)
-            self.assertEqual(
-                "init --apply requires the transaction engine; run without --apply for preview\n",
-                stderr.getvalue(),
-            )
-            self.assertFalse(target.exists())
+            self.assertEqual(0, status)
+            self.assertEqual("", stderr.getvalue())
+            self.assertTrue((target / "project.md").is_file())
 
 
 if __name__ == "__main__":

@@ -11,8 +11,9 @@ from .checks.structure import check_structure
 from .documents import DocumentError
 from .edits import EditConflict, EditPlanError, load_operations, plan_edits
 from .findings import ExecutionError, Report
+from .indexes import plan_reindex
 from .project import Project, ProjectDiscoveryError, ProjectPathError, discover_project
-from .scaffold import render_scaffold
+from .scaffold import InitError, apply_init, preview_init
 from .transactions import (
     TransactionConflict,
     TransactionEngine,
@@ -53,7 +54,10 @@ def _parser(*, error_stream: TextIO) -> argparse.ArgumentParser:
     init.add_argument("path", nargs="?", default=".")
     init.add_argument("--title", required=True)
     init.add_argument("--language", required=True)
-    init.add_argument("--apply", action="store_true")
+    _mutation_options(init)
+
+    reindex = commands.add_parser("reindex", error_stream=error_stream)
+    _mutation_options(reindex)
 
     edit = commands.add_parser("edit", error_stream=error_stream)
     edit_commands = edit.add_subparsers(dest="edit_command", required=True, parser_class=_Parser)
@@ -120,13 +124,7 @@ def run(argv: list[str], *, cwd: Path, stdout: TextIO, stderr: TextIO) -> int:
         return 0
 
     if args.command == "init":
-        if args.apply:
-            stderr.write("init --apply requires the transaction engine; run without --apply for preview\n")
-            return 2
-        operations = _init_preview(args.title, args.language)
-        json.dump(operations, stdout)
-        stdout.write("\n")
-        return 0
+        return _run_init(args, cwd=cwd, stdout=stdout, stderr=stderr)
 
     if args.command == "check" and args.check_command == "structure":
         try:
@@ -152,6 +150,9 @@ def run(argv: list[str], *, cwd: Path, stdout: TextIO, stderr: TextIO) -> int:
 
     if args.command == "undo":
         return _run_undo(args, cwd=cwd, stdout=stdout, stderr=stderr)
+
+    if args.command == "reindex":
+        return _run_reindex(args, cwd=cwd, stdout=stdout, stderr=stderr)
 
     return _write_report(Report([]), output_format=args.format, strict=args.strict, stdout=stdout)
 
@@ -237,6 +238,62 @@ def _run_undo(args: argparse.Namespace, *, cwd: Path, stdout: TextIO, stderr: Te
         return _write_command_error(error, conflict=False, output_format=args.format, stdout=stdout, stderr=stderr)
 
 
+def _run_init(args: argparse.Namespace, *, cwd: Path, stdout: TextIO, stderr: TextIO) -> int:
+    target = _from_cwd(cwd, args.path)
+    try:
+        plan = preview_init(target, args.title, args.language)
+        if not args.apply:
+            json.dump(_init_preview(plan), stdout)
+            stdout.write("\n")
+            return 0
+
+        record = apply_init(target, args.title, args.language)
+        _write_command_data(
+            {
+                "status": record.state,
+                "transaction_id": record.id,
+                "command": list(plan.command),
+                "changes": [
+                    {
+                        "action": "create" if change.before is None else "replace",
+                        "path": change.path,
+                    }
+                    for change in plan.changes
+                ],
+                "metadata": dict(plan.metadata),
+            },
+            output_format=args.format,
+            stdout=stdout,
+        )
+        return 0
+    except (DocumentError, InitError, OSError, ProjectPathError, TransactionError, UnicodeError, ValueError) as error:
+        conflict = isinstance(error, TransactionConflict)
+        return _write_command_error(
+            error, conflict=conflict, output_format=args.format, stdout=stdout, stderr=stderr
+        )
+
+
+def _run_reindex(args: argparse.Namespace, *, cwd: Path, stdout: TextIO, stderr: TextIO) -> int:
+    try:
+        project = discover_project(cwd)
+        plan = plan_reindex(project)
+        return _preview_or_apply(
+            TransactionEngine(project),
+            plan,
+            apply=args.apply,
+            output_format=args.format,
+            stdout=stdout,
+        )
+    except TransactionConflict as error:
+        return _write_command_error(
+            error, conflict=True, output_format=args.format, stdout=stdout, stderr=stderr
+        )
+    except (DocumentError, OSError, ProjectDiscoveryError, ProjectPathError, TransactionError, UnicodeError, ValueError) as error:
+        return _write_command_error(
+            error, conflict=False, output_format=args.format, stdout=stdout, stderr=stderr
+        )
+
+
 def _single_edit_target(cwd: Path, value: str) -> tuple[Project, str]:
     target = _from_cwd(cwd, value).absolute()
     project = discover_project(cwd)
@@ -315,11 +372,11 @@ def _write_command_data(data: object, *, output_format: str, stdout: TextIO) -> 
     stdout.write("\n")
 
 
-def _init_preview(title: str, language: str) -> list[dict[str, str]]:
-    file_operations = [{"op": "create", "path": path} for path in render_scaffold(title, language)]
+def _init_preview(plan: TransactionPlan) -> list[dict[str, str]]:
+    file_operations = [{"op": "create", "path": change.path} for change in plan.changes]
     directory_operations = [
         {"op": "create-directory", "path": path}
-        for path in (".creative-writing/context", ".creative-writing/transactions")
+        for path in plan.metadata["protected-directories"]
     ]
     return sorted((*file_operations, *directory_operations), key=lambda operation: operation["path"])
 
