@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
+import re
+
 from .documents import Document
 from .findings import Finding
 
 
 SCHEMA_VERSION = 1
 PROJECT_STATUSES = frozenset({"planning", "drafting", "revising", "complete", "archived"})
+DRAFT_STATUSES = frozenset({"working", "review", "ready"})
 WORLD_CLASSES = frozenset({"location", "faction", "system", "artifact", "concept"})
 SCAFFOLD_FILES: tuple[str, ...] = (
     "kb/_index.md",
@@ -34,6 +37,9 @@ SCAFFOLD_FILES: tuple[str, ...] = (
     "work/plans/_index.md",
     "work/reviews/_index.md",
 )
+
+_DRAFT_TARGET = re.compile(r"story/chapters/[^/]+\.md\Z")
+_SHA256 = re.compile(r"[0-9a-f]{64}\Z")
 
 
 def validate_metadata(relative_id: str, document: Document) -> list[Finding]:
@@ -96,10 +102,33 @@ def _validate_chapter(metadata: dict[str, object], relative_id: str) -> list[Fin
 
 
 def _validate_draft(metadata: dict[str, object], relative_id: str) -> list[Finding]:
-    findings = _validate_non_empty_string(metadata, "target", relative_id)
-    findings.extend(_validate_non_empty_string(metadata, "status", relative_id))
-    if "base-revision" in metadata:
-        findings.extend(_validate_non_empty_string(metadata, "base-revision", relative_id))
+    findings = []
+    target = metadata.get("target")
+    target_is_manuscript_chapter = isinstance(target, str) and bool(_DRAFT_TARGET.fullmatch(target))
+    if not target_is_manuscript_chapter:
+        findings.append(
+            _error("invalid-draft-target", "target must be a story/chapters/*.md path", relative_id)
+        )
+
+    if metadata.get("status") not in DRAFT_STATUSES:
+        statuses = ", ".join(sorted(DRAFT_STATUSES))
+        findings.append(_error("invalid-draft-status", f"status must be one of: {statuses}", relative_id))
+
+    if "base-revision" not in metadata:
+        if target_is_manuscript_chapter:
+            findings.append(
+                Finding(
+                    code="needs-context-draft-target",
+                    severity="info",
+                    message="NEEDS_CONTEXT: target existence determines whether base-revision is required",
+                    path=relative_id,
+                    next_action="Use a project-aware draft checker to inspect the target.",
+                )
+            )
+    elif not isinstance(metadata["base-revision"], str) or not _SHA256.fullmatch(metadata["base-revision"]):
+        findings.append(
+            _error("invalid-base-revision", "base-revision must be a lowercase SHA-256 identifier", relative_id)
+        )
     return findings
 
 

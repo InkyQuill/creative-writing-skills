@@ -155,6 +155,49 @@ class MetadataValidationTests(unittest.TestCase):
         findings = schema.validate_metadata("kb/world/harbor.md", document({"class": "city", "sources": "chapter"}))
         self.assertEqual(["invalid-world-class", "invalid-sources"], [finding.code for finding in findings])
 
+    def test_draft_for_an_existing_chapter_has_an_active_status_and_sha256_base_revision(self):
+        findings = schema.validate_metadata(
+            "work/drafts/chapter-01-revision.md",
+            document(
+                {
+                    "target": "story/chapters/chapter-01.md",
+                    "base-revision": "a" * 64,
+                    "status": "review",
+                }
+            ),
+        )
+
+        self.assertEqual([], findings)
+
+    def test_new_chapter_draft_without_a_base_revision_requires_target_existence_context(self):
+        findings = schema.validate_metadata(
+            "work/drafts/chapter-02.md",
+            document({"target": "story/chapters/chapter-02.md", "status": "working"}),
+        )
+
+        self.assertEqual(["needs-context-draft-target"], [finding.code for finding in findings])
+
+    def test_draft_metadata_rejects_non_manuscript_target_inactive_status_and_malformed_hash(self):
+        cases = {
+            "target outside manuscript": (
+                {"target": "kb/characters/iris.md", "base-revision": "b" * 64, "status": "working"},
+                "invalid-draft-target",
+            ),
+            "inactive status": (
+                {"target": "story/chapters/chapter-01.md", "base-revision": "b" * 64, "status": "abandoned"},
+                "invalid-draft-status",
+            ),
+            "malformed hash": (
+                {"target": "story/chapters/chapter-01.md", "base-revision": "not-a-sha256", "status": "ready"},
+                "invalid-base-revision",
+            ),
+        }
+
+        for name, (metadata, expected_code) in cases.items():
+            with self.subTest(name=name):
+                findings = schema.validate_metadata("work/drafts/revision.md", document(metadata))
+                self.assertIn(expected_code, [finding.code for finding in findings])
+
 
 if __name__ == "__main__":
     unittest.main()
