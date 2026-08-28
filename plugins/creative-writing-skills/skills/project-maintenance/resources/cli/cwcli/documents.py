@@ -42,6 +42,7 @@ _KEY_LINE = re.compile(r"^([^\s:#][^:\r\n]*?):(?:[ \t]*(.*))?$")
 _LIST_LINE = re.compile(r"^  -(?:[ \t](.*))?$")
 _INTEGER = re.compile(r"^-?(?:0|[1-9][0-9]*)$")
 _BLOCK_SCALAR = re.compile(r"^[>|][+-]?(?:[0-9]+)?(?:\s|$)")
+_UNSUPPORTED_YAML_VALUE_PREFIXES = ("&", "*", "!", "{", "[")
 
 
 def canonical_text(data: bytes) -> str:
@@ -199,6 +200,8 @@ def _parse_scalar(value: str, line_number: int) -> Scalar:
         if len(value) < 2 or not value.endswith("'"):
             raise _error(line_number, "unterminated single-quoted string")
         return value[1:-1].replace("''", "'")
+    if value.startswith(_UNSUPPORTED_YAML_VALUE_PREFIXES):
+        raise _error(line_number, "anchors, aliases, tags, and flow collections are not supported")
     if value in {"true", "false"}:
         return value == "true"
     if _INTEGER.fullmatch(value):

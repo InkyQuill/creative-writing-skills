@@ -85,6 +85,24 @@ class DocumentTests(unittest.TestCase):
         with self.assertRaisesRegex(documents.DocumentError, r"line 2.*block scalar"):
             documents.parse_document(b"---\nsummary: |\n  unsafe\n---\n")
 
+    def test_rejects_unsupported_yaml_value_forms_with_line_number(self):
+        cases = {
+            "anchor": b"reference: &shared value",
+            "alias": b"reference: *shared",
+            "tag": b"reference: !custom value",
+            "flow mapping": b"reference: {name: Pavel}",
+            "flow list": b"reference: [sea, memory]",
+        }
+
+        for name, entry in cases.items():
+            with self.subTest(name=name), self.assertRaisesRegex(documents.DocumentError, r"line 2"):
+                documents.parse_document(b"---\n" + entry + b"\n---\n")
+
+    def test_plain_scalar_allows_internal_yaml_punctuation(self):
+        raw = b"---\ntitle: Notes & memory [draft]!\n---\n"
+
+        self.assertEqual({"title": "Notes & memory [draft]!"}, documents.parse_document(raw).metadata)
+
     def test_rejects_duplicate_key_with_line_number(self):
         with self.assertRaisesRegex(documents.DocumentError, r"line 3.*duplicate key"):
             documents.parse_document(b"---\ntitle: First\ntitle: Second\n---\n")
