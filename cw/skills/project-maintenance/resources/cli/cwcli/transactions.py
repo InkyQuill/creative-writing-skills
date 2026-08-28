@@ -19,6 +19,10 @@ from .documents import logical_hash
 from .project import Project
 
 
+class TransactionError(RuntimeError):
+    """Raised when a guarded transaction cannot be completed safely."""
+
+
 @dataclass(frozen=True)
 class Change:
     """One exact-byte replacement planned for a project-relative file."""
@@ -202,6 +206,279 @@ class TransactionStore:
                 raise
 
 
+class TransactionEngine:
+    """Guard, stage, apply, and recover multi-file project transactions."""
+
+    def __init__(self, project: Project):
+        self.project = project
+        self.store = TransactionStore(project)
+        self.replace_hook = os.replace
+        self.unlink_hook = os.unlink
+
+    def preview(self, plan: TransactionPlan) -> dict[str, object]:
+        """Validate ``plan`` against the project and return its read-only preview."""
+
+        self._validate_plan(plan)
+        return {
+            "changes": [
+                {
+                    "action": _change_action(change),
+                    "diff": _unified_diff(change.path, change.before, change.after),
+                    "path": change.path,
+                }
+                for change in plan.changes
+            ],
+            "command": list(plan.command),
+            "metadata": _jsonable(plan.metadata),
+        }
+
+    def apply(
+        self, plan: TransactionPlan, *, transaction_id: str | None = None
+    ) -> TransactionRecord:
+        """Apply ``plan`` only while every exact before-snapshot still matches."""
+
+        self._validate_plan(plan)
+        prepared = self.store.prepare(plan, transaction_id=transaction_id)
+        completed: list[str] = []
+
+        try:
+            for change in plan.changes:
+                if change.after is not None:
+                    self._write_staged_bytes(prepared.id, change.path, change.after)
+
+            # Staging may take time. Re-resolve and re-read every target before
+            # allowing the first externally visible replacement.
+            self._validate_plan(plan)
+            self.store.write_state(prepared.id, "applying")
+
+            for change in plan.changes:
+                self._install_change(prepared.id, change)
+                completed.append(change.path)
+                self.store.write_state(
+                    prepared.id, "applying", completed=tuple(completed)
+                )
+
+            return self.store.write_state(
+                prepared.id, "committed", completed=tuple(completed)
+            )
+        except BaseException as error:
+            rollback_errors = self._restore_completed(
+                prepared.id, plan.changes, tuple(completed)
+            )
+            rollback_errors.extend(self._cleanup_temporaries(prepared.id, plan.changes))
+            try:
+                self.store.write_state(
+                    prepared.id, "rolled-back", completed=tuple(completed)
+                )
+            except BaseException as state_error:
+                rollback_errors.append(
+                    f"could not record rolled-back state: {_error_text(state_error)}"
+                )
+
+            if rollback_errors:
+                details = "; ".join(rollback_errors)
+                raise TransactionError(
+                    f"transaction {prepared.id} failed: {_error_text(error)}; "
+                    f"rollback failed: {details}"
+                ) from error
+            raise TransactionError(
+                f"transaction {prepared.id} failed: {_error_text(error)}; rolled back"
+            ) from error
+
+    def recover(self, transaction_id: str) -> TransactionRecord:
+        """Restore an interrupted transaction from before-blobs; never roll forward."""
+
+        record = self.store.load(transaction_id)
+        if record.state not in {"prepared", "applying"}:
+            raise TransactionError(
+                f"cannot recover transaction {transaction_id} in state {record.state}"
+            )
+
+        changes = self._persisted_changes(transaction_id)
+        by_path = {change.path: change for change in changes}
+        if len(by_path) != len(changes):
+            raise TransactionError(f"transaction {transaction_id} contains duplicate paths")
+        if len(set(record.completed)) != len(record.completed) or any(
+            path not in by_path for path in record.completed
+        ):
+            raise TransactionError(
+                f"transaction {transaction_id} has invalid completed paths"
+            )
+
+        # Resolve the complete persisted target set before touching any file.
+        self._resolve_changes(changes)
+        recovery_errors: list[str] = []
+        for path in reversed(record.completed):
+            change = by_path[path]
+            try:
+                self._remove_temporary(transaction_id, change.path)
+                self._restore_change(transaction_id, change)
+            except BaseException as error:
+                recovery_errors.append(f"{path}: {_error_text(error)}")
+
+        recovery_errors.extend(self._cleanup_temporaries(transaction_id, changes))
+        if recovery_errors:
+            raise TransactionError(
+                f"recovery of transaction {transaction_id} failed: "
+                + "; ".join(recovery_errors)
+            )
+        return self.store.write_state(
+            transaction_id, "rolled-back", completed=record.completed
+        )
+
+    def _validate_plan(self, plan: TransactionPlan) -> None:
+        changes = self._resolve_changes(plan.changes)
+        for change, target in changes:
+            self._validate_target(change, target)
+
+    def _resolve_changes(self, changes: tuple[Change, ...]) -> tuple[tuple[Change, Path], ...]:
+        seen: set[str] = set()
+        resolved: list[tuple[Change, Path]] = []
+        for change in changes:
+            if change.path in seen:
+                raise TransactionError(f"duplicate transaction target: {change.path}")
+            seen.add(change.path)
+            try:
+                target = self.project.resolve(change.path, for_write=True)
+            except (OSError, ValueError) as error:
+                raise TransactionError(
+                    f"unsafe transaction target {change.path}: {_error_text(error)}"
+                ) from error
+            resolved.append((change, target))
+        return tuple(resolved)
+
+    def _validate_target(self, change: Change, target: Path) -> None:
+        try:
+            if not target.exists():
+                actual = None
+            elif not target.is_file():
+                raise TransactionError(
+                    f"stale precondition for {change.path}: target is not a regular file"
+                )
+            else:
+                actual = target.read_bytes()
+        except TransactionError:
+            raise
+        except OSError as error:
+            raise TransactionError(
+                f"could not read transaction target {change.path}: {_error_text(error)}"
+            ) from error
+
+        if actual != change.before:
+            raise TransactionError(f"stale precondition for {change.path}")
+
+    def _install_change(self, transaction_id: str, change: Change) -> None:
+        target = self.project.resolve(change.path, for_write=True)
+        if change.after is None:
+            if change.before is not None:
+                self.unlink_hook(target)
+            return
+        self.replace_hook(self._temporary_path(transaction_id, change.path), target)
+
+    def _restore_completed(
+        self,
+        transaction_id: str,
+        changes: tuple[Change, ...],
+        completed: tuple[str, ...],
+    ) -> list[str]:
+        by_path = {change.path: change for change in changes}
+        errors: list[str] = []
+        for path in reversed(completed):
+            try:
+                self._remove_temporary(transaction_id, path)
+                self._restore_change(transaction_id, by_path[path])
+            except BaseException as error:
+                errors.append(f"{path}: {_error_text(error)}")
+        return errors
+
+    def _restore_change(self, transaction_id: str, change: Change) -> None:
+        target = self.project.resolve(change.path, for_write=True)
+        if change.before is None:
+            if target.exists():
+                self.unlink_hook(target)
+            return
+        self._write_staged_bytes(transaction_id, change.path, change.before)
+        self.replace_hook(self._temporary_path(transaction_id, change.path), target)
+
+    def _cleanup_temporaries(
+        self, transaction_id: str, changes: tuple[Change, ...]
+    ) -> list[str]:
+        errors: list[str] = []
+        for change in changes:
+            try:
+                self._remove_temporary(transaction_id, change.path)
+            except BaseException as error:
+                errors.append(
+                    f"could not clean temporary sibling for {change.path}: {_error_text(error)}"
+                )
+        return errors
+
+    def _remove_temporary(self, transaction_id: str, path: str) -> None:
+        self._temporary_path(transaction_id, path).unlink(missing_ok=True)
+
+    def _write_staged_bytes(self, transaction_id: str, path: str, data: bytes) -> Path:
+        destination = self._temporary_path(transaction_id, path)
+        descriptor = os.open(destination, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        try:
+            with os.fdopen(descriptor, "wb") as stream:
+                descriptor = -1
+                stream.write(data)
+                stream.flush()
+                os.fsync(stream.fileno())
+        except BaseException:
+            if descriptor >= 0:
+                os.close(descriptor)
+            destination.unlink(missing_ok=True)
+            raise
+        return destination
+
+    def _temporary_path(self, transaction_id: str, path: str) -> Path:
+        self.store._transaction_dir(transaction_id)
+        target = self.project.resolve(path, for_write=True)
+        identity = hashlib.sha256(f"{transaction_id}\0{path}".encode("utf-8")).hexdigest()
+        return target.parent / f".cw-transaction-{identity}.tmp"
+
+    def _persisted_changes(self, transaction_id: str) -> tuple[Change, ...]:
+        manifest = self.store._read_manifest(transaction_id)
+        rendered_changes = manifest.get("changes")
+        if not isinstance(rendered_changes, list):
+            raise TransactionError(f"transaction {transaction_id} has invalid changes")
+
+        changes: list[Change] = []
+        try:
+            for rendered in rendered_changes:
+                if not isinstance(rendered, dict):
+                    raise TypeError("change must be an object")
+                path = rendered["path"]
+                if not isinstance(path, str):
+                    raise TypeError("change path must be a string")
+                before = self._read_blob_reference(rendered["before"])
+                after = self._read_blob_reference(rendered["after"])
+                changes.append(Change(path, before, after))
+        except (KeyError, OSError, TypeError, ValueError) as error:
+            raise TransactionError(
+                f"transaction {transaction_id} has invalid snapshots: {_error_text(error)}"
+            ) from error
+        return tuple(changes)
+
+    def _read_blob_reference(self, reference: object) -> bytes | None:
+        if not isinstance(reference, dict):
+            raise TypeError("content reference must be an object")
+        identifier = reference.get("blob")
+        if identifier is None:
+            return None
+        if (
+            not isinstance(identifier, str)
+            or len(identifier) != 64
+            or any(character not in "0123456789abcdef" for character in identifier)
+        ):
+            raise ValueError("blob identifier must be a lowercase SHA-256 digest")
+        data = (self.store.root / "blobs" / identifier).read_bytes()
+        if hashlib.sha256(data).hexdigest() != identifier:
+            raise ValueError(f"blob content does not match identifier {identifier}")
+        return data
+
+
 def _unified_diff(path: str, before: bytes | None, after: bytes | None) -> str:
     """Render an exact textual review diff for a planned byte replacement."""
 
@@ -261,4 +538,23 @@ def _validate_change_path(path: str) -> None:
         raise ValueError("change path must be a normalized project-relative identity")
 
 
-__all__ = ["Change", "TransactionPlan", "TransactionRecord", "TransactionStore"]
+def _change_action(change: Change) -> str:
+    if change.before is None and change.after is not None:
+        return "create"
+    if change.before is not None and change.after is None:
+        return "delete"
+    return "update"
+
+
+def _error_text(error: BaseException) -> str:
+    return str(error) or type(error).__name__
+
+
+__all__ = [
+    "Change",
+    "TransactionEngine",
+    "TransactionError",
+    "TransactionPlan",
+    "TransactionRecord",
+    "TransactionStore",
+]
