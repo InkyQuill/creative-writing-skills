@@ -3,13 +3,15 @@
 from __future__ import annotations
 
 import difflib
+import errno
 import hashlib
 import json
 import os
 import shutil
 import tempfile
 import uuid
-from collections.abc import Mapping
+import warnings
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path, PurePosixPath, PureWindowsPath
@@ -21,6 +23,10 @@ from .project import Project
 
 class TransactionError(RuntimeError):
     """Raised when a guarded transaction cannot be completed safely."""
+
+
+class _StateDurabilityError(TransactionError):
+    """Raised when a journal state transition is not durably confirmed."""
 
 
 @dataclass(frozen=True)
@@ -64,6 +70,7 @@ class TransactionStore:
     def __init__(self, project: Project):
         self.project = project
         self.root = project.root / ".creative-writing" / "transactions"
+        self.directory_sync_hook = _fsync_directory
 
     def prepare(self, plan: TransactionPlan, *, transaction_id: str | None = None) -> TransactionRecord:
         """Snapshot ``plan`` and return its newly prepared transaction record."""
@@ -77,15 +84,17 @@ class TransactionStore:
             "changes": [self._manifest_change(change) for change in plan.changes],
             "command": list(plan.command),
             "completed": [],
+            "intents": [],
             "metadata": _jsonable(plan.metadata),
             "state": "prepared",
             "timestamp": datetime.now(timezone.utc).isoformat(),
         }
         rendered_manifest = _render_json(manifest)
 
-        transaction_dir.parent.mkdir(parents=True, exist_ok=True)
+        _mkdir_durable(transaction_dir.parent, self.directory_sync_hook)
         try:
             transaction_dir.mkdir()
+            self.directory_sync_hook(transaction_dir.parent)
         except FileExistsError as error:
             raise FileExistsError(f"transaction already exists: {identifier}") from error
 
@@ -93,6 +102,7 @@ class TransactionStore:
             self._write_json(transaction_dir / "manifest.json", rendered_manifest)
         except BaseException:
             shutil.rmtree(transaction_dir)
+            self.directory_sync_hook(transaction_dir.parent)
             raise
         return TransactionRecord(identifier, "prepared", ())
 
@@ -107,14 +117,23 @@ class TransactionStore:
         )
 
     def write_state(
-        self, transaction_id: str, state: str, *, completed: tuple[str, ...] = ()
+        self,
+        transaction_id: str,
+        state: str,
+        *,
+        completed: tuple[str, ...] = (),
+        intents: tuple[str, ...] | None = None,
     ) -> TransactionRecord:
-        """Atomically replace just the execution state in an existing manifest."""
+        """Atomically replace execution state and optional durable intent progress."""
 
         manifest_path = self._transaction_dir(transaction_id) / "manifest.json"
         manifest = self._read_manifest(transaction_id)
         manifest["state"] = state
         manifest["completed"] = list(completed)
+        if intents is not None:
+            manifest["intents"] = list(intents)
+        elif "intents" not in manifest:
+            manifest["intents"] = list(completed)
         self._write_json(manifest_path, _render_json(manifest))
         return TransactionRecord(transaction_id, state, tuple(completed))
 
@@ -126,7 +145,7 @@ class TransactionStore:
 
         identifier = hashlib.sha256(data).hexdigest()
         blobs = self.root / "blobs"
-        blobs.mkdir(parents=True, exist_ok=True)
+        _mkdir_durable(blobs, self.directory_sync_hook)
         destination = blobs / identifier
         if destination.exists():
             return identifier
@@ -166,44 +185,62 @@ class TransactionStore:
             raise ValueError("transaction id must be a single path component")
         return self.root / transaction_id
 
-    @staticmethod
-    def _write_json(destination: Path, rendered: str) -> None:
-        with tempfile.NamedTemporaryFile(
+    def _write_json(self, destination: Path, rendered: str) -> None:
+        stream = tempfile.NamedTemporaryFile(
             mode="w",
             encoding="utf-8",
             dir=destination.parent,
             prefix=f".{destination.name}.",
             suffix=".tmp",
             delete=False,
-        ) as stream:
-            temporary = Path(stream.name)
-            try:
+        )
+        temporary = Path(stream.name)
+        try:
+            with stream:
                 stream.write(rendered)
                 stream.flush()
                 os.fsync(stream.fileno())
-                os.replace(temporary, destination)
-            except BaseException:
-                temporary.unlink(missing_ok=True)
-                raise
+            self.directory_sync_hook(destination.parent)
+            os.replace(temporary, destination)
+            self.directory_sync_hook(destination.parent)
+        except BaseException as error:
+            cleanup_error = _remove_internal_file(
+                temporary, self.directory_sync_hook
+            )
+            if cleanup_error is not None:
+                raise OSError(
+                    f"{_error_text(error)}; temporary cleanup failed: "
+                    f"{_error_text(cleanup_error)}"
+                ) from error
+            raise
 
-    @staticmethod
-    def _write_bytes(destination: Path, data: bytes) -> None:
-        with tempfile.NamedTemporaryFile(
+    def _write_bytes(self, destination: Path, data: bytes) -> None:
+        stream = tempfile.NamedTemporaryFile(
             mode="wb",
             dir=destination.parent,
             prefix=f".{destination.name}.",
             suffix=".tmp",
             delete=False,
-        ) as stream:
-            temporary = Path(stream.name)
-            try:
+        )
+        temporary = Path(stream.name)
+        try:
+            with stream:
                 stream.write(data)
                 stream.flush()
                 os.fsync(stream.fileno())
-                os.replace(temporary, destination)
-            except BaseException:
-                temporary.unlink(missing_ok=True)
-                raise
+            self.directory_sync_hook(destination.parent)
+            os.replace(temporary, destination)
+            self.directory_sync_hook(destination.parent)
+        except BaseException as error:
+            cleanup_error = _remove_internal_file(
+                temporary, self.directory_sync_hook
+            )
+            if cleanup_error is not None:
+                raise OSError(
+                    f"{_error_text(error)}; temporary cleanup failed: "
+                    f"{_error_text(cleanup_error)}"
+                ) from error
+            raise
 
 
 class TransactionEngine:
@@ -214,6 +251,7 @@ class TransactionEngine:
         self.store = TransactionStore(project)
         self.replace_hook = os.replace
         self.unlink_hook = os.unlink
+        self.directory_sync_hook = _fsync_directory
 
     def preview(self, plan: TransactionPlan) -> dict[str, object]:
         """Validate ``plan`` against the project and return its read-only preview."""
@@ -240,6 +278,7 @@ class TransactionEngine:
         self._validate_plan(plan)
         prepared = self.store.prepare(plan, transaction_id=transaction_id)
         completed: list[str] = []
+        intents: list[str] = []
 
         try:
             for change in plan.changes:
@@ -249,37 +288,67 @@ class TransactionEngine:
             # Staging may take time. Re-resolve and re-read every target before
             # allowing the first externally visible replacement.
             self._validate_plan(plan)
-            self.store.write_state(prepared.id, "applying")
+            self._write_nonterminal_state(
+                prepared.id, "applying", completed=(), intents=()
+            )
 
             for change in plan.changes:
+                intents.append(change.path)
+                self._write_nonterminal_state(
+                    prepared.id,
+                    "applying",
+                    completed=tuple(completed),
+                    intents=tuple(intents),
+                )
                 self._install_change(prepared.id, change)
                 completed.append(change.path)
-                self.store.write_state(
-                    prepared.id, "applying", completed=tuple(completed)
+                self._write_nonterminal_state(
+                    prepared.id,
+                    "applying",
+                    completed=tuple(completed),
+                    intents=tuple(intents),
                 )
 
-            return self.store.write_state(
-                prepared.id, "committed", completed=tuple(completed)
+            return self._write_terminal_state(
+                prepared.id,
+                "committed",
+                completed=tuple(completed),
+                intents=tuple(intents),
             )
         except BaseException as error:
-            rollback_errors = self._restore_completed(
-                prepared.id, plan.changes, tuple(completed)
+            state_durability_failed = isinstance(error, _StateDurabilityError)
+            rollback_intents, progress_errors = self._rollback_intents(
+                prepared.id, tuple(intents), tuple(completed)
             )
-            rollback_errors.extend(self._cleanup_temporaries(prepared.id, plan.changes))
-            try:
-                self.store.write_state(
-                    prepared.id, "rolled-back", completed=tuple(completed)
-                )
-            except BaseException as state_error:
-                rollback_errors.append(
-                    f"could not record rolled-back state: {_error_text(state_error)}"
+            rollback_errors = progress_errors
+            rollback_errors.extend(
+                self._restore_intents(prepared.id, plan.changes, rollback_intents)
+            )
+            rollback_errors.extend(
+                self._cleanup_temporaries(prepared.id, plan.changes)
+            )
+
+            if not state_durability_failed and not rollback_errors:
+                try:
+                    self._write_terminal_state(
+                        prepared.id,
+                        "rolled-back",
+                        completed=tuple(completed),
+                        intents=rollback_intents,
+                    )
+                except BaseException as state_error:
+                    rollback_errors.append(_error_text(state_error))
+
+            if state_durability_failed:
+                rollback_errors.insert(
+                    0, "a journal state transition was not durably confirmed"
                 )
 
             if rollback_errors:
                 details = "; ".join(rollback_errors)
                 raise TransactionError(
                     f"transaction {prepared.id} failed: {_error_text(error)}; "
-                    f"rollback failed: {details}"
+                    f"rollback failed and remains recoverable: {details}"
                 ) from error
             raise TransactionError(
                 f"transaction {prepared.id} failed: {_error_text(error)}; rolled back"
@@ -298,33 +367,35 @@ class TransactionEngine:
         by_path = {change.path: change for change in changes}
         if len(by_path) != len(changes):
             raise TransactionError(f"transaction {transaction_id} contains duplicate paths")
-        if len(set(record.completed)) != len(record.completed) or any(
-            path not in by_path for path in record.completed
+        intents = self._manifest_intents(transaction_id, record.completed)
+        if len(set(intents)) != len(intents) or any(
+            path not in by_path for path in intents
         ):
             raise TransactionError(
-                f"transaction {transaction_id} has invalid completed paths"
+                f"transaction {transaction_id} has invalid intent paths"
             )
 
         # Resolve the complete persisted target set before touching any file.
         self._resolve_changes(changes)
-        recovery_errors: list[str] = []
-        for path in reversed(record.completed):
-            change = by_path[path]
-            try:
-                self._remove_temporary(transaction_id, change.path)
-                self._restore_change(transaction_id, change)
-            except BaseException as error:
-                recovery_errors.append(f"{path}: {_error_text(error)}")
-
+        recovery_errors = self._restore_intents(transaction_id, changes, intents)
         recovery_errors.extend(self._cleanup_temporaries(transaction_id, changes))
         if recovery_errors:
             raise TransactionError(
                 f"recovery of transaction {transaction_id} failed: "
                 + "; ".join(recovery_errors)
             )
-        return self.store.write_state(
-            transaction_id, "rolled-back", completed=record.completed
-        )
+        try:
+            return self._write_terminal_state(
+                transaction_id,
+                "rolled-back",
+                completed=record.completed,
+                intents=intents,
+            )
+        except BaseException as error:
+            raise TransactionError(
+                f"recovery of transaction {transaction_id} could not durably record "
+                f"rolled-back state: {_error_text(error)}"
+            ) from error
 
     def _validate_plan(self, plan: TransactionPlan) -> None:
         changes = self._resolve_changes(plan.changes)
@@ -371,34 +442,95 @@ class TransactionEngine:
         target = self.project.resolve(change.path, for_write=True)
         if change.after is None:
             if change.before is not None:
-                self.unlink_hook(target)
+                self._mutate_and_sync(
+                    lambda: self.unlink_hook(target), target.parent
+                )
             return
-        self.replace_hook(self._temporary_path(transaction_id, change.path), target)
+        temporary = self._temporary_path(transaction_id, change.path)
+        self._mutate_and_sync(
+            lambda: self.replace_hook(temporary, target), target.parent
+        )
 
-    def _restore_completed(
+    def _rollback_intents(
+        self,
+        transaction_id: str,
+        local_intents: tuple[str, ...],
+        completed: tuple[str, ...],
+    ) -> tuple[tuple[str, ...], list[str]]:
+        errors: list[str] = []
+        persisted_intents: tuple[str, ...] = ()
+        try:
+            persisted_intents = self._manifest_intents(transaction_id, completed)
+        except BaseException as error:
+            errors.append(f"could not reload durable intents: {_error_text(error)}")
+        return _ordered_union(persisted_intents, completed, local_intents), errors
+
+    def _restore_intents(
         self,
         transaction_id: str,
         changes: tuple[Change, ...],
-        completed: tuple[str, ...],
+        intents: tuple[str, ...],
     ) -> list[str]:
         by_path = {change.path: change for change in changes}
         errors: list[str] = []
-        for path in reversed(completed):
+        for path in reversed(intents):
+            change = by_path.get(path)
+            if change is None:
+                errors.append(f"{path}: intent has no persisted change")
+                continue
             try:
-                self._remove_temporary(transaction_id, path)
-                self._restore_change(transaction_id, by_path[path])
+                self._restore_if_needed(transaction_id, change)
             except BaseException as error:
                 errors.append(f"{path}: {_error_text(error)}")
         return errors
 
-    def _restore_change(self, transaction_id: str, change: Change) -> None:
+    def _restore_if_needed(self, transaction_id: str, change: Change) -> None:
         target = self.project.resolve(change.path, for_write=True)
+        current = self._current_bytes(change.path, target)
+        if current == change.before:
+            return
+        if current != change.after:
+            raise TransactionError(
+                f"recovery conflict for {change.path}: current bytes match neither before nor after"
+            )
+
+        self._remove_temporary(transaction_id, change.path)
         if change.before is None:
-            if target.exists():
-                self.unlink_hook(target)
+            try:
+                self._mutate_and_sync(lambda: self.unlink_hook(target), target.parent)
+            except BaseException as error:
+                if isinstance(error, TransactionError) or self._current_bytes(
+                    change.path, target
+                ) != change.before:
+                    raise
             return
         self._write_staged_bytes(transaction_id, change.path, change.before)
-        self.replace_hook(self._temporary_path(transaction_id, change.path), target)
+        temporary = self._temporary_path(transaction_id, change.path)
+        try:
+            self._mutate_and_sync(
+                lambda: self.replace_hook(temporary, target), target.parent
+            )
+        except BaseException as error:
+            if isinstance(error, TransactionError) or self._current_bytes(
+                change.path, target
+            ) != change.before:
+                raise
+
+    def _current_bytes(self, path: str, target: Path) -> bytes | None:
+        try:
+            if not target.exists():
+                return None
+            if not target.is_file():
+                raise TransactionError(
+                    f"recovery conflict for {path}: target is not a regular file"
+                )
+            return target.read_bytes()
+        except TransactionError:
+            raise
+        except OSError as error:
+            raise TransactionError(
+                f"could not classify recovery target {path}: {_error_text(error)}"
+            ) from error
 
     def _cleanup_temporaries(
         self, transaction_id: str, changes: tuple[Change, ...]
@@ -414,7 +546,10 @@ class TransactionEngine:
         return errors
 
     def _remove_temporary(self, transaction_id: str, path: str) -> None:
-        self._temporary_path(transaction_id, path).unlink(missing_ok=True)
+        temporary = self._temporary_path(transaction_id, path)
+        if temporary.exists() or temporary.is_symlink():
+            temporary.unlink()
+            self.directory_sync_hook(temporary.parent)
 
     def _write_staged_bytes(self, transaction_id: str, path: str, data: bytes) -> Path:
         destination = self._temporary_path(transaction_id, path)
@@ -425,12 +560,124 @@ class TransactionEngine:
                 stream.write(data)
                 stream.flush()
                 os.fsync(stream.fileno())
-        except BaseException:
+            self.directory_sync_hook(destination.parent)
+        except BaseException as error:
             if descriptor >= 0:
                 os.close(descriptor)
-            destination.unlink(missing_ok=True)
+            cleanup_error = _remove_internal_file(
+                destination, self.directory_sync_hook
+            )
+            if cleanup_error is not None:
+                raise TransactionError(
+                    f"{_error_text(error)}; staged temporary cleanup failed: "
+                    f"{_error_text(cleanup_error)}"
+                ) from error
             raise
         return destination
+
+    def _mutate_and_sync(self, mutation: Callable[[], object], directory: Path) -> None:
+        mutation_error: BaseException | None = None
+        try:
+            mutation()
+        except BaseException as error:
+            mutation_error = error
+
+        sync_error: BaseException | None = None
+        try:
+            self.directory_sync_hook(directory)
+        except BaseException as error:
+            sync_error = error
+
+        if mutation_error is not None and sync_error is not None:
+            raise TransactionError(
+                f"mutation failed: {_error_text(mutation_error)}; target directory fsync failed: "
+                f"{_error_text(sync_error)}"
+            ) from mutation_error
+        if mutation_error is not None:
+            raise mutation_error
+        if sync_error is not None:
+            raise TransactionError(
+                f"target directory fsync failed: {_error_text(sync_error)}"
+            ) from sync_error
+
+    def _write_nonterminal_state(
+        self,
+        transaction_id: str,
+        state: str,
+        *,
+        completed: tuple[str, ...],
+        intents: tuple[str, ...],
+    ) -> TransactionRecord:
+        try:
+            return self.store.write_state(
+                transaction_id, state, completed=completed, intents=intents
+            )
+        except BaseException as error:
+            raise _StateDurabilityError(
+                f"could not durably persist {state} state for transaction "
+                f"{transaction_id}: {_error_text(error)}"
+            ) from error
+
+    def _write_terminal_state(
+        self,
+        transaction_id: str,
+        state: str,
+        *,
+        completed: tuple[str, ...],
+        intents: tuple[str, ...],
+    ) -> TransactionRecord:
+        previous = self.store.load(transaction_id)
+        previous_intents = self._manifest_intents(transaction_id, previous.completed)
+        if previous.state not in {"prepared", "applying"}:
+            raise _StateDurabilityError(
+                f"transaction {transaction_id} is already terminal in state {previous.state}"
+            )
+        try:
+            return self.store.write_state(
+                transaction_id, state, completed=completed, intents=intents
+            )
+        except BaseException as error:
+            revert_errors: list[str] = []
+            try:
+                observed = self.store.load(transaction_id)
+                if observed.state == state:
+                    self.store.write_state(
+                        transaction_id,
+                        previous.state,
+                        completed=previous.completed,
+                        intents=previous_intents,
+                    )
+            except BaseException as revert_error:
+                revert_errors.append(
+                    f"could not restore nonterminal journal state: {_error_text(revert_error)}"
+                )
+            suffix = "" if not revert_errors else "; " + "; ".join(revert_errors)
+            raise _StateDurabilityError(
+                f"could not durably persist terminal {state} state for transaction "
+                f"{transaction_id}: {_error_text(error)}{suffix}"
+            ) from error
+
+    def _manifest_intents(
+        self, transaction_id: str, completed: tuple[str, ...]
+    ) -> tuple[str, ...]:
+        manifest = self.store._read_manifest(transaction_id)
+        rendered = manifest.get("intents", [])
+        if not isinstance(rendered, list) or any(
+            not isinstance(path, str) for path in rendered
+        ):
+            raise TransactionError(
+                f"transaction {transaction_id} has invalid durable intents"
+            )
+        rendered_intents = tuple(rendered)
+        if (
+            len(set(rendered_intents)) != len(rendered_intents)
+            or any(not isinstance(path, str) for path in completed)
+            or len(set(completed)) != len(completed)
+        ):
+            raise TransactionError(
+                f"transaction {transaction_id} has duplicate or invalid progress paths"
+            )
+        return _ordered_union(rendered_intents, completed)
 
     def _temporary_path(self, transaction_id: str, path: str) -> Path:
         self.store._transaction_dir(transaction_id)
@@ -477,6 +724,98 @@ class TransactionEngine:
         if hashlib.sha256(data).hexdigest() != identifier:
             raise ValueError(f"blob content does not match identifier {identifier}")
         return data
+
+
+def _fsync_directory(directory: Path) -> bool:
+    """Fsync a directory, or warn and return false when the platform cannot.
+
+    POSIX filesystems normally support opening a directory and syncing its entry
+    table. Some platforms, notably Windows, reject that operation. On those
+    platforms file contents are still fsynced and atomic replacement is used, but
+    crash durability of directory entries remains explicitly best-effort.
+    """
+
+    flags = os.O_RDONLY | getattr(os, "O_DIRECTORY", 0)
+    try:
+        descriptor = os.open(directory, flags)
+    except OSError as error:
+        if _directory_fsync_unsupported(error):
+            warnings.warn(
+                "directory fsync is unsupported on this platform; transaction "
+                "directory-entry durability is best-effort",
+                RuntimeWarning,
+                stacklevel=2,
+            )
+            return False
+        raise
+
+    try:
+        os.fsync(descriptor)
+    except OSError as error:
+        if _directory_fsync_unsupported(error):
+            warnings.warn(
+                "directory fsync is unsupported on this platform; transaction "
+                "directory-entry durability is best-effort",
+                RuntimeWarning,
+                stacklevel=2,
+            )
+            return False
+        raise
+    finally:
+        os.close(descriptor)
+    return True
+
+
+def _directory_fsync_unsupported(error: OSError) -> bool:
+    unsupported = {
+        errno.EINVAL,
+        getattr(errno, "ENOTSUP", errno.EINVAL),
+        getattr(errno, "EOPNOTSUPP", errno.EINVAL),
+    }
+    if error.errno in unsupported:
+        return True
+    return os.name == "nt" and error.errno in {
+        errno.EACCES,
+        errno.EPERM,
+        getattr(errno, "EISDIR", errno.EACCES),
+    }
+
+
+def _mkdir_durable(directory: Path, sync_hook: Callable[[Path], object]) -> None:
+    missing: list[Path] = []
+    current = directory
+    while not current.exists():
+        missing.append(current)
+        if current.parent == current:
+            break
+        current = current.parent
+    directory.mkdir(parents=True, exist_ok=True)
+    for created in reversed(missing):
+        sync_hook(created.parent)
+
+
+def _remove_internal_file(
+    path: Path, sync_hook: Callable[[Path], object]
+) -> BaseException | None:
+    if not path.exists() and not path.is_symlink():
+        return None
+    try:
+        path.unlink()
+        sync_hook(path.parent)
+    except BaseException as error:
+        return error
+    return None
+
+
+def _ordered_union(*groups: tuple[str, ...]) -> tuple[str, ...]:
+    seen: set[str] = set()
+    ordered: list[str] = []
+    for group in groups:
+        for path in group:
+            if path not in seen:
+                seen.add(path)
+                ordered.append(path)
+    return tuple(ordered)
 
 
 def _unified_diff(path: str, before: bytes | None, after: bytes | None) -> str:

@@ -1,8 +1,12 @@
+import errno
 import hashlib
 import json
+import os
 import tempfile
 import unittest
+import warnings
 from pathlib import Path
+from unittest import mock
 
 from . import helpers  # Adds the canonical CLI directory to sys.path.
 from cwcli import documents, project, transactions
@@ -38,12 +42,16 @@ class TransactionStoreTests(unittest.TestCase):
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
 
         self.assertEqual(transactions.TransactionRecord("tx-test", "prepared", ()), record)
-        self.assertEqual(["changes", "command", "completed", "metadata", "state", "timestamp"], list(manifest))
+        self.assertEqual(
+            ["changes", "command", "completed", "intents", "metadata", "state", "timestamp"],
+            list(manifest),
+        )
         self.assertEqual(["edit", "replace"], manifest["command"])
         self.assertEqual({"reason": "replace repeated heading"}, manifest["metadata"])
         self.assertRegex(manifest["timestamp"], r"^\d{4}-\d{2}-\d{2}T.*\+00:00$")
         self.assertEqual("prepared", manifest["state"])
         self.assertEqual([], manifest["completed"])
+        self.assertEqual([], manifest["intents"])
         self.assertEqual(
             ["story/chapters/ch-001.md", "story/chapters/ch-002.md"],
             [change["path"] for change in manifest["changes"]],
@@ -195,7 +203,12 @@ class TransactionStoreTests(unittest.TestCase):
         store.prepare(plan, transaction_id="tx-state")
         before = json.loads((store.root / "tx-state" / "manifest.json").read_text(encoding="utf-8"))
 
-        record = store.write_state("tx-state", "applying", completed=("story/chapters/ch-001.md",))
+        record = store.write_state(
+            "tx-state",
+            "applying",
+            completed=("story/chapters/ch-001.md",),
+            intents=("story/chapters/ch-001.md",),
+        )
         after = json.loads((store.root / "tx-state" / "manifest.json").read_text(encoding="utf-8"))
 
         self.assertEqual(transactions.TransactionRecord("tx-state", "applying", ("story/chapters/ch-001.md",)), record)
@@ -206,7 +219,46 @@ class TransactionStoreTests(unittest.TestCase):
         self.assertEqual(before["metadata"], after["metadata"])
         self.assertEqual("applying", after["state"])
         self.assertEqual(["story/chapters/ch-001.md"], after["completed"])
+        self.assertEqual(["story/chapters/ch-001.md"], after["intents"])
         self.assertFalse(list((store.root / "tx-state").glob(".manifest.json.*.tmp")))
+
+    def test_atomic_blob_install_syncs_parent_before_and_after_replace(self):
+        store = self.make_store()
+        destination = store.root / "blobs" / "blob"
+        destination.parent.mkdir(parents=True)
+        events: list[str] = []
+        replace = os.replace
+
+        def sync_parent(_directory: Path) -> bool:
+            events.append("sync")
+            return True
+
+        def record_replace(source: os.PathLike[str], target: os.PathLike[str]) -> None:
+            events.append("replace")
+            replace(source, target)
+
+        store.directory_sync_hook = sync_parent
+        with mock.patch.object(transactions.os, "replace", side_effect=record_replace):
+            store._write_bytes(destination, b"content\n")
+
+        self.assertEqual(["sync", "replace", "sync"], events)
+        self.assertEqual(b"content\n", destination.read_bytes())
+
+    def test_directory_fsync_warns_when_platform_cannot_sync_directories(self):
+        store = self.make_store()
+        unsupported = OSError(errno.EINVAL, "directory fsync unsupported")
+
+        with (
+            mock.patch.object(transactions.os, "open", side_effect=unsupported),
+            warnings.catch_warnings(record=True) as caught,
+        ):
+            warnings.simplefilter("always")
+            supported = transactions._fsync_directory(store.root)
+
+        self.assertFalse(supported)
+        self.assertTrue(
+            any("directory fsync is unsupported" in str(warning.message) for warning in caught)
+        )
 
 
 if __name__ == "__main__":
