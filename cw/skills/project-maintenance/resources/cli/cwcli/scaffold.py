@@ -45,12 +45,18 @@ def render_scaffold(title: str, language: str) -> dict[str, bytes]:
     for relative_id in SCAFFOLD_FILES:
         if relative_id == "project.md":
             rendered[relative_id] = _render_manifest(title, language)
-        elif relative_id in GENERATED_INDEX_FILES:
-            rendered[relative_id] = render_index(relative_id)
-        else:
+        elif relative_id not in GENERATED_INDEX_FILES:
             document_title, body = _STARTER_DOCUMENTS[relative_id]
             rendered[relative_id] = _render_document({"title": document_title}, body)
-    return rendered
+
+    authored_documents = tuple(
+        (relative_id, parse_document(data))
+        for relative_id, data in rendered.items()
+        if relative_id != "project.md"
+    )
+    for relative_id in GENERATED_INDEX_FILES:
+        rendered[relative_id] = render_index(relative_id, authored_documents)
+    return {relative_id: rendered[relative_id] for relative_id in SCAFFOLD_FILES}
 
 
 class InitError(RuntimeError):

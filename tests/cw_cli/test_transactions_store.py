@@ -83,6 +83,116 @@ class TransactionStoreTests(unittest.TestCase):
         with self.assertRaises(FileExistsError):
             store.prepare(plan, transaction_id="tx-test")
 
+    def test_prepare_rejects_symlinked_protected_components_without_snapshot_leakage(self):
+        for component in (".creative-writing", ".creative-writing/transactions"):
+            with self.subTest(component=component):
+                store = self.make_store()
+                external = Path(self.directory.name) / "external"
+                external.mkdir()
+                linked = store.project.root / component
+                linked.parent.mkdir(parents=True, exist_ok=True)
+                linked.symlink_to(external, target_is_directory=True)
+
+                with self.assertRaisesRegex(transactions.TransactionError, "without links"):
+                    store.prepare(
+                        transactions.TransactionPlan(
+                            ("edit", "replace"),
+                            (transactions.Change("story/a.md", b"secret", b"changed"),),
+                            {},
+                        ),
+                        transaction_id="tx-link",
+                    )
+
+                self.assertEqual([], list(external.iterdir()))
+
+    def test_prepare_rejects_symlinked_blobs_and_transaction_directory(self):
+        for component in ("blobs", "tx-link"):
+            with self.subTest(component=component):
+                store = self.make_store()
+                (store.project.root / ".creative-writing/transactions").mkdir(parents=True)
+                external = Path(self.directory.name) / "external"
+                external.mkdir()
+                (store.root / component).symlink_to(external, target_is_directory=True)
+
+                error = transactions.TransactionError if component == "blobs" else FileExistsError
+                with self.assertRaises(error):
+                    store.prepare(
+                        transactions.TransactionPlan(
+                            ("edit", "replace"),
+                            (transactions.Change("story/a.md", b"secret", b"changed"),),
+                            {},
+                        ),
+                        transaction_id="tx-link",
+                    )
+
+                self.assertEqual([], list(external.iterdir()))
+
+    def test_load_and_blob_read_reject_symlinked_journal_files(self):
+        store = self.make_store()
+        plan = transactions.TransactionPlan(
+            ("edit", "replace"),
+            (transactions.Change("story/a.md", b"old\n", b"new\n"),),
+            {},
+        )
+        store.prepare(plan, transaction_id="tx-files")
+        external_manifest = Path(self.directory.name) / "outside-manifest.json"
+        external_manifest.write_text('{"state": "committed"}\n', encoding="utf-8")
+        manifest = store.root / "tx-files/manifest.json"
+        manifest.unlink()
+        manifest.symlink_to(external_manifest)
+
+        with self.assertRaisesRegex(transactions.TransactionError, "without links"):
+            store.load("tx-files")
+        self.assertEqual('{"state": "committed"}\n', external_manifest.read_text())
+
+        blob_id = hashlib.sha256(b"old\n").hexdigest()
+        external_blob = Path(self.directory.name) / "outside-blob"
+        external_blob.write_bytes(b"outside secret")
+        blob = store.root / "blobs" / blob_id
+        blob.unlink()
+        blob.symlink_to(external_blob)
+
+        with self.assertRaisesRegex(transactions.TransactionError, "without links"):
+            store.read_blob(blob_id)
+        self.assertEqual(b"outside secret", external_blob.read_bytes())
+
+    def test_history_rejects_symlinked_transaction_entry(self):
+        store = self.make_store()
+        (store.project.root / ".creative-writing/transactions/blobs").mkdir(parents=True)
+        external = Path(self.directory.name) / "outside-history"
+        external.mkdir()
+        (store.root / "tx-link").symlink_to(external, target_is_directory=True)
+
+        with self.assertRaisesRegex(transactions.TransactionError, "without links"):
+            store.history()
+
+        self.assertEqual([], list(external.iterdir()))
+
+    def test_apply_rejects_symlinked_staged_sibling_before_journal_write(self):
+        store = self.make_store()
+        target = store.project.root / "story/a.md"
+        target.parent.mkdir(parents=True)
+        target.write_bytes(b"old\n")
+        engine = transactions.TransactionEngine(store.project)
+        staged = engine._temporary_path("tx-stage", "story/a.md")
+        external = Path(self.directory.name) / "outside-stage"
+        external.write_bytes(b"outside secret")
+        staged.symlink_to(external)
+
+        with self.assertRaisesRegex(transactions.TransactionError, "staged transaction sibling"):
+            engine.apply(
+                transactions.TransactionPlan(
+                    ("edit", "replace"),
+                    (transactions.Change("story/a.md", b"old\n", b"new\n"),),
+                    {},
+                ),
+                transaction_id="tx-stage",
+            )
+
+        self.assertFalse(store.root.exists())
+        self.assertEqual(b"old\n", target.read_bytes())
+        self.assertEqual(b"outside secret", external.read_bytes())
+
     def test_plan_metadata_is_an_immutable_snapshot_of_nested_json_data(self):
         metadata = {"nested": {"items": ["first"]}}
         plan = transactions.TransactionPlan(

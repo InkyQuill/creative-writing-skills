@@ -8,6 +8,7 @@ import hashlib
 import json
 import os
 import shutil
+import stat
 import tempfile
 import uuid
 import warnings
@@ -90,7 +91,12 @@ class TransactionStore:
 
         identifier = transaction_id or uuid.uuid4().hex
         transaction_dir = self._transaction_dir(identifier)
-        if transaction_dir.exists():
+        if self._require_transactions_directory(allow_missing=True) and _entry_exists(
+            transaction_dir
+        ):
+            raise FileExistsError(f"transaction already exists: {identifier}")
+        self._ensure_layout()
+        if _entry_exists(transaction_dir):
             raise FileExistsError(f"transaction already exists: {identifier}")
 
         manifest = {
@@ -104,9 +110,10 @@ class TransactionStore:
         }
         rendered_manifest = _render_json(manifest)
 
-        _mkdir_durable(transaction_dir.parent, self.directory_sync_hook)
+        self._require_transactions_directory()
         try:
             transaction_dir.mkdir()
+            _require_directory(transaction_dir, "transaction directory")
             self.directory_sync_hook(transaction_dir.parent)
         except FileExistsError as error:
             raise FileExistsError(f"transaction already exists: {identifier}") from error
@@ -114,6 +121,7 @@ class TransactionStore:
         try:
             self._write_json(transaction_dir / "manifest.json", rendered_manifest)
         except BaseException:
+            _require_directory(transaction_dir, "transaction directory")
             shutil.rmtree(transaction_dir)
             self.directory_sync_hook(transaction_dir.parent)
             raise
@@ -132,18 +140,16 @@ class TransactionStore:
     def history(self) -> tuple[dict[str, object], ...]:
         """Return newest-first manifest summaries without loading content blobs."""
 
-        if not self.root.is_dir():
+        if not self._require_transactions_directory(allow_missing=True):
             return ()
         entries: list[dict[str, object]] = []
         for transaction_dir in self.root.iterdir():
-            manifest_path = transaction_dir / "manifest.json"
-            if (
-                transaction_dir.is_symlink()
-                or not transaction_dir.is_dir()
-                or manifest_path.is_symlink()
-                or not manifest_path.is_file()
-            ):
+            if transaction_dir.name == "blobs":
+                _require_directory(transaction_dir, "transaction blob directory")
                 continue
+            manifest_path = transaction_dir / "manifest.json"
+            _require_directory(transaction_dir, "transaction directory")
+            _require_regular_file(manifest_path, "transaction manifest")
             transaction_id = transaction_dir.name
             manifest = self._read_manifest(transaction_id)
             changes = manifest.get("changes")
@@ -197,10 +203,11 @@ class TransactionStore:
             raise TypeError("blob data must be bytes")
 
         identifier = hashlib.sha256(data).hexdigest()
+        self._ensure_layout()
         blobs = self.root / "blobs"
-        _mkdir_durable(blobs, self.directory_sync_hook)
         destination = blobs / identifier
-        if destination.exists():
+        if _entry_exists(destination):
+            _require_regular_file(destination, "transaction blob")
             return identifier
 
         self._write_bytes(destination, data)
@@ -226,9 +233,21 @@ class TransactionStore:
         }
 
     def _read_manifest(self, transaction_id: str) -> dict[str, object]:
+        self._require_transactions_directory()
+        transaction_dir = self._transaction_dir(transaction_id)
+        _require_directory(transaction_dir, "transaction directory")
         manifest_path = self._transaction_dir(transaction_id) / "manifest.json"
-        with manifest_path.open(encoding="utf-8") as stream:
+        with _open_regular_file(manifest_path, "transaction manifest", text=True) as stream:
             return json.load(stream)
+
+    def read_blob(self, identifier: str) -> bytes:
+        """Read one snapshot without following any protected journal link."""
+
+        self._require_transactions_directory()
+        blobs = self.root / "blobs"
+        _require_directory(blobs, "transaction blob directory")
+        with _open_regular_file(blobs / identifier, "transaction blob") as stream:
+            return stream.read()
 
     def _transaction_dir(self, transaction_id: str) -> Path:
         if not isinstance(transaction_id, str) or not transaction_id:
@@ -238,7 +257,30 @@ class TransactionStore:
             raise ValueError("transaction id must be a single path component")
         return self.root / transaction_id
 
+    def _ensure_layout(self) -> None:
+        protected = self.project.root / ".creative-writing"
+        _mkdir_durable(protected, self.directory_sync_hook)
+        _mkdir_durable(self.root, self.directory_sync_hook)
+        _mkdir_durable(self.root / "blobs", self.directory_sync_hook)
+
+    def _require_transactions_directory(self, *, allow_missing: bool = False) -> bool:
+        protected = self.project.root / ".creative-writing"
+        if not _entry_exists(protected):
+            if allow_missing:
+                return False
+            raise TransactionError("protected .creative-writing directory is missing")
+        _require_directory(protected, "protected .creative-writing directory")
+        if not _entry_exists(self.root):
+            if allow_missing:
+                return False
+            raise TransactionError("transaction directory is missing")
+        _require_directory(self.root, "transaction directory")
+        return True
+
     def _write_json(self, destination: Path, rendered: str) -> None:
+        _require_directory(destination.parent, "journal write directory")
+        if _entry_exists(destination):
+            _require_regular_file(destination, "transaction manifest")
         stream = tempfile.NamedTemporaryFile(
             mode="w",
             encoding="utf-8",
@@ -253,6 +295,9 @@ class TransactionStore:
                 stream.write(rendered)
                 stream.flush()
                 os.fsync(stream.fileno())
+            _require_directory(destination.parent, "journal write directory")
+            if _entry_exists(destination):
+                _require_regular_file(destination, "transaction manifest")
             self.directory_sync_hook(destination.parent)
             os.replace(temporary, destination)
             self.directory_sync_hook(destination.parent)
@@ -268,6 +313,9 @@ class TransactionStore:
             raise
 
     def _write_bytes(self, destination: Path, data: bytes) -> None:
+        _require_directory(destination.parent, "journal write directory")
+        if _entry_exists(destination):
+            raise TransactionError(f"journal destination already exists: {destination.name}")
         stream = tempfile.NamedTemporaryFile(
             mode="wb",
             dir=destination.parent,
@@ -281,6 +329,9 @@ class TransactionStore:
                 stream.write(data)
                 stream.flush()
                 os.fsync(stream.fileno())
+            _require_directory(destination.parent, "journal write directory")
+            if _entry_exists(destination):
+                raise TransactionError(f"journal destination already exists: {destination.name}")
             self.directory_sync_hook(destination.parent)
             os.replace(temporary, destination)
             self.directory_sync_hook(destination.parent)
@@ -329,7 +380,15 @@ class TransactionEngine:
         """Apply ``plan`` only while every exact before-snapshot still matches."""
 
         self._validate_plan(plan)
-        prepared = self.store.prepare(plan, transaction_id=transaction_id)
+        identifier = transaction_id or uuid.uuid4().hex
+        for change in plan.changes:
+            if change.after is not None:
+                temporary = self._temporary_path(identifier, change.path)
+                if _entry_exists(temporary):
+                    raise TransactionError(
+                        f"staged transaction sibling already exists for {change.path}"
+                    )
+        prepared = self.store.prepare(plan, transaction_id=identifier)
         completed: list[str] = []
         intents: list[str] = []
 
@@ -722,13 +781,21 @@ class TransactionEngine:
 
     def _remove_temporary(self, transaction_id: str, path: str) -> None:
         temporary = self._temporary_path(transaction_id, path)
-        if temporary.exists() or temporary.is_symlink():
+        if _entry_exists(temporary):
+            _require_regular_file(temporary, "staged transaction sibling")
             temporary.unlink()
             self.directory_sync_hook(temporary.parent)
 
     def _write_staged_bytes(self, transaction_id: str, path: str, data: bytes) -> Path:
         destination = self._temporary_path(transaction_id, path)
-        descriptor = os.open(destination, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        _require_directory(destination.parent, "transaction target directory")
+        if _entry_exists(destination):
+            raise TransactionError(f"staged transaction sibling already exists for {path}")
+        descriptor = os.open(
+            destination,
+            os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0),
+            0o600,
+        )
         try:
             with os.fdopen(descriptor, "wb") as stream:
                 descriptor = -1
@@ -923,7 +990,7 @@ class TransactionEngine:
             or any(character not in "0123456789abcdef" for character in identifier)
         ):
             raise ValueError("blob identifier must be a lowercase SHA-256 digest")
-        data = (self.store.root / "blobs" / identifier).read_bytes()
+        data = self.store.read_blob(identifier)
         if hashlib.sha256(data).hexdigest() != identifier:
             raise ValueError(f"blob content does not match identifier {identifier}")
         return data
@@ -938,7 +1005,11 @@ def _fsync_directory(directory: Path) -> bool:
     crash durability of directory entries remains explicitly best-effort.
     """
 
-    flags = os.O_RDONLY | getattr(os, "O_DIRECTORY", 0)
+    flags = (
+        os.O_RDONLY
+        | getattr(os, "O_DIRECTORY", 0)
+        | getattr(os, "O_NOFOLLOW", 0)
+    )
     try:
         descriptor = os.open(directory, flags)
     except OSError as error:
@@ -953,6 +1024,8 @@ def _fsync_directory(directory: Path) -> bool:
         raise
 
     try:
+        if not stat.S_ISDIR(os.fstat(descriptor).st_mode):
+            raise NotADirectoryError(f"not an ordinary directory: {directory}")
         os.fsync(descriptor)
     except OSError as error:
         if _directory_fsync_unsupported(error):
@@ -987,27 +1060,72 @@ def _directory_fsync_unsupported(error: OSError) -> bool:
 def _mkdir_durable(directory: Path, sync_hook: Callable[[Path], object]) -> None:
     missing: list[Path] = []
     current = directory
-    while not current.exists():
+    while not _entry_exists(current):
         missing.append(current)
         if current.parent == current:
             break
         current = current.parent
-    directory.mkdir(parents=True, exist_ok=True)
+    _require_directory(current, "journal directory ancestor")
     for created in reversed(missing):
+        _require_directory(created.parent, "journal directory parent")
+        created.mkdir()
+        _require_directory(created, "journal directory")
         sync_hook(created.parent)
+    _require_directory(directory, "journal directory")
 
 
 def _remove_internal_file(
     path: Path, sync_hook: Callable[[Path], object]
 ) -> BaseException | None:
-    if not path.exists() and not path.is_symlink():
+    if not _entry_exists(path):
         return None
     try:
+        _require_regular_file(path, "internal temporary file")
         path.unlink()
         sync_hook(path.parent)
     except BaseException as error:
         return error
     return None
+
+
+def _entry_exists(path: Path) -> bool:
+    try:
+        os.lstat(path)
+    except FileNotFoundError:
+        return False
+    return True
+
+
+def _require_directory(path: Path, label: str) -> None:
+    try:
+        mode = os.lstat(path).st_mode
+    except FileNotFoundError as error:
+        raise TransactionError(f"{label} is missing: {path}") from error
+    if not stat.S_ISDIR(mode):
+        raise TransactionError(f"{label} must be an ordinary directory without links: {path}")
+
+
+def _require_regular_file(path: Path, label: str) -> None:
+    try:
+        mode = os.lstat(path).st_mode
+    except FileNotFoundError as error:
+        raise TransactionError(f"{label} is missing: {path}") from error
+    if not stat.S_ISREG(mode):
+        raise TransactionError(f"{label} must be an ordinary file without links: {path}")
+
+
+def _open_regular_file(path: Path, label: str, *, text: bool = False):
+    _require_regular_file(path, label)
+    descriptor = os.open(path, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0))
+    try:
+        if not stat.S_ISREG(os.fstat(descriptor).st_mode):
+            raise TransactionError(f"{label} must be an ordinary file without links: {path}")
+        if text:
+            return os.fdopen(descriptor, "r", encoding="utf-8")
+        return os.fdopen(descriptor, "rb")
+    except BaseException:
+        os.close(descriptor)
+        raise
 
 
 def _ordered_union(*groups: tuple[str, ...]) -> tuple[str, ...]:

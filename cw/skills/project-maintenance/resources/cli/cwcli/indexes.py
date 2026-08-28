@@ -50,7 +50,14 @@ def plan_reindex(project: Project) -> TransactionPlan:
     for path in project.iter_managed_markdown():
         relative_id = project.relative_id(path)
         kind = allowed_document_kind(relative_id)
-        if kind not in {"chapter", "work-artifact", "kb-content", "continuity-scene"}:
+        if kind not in {
+            "chapter",
+            "work-artifact",
+            "kb-content",
+            "continuity-scene",
+            "continuity-record",
+            "vocabulary",
+        }:
             continue
         if relative_id.startswith("work/archive/"):
             continue

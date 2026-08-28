@@ -28,6 +28,50 @@ class IndexTests(unittest.TestCase):
             self.assertEqual((), plan.changes)
             self.assertEqual(("reindex",), plan.command)
 
+    def test_fixed_kb_documents_are_in_complete_scaffold_indexes(self):
+        rendered = scaffold.render_scaffold("Index Test", "en")
+
+        kb_index = rendered["kb/_index.md"].decode("utf-8")
+        continuity_index = rendered["kb/continuity/_index.md"].decode("utf-8")
+        self.assertIn('`kb/vocab.md` — title="Vocabulary"', kb_index)
+        for name, title in (
+            ("timeline", "Timeline"),
+            ("state", "State"),
+            ("promises", "Promises"),
+            ("questions", "Questions"),
+        ):
+            entry = f'`kb/continuity/{name}.md` — title="{title}"'
+            self.assertIn(entry, kb_index)
+            self.assertIn(entry, continuity_index)
+
+    def test_reindex_tracks_fixed_document_type_specific_fields(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            story = make_project(root)
+            (root / "kb/vocab.md").write_text(
+                "---\ntitle: Terms\nstatus: active\n---\n", encoding="utf-8"
+            )
+            (root / "kb/continuity/timeline.md").write_text(
+                "---\ntitle: Events\nstatus: stable\n---\n", encoding="utf-8"
+            )
+
+            plan = indexes.plan_reindex(story)
+            kb_index = next(change.after for change in plan.changes if change.path == "kb/_index.md")
+            continuity_index = next(
+                change.after for change in plan.changes
+                if change.path == "kb/continuity/_index.md"
+            )
+
+            assert kb_index is not None and continuity_index is not None
+            self.assertIn(
+                '`kb/vocab.md` — title="Terms"; status="active"',
+                kb_index.decode("utf-8"),
+            )
+            self.assertIn(
+                '`kb/continuity/timeline.md` — title="Events"; status="stable"',
+                continuity_index.decode("utf-8"),
+            )
+
     def test_indexes_are_sorted_and_include_type_specific_frontmatter(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

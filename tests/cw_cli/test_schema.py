@@ -76,7 +76,10 @@ class ScaffoldTests(unittest.TestCase):
             with self.subTest(relative_id=relative_id):
                 parsed = documents.parse_document(rendered[relative_id])
                 self.assertEqual({"generated": True}, parsed.metadata)
-                self.assertRegex(parsed.body, r"^# .+\n\n<!-- generated registry -->\n$")
+                self.assertRegex(
+                    parsed.body,
+                    r"^# .+\n\n<!-- generated registry -->\n(?:\n(?:- `[^`]+`(?: — .+)?\n)+)?$",
+                )
 
     def test_renderer_can_materialize_the_minimal_project_fixture(self):
         with tempfile.TemporaryDirectory() as directory:

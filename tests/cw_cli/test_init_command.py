@@ -40,6 +40,11 @@ class InitCommandTests(unittest.TestCase):
             self.assertTrue((root / "project.md").is_file())
             self.assertTrue((root / ".creative-writing/context").is_dir())
             self.assertTrue((root / ".creative-writing/transactions").is_dir())
+            self.assertIn("kb/vocab.md", (root / "kb/_index.md").read_text())
+            self.assertIn(
+                "kb/continuity/timeline.md",
+                (root / "kb/continuity/_index.md").read_text(),
+            )
             manifest = root / ".creative-writing/transactions" / result["transaction_id"] / "manifest.json"
             self.assertFalse(json.loads(manifest.read_text())["metadata"]["undoable"])
 
