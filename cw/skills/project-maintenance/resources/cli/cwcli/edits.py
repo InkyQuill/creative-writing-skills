@@ -74,24 +74,22 @@ def plan_edits(project: Project, operations: Iterable[EditOperation]) -> Transac
         targets.setdefault(relative, target)
 
     originals: dict[str, bytes] = {}
-    documents: dict[str, Document] = {}
     for relative, target in targets.items():
         try:
             source = target.read_bytes()
-            document = parse_document(source)
+            parse_document(source)
         except (OSError, UnicodeError, DocumentError) as error:
             raise EditPlanError(f"cannot read edit target {relative}: {error}") from error
         originals[relative] = source
-        documents[relative] = document
 
+    working = dict(originals)
     for operation in validated:
         relative = operation["path"]
         assert isinstance(relative, str)
-        document = documents[relative]
-        documents[relative] = _apply_operation(document, operation)
+        working[relative] = _apply_operation(working[relative], operation, relative)
 
     changes = tuple(
-        Change(relative, originals[relative], render_document(documents[relative]))
+        Change(relative, originals[relative], working[relative])
         for relative in targets
     )
     return TransactionPlan(
@@ -116,6 +114,7 @@ def _validate_operations(operations: Iterable[EditOperation]) -> tuple[EditOpera
         operation = dict(candidate)
         if not all(isinstance(key, str) for key in operation):
             raise EditPlanError(f"operation {index} field names must be strings")
+        _validate_unicode_strings(operation, index)
         kind = operation.get("op")
         if not isinstance(kind, str) or kind not in {*_TEXT_OPERATION_FIELDS, "frontmatter-set"}:
             raise EditPlanError(f"operation {index} has unknown operation kind: {kind!r}")
@@ -194,7 +193,12 @@ def _validate_frontmatter_operation(operation: dict[str, object], index: int) ->
         raise EditPlanError(f"operation {index} value has an unsupported frontmatter type")
 
 
-def _apply_operation(document: Document, operation: EditOperation) -> Document:
+def _apply_operation(source: bytes, operation: EditOperation, relative: str) -> bytes:
+    try:
+        document = parse_document(source)
+    except (UnicodeError, DocumentError) as error:
+        raise EditPlanError(f"cannot safely edit malformed document {relative}: {error}") from error
+
     kind = operation["op"]
     if kind == "frontmatter-set":
         metadata = dict(document.metadata)
@@ -203,7 +207,7 @@ def _apply_operation(document: Document, operation: EditOperation) -> Document:
         assert isinstance(key, str)
         assert isinstance(value, (str, int, bool, list))
         metadata[key] = value
-        return replace(document, metadata=metadata)
+        return render_document(replace(document, metadata=metadata))
 
     normalized_body = _normalize_newlines(document.body)
     anchor_key = "anchor" if kind in {"insert-before", "insert-after"} else "old"
@@ -223,11 +227,62 @@ def _apply_operation(document: Document, operation: EditOperation) -> Document:
         replacement = ""
     normalized_replacement = _normalize_newlines(str(replacement))
     edited = normalized_body.replace(normalized_anchor, normalized_replacement)
-    return replace(document, body=edited.replace("\n", document.newline))
+    rendered_body = edited.replace("\n", document.newline).encode("utf-8")
+    prefix = _raw_document_prefix(source, document)
+    rendered = prefix + rendered_body
+
+    try:
+        reparsed = parse_document(rendered)
+    except (UnicodeError, DocumentError) as error:
+        raise EditPlanError(
+            f"text edit would create an invalid frontmatter boundary in {relative}: {error}"
+        ) from error
+    if (
+        _has_frontmatter(source) != _has_frontmatter(rendered)
+        or reparsed.metadata != document.metadata
+    ):
+        raise EditPlanError(
+            f"text edit would change frontmatter or protected lifecycle metadata in {relative}"
+        )
+    return rendered
+
+
+def _raw_document_prefix(source: bytes, document: Document) -> bytes:
+    body = document.body.encode("utf-8")
+    if body:
+        if not source.endswith(body):
+            raise EditPlanError("document body does not match its exact source bytes")
+        return source[: -len(body)]
+    return source
+
+
+def _has_frontmatter(source: bytes) -> bool:
+    text = source.decode("utf-8-sig")
+    first_line = text.splitlines(keepends=False)[:1]
+    return bool(first_line and first_line[0] == "---")
 
 
 def _normalize_newlines(text: str) -> str:
     return text.replace("\r\n", "\n").replace("\r", "\n")
+
+
+def _validate_unicode_strings(value: object, index: int) -> None:
+    if isinstance(value, str):
+        try:
+            value.encode("utf-8")
+        except UnicodeEncodeError as error:
+            raise EditPlanError(
+                f"operation {index} contains text that is not valid Unicode scalar data"
+            ) from error
+        return
+    if isinstance(value, Mapping):
+        for key, item in value.items():
+            _validate_unicode_strings(key, index)
+            _validate_unicode_strings(item, index)
+        return
+    if isinstance(value, (list, tuple)):
+        for item in value:
+            _validate_unicode_strings(item, index)
 
 
 def _json_object(pairs: list[tuple[str, object]]) -> dict[str, object]:

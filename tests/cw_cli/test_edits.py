@@ -121,6 +121,24 @@ class EditPlanningTests(unittest.TestCase):
         )
         self.assertEqual(before, target.read_bytes())
 
+    def test_body_edit_preserves_raw_frontmatter_prefix_byte_for_byte(self):
+        prefix = b'\xef\xbb\xbf---\r\n# Keep this comment\r\ntitle: "Rain: quoted"\r\nlabels:\r\n  - one\r\n---\r\n'
+        target = self.make_file("story/chapters/ch-001.md", prefix + b"Old body.\r\n")
+        plan = edits.plan_edits(
+            self.project,
+            [
+                {
+                    "op": "replace",
+                    "path": "story/chapters/ch-001.md",
+                    "old": "Old body.",
+                    "new": "New body.",
+                }
+            ],
+        )
+
+        self.assertEqual(prefix + b"New body.\r\n", plan.changes[0].after)
+        self.assertEqual(prefix + b"Old body.\r\n", target.read_bytes())
+
     def test_frontmatter_set_preserves_body_and_supports_regular_values(self):
         self.make_file(
             "story/chapters/ch-001.md",
@@ -191,6 +209,55 @@ class EditPlanningTests(unittest.TestCase):
 
         with self.assertRaisesRegex(edits.EditPlanError, "field names must be strings"):
             edits.plan_edits(self.project, [{"op": "delete", "path": "story/a.md", "old": "x", 1: "bad"}])
+
+    def test_lone_surrogate_is_rejected_before_any_target_is_read(self):
+        self.make_file("story/chapters/ch-001.md", "Rain.\n")
+        original_read_bytes = Path.read_bytes
+        reads: list[Path] = []
+
+        def tracked_read_bytes(path: Path) -> bytes:
+            reads.append(path)
+            return original_read_bytes(path)
+
+        with mock.patch.object(Path, "read_bytes", tracked_read_bytes):
+            with self.assertRaisesRegex(edits.EditPlanError, "Unicode scalar"):
+                edits.plan_edits(
+                    self.project,
+                    [
+                        {"op": "delete", "path": "story/chapters/ch-001.md", "old": "Rain."},
+                        {
+                            "op": "replace",
+                            "path": "story/chapters/ch-001.md",
+                            "old": "Rain.",
+                            "new": "\ud800",
+                        },
+                    ],
+                )
+        self.assertEqual([], reads)
+
+    def test_text_edit_cannot_create_frontmatter_or_edit_malformed_document(self):
+        plain = self.make_file("story/chapters/plain.md", "Body.\n")
+        malformed = self.make_file("story/chapters/malformed.md", "---\nstatus: working\nBody.\n")
+
+        with self.assertRaisesRegex(edits.EditPlanError, "change frontmatter"):
+            edits.plan_edits(
+                self.project,
+                [
+                    {
+                        "op": "replace",
+                        "path": "story/chapters/plain.md",
+                        "old": "Body.",
+                        "new": "---\nstatus: ready\n---\nBody.",
+                    }
+                ],
+            )
+        with self.assertRaisesRegex(edits.EditPlanError, "cannot read edit target"):
+            edits.plan_edits(
+                self.project,
+                [{"op": "delete", "path": "story/chapters/malformed.md", "old": "Body."}],
+            )
+        self.assertEqual(b"Body.\n", plain.read_bytes())
+        self.assertEqual(b"---\nstatus: working\nBody.\n", malformed.read_bytes())
 
     def test_load_operations_validates_strict_json_schema(self):
         plans = Path(self.directory.name) / "plans"
