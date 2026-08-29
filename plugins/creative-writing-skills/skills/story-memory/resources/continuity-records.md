@@ -96,7 +96,7 @@ use the full chapter-scene citation in `Introduced` and `Answered`.
 ## State Snapshot
 
 `state.md` — the mutable present at the writing front. Rewritten as the story
-advances; the other records in the selected continuity root keep durable
+advances; the other records in the canonical continuity root keep durable
 chronology and lifecycle history, while this file keeps only current state.
 
 ```markdown
@@ -149,14 +149,15 @@ appear in `Mentions` after their death, never in `Present`.
 
 ## Updating the Records
 
-Records update when decisions settle, not during exploration: after the author
-accepts prose, confirms a decision, or an edit lands. Fact extraction writes
-scene records and timeline rows from the accepted chapter, moves promises and
-questions to their new statuses, and refreshes `state.md` to the new writing
-front. An edit that changes events, knowledge, or deaths ripples into the same
-records before the pass reports done. When a record and the prose disagree,
-the record is flagged to the author — the author decides canon; agents never
-quietly re-time, re-cast, or resolve.
+Records change only after a separate promotion decision, not merely because the
+author accepts prose, confirms an edit, or exploration ends. Fact extraction
+proposes scene records and timeline rows, promise and question status changes,
+and a refreshed `state.md`; acceptance does not promote or write them. Show the
+facts, evidence, and exact destinations for separate author confirmation, then
+use `$project-maintenance` to preview and apply the recoverable transaction. If
+the applied update was mistaken, preview `cw undo <transaction-id>`. When a
+record and prose disagree, flag it to the author — the author decides canon;
+agents never quietly re-time, re-cast, resolve, or write around the conflict.
 
 ## Deterministic Check First
 

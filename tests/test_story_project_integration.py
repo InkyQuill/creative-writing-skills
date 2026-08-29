@@ -66,6 +66,25 @@ class StoryProjectIntegrationTests(unittest.TestCase):
         self.assertIn("cw check continuity", text)
         self.assertRegex(text, r"(?is)(author|direct).{0,80}edits?.{0,120}(valid|tolerat|preserv)")
 
+    def test_story_memory_tree_uses_only_canonical_artifact_roots(self):
+        text = all_runtime_markdown("story-memory")
+        for path in ("kb/continuity/", "work/plans/", "work/reviews/"):
+            self.assertIn(path, text)
+        for rejected in ("plot/", "work/outline/", "work/critique-reports/"):
+            self.assertNotIn(rejected, text)
+        self.assertNotRegex(text, r"(?is)(selected|configured|swappable).{0,100}continuity root")
+
+    def test_story_memory_tree_proposes_then_transacts_kb_promotion(self):
+        text = all_runtime_markdown("story-memory")
+        self.assertNotIn("Fact extraction writes", text)
+        self.assertNotRegex(text, r"(?is)then write the chapter's scene record")
+        self.assertNotRegex(text, r"(?is)when a work item completes, promote")
+        self.assertRegex(text, r"(?is)fact extraction.{0,220}proposal")
+        self.assertRegex(text, r"(?is)acceptance.{0,180}(does not|never).{0,160}(promot|KB write)")
+        self.assertRegex(text, r"(?is)promotion.{0,240}separate author confirmation")
+        self.assertRegex(text, r"(?is)promotion.{0,320}previewed,?\s+recoverable.{0,160}\$project-maintenance.{0,120}transaction")
+        self.assertIn("cw undo", text)
+
     def test_kb_paths_match_schema_v1_allowed_locations(self):
         text = all_runtime_markdown("kb-management")
         allowed_paths = (

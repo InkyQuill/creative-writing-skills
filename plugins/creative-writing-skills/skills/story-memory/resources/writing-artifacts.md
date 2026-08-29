@@ -6,18 +6,22 @@ description: >
 
 # Writing Artifacts
 
-- Durable project knowledge lives in the kb directory. Look for `kb/` in the project root or check project docs for the configured location. Continuity records — timeline, promises, questions, state snapshot, scene records — live in the project's continuity root (`kb/` or `plot/` per layout); see `resources/continuity-records.md` for their formats.
-- Work scratch lives in the work directory, scoped to the current task and archived on completion.
-- Project-specific structure (kb subdirectories, author's space, conventions) is documented in the project's instructions. Read them for this project's layout.
+- Durable project knowledge lives in canonical `kb/`. Continuity records —
+  timeline, promises, questions, state snapshot, and scene records — live only
+  under `kb/continuity/`; see `resources/continuity-records.md` for formats.
+- Work scratch lives in canonical `work/`, scoped to the current task and
+  archived on completion.
+- Project-specific semantic conventions live in the body of `project.md`, but
+  they do not replace or customize the schema-v1 managed roots.
 
 ## Work Layout
 
 ```text
-work/
-  outline/               # current outline being worked
-  drafts/                # draft iterations (v1, v2, etc.)
-  critique-reports/      # critic output for each round
-  brainstorm/            # brainstorm captures and synthesis
+work/plans/              # outlines and current plans
+work/drafts/             # draft iterations
+work/reviews/            # critique and review reports
+work/brainstorm/         # brainstorm captures and synthesis
+work/archive/            # completed or abandoned work artifacts
 ```
 
 ## Shared Workspace
@@ -36,7 +40,10 @@ always authoritative.
 
 ## Promotion
 
-When a work item completes, promote *knowledge* from work to kb: not raw artifacts. Brainstorm captures and draft iterations stay archived in the work item.
+Completing or accepting a work item only makes durable facts eligible for a
+promotion proposal; it never performs a KB write. Propose the knowledge rather
+than raw artifacts, with exact destinations and source evidence. Brainstorm
+captures and draft iterations stay in work storage.
 
 Preserve provenance during promotion. Untagged author-stated text remains untagged.
 Preserve `<AI>...</AI>` markers around AI suggestions; promotion does
@@ -45,6 +52,7 @@ content unless the author explicitly confirms both the fact and its destination
 in durable knowledge. Even after that confirmation, preserve any knowledge
 boundary the author assigns.
 
-## Convention Is Swappable
-
-This skill defines convention. A project can replace it without touching agent bodies.
+KB promotion requires separate author confirmation. After confirmation, perform
+it as a previewed, recoverable `$project-maintenance` transaction, then apply
+only that reviewed transaction. If it was mistaken, inspect history and preview
+`cw undo <transaction-id>`; never reconstruct earlier bytes from memory.
