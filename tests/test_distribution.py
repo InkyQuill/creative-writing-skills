@@ -33,7 +33,7 @@ EXPECTED_SKILLS = {
     "character-sim", "cli-doctor", "creative-research", "creative-writing-craft",
     "creative-writing-modes", "creative-writing-muse", "decision-grill",
     "information-hierarchy", "intent-modeling", "kb-management",
-    "knowledge-layers", "llm-writing", "md-validation", "project-doctor",
+    "knowledge-layers", "llm-writing", "md-validation", "project-bootstrap", "project-doctor",
     "project-feedback", "project-maintenance", "project-setup", "qi-layer",
     "reader-sim", "reflect", "shared-dao", "story-memory",
     "story-planning", "story-review", "structured-artifact",
@@ -44,7 +44,7 @@ EXPECTED_SKILLS = {
 EXPECTED_AUTHORED_SKILLS = {
     "character-sim", "cli-doctor", "creative-research", "creative-writing-craft",
     "creative-writing-modes", "creative-writing-muse", "kb-management",
-    "project-doctor", "project-feedback", "project-maintenance", "project-setup",
+    "project-bootstrap", "project-doctor", "project-feedback", "project-maintenance", "project-setup",
     "reader-sim", "shared-dao", "story-memory", "story-planning", "story-review",
     "targeted-editing", "world-creation", "writing-principles", "writing-staffing",
 }
@@ -73,6 +73,36 @@ PRESSURE_RESULTS = REPO_ROOT / "tests" / "fixtures" / "muse-pressure" / "results
 
 
 class DistributionScaffoldTests(unittest.TestCase):
+    def test_project_bootstrap_defines_portable_entrypoint_contract(self):
+        skill_root = PLUGIN_ROOT / "skills" / "project-bootstrap"
+        skill = (skill_root / "SKILL.md").read_text()
+        reconciliation = (
+            skill_root / "resources" / "entrypoint-reconciliation.md"
+        ).read_text()
+
+        for platform in ("Codex", "Pi", "OpenCode", "ZCode", "MiMo Code"):
+            self.assertIn(platform, skill)
+        self.assertIn("regular sibling `CLAUDE.md`", skill)
+        self.assertIn("first line is exactly `@AGENTS.md`", skill)
+        self.assertIn("Do not create filesystem symlinks by default", skill)
+        self.assertIn("unreliable on Windows", skill)
+        self.assertIn("Only regular `AGENTS.md` exists", reconciliation)
+        self.assertIn("needs no additional confirmation", reconciliation)
+        self.assertIn("Only regular `CLAUDE.md` exists", reconciliation)
+        self.assertIn("materially ambiguous", reconciliation)
+        self.assertIn("Both regular files exist", reconciliation)
+        self.assertIn("contradictory or ambiguously divergent", reconciliation)
+        self.assertIn("each nested directory", reconciliation)
+
+    def test_instruction_writers_route_through_project_bootstrap(self):
+        routed = {
+            "qi-layer", "knowledge-layers", "project-setup", "shared-dao",
+            "reflect", "decision-grill",
+        }
+        for name in routed:
+            text = (PLUGIN_ROOT / "skills" / name / "SKILL.md").read_text()
+            self.assertIn("$project-bootstrap", text, name)
+
     def test_structured_artifact_audit_is_deterministic_and_current(self):
         skill_root = PLUGIN_ROOT / "skills" / "structured-artifact"
         expected = load_json(
@@ -281,7 +311,7 @@ class DistributionScaffoldTests(unittest.TestCase):
         ):
             self.assertIn(path, text)
         self.assertRegex(text, r"(?is)body of.{0,80}`project\.md`.{0,180}(durable|writing contract)")
-        self.assertRegex(text, r"(?is)platform instruction files?.{0,180}(unmanaged|optional)")
+        self.assertRegex(text, r"(?is)resolved project instructions.{0,180}(unmanaged|optional)")
 
     def test_llm_writing_requires_an_authorized_artifact_path_for_disk_drafts(self):
         text = (PLUGIN_ROOT / "skills/llm-writing/SKILL.md").read_text()
@@ -549,7 +579,7 @@ class DistributionScaffoldTests(unittest.TestCase):
         self.assertEqual(config["authored_skills"], sorted(EXPECTED_AUTHORED_SKILLS))
         self.assertEqual(config["vendored_skills"], sorted(EXPECTED_VENDORED_SKILLS))
         self.assertEqual(
-            (30, 20, 10),
+            (31, 21, 10),
             tuple(
                 len(config[field])
                 for field in (
@@ -2085,7 +2115,18 @@ class ValidatorTests(unittest.TestCase):
             "Read `CLAUDE.md` before continuing.\n"
         )
         self.assertIn(
-            "story-memory: Claude-only vocabulary CLAUDE.md",
+            "story-memory: hard-coded project instruction entrypoint CLAUDE.md",
+            validate(self.root),
+        )
+
+    def test_validator_rejects_hard_coded_agents_entrypoint_outside_bootstrap(self):
+        skill = self.skills / "story-memory" / "SKILL.md"
+        skill.write_text(
+            "---\nname: story-memory\ndescription: Demo.\n---\n"
+            "Read `AGENTS.md` before continuing.\n"
+        )
+        self.assertIn(
+            "story-memory: hard-coded project instruction entrypoint AGENTS.md",
             validate(self.root),
         )
 

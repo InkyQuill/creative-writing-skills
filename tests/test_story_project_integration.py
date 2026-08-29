@@ -34,8 +34,8 @@ class StoryProjectIntegrationTests(unittest.TestCase):
         for path in ("project.md", "story/chapters/", "work/drafts/", "kb/continuity/"):
             self.assertIn(path, text)
         self.assertRegex(text, r"(?is)body of.{0,80}`project\.md`.{0,180}(durable|writing contract)")
-        self.assertRegex(text, r"(?is)(AGENTS\.md|platform instruction).{0,180}(unmanaged|optional)")
-        self.assertNotRegex(text, r"(?is)(working|durable|project-specific) `AGENTS\.md`")
+        self.assertRegex(text, r"(?is)resolved project instructions.{0,180}(unmanaged|optional)")
+        self.assertNotRegex(text, r"(?is)(working|durable|project-specific) project instructions")
 
     def test_setup_routes_legacy_content_through_reviewed_migration_preview(self):
         text = all_runtime_markdown("project-setup")

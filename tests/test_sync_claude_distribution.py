@@ -42,6 +42,7 @@ EXPECTED_SKILLS = {
     "llm-writing",
     "md-validation",
     "project-doctor",
+    "project-bootstrap",
     "project-feedback",
     "project-maintenance",
     "project-setup",
@@ -202,10 +203,10 @@ class ClaudeTransformTests(unittest.TestCase):
             disable_model_invocation=True,
         )
 
-        self.assertIn("description: \"Use /story-memory when updating CLAUDE.md.\"", rendered)
+        self.assertIn("description: \"Use /story-memory when updating AGENTS.md.\"", rendered)
         self.assertIn("disable-model-invocation: true", rendered)
         self.assertIn('argument-hint: "Optional focus"', rendered)
-        self.assertNotIn("AGENTS.md", rendered)
+        self.assertNotIn("CLAUDE.md", rendered)
         self.assertNotIn("$story-memory", rendered)
 
     def test_skill_transform_omits_unconfigured_claude_flag(self):
@@ -231,7 +232,7 @@ class ClaudeTransformTests(unittest.TestCase):
         ):
             transform_skill(source, "demo")
 
-    def test_skill_transform_uses_claude_instruction_names(self):
+    def test_skill_transform_preserves_agent_agnostic_instruction_names(self):
         source = (
             "---\n"
             "name: demo\n"
@@ -242,9 +243,9 @@ class ClaudeTransformTests(unittest.TestCase):
 
         rendered = transform_skill(source, "demo")
 
-        self.assertIn("Read CLAUDE.md", rendered)
+        self.assertIn("Read AGENTS.md", rendered)
         self.assertIn("/story-memory", rendered)
-        self.assertNotIn("AGENTS.md", rendered)
+        self.assertNotIn("CLAUDE.md", rendered)
         self.assertNotIn("$story-memory", rendered)
 
     def test_worker_renders_as_claude_agent(self):
@@ -429,19 +430,24 @@ class ClaudeDistributionRenderTests(unittest.TestCase):
                 output_root
                 / "skills/knowledge-layers/resources/bootstrap.md"
             ).read_text()
+            project_bootstrap = (
+                output_root / "skills/project-bootstrap/SKILL.md"
+            ).read_text()
             worker_resource = (
                 output_root
                 / "skills/creative-writing-muse/resources/workers/critic.md"
             ).read_text()
-            self.assertIn("CLAUDE.md", project_setup)
+            self.assertIn("Resolved project instructions", project_setup)
             self.assertNotIn("AGENTS.md", project_setup)
+            self.assertNotIn("CLAUDE.md", project_setup)
             self.assertIn(
                 "authored body is the durable writing contract",
                 project_setup,
             )
             self.assertIn("remain unmanaged", project_setup)
-            self.assertIn("Project conventions in `CLAUDE.md`", grill)
+            self.assertIn("Resolved project instructions", grill)
             self.assertNotIn("AGENTS.md", grill)
+            self.assertNotIn("CLAUDE.md", grill)
             for resource in (
                 "creative-direction.md",
                 "brainstorming.md",
@@ -449,16 +455,15 @@ class ClaudeDistributionRenderTests(unittest.TestCase):
             ):
                 self.assertIn(f"`resources/{resource}`", story_planning)
             self.assertNotIn("AGENTS.md", qi_layer)
-            self.assertIn(
-                "instruction filename required by the active harness", qi_layer
-            )
-            self.assertIn("must never import itself", qi_layer)
-            self.assertNotIn("CLAUDE.md, not CLAUDE.md", qi_layer)
-            self.assertNotIn("sibling CLAUDE.md", qi_layer)
-            self.assertNotIn("@CLAUDE.md", qi_layer)
-            self.assertIn("{instruction-file}", bootstrap)
-            self.assertIn("## Starter instruction file", bootstrap)
+            self.assertNotIn("CLAUDE.md", qi_layer)
+            self.assertIn("`/project-bootstrap` owns filenames", qi_layer)
+            self.assertIn("{project-instructions}", bootstrap)
+            self.assertIn("## Starter project instructions", bootstrap)
             self.assertNotIn("AGENTS.md", bootstrap)
+            self.assertNotIn("CLAUDE.md", bootstrap)
+            self.assertIn("AGENTS.md", project_bootstrap)
+            self.assertIn("CLAUDE.md", project_bootstrap)
+            self.assertIn("ZCode does not expand", project_bootstrap)
             self.assertIn("Use `/md-validation` for link checking", bootstrap)
             self.assertNotIn("Use `$md-validation` for link checking", bootstrap)
             for path in (
@@ -1055,7 +1060,7 @@ class ClaudeDistributionCliTests(unittest.TestCase):
                 apply_status = main(["--apply"], repo_root=repo_root)
 
             self.assertEqual(0, apply_status)
-            self.assertEqual(30, apply_output.getvalue().count("synced skill "))
+            self.assertEqual(31, apply_output.getvalue().count("synced skill "))
             self.assertEqual(11, apply_output.getvalue().count("synced agent "))
             marketplace = json.loads(marketplace_path.read_text())
             canonical_manifest = json.loads(

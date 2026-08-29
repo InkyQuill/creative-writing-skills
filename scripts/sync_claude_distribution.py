@@ -38,7 +38,6 @@ PLUGIN_ROOT = REPO_ROOT / "plugins" / "creative-writing-skills"
 SKILLS_ROOT = PLUGIN_ROOT / "skills"
 CANONICAL_MANIFEST_PATH = PLUGIN_ROOT / ".codex-plugin" / "plugin.json"
 TEXT_REPLACEMENTS = {
-    "AGENTS.md": "CLAUDE.md",
     "Codex subagent": "subagent",
     "Codex subagents": "subagents",
 }

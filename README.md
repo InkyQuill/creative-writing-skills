@@ -42,11 +42,10 @@ and research.
 
 Independent passes can run in parallel. Dependent work stays sequential: a
 draft is completed before a fresh critic or editor reviews it, and revisions
-follow the muse's synthesis rather than raw worker output. When Codex
-subagents are unavailable, the muse applies the same worker prompts as bounded
+follow the muse's synthesis rather than raw worker output. When fresh-context
+delegation is unavailable, the muse applies the same worker prompts as bounded
 stances in the current conversation. It preserves the workflow and tells the
-author when the loss of fresh-context independence materially affects the
-result.
+author when the loss of independence materially affects the result.
 
 ## Claude and ZCode Compatibility
 
@@ -77,7 +76,7 @@ Upload them under **Customize → Skills**, enable `creative-writing-muse`, and
 describe the writing task. Skills-only chat uses the muse's single-agent
 fallback.
 
-To build the same 30 archives locally:
+To build the same 31 archives locally:
 
 ```bash
 python3 scripts/sync_claude_distribution.py --check
@@ -95,6 +94,7 @@ The archives are written to `zips/` from the generated `cw/skills/` tree.
 | `project-doctor` | Project-level diagnosis and safe repair planning |
 | `cli-doctor` | Diagnosis of the bundled `cw` command infrastructure |
 | `project-feedback` | Reports reproducible problems in this plugin without capturing unrelated skills or projects |
+| `project-bootstrap` | Resolves portable project instruction entrypoints without duplicating guidance |
 | `story-planning` | Brainstorming, outlining, and story architecture |
 | `creative-writing-modes` | Fresh drafts, revisions, bridges, alternatives, and polish |
 | `creative-writing-craft` | Prose, scene, style, voice, and genre technique |
@@ -106,7 +106,7 @@ The archives are written to `zips/` from the generated `cw/skills/` tree.
 | `story-memory` | Durable facts, continuity records with a deterministic checker, canon, terminology, and issue tracking |
 | `writing-staffing` | Small, purpose-built specialist compositions |
 
-All 30 installed skills are listed in `config/distribution.json`.
+All 31 installed skills are listed in `config/distribution.json`.
 
 ## Story Project Layout
 
@@ -115,10 +115,16 @@ The plugin adapts to existing projects. A typical project can use:
 ```text
 my-story/
 ├── AGENTS.md
+├── CLAUDE.md              # regular portable shim: @AGENTS.md
 ├── story/                  # Chapters and manuscript
 ├── work/                   # Plans, drafts, and review artifacts
 └── kb/                     # Characters, world, timeline, canon, styles, issues
 ```
+
+`AGENTS.md` is the single shared project-instruction source for Codex, Pi,
+OpenCode, ZCode, and MiMo Code. Claude Code uses the regular `CLAUDE.md` import
+shim. The bootstrap skill reconciles this pair automatically, so authors do not
+need to maintain duplicate harness instructions or filesystem symlinks.
 
 This is one story-project model across planning, drafting, review, and durable
 knowledge. Authors may keep editing the Markdown files directly; the bundled

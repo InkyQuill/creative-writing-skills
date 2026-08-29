@@ -305,11 +305,9 @@ class VendorGenericSkillsTests(unittest.TestCase):
         rendered = (self.output / "qi-layer" / "SKILL.md").read_text()
         self.assertNotIn("meridian", rendered.lower())
         self.assertNotIn("claude-md-fix", rendered)
-        self.assertIn("create missing mirrors", rendered)
-        self.assertIn("leave exact mirrors unchanged", rendered)
-        self.assertIn("report divergent files as conflicts", rendered)
-        self.assertIn("instruction filename required by the active harness", rendered)
-        self.assertIn("must never import itself", rendered)
+        self.assertIn("`$project-bootstrap` owns filenames", rendered)
+        self.assertIn("canonical path it resolves", rendered)
+        self.assertIn("Do not duplicate entrypoint logic here", rendered)
         self.assertNotIn("sibling CLAUDE.md", rendered)
         self.assertNotIn("@AGENTS.md", rendered)
         self.assertIn(
@@ -354,10 +352,10 @@ class VendorGenericSkillsTests(unittest.TestCase):
             self.output / "knowledge-layers/resources/bootstrap.md"
         ).read_text()
         self.assertIn(
-            "{instruction-file}  # active harness instructions: intent and key rules",
+            "{project-instructions} # resolved project instructions: intent and key rules",
             rendered,
         )
-        self.assertIn("## Starter instruction file", rendered)
+        self.assertIn("## Starter project instructions", rendered)
         self.assertNotIn("AGENTS.md", rendered)
         self.assertIn("Use `$md-validation` for link checking", rendered)
         self.assertNotIn("Use `/md-validation` for link checking", rendered)
@@ -509,7 +507,8 @@ class VendorGenericSkillsTests(unittest.TestCase):
         self.assertIn("# Decision Grill", rendered)
         self.assertNotIn("name: grill-with-docs", rendered)
         self.assertNotIn("# Grill With Docs", rendered)
-        self.assertIn("Project conventions in `AGENTS.md`", rendered)
+        self.assertIn("Resolved project instructions", rendered)
+        self.assertNotIn("AGENTS.md", rendered)
         self.assertNotIn("CLAUDE.md", rendered)
 
     def test_check_reports_mapped_skill_drift_under_local_name(self):

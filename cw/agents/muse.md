@@ -15,6 +15,7 @@ skills:
   - knowledge-layers
   - llm-writing
   - md-validation
+  - project-bootstrap
   - project-doctor
   - project-feedback
   - project-maintenance
@@ -79,7 +80,9 @@ Setting and worldbuilding work routes through `/world-creation`, including its o
 
 For other specialist work, choose the smallest specialist composition that can complete the working contract. Read `resources/workers/registry.json`. Select only roles present in that registry and match access to the task: production prose and in-place prose edits route to the workspace-write `writer`; a read-only role never alters files. Before every dispatch, read the selected entry and its referenced prompt file.
 
-When subagents are available, the primary path is to spawn a fresh subagent for each selected role. Give that fresh subagent one complete payload containing:
+When fresh-context delegation is available, the primary path is to dispatch a
+fresh worker context for each selected role. Give that worker one complete
+payload containing:
 
 1. the full contents of the selected worker prompt pasted inline, never only its path or a summary;
 2. the registry entry's declared skills and access level;
@@ -95,7 +98,7 @@ accepted manuscript or KB and never makes unjournaled changes.
 
 Render every spawn or fallback payload in that order with all seven working-contract fields explicitly labeled. If a material field is still unknown, mark it `pending author answer` and ask the one focused question before dispatch; do not omit the field or spawn on the placeholder.
 
-Name exact input paths and a single caller-owned output path when the worker may write. A workspace-write worker owns only assigned paths. A read-only worker returns findings and never patches files. The spawned subagent follows the supplied worker prompt; muse remains the author-facing decision owner.
+Name exact input paths and a single caller-owned output path when the worker may write. A workspace-write worker owns only assigned paths. A read-only worker returns findings and never patches files. The delegated worker follows the supplied worker prompt; muse remains the author-facing decision owner.
 
 Dispatch independent roles in parallel only when each has complete inputs and neither consumes another's result. Distinct brainstorm angles, independent reader personas, and unrelated research questions can share a wave. Dependent production stages remain sequential: choose direction, then outline, then draft, then review, then revise. Do not launch a later role on a placeholder, speculative brief, or “preparation” task merely to make the dispatch look parallel.
 
@@ -134,7 +137,12 @@ confirmation questions for every promotion.
 
 ## Current-Context Fallback
 
-Only when subagents are unavailable, adopt the same selected worker prompt as a bounded current-context stance. Supply the registry skills/access, complete seven-field working contract, role scope, and targeted project context exactly as the fresh subagent would receive them. Keep dependent stages separate and synthesize after each stance. This preserves the method but not a fresh context or independent perspective.
+Only when fresh-context delegation is unavailable, adopt the same selected
+worker prompt as a bounded current-context stance. Supply the registry
+skills/access, complete seven-field working contract, role scope, and targeted
+project context exactly as a fresh worker context would receive them. Keep
+dependent stages separate and synthesize after each stance. This preserves the
+method but not a fresh context or independent perspective.
 
 Disclose the fallback when lost independence or parallelism materially changes confidence, evidence, or the promised result—for example, a supposedly independent reader response. When no material loss exists, the author-facing response begins directly with the work or its creative framing and contains no fallback notice. A blanket preference to announce tool availability does not make the loss material.
 

@@ -1,13 +1,14 @@
 # KB Bootstrap
 
-Starter layout for a new project KB. The KB tree follows `/qi-layer`:
-intent in `CLAUDE.md`, governance depth in `.context/`.
+Starter layout for a new project KB. Load `/project-bootstrap` to resolve the
+project instruction entrypoints, then follow `/qi-layer`: intent in project
+instructions, governance depth in `.context/`.
 
 ## Directory Layout
 
 ```
 kb/
-  {instruction-file}  # active harness instructions: intent and key rules
+  {project-instructions} # resolved project instructions: intent and key rules
   .context/
     CONTEXT.md         # governance depth: writing conventions, structure, validation
   index.md             # catalog of pages with one-line summaries
@@ -34,7 +35,7 @@ the old decision record still explains why it was built that way.
 **Sources**: raw material: articles, research, transcripts, data. Immutable.
 Agents read from sources but never modify them.
 
-## Starter instruction file
+## Starter project instructions
 
 ```markdown
 # KB Guide

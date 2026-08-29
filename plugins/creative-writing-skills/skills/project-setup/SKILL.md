@@ -9,12 +9,15 @@ description: >
 Establish the project-specific writing conventions and one canonical on-disk
 contract. Use `$project-maintenance` for all scaffold and migration mechanics;
 do not duplicate its command reference or construct managed files by hand.
+Load `$project-bootstrap` to resolve or reconcile project instruction
+entrypoints. Those instructions are harness guidance; `project.md` remains the
+durable story-writing contract.
 
 ## Discover Before Changing
 
 Read canonical `project.md`, generated indexes, and populated content before
-proposing anything. Platform instruction files such as `AGENTS.md` may constrain
-the current agent, but they remain unmanaged, optional migration inputs rather
+proposing anything. Resolved project instructions may constrain the current
+agent, but they remain unmanaged, optional migration inputs rather
 than the durable story-project contract. Ask only for creative information the
 managed files do not answer: project kind and stage, language, POV and timeline
 shape, voice goals, naming and spoiler conventions, and the intended role of
@@ -43,7 +46,8 @@ alternative layout choice.
 
 Draft the project-specific writing contract in the body of `project.md` for the
 author to review. That authored body is the durable writing contract; preserve
-the CLI-owned frontmatter and do not move the contract into `AGENTS.md`. Cover:
+the CLI-owned frontmatter and do not move the contract into project
+instructions. Cover:
 
 - project overview, current stage, language, and punctuation conventions;
 - voice, POV, timeline, naming, chapter, spoiler, and source-tagging rules;

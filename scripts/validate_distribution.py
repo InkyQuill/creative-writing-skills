@@ -35,7 +35,7 @@ EXPECTED_SKILLS = {
     "character-sim", "cli-doctor", "creative-research", "creative-writing-craft",
     "creative-writing-modes", "creative-writing-muse", "decision-grill",
     "information-hierarchy", "intent-modeling", "kb-management",
-    "knowledge-layers", "llm-writing", "md-validation", "project-doctor",
+    "knowledge-layers", "llm-writing", "md-validation", "project-bootstrap", "project-doctor",
     "project-feedback", "project-maintenance", "project-setup", "qi-layer",
     "reader-sim", "reflect", "shared-dao", "story-memory",
     "story-planning", "story-review", "structured-artifact",
@@ -45,7 +45,7 @@ EXPECTED_SKILLS = {
 AUTHORED_SKILLS = {
     "character-sim", "cli-doctor", "creative-research", "creative-writing-craft",
     "creative-writing-modes", "creative-writing-muse", "kb-management",
-    "project-doctor", "project-feedback", "project-maintenance", "project-setup",
+    "project-bootstrap", "project-doctor", "project-feedback", "project-maintenance", "project-setup",
     "reader-sim", "shared-dao", "story-memory",
     "story-planning", "story-review", "targeted-editing", "world-creation",
     "writing-principles", "writing-staffing",
@@ -897,8 +897,12 @@ def _validate_markdown(
             problems.append(f"{skill_name}: dangling skill reference ${reference}")
 
     visible = _outside_fences(reference_text)
-    if "CLAUDE.md" in visible:
-        problems.append(f"{skill_name}: Claude-only vocabulary CLAUDE.md")
+    if skill_name != "project-bootstrap":
+        for filename in ("AGENTS.md", "CLAUDE.md"):
+            if filename in visible:
+                problems.append(
+                    f"{skill_name}: hard-coded project instruction entrypoint {filename}"
+                )
     for reference in sorted(_worker_references(visible) - worker_names):
         problems.append(f"{skill_name}: dangling worker reference @{reference}")
 
@@ -1308,7 +1312,10 @@ def _validate_claude_distribution(
                 problems,
             )
         visible = _outside_fences(_without_urls_outside_fences(text))
-        for token in ("AGENTS.md", "spawn_agent", "collaboration."):
+        filename_tokens = () if "project-bootstrap" in path.parts else (
+            "AGENTS.md", "CLAUDE.md"
+        )
+        for token in (*filename_tokens, "spawn_agent", "collaboration."):
             if token in visible:
                 problems.append(f"{label}: Codex-only vocabulary {token}")
         for reference in sorted(extract_skill_references(_without_urls_outside_fences(text), "$")):

@@ -171,7 +171,7 @@
         "name": "muse",
         "path": "plugins/creative-writing-skills/skills/creative-writing-muse/SKILL.md",
         "description": "Use when fiction or story work spans planning, drafting, critique, research, continuity, voice, or durable story state, or when the author explicitly asks for a muse or broad end-to-end creative-writing help.",
-        "fallback": "Fresh subagents are the primary route. Only when they are unavailable, muse applies the same worker prompt as a bounded current-context stance and discloses material loss of independence or parallelism.",
+        "fallback": "Fresh worker contexts are the primary route. Only when fresh-context delegation is unavailable, muse applies the same worker prompt as a bounded current-context stance and discloses material loss of independence or parallelism.",
         "load": [
           "story-planning",
           "writing-principles",
@@ -475,7 +475,8 @@
         "type": "canonical skill",
         "modelInvocable": true,
         "loads": [
-          "intent-modeling"
+          "intent-modeling",
+          "project-bootstrap"
         ],
         "resources": [],
         "source": "canonical plugin"
@@ -513,10 +514,11 @@
       "knowledge-layers": {
         "name": "knowledge-layers",
         "path": "plugins/creative-writing-skills/skills/knowledge-layers/SKILL.md",
-        "description": "Use when deciding where knowledge goes or reading/writing durable docs: AGENTS.md, .context/, KB, docs/, and work directories.",
+        "description": "Use when deciding where knowledge goes or reading/writing durable docs: project instructions, .context/, KB, docs/, and work directories.",
         "type": "canonical skill",
         "modelInvocable": true,
         "loads": [
+          "project-bootstrap",
           "qi-layer",
           "llm-writing",
           "shared-dao"
@@ -548,6 +550,20 @@
         "loads": [],
         "resources": [
           "resources/mermaid-authoring.md"
+        ],
+        "source": "canonical plugin"
+      },
+      "project-bootstrap": {
+        "name": "project-bootstrap",
+        "path": "plugins/creative-writing-skills/skills/project-bootstrap/SKILL.md",
+        "description": "Locate, create, migrate, or reconcile portable project instruction entrypoints across supported agent harnesses.",
+        "type": "canonical skill",
+        "modelInvocable": true,
+        "loads": [
+          "qi-layer"
+        ],
+        "resources": [
+          "resources/entrypoint-reconciliation.md"
         ],
         "source": "canonical plugin"
       },
@@ -596,7 +612,9 @@
         "description": "One-time project setup for creative writing. Interviews the author about the project, discovers or confirms its file layout, collects provisional writing samples and voice goals, and creates or updates project instructions after the workspace plan is approved.",
         "type": "canonical skill",
         "modelInvocable": true,
-        "loads": [],
+        "loads": [
+          "project-bootstrap"
+        ],
         "resources": [],
         "source": "canonical plugin"
       },
@@ -608,7 +626,8 @@
         "modelInvocable": true,
         "loads": [
           "knowledge-layers",
-          "llm-writing"
+          "llm-writing",
+          "project-bootstrap"
         ],
         "resources": [
           "resources/references.md"
@@ -622,7 +641,8 @@
         "type": "canonical skill",
         "modelInvocable": true,
         "loads": [
-          "intent-modeling"
+          "intent-modeling",
+          "project-bootstrap"
         ],
         "resources": [],
         "source": "canonical plugin"
@@ -633,7 +653,9 @@
         "description": "Shared vocabulary for creative writing projects. Load when establishing canonical story terms, resolving ambiguous names, checking term consistency, or deciding where vocabulary belongs in kb/.",
         "type": "canonical skill",
         "modelInvocable": true,
-        "loads": [],
+        "loads": [
+          "project-bootstrap"
+        ],
         "resources": [],
         "source": "canonical plugin"
       },

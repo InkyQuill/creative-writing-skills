@@ -42,7 +42,7 @@ _QI_DESCRIPTION_ADAPTATION = (
     ".context/CONTEXT.md: keep intent docs minimal and load-bearing.'"
 )
 _QI_ADAPTATION = (
-    "When colocated knowledge changes, keep its AGENTS.md and .context "
+    "When colocated knowledge changes, keep its project instructions and .context\n"
     "documentation synchronized with the source in the same change."
 )
 _QI_MIRROR_COMMAND = (
@@ -66,18 +66,34 @@ _QI_MIRROR_SECTION = (
     "an agent needs on entry, with everything else inherited from ancestors."
 )
 _QI_MIRROR_ADAPTATION = (
-    "## Harness Instruction Files\n\n"
-    "Use the instruction filename required by the active harness at each directory. "
-    "When multiple harness entry points share guidance, each may import one distinct "
-    "canonical source but must never import itself. After creating or moving "
-    "instruction files, inspect the containing tree: create missing mirrors, leave "
-    "exact mirrors unchanged, and report divergent files as conflicts.\n\n"
-    "Keep shared instructions in one canonical source. Put harness-only guidance in "
-    "the applicable entry point, and treat intentional divergence as a conflict that "
-    "requires explicit review rather than silently overwriting it.\n\n"
-    "At every directory, work from the active harness's instruction file and read any "
-    "applicable local instructions on entry. Do not rely on harness-specific automatic "
-    "loading when another tool may need the same local guidance."
+    "## Entrypoint Compatibility\n\n"
+    "`$project-bootstrap` owns filenames, imports, compatibility, migration, and\n"
+    "conflict handling. This skill writes substantive shared instructions only to\n"
+    "the canonical path it resolves. Do not duplicate entrypoint logic here."
+)
+_QI_AGENT_NEUTRAL_ADAPTATIONS = (
+    (
+        "Load `/knowledge-layers` for where each layer lives and what it holds.",
+        "Load `$project-bootstrap` first to resolve instruction entrypoints.\n"
+        "Load `$knowledge-layers` for where each layer lives and what it holds.",
+    ),
+    ("AGENTS.md and `.context/CONTEXT.md`. The pair governs any tree agents work\n"
+     "in — code, the KB, docs, work directories. AGENTS.md loads into an agent's",
+     "resolved project instructions and `.context/CONTEXT.md`. The pair governs any\n"
+     "tree agents work in — code, the KB, docs, work directories. Project instructions load into an agent's"),
+    ("leaf AGENTS.md summarizes its directory's", "leaf project instructions summarize their directory's"),
+    ("parent AGENTS.md summarizes its children", "parent project instructions summarize their children"),
+    ("## Writing AGENTS.md", "## Writing Project Instructions"),
+    ("Agents read AGENTS.md before opening anything else in the tree", "Agents read applicable project instructions before opening anything else in the tree"),
+    ("That's what AGENTS.md captures.", "That's what project instructions capture."),
+    ("Keep AGENTS.md as short as the directory allows", "Keep project instructions as short as the directory allows"),
+    ("An agent that only reads AGENTS.md", "An agent that only reads project instructions"),
+    ("## What Does NOT Belong in AGENTS.md", "## What Does NOT Belong in Project Instructions"),
+    ("root AGENTS.md loads", "root project instructions load"),
+    ("in that domain's AGENTS.md or .context/", "in that domain's project instructions or .context/"),
+    ("*wrong decision* belongs in AGENTS.md", "*wrong decision* belongs in project instructions"),
+    ("their domain's\n  AGENTS.md, not root", "their domain's\n  project instructions, not root"),
+    ("- AGENTS.md and .context/ at the same directory level", "- Project instructions and .context/ at the same directory level"),
 )
 _KNOWLEDGE_BOOTSTRAP_LAYOUT = (
     "```\n"
@@ -92,7 +108,7 @@ _KNOWLEDGE_BOOTSTRAP_LAYOUT = (
 _KNOWLEDGE_BOOTSTRAP_LAYOUT_ADAPTATION = (
     "```\n"
     "kb/\n"
-    "  {instruction-file}  # active harness instructions: intent and key rules\n"
+    "  {project-instructions} # resolved project instructions: intent and key rules\n"
     "  .context/\n"
     "    CONTEXT.md         # governance depth: writing conventions, structure, validation\n"
     "  index.md             # catalog of pages with one-line summaries\n"
@@ -100,7 +116,7 @@ _KNOWLEDGE_BOOTSTRAP_LAYOUT_ADAPTATION = (
     "```"
 )
 _KNOWLEDGE_BOOTSTRAP_HEADING = "## Starter AGENTS.md"
-_KNOWLEDGE_BOOTSTRAP_HEADING_ADAPTATION = "## Starter instruction file"
+_KNOWLEDGE_BOOTSTRAP_HEADING_ADAPTATION = "## Starter project instructions"
 _KNOWLEDGE_BOOTSTRAP_VALIDATION = (
     "Use `/md-validation` for link checking and diagram validation before\n"
     "committing."
@@ -108,6 +124,39 @@ _KNOWLEDGE_BOOTSTRAP_VALIDATION = (
 _KNOWLEDGE_BOOTSTRAP_VALIDATION_ADAPTATION = (
     "Use `$md-validation` for link checking and diagram validation before\n"
     "committing."
+)
+_KNOWLEDGE_AGENT_NEUTRAL_ADAPTATIONS = (
+    ("description: 'Use when deciding where knowledge goes or reading/writing durable docs: AGENTS.md, .context/, KB, docs/, and work directories.'",
+     "description: 'Use when deciding where knowledge goes or reading/writing durable docs: project instructions, .context/, KB, docs/, and work directories.'"),
+    ("Load `/qi-layer` when writing or editing AGENTS.md or .context/ files: it",
+     "Load `$project-bootstrap` when locating or placing project instructions. Load\n`$qi-layer` when writing project instructions or .context/ files: it"),
+    ("| `AGENTS.md` | Intent and mental model for a directory", "| Project instructions | Intent and mental model for a directory"),
+    ("If it's intent/mental-model for a directory → `AGENTS.md`.", "If it's intent/mental-model for a directory → project instructions."),
+    ("in that subsystem's AGENTS.md or .context/", "in that subsystem's project instructions or .context/"),
+    ("Every durable layer — AGENTS.md, `.context/`, KB, `docs/`", "Every durable layer — project instructions, `.context/`, KB, `docs/`"),
+    ("**Truth is anchored per layer.** AGENTS.md and `.context/`", "**Truth is anchored per layer.** Project instructions and `.context/`"),
+    ("it carries its own AGENTS.md\nand `.context/` pair, written per `/qi-layer` — intent in AGENTS.md,",
+     "it carries its own project\ninstructions and `.context/` pair, written per `$qi-layer` — intent in project instructions,"),
+    ("`.context/`. Read the KB's own `AGENTS.md` before writing.", "`.context/`. Resolve and read the KB's own project instructions before writing."),
+)
+_KNOWLEDGE_BOOTSTRAP_INTRO = (
+    "Starter layout for a new project KB. The KB tree follows `/qi-layer`:\n"
+    "intent in `AGENTS.md`, governance depth in `.context/`."
+)
+_KNOWLEDGE_BOOTSTRAP_INTRO_ADAPTATION = (
+    "Starter layout for a new project KB. Load `$project-bootstrap` to resolve the\n"
+    "project instruction entrypoints, then follow `$qi-layer`: intent in project\n"
+    "instructions, governance depth in `.context/`."
+)
+_REFLECT_CAPTURE = (
+    "If something should survive this session, put it in the right layer: `/knowledge-layers` for placement "
+    "(AGENTS.md, `.context/`, KB, docs), `/qi-layer` for writing AGENTS.md and `.context/CONTEXT.md`."
+)
+_REFLECT_CAPTURE_ADAPTATION = (
+    "If something should survive this session, put it in the right layer:\n"
+    "`$knowledge-layers` for placement (project instructions, `.context/`, KB,\n"
+    "docs), `$project-bootstrap` for resolving instruction entrypoints, and\n"
+    "`$qi-layer` for writing project instructions and `.context/CONTEXT.md`."
 )
 _MERMAID_COMMAND = "Validate with `meridian mermaid check`."
 _MERMAID_ADAPTATION = (
@@ -118,7 +167,11 @@ _GRILL_INSTRUCTION_FILE = (
     "2. Project conventions in `CLAUDE.md` — established names and labels."
 )
 _GRILL_INSTRUCTION_FILE_ADAPTATION = (
-    "2. Project conventions in `AGENTS.md` — established names and labels."
+    "2. Resolved project instructions — established names and labels."
+)
+_GRILL_BOOTSTRAP_ADAPTATION = (
+    "Load `$intent-modeling` if it isn't already loaded.\n"
+    "Load `$project-bootstrap` before consulting project instructions."
 )
 _UPSTREAM_SKILL_NAMES = {
     "decision-grill": "grill-with-docs",
@@ -540,6 +593,13 @@ def _adapt_markdown(
             _GRILL_INSTRUCTION_FILE_ADAPTATION,
             "decision-grill: expected licensed instruction-file reference",
         )
+        if "Load `/intent-modeling` if it isn't already loaded." in text:
+            text = replace_exactly_once(
+                text,
+                "Load `/intent-modeling` if it isn't already loaded.",
+                _GRILL_BOOTSTRAP_ADAPTATION,
+                "decision-grill: expected licensed intent-modeling load",
+            )
     if skill_name == "llm-writing" and is_skill_document:
         text = replace_exactly_once(
             text,
@@ -560,10 +620,36 @@ def _adapt_markdown(
             text, _QI_MIRROR_SECTION, _QI_MIRROR_ADAPTATION,
             "qi-layer: expected licensed mirror section",
         )
+        if "Load `/knowledge-layers` for where each layer lives" in text:
+            for source, replacement in _QI_AGENT_NEUTRAL_ADAPTATIONS:
+                text = replace_exactly_once(
+                    text, source, replacement,
+                    "qi-layer: expected licensed project-instruction wording",
+                )
+    if (skill_name == "knowledge-layers" and is_skill_document and
+            "description: 'Use when deciding where knowledge goes" in text):
+        for source, replacement in _KNOWLEDGE_AGENT_NEUTRAL_ADAPTATIONS:
+            text = replace_exactly_once(
+                text, source, replacement,
+                "knowledge-layers: expected licensed project-instruction wording",
+            )
+    if (skill_name == "reflect" and is_skill_document and
+            _REFLECT_CAPTURE in text):
+        text = replace_exactly_once(
+            text, _REFLECT_CAPTURE, _REFLECT_CAPTURE_ADAPTATION,
+            "reflect: expected licensed knowledge-capture routing",
+        )
     if (
         skill_name == "knowledge-layers"
         and relative_path == Path("resources/bootstrap.md")
     ):
+        if _KNOWLEDGE_BOOTSTRAP_INTRO in text:
+            text = replace_exactly_once(
+                text,
+                _KNOWLEDGE_BOOTSTRAP_INTRO,
+                _KNOWLEDGE_BOOTSTRAP_INTRO_ADAPTATION,
+                "knowledge-layers: expected licensed bootstrap introduction",
+            )
         text = replace_exactly_once(
             text,
             _KNOWLEDGE_BOOTSTRAP_LAYOUT,

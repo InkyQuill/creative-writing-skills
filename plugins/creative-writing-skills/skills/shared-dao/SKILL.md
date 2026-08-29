@@ -53,7 +53,8 @@ Each entry includes:
 Before defining new terms, check what already exists:
 
 1. Read relevant vocab files.
-2. Search `AGENTS.md`, kb pages, outlines, drafts, and work notes.
+2. Load `$project-bootstrap`, then search the resolved project instructions,
+   kb pages, outlines, drafts, and work notes.
 3. When delegation is available and the search would crowd your context,
    assign focused search lanes by artifact scope or domain.
 4. Check how the author uses the term in conversation and prose.
