@@ -13,3 +13,4 @@ Load only the resource needed:
 - `resources/creative-direction.md` — scoped option, evidence, and tradeoff analysis for the muse.
 - `resources/brainstorming.md` — exploratory capture and source tagging.
 - `resources/story-architecture.md` — arc, chapter, scene, and beat structure.
+- `resources/key-moments.md` — genre-driven emotional beats selected before structure.
