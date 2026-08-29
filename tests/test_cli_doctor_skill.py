@@ -1,4 +1,9 @@
+import json
 import re
+import shlex
+import shutil
+import subprocess
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -13,6 +18,15 @@ SKILL_ROOT = (
 )
 SKILL = SKILL_ROOT / "SKILL.md"
 LAUNCHER_SETUP = SKILL_ROOT / "resources" / "launcher-setup.md"
+CLI_SOURCE = (
+    ROOT
+    / "plugins"
+    / "creative-writing-skills"
+    / "skills"
+    / "project-maintenance"
+    / "resources"
+    / "cli"
+)
 
 
 def all_runtime_markdown() -> str:
@@ -54,9 +68,26 @@ class CliDoctorSkillTests(unittest.TestCase):
         text = SKILL.read_text(encoding="utf-8")
         for platform in ("Windows", "macOS", "Linux"):
             self.assertIn(platform, text)
-        self.assertRegex(text, r"py -3 .*resources\\cli\\cw\.py")
+        self.assertRegex(text, r'py -3 "<project-maintenance-skill>\\resources\\cli\\cw\.py"')
         self.assertNotIn("py -3.10", text)
-        self.assertRegex(text, r"python3 .*resources/cli/cw\.py")
+        self.assertRegex(text, r'python3 "<project-maintenance-skill>/resources/cli/cw\.py"')
+
+    def test_posix_direct_invocation_executes_from_spaced_installed_path(self):
+        text = SKILL.read_text(encoding="utf-8")
+        example = next(
+            line.removeprefix("Linux/macOS: ")
+            for line in text.splitlines()
+            if line.startswith("Linux/macOS: ")
+        )
+        with tempfile.TemporaryDirectory(prefix="cw installed skills ") as directory:
+            skill_root = Path(directory) / "project maintenance skill"
+            shutil.copytree(CLI_SOURCE, skill_root / "resources" / "cli")
+            command = shlex.split(
+                example.replace("<project-maintenance-skill>", str(skill_root))
+            )
+            result = subprocess.run(command, capture_output=True, text=True, check=False)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertTrue(json.loads(result.stdout)["ok"])
 
     def test_zero_configuration_does_not_install_or_copy_runtime(self):
         text = all_runtime_markdown()
@@ -87,6 +118,36 @@ class CliDoctorSkillTests(unittest.TestCase):
         text = LAUNCHER_SETUP.read_text(encoding="utf-8")
         self.assertRegex(text, r"(?is)user-(owned|scoped).{0,120}executable wrapper")
         self.assertNotIn("symlink", text.lower())
+
+    def test_documented_posix_wrapper_executes_from_spaced_path(self):
+        text = LAUNCHER_SETUP.read_text(encoding="utf-8")
+        wrapper_source = re.search(r"```sh\n(.+?)\n```", text, re.DOTALL)
+        self.assertIsNotNone(wrapper_source)
+        self.assertRegex(text, r"(?is)preview.{0,220}executable (mode|permission)")
+        self.assertRegex(text, r"(?is)after approval.{0,120}set executable mode")
+        with tempfile.TemporaryDirectory(prefix="cw wrapper test ") as directory:
+            root = Path(directory)
+            skill_root = root / "installed skills" / "project maintenance"
+            shutil.copytree(CLI_SOURCE, skill_root / "resources" / "cli")
+            launcher = root / "launcher directory" / "cw"
+            launcher.parent.mkdir()
+            launcher.write_text(
+                wrapper_source.group(1).replace(
+                    "/absolute/project-maintenance",
+                    str(skill_root),
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            launcher.chmod(0o700)
+            result = subprocess.run(
+                [str(launcher), "--version", "--format", "json"],
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("version", json.loads(result.stdout))
 
 
 if __name__ == "__main__":

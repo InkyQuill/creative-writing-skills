@@ -14,8 +14,8 @@ Require Python 3.10 or newer. Select an available Python 3 interpreter, test
 that exact bundled entrypoint, and let its diagnosis enforce the minimum:
 
 ```text
-Linux/macOS: python3 <project-maintenance-skill>/resources/cli/cw.py cli-doctor --format json
-Windows: py -3 <project-maintenance-skill>\resources\cli\cw.py cli-doctor --format json
+Linux/macOS: python3 "<project-maintenance-skill>/resources/cli/cw.py" cli-doctor --format json
+Windows: py -3 "<project-maintenance-skill>\resources\cli\cw.py" cli-doctor --format json
 ```
 
 Interpret the JSON before acting. A failed required Python or direct-entrypoint

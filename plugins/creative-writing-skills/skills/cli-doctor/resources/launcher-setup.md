@@ -15,6 +15,7 @@ modify system directories.
 Before any write, show a complete preview containing:
 
 - the exact launcher path and full wrapper contents;
+- the executable mode `0700` and the exact `chmod 700 <launcher>` command;
 - any PATH or shell-profile line to add, including the exact profile file;
 - the verification command `cw cli-doctor --format json`;
 - how to remove every proposed change.
@@ -22,11 +23,13 @@ Before any write, show a complete preview containing:
 Ask for explicit approval or permission for that preview. Approval for direct
 CLI work is not approval for a persistent launcher, PATH edit, or profile edit.
 Never silently change a shell profile or PATH. If approval is absent, stop the
-setup and retain direct invocation.
+setup and retain direct invocation. After approval, create the exact previewed
+wrapper and set executable mode `0700` with the previewed `chmod` command.
 
 For Linux and macOS, a user-owned executable wrapper may call:
 
 ```sh
+#!/bin/sh
 exec python3 "/absolute/project-maintenance/resources/cli/cw.py" "$@"
 ```
 
