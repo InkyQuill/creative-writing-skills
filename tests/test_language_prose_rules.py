@@ -76,6 +76,31 @@ class LanguageProseRulesTests(unittest.TestCase):
         self.assertEqual(positions, sorted(positions))
         self.assertRegex(router.lower(), r"unsupported.{0,180}never.{0,80}english")
 
+    def test_profile_language_adapter_is_optional_when_profile_is_base_only(self):
+        self.assertTrue(
+            (
+                CRAFT
+                / "resources/prose/profiles/literary-fiction/base.md"
+            ).is_file()
+        )
+        self.assertFalse(
+            (
+                CRAFT
+                / "resources/prose/profiles/literary-fiction/en.md"
+            ).exists()
+        )
+        for path in (
+            "creative-writing-craft/SKILL.md",
+            "creative-writing-muse/SKILL.md",
+            "story-memory/resources/story-context.md",
+        ):
+            text = read(path).lower()
+            self.assertRegex(
+                text,
+                r"language adapter.{0,100}(when|if).{0,80}(provide|exist|available)",
+                path,
+            )
+
     def test_generic_review_guidance_routes_surface_rules_to_language_stack(self):
         generic_paths = (
             "writing-principles/SKILL.md",

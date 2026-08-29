@@ -37,7 +37,8 @@ Writers need enough to stay in voice and on-canon, not everything ever written. 
 
 - **Scene brief or outline**: what happens in this scene, the beats to hit
 - **Resolved prose stack**: universal base, exact manuscript language,
-  prose-profile base and matching language adapter, then only applicable
+  prose-profile base and matching language adapter when the profile provides
+  one, then only applicable
   `kb/styles/` guidance and supporting `kb/samples/` evidence. Name why every
   narrower narrator, POV, character, or scene style applies.
 - **Continuity anchors**: the immediately preceding chapter or scene (for flow), plus any chapters that establish facts this scene references. Two to four files, not the entire manuscript. For revisions and insertions, also the scene's timeline position — where its events fall relative to neighboring events and which character sub-timelines intersect — so the edit lands without breaking order, duration, or simultaneity.

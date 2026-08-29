@@ -52,8 +52,8 @@ Setting and worldbuilding work routes through `$world-creation`, including its o
 Before every writer, editor, critic, or style-creator pass, use
 `$creative-writing-craft` to resolve exact plugin resource paths for the
 universal base, primary manuscript-language tag and resource, and selected
-prose-profile base plus matching language adapter. `general` means no profile
-overlay and needs no confirmation question. Then select applicable flat
+prose-profile base plus its matching language adapter when the profile provides
+one. `general` means no profile overlay and needs no confirmation question. Then select applicable flat
 `kb/styles/` references and their approved `kb/samples/` evidence: project-wide
 first, narrower narrator/POV/character/scene scope next, current author brief
 last. State why each narrow style applies.

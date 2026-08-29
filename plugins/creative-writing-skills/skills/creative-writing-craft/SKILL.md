@@ -21,8 +21,8 @@ Before prose production or surface review, resolve resources in this order:
 1. universal prose base: `resources/prose/base.md`;
 2. exact manuscript-language defaults under `resources/prose/languages/`,
    using the primary tag (`ru-RU` → `ru`, `en-GB` → `en`);
-3. the prose-profile base and matching language adapter under
-   `resources/prose/profiles/`;
+3. the prose-profile base under `resources/prose/profiles/`, plus its matching
+   language adapter when the profile provides one;
 4. applicable project-wide `kb/styles/` references and their approved
    `kb/samples/` evidence;
 5. narrower narrator, POV, character, or scene style references and evidence;
