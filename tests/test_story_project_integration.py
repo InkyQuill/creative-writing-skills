@@ -80,11 +80,51 @@ class StoryProjectIntegrationTests(unittest.TestCase):
         self.assertNotRegex(text, r"(?is)then write the chapter's scene record")
         self.assertNotRegex(text, r"(?is)when a work item completes, promote")
         self.assertRegex(text, r"(?is)fact extraction.{0,220}proposal")
-        self.assertRegex(text, r"(?is)acceptance.{0,180}(does not|never).{0,160}(promot|KB write)")
+        self.assertRegex(
+            text,
+            r"(?is)acceptance.{0,180}(does not itself write|writes manuscript state only)"
+            r".{0,160}(continuity records|KB\s+state)",
+        )
         self.assertRegex(text, r"(?is)(direct|explicit).{0,180}(unambiguous|establish).{0,260}without.{0,100}(re-?confirm|ask)")
         self.assertRegex(text, r"(?is)(ambigu|infer|conflict|retcon).{0,320}(ask|question|confirm)")
         self.assertRegex(text, r"(?is)promotion.{0,320}previewed,?\s+recoverable.{0,160}\$project-maintenance.{0,120}transaction")
         self.assertIn("cw undo", text)
+
+    def test_story_memory_does_not_require_redundant_promotion_approval(self):
+        fact_extraction = (
+            SKILLS / "story-memory" / "resources" / "fact-extraction.md"
+        ).read_text(encoding="utf-8")
+        continuity_records = (
+            SKILLS / "story-memory" / "resources" / "continuity-records.md"
+        ).read_text(encoding="utf-8")
+
+        self.assertNotRegex(
+            fact_extraction,
+            r"(?is)acceptance of\s+the source chapter\s+does not authorize promotion",
+        )
+        self.assertNotRegex(
+            continuity_records,
+            r"(?is)record updates that change canon wait for the author",
+        )
+        self.assertRegex(
+            fact_extraction,
+            r"(?is)acceptance.{0,100}writes manuscript state only, not KB\s+state",
+        )
+        self.assertRegex(
+            fact_extraction,
+            r"(?is)after acceptance.{0,100}re-read.{0,100}synchroniz.{0,100}direct and\s+"
+            r"unambiguous.{0,180}previewed, recoverable transaction.{0,100}"
+            r"without redundant confirmation",
+        )
+        self.assertRegex(
+            continuity_records,
+            r"(?is)after acceptance.{0,100}re-reads.{0,100}synchronizes.{0,180}directly\s+"
+            r"and unambiguously establishes.{0,180}without asking for reconfirmation",
+        )
+        self.assertRegex(
+            continuity_records,
+            r"(?is)ask only.{0,320}(ambigu|infer|conflict|retcon|source tag|knowledge boundary)",
+        )
 
     def test_kb_paths_match_schema_v1_allowed_locations(self):
         text = all_runtime_markdown("kb-management")

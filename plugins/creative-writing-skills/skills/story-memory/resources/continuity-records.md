@@ -175,4 +175,7 @@ compares anchored timeline tables embedded in character and subplot entries
 with the master timeline. Exit is nonzero when it finds errors. Treat its
 output as the fixed floor: resolve or flag every finding, then apply reader
 judgment for what a script cannot see. Deterministic findings are reported,
-not auto-repaired; record updates that change canon wait for the author.
+not auto-repaired. Direct and unambiguous facts established by accepted prose
+follow the separate previewed, recoverable synchronization above without
+reconfirmation. Ask the author only for ambiguity, inference, conflict, retcon,
+source-tag uncertainty, or character/reader knowledge-boundary uncertainty.

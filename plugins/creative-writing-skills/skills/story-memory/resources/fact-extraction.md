@@ -1,7 +1,7 @@
 ---
 name: story-memory
 description: >
-  Extract factual state changes from written chapters as a KB promotion proposal. Use when a chapter needs its canon, timeline, character state, and terminology captured for author review.
+  Extract factual state changes from accepted prose for previewed KB synchronization. Use when a chapter needs its canon, timeline, character state, and terminology captured or an ambiguous change needs author review.
 ---
 
 # Fact Extraction
@@ -26,10 +26,13 @@ If something the chapter establishes doesn't fit the common categories but still
 
 ## Prepare the Promotion Proposal
 
-Fact extraction produces a proposal; it does not write to the KB. Acceptance of
-the source chapter does not authorize promotion. Describe updates to existing
-entries instead of proposing duplicates. A character entry should grow chapter
-by chapter as their state evolves rather than gaining a parallel file.
+Fact extraction prepares the KB promotion proposal; it does not write to the KB
+itself. Acceptance of the source chapter writes manuscript state only, not KB
+state. After acceptance, re-read the prose and synchronize direct and
+unambiguous facts through the separate previewed, recoverable transaction below
+without redundant confirmation. Describe updates to existing entries instead
+of proposing duplicates. A character entry should grow chapter by chapter as
+their state evolves rather than gaining a parallel file.
 
 Cross-link between entries. If a chapter establishes a relationship change between two characters, both character entries should reflect it, and the timeline entry should reference the event. When an event lands on a character sub-timeline as well as the main timeline, record it once with its shared anchor on both, and keep the two synchronized on every later update. If updating one side would desynchronize the other — shifted order, stretched duration, knowledge arriving too early — flag it as a conflict rather than re-timing silently.
 
