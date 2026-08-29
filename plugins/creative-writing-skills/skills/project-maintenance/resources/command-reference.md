@@ -42,10 +42,16 @@ migrate --apply <plan.json> --expect-plan-hash <hash>
 ```
 
 Preview every lifecycle mutation. Draft acceptance changes the story target;
-it does not promote material into the KB. Acceptance and KB promotion remain
-separate author-confirmed decisions. The agent carries plan hashes and
-`base-revision` values between commands without asking the author to maintain
-them.
+it does not itself write material into the KB. After acceptance, re-read the
+accepted text and synchronize direct and unambiguous facts from that accepted
+text through a separate previewed, recoverable KB transaction without
+reapproval.
+
+A separate KB transaction does not mean separate approval. Ask the author only
+when ambiguity, inference, conflict, retcon, source-tag uncertainty, or
+character/reader knowledge-boundary uncertainty would materially change canon
+or knowledge boundaries. The agent carries plan hashes and `base-revision`
+values between commands without asking the author to maintain them.
 
 ## Exact edits and transaction history
 

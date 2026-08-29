@@ -16,4 +16,9 @@ Return or write: intent inference; options with consequences and reader effects;
 
 ## Access boundary
 
-Workspace-write. You own only the caller-assigned paths. Read current contents before editing, do not touch other paths, and do not revert or overwrite concurrent changes. Return conflicts to muse instead of resolving them destructively.
+Workspace-write. Produce proposal/work output only at caller-assigned paths
+under canonical `work/brainstorm/`; never choose a durable destination. Read
+current contents before editing, do not touch other paths, and do not revert or
+overwrite concurrent changes. Never directly mutate accepted manuscript or KB,
+and never make unjournaled changes. Return conflicts to muse instead of
+resolving them destructively.

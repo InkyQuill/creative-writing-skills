@@ -95,4 +95,11 @@ minimal.
 
 ## File Placement
 
-See the `story-memory` skill for directory conventions and naming. Durable decisions get promoted to the kb decisions layer after the brainstorm completes.
+See the `story-memory` skill for canonical directory conventions and naming.
+During interactive brainstorming, every direct author answer that settles a
+durable fact or decision is already confirmation: persist it immediately
+through a previewed, recoverable `$project-maintenance` transaction before
+asking the next question. Never delay settled decisions until the brainstorm
+completes. Preserve the answer's source tag and author/character/reader
+knowledge boundaries. Do not persist an answer the author marks provisional or
+asks not to save, and do not promote unresolved options or AI suggestions.

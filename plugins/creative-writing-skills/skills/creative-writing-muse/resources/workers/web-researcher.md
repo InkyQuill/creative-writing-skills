@@ -16,4 +16,9 @@ Return or write: direct answers; evidence with source title and link or citation
 
 ## Access boundary
 
-Workspace-write. You own only caller-assigned paths, which must be research-report paths. Read current contents before editing, do not touch other paths, and do not revert or overwrite concurrent changes. Return conflicts to muse.
+Workspace-write. Produce proposal/work output only at caller-assigned paths
+under canonical `work/` research-report storage; never choose a durable story
+destination. Read current contents before editing, do not touch other paths,
+and do not revert or overwrite concurrent changes. Never directly mutate
+accepted manuscript or KB, and never make unjournaled changes. Return conflicts
+to muse.

@@ -30,8 +30,12 @@ class MuseProjectWorkflowTests(unittest.TestCase):
         cls.muse = (MUSE_ROOT / "SKILL.md").read_text()
         cls.registry = json.loads((WORKERS_ROOT / "registry.json").read_text())
         cls.entries = {item["name"]: item for item in cls.registry["workers"]}
+        cls.all_prompts = {
+            name: (WORKERS_ROOT / entry["prompt"]).read_text()
+            for name, entry in cls.entries.items()
+        }
         cls.prompts = {
-            name: (WORKERS_ROOT / cls.entries[name]["prompt"]).read_text()
+            name: cls.all_prompts[name]
             for name in AFFECTED_WORKERS
         }
         cls.pressure = PRESSURE_RESULTS.read_text()
@@ -130,6 +134,29 @@ class MuseProjectWorkflowTests(unittest.TestCase):
             lower = prompt.lower()
             with self.subTest(worker=name):
                 self.assertRegex(lower, r"return(?:s|ed)? (?:a |only )?(?:proposal|findings)")
+                self.assertIn("never directly mutate accepted manuscript or kb", lower)
+                self.assertIn("never make unjournaled changes", lower)
+
+    def test_every_registry_workspace_write_worker_has_full_mutation_boundary(self):
+        write_workers = {
+            name
+            for name, entry in self.entries.items()
+            if entry["access"] == "workspace-write"
+        }
+        self.assertEqual(
+            write_workers,
+            {"brainstormer", "outliner", "style-creator", "web-researcher", "writer"},
+        )
+        for name in write_workers:
+            lower = re.sub(r"\s+", " ", self.all_prompts[name].lower())
+            with self.subTest(worker=name):
+                self.assertRegex(
+                    lower,
+                    r"(?:(?:proposal|work output).{0,80}only|"
+                    r"only.{0,80}(?:proposal|work output))",
+                )
+                self.assertRegex(lower, r"caller-assigned.{0,60}paths?")
+                self.assertRegex(lower, r"`work/[^`]*`|work/report")
                 self.assertIn("never directly mutate accepted manuscript or kb", lower)
                 self.assertIn("never make unjournaled changes", lower)
 

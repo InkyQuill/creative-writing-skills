@@ -180,6 +180,38 @@ class StoryProjectIntegrationTests(unittest.TestCase):
         self.assertRegex(text, r"(?is)(promotion transaction|promot).{0,220}(provenance|source|evidence)")
         self.assertNotRegex(text, r"(?is)(always|every).{0,80}(ask|confirm).{0,80}promotion")
 
+    def test_routed_workflows_reject_delayed_and_blanket_confirmation_gates(self):
+        brainstorming = all_runtime_markdown("story-planning")
+        command_reference = (
+            SKILLS / "project-maintenance" / "resources" / "command-reference.md"
+        ).read_text(encoding="utf-8")
+        routed = brainstorming + command_reference + all_runtime_markdown("world-creation")
+
+        self.assertNotRegex(
+            brainstorming,
+            r"(?is)durable decisions.{0,100}after the brainstorm completes",
+        )
+        self.assertRegex(
+            brainstorming,
+            r"(?is)direct author answer.{0,180}settles.{0,180}persist.{0,180}"
+            r"before.{0,80}next question",
+        )
+        self.assertNotIn("separate author-confirmed decisions", command_reference)
+        self.assertRegex(
+            command_reference,
+            r"(?is)separate KB transaction.{0,120}(does not|is not).{0,100}separate approval",
+        )
+        self.assertRegex(
+            command_reference,
+            r"(?is)direct.{0,80}unambiguous.{0,220}accepted.{0,180}"
+            r"without.{0,80}(reapproval|re-approval|reconfirmation)",
+        )
+        self.assertNotRegex(
+            routed,
+            r"(?is)(always|every).{0,100}(ask|confirm|approval).{0,100}"
+            r"(promotion|canon|KB)",
+        )
+
     def test_author_is_never_asked_to_maintain_cli_metadata(self):
         text = "\n".join(all_runtime_markdown(name) for name in DOMAIN_SKILLS)
         self.assertNotRegex(
