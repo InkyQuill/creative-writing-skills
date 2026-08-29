@@ -120,6 +120,12 @@ _GRILL_INSTRUCTION_FILE = (
 _GRILL_INSTRUCTION_FILE_ADAPTATION = (
     "2. Project conventions in `AGENTS.md` — established names and labels."
 )
+_UPSTREAM_SKILL_NAMES = {
+    "decision-grill": "grill-with-docs",
+}
+_LOCAL_SKILL_HEADINGS = {
+    "decision-grill": ("# Grill With Docs", "# Decision Grill"),
+}
 _LLM_DISK_DRAFT = (
     "3. **Draft.** Write a full draft to disk so you can edit it piece by piece."
 )
@@ -467,6 +473,12 @@ def validated_vendored_skills() -> tuple[str, ...]:
     return skills
 
 
+def upstream_skill_name(local_skill_name: str) -> str:
+    """Return the pinned checkout name for one distributed vendored skill."""
+
+    return _UPSTREAM_SKILL_NAMES.get(local_skill_name, local_skill_name)
+
+
 def normalize_codex_references(text: str, canonical_skills: set[str], skill_name: str) -> str:
     """Convert Claude slash skill references outside fenced code blocks to Codex syntax."""
 
@@ -506,12 +518,27 @@ def _adapt_markdown(
     is_skill_document = relative_path == Path("SKILL.md")
     if is_skill_document:
         text = normalize_codex_invocation_metadata(text)
-    if skill_name == "grill-with-docs" and is_skill_document:
+        upstream_name = upstream_skill_name(skill_name)
+        if upstream_name != skill_name:
+            text = replace_exactly_once(
+                text,
+                f"name: {upstream_name}",
+                f"name: {skill_name}",
+                f"{skill_name}: expected licensed upstream frontmatter name",
+            )
+            upstream_heading, local_heading = _LOCAL_SKILL_HEADINGS[skill_name]
+            text = replace_exactly_once(
+                text,
+                upstream_heading,
+                local_heading,
+                f"{skill_name}: expected licensed upstream heading",
+            )
+    if skill_name == "decision-grill" and is_skill_document:
         text = replace_exactly_once(
             text,
             _GRILL_INSTRUCTION_FILE,
             _GRILL_INSTRUCTION_FILE_ADAPTATION,
-            "grill-with-docs: expected licensed instruction-file reference",
+            "decision-grill: expected licensed instruction-file reference",
         )
     if skill_name == "llm-writing" and is_skill_document:
         text = replace_exactly_once(
@@ -852,9 +879,10 @@ def render_from_checkout(checkout: Path, output_root: Path) -> None:
     )
     sources: dict[str, Path] = {}
     for skill_name in configured_skills:
+        source_name = upstream_skill_name(skill_name)
         source = _require_safe_directory(
-            source_root / skill_name,
-            f"{skill_name} licensed source skill boundary",
+            source_root / source_name,
+            f"{skill_name} licensed source skill boundary ({source_name})",
             boundary=source_root,
         )
         _preflight_source_tree(source, skill_name)

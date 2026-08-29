@@ -34,7 +34,7 @@ EXPECTED_SKILLS = {
     "creative-writing-craft",
     "creative-writing-modes",
     "creative-writing-muse",
-    "grill-with-docs",
+    "decision-grill",
     "information-hierarchy",
     "intent-modeling",
     "kb-management",
@@ -420,7 +420,7 @@ class ClaudeDistributionRenderTests(unittest.TestCase):
             self.assertEqual(EXPECTED_WORKERS | {"muse"}, agent_names)
 
             project_setup = (output_root / "skills/project-setup/SKILL.md").read_text()
-            grill = (output_root / "skills/grill-with-docs/SKILL.md").read_text()
+            grill = (output_root / "skills/decision-grill/SKILL.md").read_text()
             story_planning = (
                 output_root / "skills/story-planning/SKILL.md"
             ).read_text()

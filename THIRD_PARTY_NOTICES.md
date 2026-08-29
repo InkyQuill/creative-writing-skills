@@ -13,7 +13,8 @@ without further modification.
 The following skill snapshots are imported from the Apache-2.0 distribution at
 [`haowjy/creative-writing-skills@fd7a3ad9cd7697a0645ff6ff4bd5e809cf7673a3`](https://github.com/haowjy/creative-writing-skills/tree/fd7a3ad9cd7697a0645ff6ff4bd5e809cf7673a3):
 
-- `grill-with-docs`
+- `decision-grill` (distributed name; the pinned upstream snapshot is named
+  `grill-with-docs`)
 - `information-hierarchy`
 - `intent-modeling`
 - `knowledge-layers`

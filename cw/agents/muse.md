@@ -8,7 +8,7 @@ skills:
   - creative-writing-craft
   - creative-writing-modes
   - creative-writing-muse
-  - grill-with-docs
+  - decision-grill
   - information-hierarchy
   - intent-modeling
   - kb-management

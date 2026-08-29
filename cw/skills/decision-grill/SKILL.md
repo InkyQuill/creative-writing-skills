@@ -1,9 +1,9 @@
 ---
-name: grill-with-docs
+name: decision-grill
 description: "Use when challenging a plan — grills the author against documented decisions and sharpens terminology."
 ---
 
-# Grill With Docs
+# Decision Grill
 
 Load `/intent-modeling` if it isn't already loaded.
 

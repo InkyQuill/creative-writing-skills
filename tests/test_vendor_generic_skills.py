@@ -486,42 +486,94 @@ class VendorGenericSkillsTests(unittest.TestCase):
         self.assertIn("available Mermaid parser or renderer", rendered)
         self.assertIn("report syntax errors before delivery", rendered)
 
-    def test_render_adapts_grill_instruction_file_for_codex(self):
+    def test_render_maps_upstream_grill_to_local_decision_grill(self):
         source = self.checkout / "cw" / "skills" / "grill-with-docs"
         source.mkdir(parents=True)
         (source / "SKILL.md").write_text(
             "---\nname: grill-with-docs\n---\n"
+            "# Grill With Docs\n\n"
             "2. Project conventions in `CLAUDE.md` — established names and labels.\n"
         )
         with patch(
             "scripts.vendor_generic_skills.vendored_skills",
-            return_value=("grill-with-docs",),
+            return_value=("decision-grill",),
         ), patch(
             "scripts.vendor_generic_skills.canonical_skills",
-            return_value={"grill-with-docs"},
+            return_value={"decision-grill"},
         ):
             render_from_checkout(self.checkout, self.output)
 
-        rendered = (self.output / "grill-with-docs/SKILL.md").read_text()
+        self.assertFalse((self.output / "grill-with-docs").exists())
+        rendered = (self.output / "decision-grill/SKILL.md").read_text()
+        self.assertIn("name: decision-grill", rendered)
+        self.assertIn("# Decision Grill", rendered)
+        self.assertNotIn("name: grill-with-docs", rendered)
+        self.assertNotIn("# Grill With Docs", rendered)
         self.assertIn("Project conventions in `AGENTS.md`", rendered)
         self.assertNotIn("CLAUDE.md", rendered)
+
+    def test_check_reports_mapped_skill_drift_under_local_name(self):
+        source = self.checkout / "cw" / "skills" / "grill-with-docs"
+        source.mkdir(parents=True)
+        (source / "SKILL.md").write_text(
+            "---\nname: grill-with-docs\n---\n"
+            "# Grill With Docs\n\n"
+            "2. Project conventions in `CLAUDE.md` — established names and labels.\n"
+        )
+        with patch(
+            "scripts.vendor_generic_skills.vendored_skills",
+            return_value=("decision-grill",),
+        ), patch(
+            "scripts.vendor_generic_skills.canonical_skills",
+            return_value={"decision-grill"},
+        ):
+            render_from_checkout(self.checkout, self.output)
+            check_checkout(self.checkout, self.output)
+            (self.output / "decision-grill/SKILL.md").write_text("changed\n")
+            with self.assertRaisesRegex(
+                VendorDriftError,
+                "decision-grill/SKILL.md",
+            ):
+                check_checkout(self.checkout, self.output)
 
     def test_grill_adaptation_rejects_unrecognized_licensed_source(self):
         source = self.checkout / "cw" / "skills" / "grill-with-docs"
         source.mkdir(parents=True)
         (source / "SKILL.md").write_text(
             "---\nname: grill-with-docs\n---\n"
+            "# Grill With Docs\n\n"
             "2. Changed project conventions wording.\n"
         )
         with patch(
             "scripts.vendor_generic_skills.vendored_skills",
-            return_value=("grill-with-docs",),
+            return_value=("decision-grill",),
         ), patch(
             "scripts.vendor_generic_skills.canonical_skills",
-            return_value={"grill-with-docs"},
+            return_value={"decision-grill"},
         ):
             with self.assertRaisesRegex(ValueError, "licensed instruction-file reference"):
                 render_from_checkout(self.checkout, self.output)
+
+    def test_render_does_not_rename_unmapped_skill_content(self):
+        source = self.checkout / "cw" / "skills" / "intent-modeling"
+        source.mkdir(parents=True)
+        (source / "SKILL.md").write_text(
+            "---\nname: intent-modeling\n---\n"
+            "# Grill With Docs is merely mentioned here\n"
+            "The upstream name grill-with-docs is example prose.\n"
+        )
+        with patch(
+            "scripts.vendor_generic_skills.vendored_skills",
+            return_value=("intent-modeling",),
+        ), patch(
+            "scripts.vendor_generic_skills.canonical_skills",
+            return_value={"intent-modeling"},
+        ):
+            render_from_checkout(self.checkout, self.output)
+
+        rendered = (self.output / "intent-modeling/SKILL.md").read_text()
+        self.assertIn("# Grill With Docs is merely mentioned here", rendered)
+        self.assertIn("upstream name grill-with-docs", rendered)
 
     def test_render_adapts_llm_writing_disk_boundary(self):
         source = self.checkout / "cw" / "skills" / "llm-writing"
@@ -704,14 +756,15 @@ class VendorGenericSkillsTests(unittest.TestCase):
         )
         (source / "SKILL.md").write_text(
             "---\nname: grill-with-docs\n---\n"
+            "# Grill With Docs\n\n"
             f"{instruction}\n{instruction}\n"
         )
         with patch(
             "scripts.vendor_generic_skills.vendored_skills",
-            return_value=("grill-with-docs",),
+            return_value=("decision-grill",),
         ), patch(
             "scripts.vendor_generic_skills.canonical_skills",
-            return_value={"grill-with-docs"},
+            return_value={"decision-grill"},
         ):
             with self.assertRaisesRegex(
                 ValueError,
