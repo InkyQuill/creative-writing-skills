@@ -132,6 +132,11 @@ class ProjectMaintenanceSkillTests(unittest.TestCase):
             r"(?is)(mechanical|repairable).{0,100}(never block|do not block).{0,100}(prose review|creative work)",
         )
 
+    def test_cli_failures_route_to_canonical_cli_doctor_skill(self):
+        text = all_runtime_markdown()
+        self.assertIn("$cli-doctor", text)
+        self.assertNotRegex(text, r"(?<!\$)cli-doctor workflow")
+
 
 if __name__ == "__main__":
     unittest.main()

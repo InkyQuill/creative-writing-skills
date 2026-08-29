@@ -7,8 +7,8 @@ description: Diagnose a canonical creative-writing project and plan safe repairs
 
 Diagnose before changing anything. Run `cw doctor --format json` as a read-only
 first step and retain its structured findings. Diagnosis performs no hidden or
-implicit repair. If the CLI itself cannot run, route to the `cli-doctor`
-workflow; do not guess at project changes.
+implicit repair. If the CLI itself cannot run, route to `$cli-doctor`; do not
+guess at project changes.
 
 Treat incomplete transactions and recovery blockers as the highest priority.
 Until they have an exact recovery action, do not start another journaled

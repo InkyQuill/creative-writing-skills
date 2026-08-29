@@ -25,7 +25,7 @@ runtime setup.
 
 Interpret results agent-first: exit 0 continues; exit 1 means inspect the
 findings, repair what is safe, and continue unrelated creative work; exit 2
-means follow the `cli-doctor` workflow. Mechanical warnings never block prose review or
+means follow `$cli-doctor`. Mechanical warnings never block prose review or
 unrelated creative work.
 
 Read only the resource needed for the current operation:

@@ -105,6 +105,11 @@ class ProjectDoctorSkillTests(unittest.TestCase):
         )
         self.assertIn("continue", text.lower())
 
+    def test_cli_failures_route_to_canonical_cli_doctor_skill(self):
+        text = all_runtime_markdown()
+        self.assertIn("$cli-doctor", text)
+        self.assertNotRegex(text, r"(?<!\$)cli-doctor workflow")
+
 
 if __name__ == "__main__":
     unittest.main()
