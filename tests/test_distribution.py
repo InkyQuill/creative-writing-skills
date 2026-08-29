@@ -88,11 +88,16 @@ class DistributionScaffoldTests(unittest.TestCase):
         self.assertIn("unreliable on Windows", skill)
         self.assertIn("Only regular `AGENTS.md` exists", reconciliation)
         self.assertIn("needs no additional confirmation", reconciliation)
-        self.assertIn("Only regular `CLAUDE.md` exists", reconciliation)
+        self.assertIn("Only non-broken regular `CLAUDE.md` exists", reconciliation)
         self.assertIn("materially ambiguous", reconciliation)
         self.assertIn("Both regular files exist", reconciliation)
         self.assertIn("contradictory or ambiguously divergent", reconciliation)
         self.assertIn("each nested directory", reconciliation)
+        self.assertRegex(
+            reconciliation,
+            r"(?s)Classify safety before.*broken import always takes precedence.*"
+            r"lone regular `CLAUDE\.md` beginning\s+`@AGENTS\.md`.*sibling target is absent",
+        )
 
     def test_instruction_writers_route_through_project_bootstrap(self):
         routed = {
