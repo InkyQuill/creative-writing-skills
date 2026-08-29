@@ -1,7 +1,7 @@
 import unittest
 
 from tests.cw_cli import helpers  # noqa: F401
-from cwcli.markdown_tables import parse_tables
+from cwcli.markdown_tables import malformed_table_lines, parse_tables, table_header_lines
 
 
 class MarkdownTableTests(unittest.TestCase):
@@ -33,6 +33,14 @@ class MarkdownTableTests(unittest.TestCase):
     def test_mismatched_body_row_ends_table_without_guessing(self):
         tables = parse_tables("| a | b |\n|---|---|\n| one |\n| two | three |\n")
         self.assertEqual(tables[0].rows, ())
+
+    def test_diagnostics_require_a_credible_table_sequence(self):
+        text = "Ordinary prose with left | right but no table delimiter.\n"
+        self.assertEqual(malformed_table_lines(text), ())
+
+        mixed = "| good | table |\n|---|---|\n| yes | value |\n\n| broken | table |\n| -- | --- |\n"
+        self.assertEqual(table_header_lines(mixed), (1,))
+        self.assertEqual(malformed_table_lines(mixed), (5,))
 
 
 if __name__ == "__main__":

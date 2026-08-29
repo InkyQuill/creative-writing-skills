@@ -8,7 +8,13 @@ import unicodedata
 from pathlib import Path
 
 from ..findings import Finding, Severity
-from ..markdown_tables import MarkdownTable, TableRow, parse_tables
+from ..markdown_tables import (
+    MarkdownTable,
+    TableRow,
+    malformed_table_lines,
+    parse_tables,
+    table_header_lines,
+)
 from ..project import Project
 
 
@@ -28,7 +34,15 @@ UNKNOWN_CHARACTER = "CW-CONT-060"
 MALFORMED = "CW-CONT-090"
 
 _CHAPTER_RE = re.compile(r"(?:Chapter|Ch)[-\s]*(\d+)(?:\.(\d+))?", re.IGNORECASE)
-_DECEASED_RE = re.compile(r"(?:deceased|dead)\s*(?:\((?:Ch[-\s]*)?(\d+)\)|(?:Ch[-\s]*)?(\d+))?", re.IGNORECASE)
+_DECEASED_RE = re.compile(
+    r"(?:dead|deceased)(?:\s*\(ch(?:apter)?[-\s]*(\d+)\))?",
+    re.IGNORECASE,
+)
+_WINDOWS_RESERVED = frozenset(
+    {"CON", "PRN", "AUX", "NUL"}
+    | {f"COM{number}" for number in range(1, 10)}
+    | {f"LPT{number}" for number in range(1, 10)}
+)
 
 
 def check_continuity(project: Project) -> list[Finding]:
@@ -41,7 +55,7 @@ def check_continuity(project: Project) -> list[Finding]:
     if not root.is_dir():
         return [_finding(RECORD, "warning", "continuity record directory is missing", "kb/continuity", None,
                          "Restore kb/continuity and its canonical record files when continuity tracking is needed.")]
-    if _is_nested_project(root):
+    if _nested_project_boundary(project.root, root) is not None:
         return [_finding(RECORD, "warning", "kb/continuity belongs to a nested project and was not inspected",
                          "kb/continuity", None, "Run the continuity check from the nested project's own root.")]
 
@@ -62,12 +76,12 @@ def check_continuity(project: Project) -> list[Finding]:
         text, tables = loaded["state.md"]
         state_current = _last_int_field(text, "current-chapter")
         story_status = _last_word_field(text, "story-status") or "draft"
-        recognized = False
+        recognized: set[int] = set()
         legacy_state_shape = False
-        for table in tables:
+        for table_index, table in enumerate(tables):
             headers = _headers(table)
             if _has_columns(headers, ("character", "location", "status", "injuries", "relationships")):
-                recognized = True
+                recognized.add(table_index)
                 legacy_state_shape = True
                 for row in table.rows:
                     values = _row(table, row)
@@ -77,7 +91,7 @@ def check_continuity(project: Project) -> list[Finding]:
                     if death is not None:
                         deceased[_identity(character)] = (character, death, row.line)
             elif _has_columns(headers, ("character", "state", "since")):
-                recognized = True
+                recognized.add(table_index)
                 for row in table.rows:
                     values = _row(table, row)
                     character = values["character"]
@@ -86,7 +100,7 @@ def check_continuity(project: Project) -> list[Finding]:
                     if death is not None:
                         deceased[_identity(character)] = (character, death, row.line)
             elif _has_columns(headers, ("character", "fact", "learned in")):
-                recognized = True
+                recognized.add(table_index)
                 legacy_state_shape = True
                 for row in table.rows:
                     values = _row(table, row)
@@ -103,7 +117,7 @@ def check_continuity(project: Project) -> list[Finding]:
                                      "Repair current-chapter without changing unrelated state records."))
         _warn_partial("state.md", text, tables, recognized, findings)
 
-    scenes = _load_scenes(root / "scenes", character_ids, findings)
+    scenes = _load_scenes(project.root, root / "scenes", character_ids, findings)
     scene_records = [record for _path, record in scenes]
     if _path_kind(root / "scenes") == "missing":
         findings.append(_finding(RECORD, "warning", "canonical scenes directory is missing",
@@ -134,12 +148,12 @@ def check_continuity(project: Project) -> list[Finding]:
     timeline_anchors: dict[str, tuple[set[str], set[int]]] = {}
     if "timeline.md" in loaded:
         text, tables = loaded["timeline.md"]
-        recognized = False
+        recognized: set[int] = set()
         last_story_chapter: int | None = None
-        for table in tables:
+        for table_index, table in enumerate(tables):
             if not _has_columns(_headers(table), ("when", "event", "threads", "anchor")):
                 continue
-            recognized = True
+            recognized.add(table_index)
             for row in table.rows:
                 values = _row(table, row)
                 section = _section_before(text, row.line)
@@ -184,22 +198,22 @@ def check_continuity(project: Project) -> list[Finding]:
     horizon = state_current if state_current is not None else (max_scene or 0)
     if "promises.md" in loaded:
         text, tables = loaded["promises.md"]
-        recognized = False
-        for table in tables:
+        recognized: set[int] = set()
+        for table_index, table in enumerate(tables):
             if not _has_columns(_headers(table), ("promise", "status", "planted", "payoff", "pov knows", "evidence")):
                 continue
-            recognized = True
+            recognized.add(table_index)
             for row in table.rows:
                 _check_promise(_row(table, row), row.line, state_current, horizon, story_status, findings)
         _warn_partial("promises.md", text, tables, recognized, findings)
 
     if "questions.md" in loaded:
         text, tables = loaded["questions.md"]
-        recognized = False
-        for table in tables:
+        recognized: set[int] = set()
+        for table_index, table in enumerate(tables):
             if not _has_columns(_headers(table), ("question", "status", "introduced", "answered", "evidence")):
                 continue
-            recognized = True
+            recognized.add(table_index)
             for row in table.rows:
                 _check_question(_row(table, row), row.line, state_current, story_status, findings)
         _warn_partial("questions.md", text, tables, recognized, findings)
@@ -265,7 +279,7 @@ def _check_question(values: dict[str, str], line: int, current: int | None,
                                  "Correct the explicit question lifecycle fields after confirming intent."))
 
 
-def _load_scenes(directory: Path, character_ids: set[str], findings: list[Finding]) -> list[tuple[str, tuple[int | None, list[str], str, str, int]]]:
+def _load_scenes(project_root: Path, directory: Path, character_ids: set[str], findings: list[Finding]) -> list[tuple[str, tuple[int | None, list[str], str, str, int]]]:
     records: list[tuple[str, tuple[int | None, list[str], str, str, int]]] = []
     if _path_kind(directory) != "directory":
         if _path_kind(directory) not in {"missing", "directory"}:
@@ -273,7 +287,7 @@ def _load_scenes(directory: Path, character_ids: set[str], findings: list[Findin
                                      "kb/continuity/scenes", None,
                                      "Replace it with an ordinary in-project directory before checking scenes."))
         return records
-    if _is_nested_project(directory):
+    if _nested_project_boundary(project_root, directory) is not None:
         findings.append(_finding(RECORD, "warning", "scenes belongs to a nested project and was not inspected",
                                  "kb/continuity/scenes", None,
                                  "Run the continuity check from the nested project's own root."))
@@ -286,22 +300,23 @@ def _load_scenes(directory: Path, character_ids: set[str], findings: list[Findin
         if result is None:
             continue
         text, tables = result
-        recognized = False
+        recognized: set[int] = set()
         filename_chapter = _parse_scene_chapter(path.stem)
-        for table in tables:
+        for table_index, table in enumerate(tables):
             headers = _headers(table)
             legacy = _has_columns(headers, ("scene", "pov", "location", "present", "mentions", "anchor", "state changes"))
             compact = _has_columns(headers, ("chapter", "cast"))
             if not legacy and not compact:
                 continue
-            recognized = True
+            recognized.add(table_index)
             for row in table.rows:
                 values = _row(table, row)
                 chapter = _parse_chapter(values.get("chapter", "")) if compact else filename_chapter
                 cast_value = values.get("cast", values.get("present", ""))
                 present = [item.strip() for item in cast_value.split(",") if item.strip()]
+                mentions = [item.strip() for item in values.get("mentions", "").split(",") if item.strip()]
                 pov = values.get("pov", "").strip()
-                for character in present + ([pov] if pov else []):
+                for character in present + mentions + ([pov] if pov else []):
                     _check_character(character, relative, row.line, character_ids, findings)
                 records.append((relative, (chapter, present, pov, values.get("anchor", "").strip(), row.line)))
         _warn_partial(path.name, text, tables, recognized, findings, path=relative)
@@ -310,7 +325,7 @@ def _load_scenes(directory: Path, character_ids: set[str], findings: list[Findin
 
 def _character_ids(project: Project, findings: list[Finding]) -> set[str]:
     directory = project.root / "kb" / "characters"
-    if _path_kind(directory) != "directory" or _is_nested_project(directory):
+    if _path_kind(directory) != "directory" or _nested_project_boundary(project.root, directory) is not None:
         return set()
     identities: set[str] = set()
     for path in directory.iterdir():
@@ -322,7 +337,7 @@ def _character_ids(project: Project, findings: list[Finding]) -> set[str]:
 
 def _character_timeline_documents(project: Project, findings: list[Finding]):
     directory = project.root / "kb" / "characters"
-    if _path_kind(directory) != "directory" or _is_nested_project(directory):
+    if _path_kind(directory) != "directory" or _nested_project_boundary(project.root, directory) is not None:
         return []
     documents = []
     for path in sorted(directory.iterdir(), key=lambda item: item.name):
@@ -355,14 +370,20 @@ def _read_record(path: Path, relative: str, findings: list[Finding], *, required
     return text, parse_tables(text)
 
 
-def _warn_partial(name: str, text: str, tables: tuple[MarkdownTable, ...], recognized: bool,
+def _warn_partial(name: str, text: str, tables: tuple[MarkdownTable, ...], recognized: set[int],
                   findings: list[Finding], *, path: str | None = None) -> None:
-    if recognized or not any("|" in line for line in text.splitlines()):
-        return
-    line = next((index for index, value in enumerate(text.splitlines(), 1) if "|" in value), None)
-    reason = "contains tables with unrecognized columns" if tables else "contains a malformed or incomplete table"
-    findings.append(_finding(MALFORMED, "warning", f"{name} {reason}", path or f"kb/continuity/{name}", line,
-                             "Repair the delimiter/header without assigning semantic column roles by guesswork."))
+    relative = path or f"kb/continuity/{name}"
+    headers = table_header_lines(text)
+    for table_index, line in enumerate(headers):
+        if table_index in recognized:
+            continue
+        findings.append(_finding(MALFORMED, "warning", f"{name} contains a table with unrecognized columns",
+                                 relative, line,
+                                 "Use an explicitly supported header without assigning column roles by guesswork."))
+    for line in malformed_table_lines(text):
+        findings.append(_finding(MALFORMED, "warning", f"{name} contains a malformed or incomplete table",
+                                 relative, line,
+                                 "Repair the delimiter/header without assigning semantic column roles by guesswork."))
 
 
 def _headers(table: MarkdownTable) -> tuple[str, ...]:
@@ -395,10 +416,10 @@ def _parse_scene_chapter(value: str) -> int | None:
 
 
 def _death_chapter(state: str, since: str) -> int | None:
-    match = _DECEASED_RE.search(state)
+    match = _DECEASED_RE.fullmatch(state.strip())
     if not match:
         return None
-    explicit = match.group(1) or match.group(2)
+    explicit = match.group(1)
     return int(explicit) if explicit else _parse_chapter(since)
 
 
@@ -410,8 +431,23 @@ def _check_character(value: str, path: str, line: int, known: set[str], findings
     identity = _identity(value)
     if not identity or identity in known:
         return
-    findings.append(_finding(UNKNOWN_CHARACTER, "warning", f"unknown character ID {value!r}", path, line,
-                             f"Create kb/characters/{value.strip()}.md or correct the explicit character ID."))
+    if _safe_character_stem(value):
+        action = f"Create kb/characters/{value.strip()}.md or correct the explicit character ID."
+    else:
+        action = "Correct the explicit character ID to one safe portable file stem."
+    findings.append(_finding(UNKNOWN_CHARACTER, "warning", f"unknown character ID {value!r}", path, line, action))
+
+
+def _safe_character_stem(value: str) -> bool:
+    if not value or value != value.strip() or value in {".", ".."}:
+        return False
+    if unicodedata.normalize("NFC", value) != value:
+        return False
+    if value.endswith((".", " ")) or any(character in '<>:"/\\|?*' for character in value):
+        return False
+    if any(ord(character) < 32 or ord(character) == 127 for character in value):
+        return False
+    return value.rstrip(". ").split(".", 1)[0].upper() not in _WINDOWS_RESERVED
 
 
 def _add_anchor(anchors: dict[str, tuple[set[str], set[int]]], anchor: str, when: str, chapter: int | None) -> None:
@@ -472,9 +508,15 @@ def _contains_symlink(root: Path, target: Path) -> bool:
     return False
 
 
-def _is_nested_project(directory: Path) -> bool:
-    manifest = directory / "project.md"
-    return _path_kind(manifest) == "file"
+def _nested_project_boundary(project_root: Path, target: Path) -> Path | None:
+    current = project_root
+    relative = target.relative_to(project_root)
+    for part in relative.parts:
+        current /= part
+        manifest = current / "project.md"
+        if _path_kind(manifest) == "file":
+            return current
+    return None
 
 
 def _finding(code: str, severity: Severity, message: str, path: str, line: int | None, next_action: str) -> Finding:
