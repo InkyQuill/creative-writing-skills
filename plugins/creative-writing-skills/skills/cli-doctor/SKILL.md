@@ -10,12 +10,12 @@ Resolve the actual installed `$project-maintenance` skill path from the active
 skill catalog; do not infer it from the story project. Its exact bundled
 entrypoint is `<project-maintenance-skill>/resources/cli/cw.py`.
 
-Require Python 3.10 or newer. Test that exact bundled entrypoint with the
-platform's interpreter, then consume its structured diagnosis:
+Require Python 3.10 or newer. Select an available Python 3 interpreter, test
+that exact bundled entrypoint, and let its diagnosis enforce the minimum:
 
 ```text
 Linux/macOS: python3 <project-maintenance-skill>/resources/cli/cw.py cli-doctor --format json
-Windows: py -3.10 <project-maintenance-skill>\resources\cli\cw.py cli-doctor --format json
+Windows: py -3 <project-maintenance-skill>\resources\cli\cw.py cli-doctor --format json
 ```
 
 Interpret the JSON before acting. A failed required Python or direct-entrypoint

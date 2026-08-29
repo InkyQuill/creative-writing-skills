@@ -9,12 +9,12 @@ First identify the operating system, the user's actual shell, the installed
 `project-maintenance` skill path, and a user-owned launcher directory. Build a
 small wrapper that invokes `$project-maintenance`'s exact bundled
 `resources/cli/cw.py` with Python 3.10 or newer and forwards every argument.
-Prefer a wrapper or symlink in an
-existing user PATH directory; do not modify system directories.
+Use a user-owned executable wrapper in an existing user PATH directory; do not
+modify system directories.
 
 Before any write, show a complete preview containing:
 
-- the exact launcher path and full wrapper contents or symlink target;
+- the exact launcher path and full wrapper contents;
 - any PATH or shell-profile line to add, including the exact profile file;
 - the verification command `cw cli-doctor --format json`;
 - how to remove every proposed change.
@@ -33,7 +33,7 @@ exec python3 "/absolute/project-maintenance/resources/cli/cw.py" "$@"
 For Windows, a user-owned `cw.cmd` may call:
 
 ```bat
-@py -3.10 "C:\absolute\project-maintenance\resources\cli\cw.py" %*
+@py -3 "C:\absolute\project-maintenance\resources\cli\cw.py" %*
 ```
 
 After an approved change, run the launcher diagnosis and compare its reported

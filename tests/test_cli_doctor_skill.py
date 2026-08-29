@@ -54,7 +54,8 @@ class CliDoctorSkillTests(unittest.TestCase):
         text = SKILL.read_text(encoding="utf-8")
         for platform in ("Windows", "macOS", "Linux"):
             self.assertIn(platform, text)
-        self.assertRegex(text, r"py -3\.10 .*resources\\cli\\cw\.py")
+        self.assertRegex(text, r"py -3 .*resources\\cli\\cw\.py")
+        self.assertNotIn("py -3.10", text)
         self.assertRegex(text, r"python3 .*resources/cli/cw\.py")
 
     def test_zero_configuration_does_not_install_or_copy_runtime(self):
@@ -81,6 +82,11 @@ class CliDoctorSkillTests(unittest.TestCase):
         self.assertLess(len(main.splitlines()), 60)
         self.assertGreater(len(resource), 200)
         self.assertIn("launcher-setup.md", main)
+
+    def test_launcher_is_executable_wrapper_not_symlink_to_cw_py(self):
+        text = LAUNCHER_SETUP.read_text(encoding="utf-8")
+        self.assertRegex(text, r"(?is)user-(owned|scoped).{0,120}executable wrapper")
+        self.assertNotIn("symlink", text.lower())
 
 
 if __name__ == "__main__":
