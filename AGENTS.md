@@ -13,7 +13,7 @@ ZCode. It is never an independent source tree and must not be hand-edited.
 Make every runtime change in the canonical plugin first, then regenerate `cw/`.
 
 The repository marketplace is `.agents/plugins/marketplace.json`. The exact
-26-skill inventory and authored/vendored partition are declared in
+31-skill inventory and authored/vendored partition are declared in
 `config/distribution.json`.
 
 ## Canonical Content
@@ -64,7 +64,7 @@ python3 scripts/create_skill_zips.py
 ```
 
 Archive generation reads only the generated `cw/skills/` tree, requires an
-exact match with the configured 26-skill inventory, and writes deterministic
+exact match with the configured 31-skill inventory, and writes deterministic
 archives under `zips/`.
 
 ## Releases

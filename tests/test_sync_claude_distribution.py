@@ -612,6 +612,28 @@ class ClaudeDistributionCliTests(unittest.TestCase):
         mutate(config)
         path.write_text(json.dumps(config) + "\n")
 
+    def test_apply_excludes_python_cache_artifacts_from_generated_runtime(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            repo_root = Path(temporary)
+            self._copy_canonical_inputs(repo_root)
+            cli_root = (
+                repo_root
+                / "plugins/creative-writing-skills/skills/project-maintenance/"
+                "resources/cli/cwcli"
+            )
+            cache_file = cli_root / "__pycache__/app.cpython-314.pyc"
+            cache_file.parent.mkdir(exist_ok=True)
+            cache_file.write_bytes(b"local bytecode cache")
+            loose_cache = cli_root / "local.pyc"
+            loose_cache.write_bytes(b"local bytecode cache")
+
+            status = main(["--apply"], repo_root=repo_root)
+
+            self.assertEqual(0, status)
+            generated_cli = repo_root / "cw/skills/project-maintenance/resources/cli/cwcli"
+            self.assertFalse((generated_cli / "__pycache__").exists())
+            self.assertFalse((generated_cli / "local.pyc").exists())
+
     def test_apply_rejects_duplicate_bootstrap_instruction_without_mutation(self):
         with tempfile.TemporaryDirectory() as temporary:
             repo_root = Path(temporary) / "repo"

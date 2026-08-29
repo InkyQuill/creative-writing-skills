@@ -87,6 +87,15 @@ _KNOWLEDGE_BOOTSTRAP_CLAUDE_VALIDATION = (
     "Use `/md-validation` for link checking and diagram validation before\n"
     "committing."
 )
+_EXCLUDED_RUNTIME_PARTS = frozenset({"__pycache__"})
+_EXCLUDED_RUNTIME_SUFFIXES = frozenset({".pyc"})
+
+
+def _is_excluded_runtime_artifact(relative: Path) -> bool:
+    return (
+        any(part in _EXCLUDED_RUNTIME_PARTS for part in relative.parts)
+        or relative.suffix.lower() in _EXCLUDED_RUNTIME_SUFFIXES
+    )
 
 
 class UnsupportedTransformError(ValueError):
@@ -166,6 +175,8 @@ def _preflight_skill_tree(skill_root: Path, skill_name: str) -> None:
         for entry in entries:
             path = Path(entry.path)
             relative = path.relative_to(skill_root)
+            if _is_excluded_runtime_artifact(relative):
+                continue
             try:
                 mode = entry.stat(follow_symlinks=False).st_mode
             except OSError as error:
@@ -663,6 +674,8 @@ def _copy_skill(
 ) -> None:
     for path in sorted(source.rglob("*")):
         relative = path.relative_to(source)
+        if _is_excluded_runtime_artifact(relative):
+            continue
         try:
             mode = path.stat(follow_symlinks=False).st_mode
         except OSError as error:
