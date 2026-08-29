@@ -20,12 +20,14 @@ Before prose production or surface review, resolve resources in this order:
 1. universal prose base: `resources/prose/base.md`;
 2. exact manuscript-language defaults under `resources/prose/languages/`,
    using the primary tag (`ru-RU` → `ru`, `en-GB` → `en`);
-3. the prose-profile base under `resources/prose/profiles/`, plus its matching
+3. for `ru`-language projects during proofreading, line editing, or review
+   passes: the applicable files under `resources/prose/editorial/ru/`;
+4. the prose-profile base under `resources/prose/profiles/`, plus its matching
    language adapter when the profile provides one;
-4. applicable project-wide `kb/styles/` references and their approved
+5. applicable project-wide `kb/styles/` references and their approved
    `kb/samples/` evidence;
-5. narrower narrator, POV, character, or scene style references and evidence;
-6. the current author brief.
+6. narrower narrator, POV, character, or scene style references and evidence;
+7. the current author brief.
 
 Grammar and orthography in the language resource are the floor. Project
 conventions choose among valid variants. A profile shapes register but cannot
@@ -45,3 +47,8 @@ Load only the other resource needed for the task:
 - `resources/scene-construction.md` — scene entry, dialogue, pacing, transitions.
 - `resources/style-analysis.md` — analyzing evidence samples and producing scoped style references.
 - `resources/genre/` — market-genre craft guidance when a reader promise shapes the page.
+- `resources/humor.md` — engineering jokes and comedic passages as connection systems.
+- `resources/dialogue.md` — subtext layers, same-voice diagnosis, and the deterministic dialogue audit.
+- `resources/scene-sequencing.md` — scene/sequel structure and pacing rhythm.
+- `resources/endings.md` — ending anatomy, resolution types, and payoff design.
+- `resources/character-arc.md` — arc polarities, lie/want/need, and arc troubleshooting.
