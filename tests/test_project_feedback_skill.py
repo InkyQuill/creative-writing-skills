@@ -36,7 +36,7 @@ class ProjectFeedbackSkillTests(unittest.TestCase):
         self.assertRegex(text, r"(?is)(never|do not).{0,120}(replace|unnecessarily block).{0,100}(primary|actual)")
         self.assertRegex(text, r"(?is)do not file feedback.{0,160}(ordinary story-content ambiguity|author preference)")
 
-    def test_scope_is_only_this_repository_and_excludes_upstream_tools(self):
+    def test_scope_includes_all_local_canonical_skills_but_excludes_upstream_tools(self):
         text = all_runtime_markdown()
         lowered = re.sub(r"\s+", " ", text.lower().replace("`", ""))
         for owned in (
@@ -44,6 +44,9 @@ class ProjectFeedbackSkillTests(unittest.TestCase):
             "bundled cw cli",
             "generated claude or zcode distribution",
             "project docs and contracts",
+            "authored and internal skills such as story-memory",
+            "pinned or adapted vendored copy of a skill such as llm-writing",
+            "packaging or distribution of that local copy",
         ):
             self.assertIn(owned, lowered)
         for excluded in (
@@ -52,11 +55,14 @@ class ProjectFeedbackSkillTests(unittest.TestCase):
             "claude",
             "zcode",
             "github cli (`gh`)",
-            "another plugin or skill",
-            "third-party",
-            "vendored skill",
+            "skill or plugin not shipped by this repository",
+            "upstream defect in the original project from which a skill was vendored",
         ):
             self.assertIn(excluded.replace("`", ""), lowered)
+        self.assertRegex(
+            text,
+            r"(?is)upstream defect.{0,240}out of scope.{0,220}(pinned copy|adaptation|packaging|distribution)",
+        )
         self.assertRegex(
             text,
             r"(?is)if ownership is unclear.{0,100}diagnose.{0,100}(do not|don't).{0,80}file",

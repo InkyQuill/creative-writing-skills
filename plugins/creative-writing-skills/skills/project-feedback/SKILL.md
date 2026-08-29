@@ -11,13 +11,21 @@ useful only for a problem owned by this repository: its canonical Creative
 Writing Skills plugin skills, bundled `cw` CLI, generated Claude or ZCode
 distribution, or project docs and contracts.
 
+Every canonical skill shipped by this repository is in scope. That includes
+authored and internal skills such as `story-memory`, plus defects in this
+repository's pinned or adapted vendored copy of a skill such as `llm-writing`
+and in the packaging or distribution of that local copy. Ownership follows the
+local implementation or adaptation, not whether the skill originated here.
+
 Do not file feedback for ordinary story-content ambiguity, author preference,
 an unrelated harness bug, a local configuration mistake, or a problem already
 durably tracked by the active task or plan. An upstream issue may still be
 useful when the durable task record does not cover the reusable project defect.
 Do not activate or file here for Superpowers, Codex, Claude, or ZCode harness
-bugs, GitHub CLI (`gh`), another plugin or skill, or an unrelated third-party or
-vendored skill as an upstream project. If ownership is unclear, diagnose it
+bugs, GitHub CLI (`gh`), or any skill or plugin not shipped by this repository.
+An upstream defect in the original project from which a skill was vendored is
+also out of scope when this repository's pinned copy, adaptation, packaging,
+and distribution are working as intended. If ownership is unclear, diagnose it
 first and do not file in this repository until local ownership is established.
 
 Use the fixed [Creative Writing Skills issue tracker](https://github.com/InkyQuill/creative-writing-skills/issues).
