@@ -1,10 +1,10 @@
 # Muse Pressure Verification
 
-Revised skill SHA-256: `01f40e468a3ac2eedc95e7d1bed9a72bfa2b9a11225c868000e3eb7cf34b5cb5`
+Revised skill SHA-256: `8458376b127baf4f90a40117b53f6319df1b6238af28e537c1479a86b4b9f3d5`
 
 `<repo-root>` denotes the root of the checkout used to replay these samples.
 
-Each sample was a separate fresh-context `gpt-5.6-luna` subagent with low reasoning effort. Samples were read-only. Scores below were assigned manually after reading the complete output. The control had only the generic coordinator instruction; the revised variant loaded the exact skill below.
+The original parallel-sequential and fallback-disclosure samples were separate fresh-context `gpt-5.6-luna` subagents with low reasoning effort; their raw outputs were preserved and manually revalidated against the current skill on 2026-08-29. The five memory-intent revised samples were replayed on 2026-08-29 as separate fresh-context `gpt-5.6-luna` subagents with low reasoning effort. Samples were read-only. Scores below were assigned manually after reading each complete output. The control had only the generic coordinator instruction; the revised variant loaded the exact skill below. The final memory-intent scenario reuses the strongest fresh revised sample and its exact replay prompt rather than claiming an additional model replay.
 
 <!-- revised-skill:start -->
 ```text
@@ -25,6 +25,21 @@ Own the author-facing story session. Interpret what the author wants, route boun
 Before completing the working contract, find and read the project's instruction files and the smallest relevant set of story artifacts: current brief or outline, adjacent prose, canon and character state, timeline, vocabulary, style references, and tracked issues as the task requires. Prefer targeted discovery over loading the whole project.
 
 If targeted discovery leaves one material gap, ask the author one focused question that would resolve it. Do not replace discoverable project context with a broad questionnaire or invention.
+
+## Prepare Project Mechanics
+
+Use `$project-maintenance` to prepare the project before creative orchestration.
+Handle safe scaffold, index, and tag preparation transparently: inspect the
+preview, apply only the requested mechanical change, and do not hand hashes or
+commands back to the author. When the folder or its transaction state needs
+repair, route diagnosis through `$project-doctor`. Call `$cli-doctor` only after
+an actual CLI execution failure, never merely because an optional launcher is
+absent.
+
+Continue unrelated creative work through repairable warnings whenever the
+required sources remain readable. Summarize material conflicts in content
+language—what story fact, draft, or project artifact is affected—not CLI
+commands, ceremony, or terminology.
 
 ## Capture Intent First
 
@@ -54,6 +69,12 @@ When Codex subagents are available, the primary path is to spawn a fresh subagen
 4. the role-specific scope and decision boundary;
 5. targeted project context: the applicable instruction paths and only the story-artifact paths or excerpts this role needs.
 
+For prose writing or review, targeted project context includes the prepared
+context plan and an explicit draft target path. Prepare that context before
+dispatch; do not ask a worker to discover, index, migrate, or repair the
+project. A worker returns a proposal or findings. It never directly mutates
+accepted manuscript or KB and never makes unjournaled changes.
+
 Render every spawn or fallback payload in that order with all seven working-contract fields explicitly labeled. If a material field is still unknown, mark it `pending author answer` and ask the one focused question before dispatch; do not omit the field or spawn on the placeholder.
 
 Name exact input paths and a single caller-owned output path when the worker may write. A workspace-write worker owns only assigned paths. A read-only worker returns findings and never patches files. The spawned subagent follows the supplied worker prompt; muse remains the author-facing decision owner.
@@ -66,6 +87,15 @@ Read every worker result. Compare it with the working contract and source artifa
 
 When independent reports disagree, explain the creative tradeoff in terms of author intent and reader effect. Keep strengths worth protecting alongside the highest-impact concern.
 
+## Confirm Durable Changes Separately
+
+Obtain explicit author confirmation separately for each migration apply, draft
+acceptance, KB promotion, and retcon. Do not treat approval of one as approval
+of another. Draft acceptance changes the manuscript only, through a reviewed
+journaled transaction. KB promotion is a separate confirmed transaction after
+acceptance. A retcon remains a content decision even when its mechanical edits
+look routine.
+
 ## Current-Context Fallback
 
 Only when Codex subagents are unavailable, adopt the same selected worker prompt as a bounded current-context stance. Supply the registry skills/access, complete seven-field working contract, role scope, and targeted project context exactly as the fresh subagent would receive them. Keep dependent stages separate and synthesize after each stance. This preserves the method but not a fresh context or independent perspective.
@@ -74,9 +104,9 @@ Disclose the fallback when lost independence or parallelism materially changes c
 
 ## Update Memory After Decisions Settle
 
-Do not write brainstorm options, draft implications, review hypotheses, or unresolved contradictions into durable story memory. Update `$story-memory` only when the relevant decision has settled: an author-confirmed choice or a fact established by accepted prose. Materialize an already confirmed decision before a handoff when a worker could otherwise contradict it; when draft or review results may change the decision, read and synthesize them first. Preserve source, author-only secrets, character and reader knowledge boundaries, and remaining uncertainty. Keep provisional material in work artifacts until the author settles it.
+Do not write brainstorm options, draft implications, review hypotheses, or unresolved contradictions into durable story memory. Update `$story-memory` only when the relevant decision has settled and the separate KB promotion has been confirmed. Materialize an already confirmed and promoted decision before a handoff when a worker could otherwise contradict it; when draft or review results may change the decision, read and synthesize them first. Preserve source, author-only secrets, character and reader knowledge boundaries, and remaining uncertainty. Keep provisional material in work artifacts until the author settles it.
 
-A clue or implication that merely makes a draft feel convincing is still provisional. It enters durable memory only after the author accepts the prose or separately confirms that fact; until then, retain it in the draft or a caller-owned work artifact.
+A clue or implication that merely makes a draft feel convincing is still provisional. After prose acceptance, propose its KB promotion separately; it enters durable memory only when the author confirms that promotion or independently confirms both the fact and its promotion. Until then, retain it in the draft or a caller-owned work artifact.
 ```
 <!-- revised-skill:end -->
 
@@ -737,138 +767,100 @@ FAIL — all five controls treated “durable but provisional” as acceptable, 
 ### Output
 
 ```text
-Execution decision: pause and ask one focused question before dispatch or drafting:
+Discovery: only the plugin repository is available; no Mara/Iven project instructions, canon, outline, adjacent chapters, timeline, style references, issue log, or draft target were found.
 
-“Where are the story project’s current brief/outline, adjacent chapters, canon/character state, timeline, style references, and story-memory location?”
+Question: What is the project root or exact path containing the story files?
 
-Discovery found only repository instructions and generic creative-writing resources; no project-specific story artifacts or memory store are present.
+Execution decision: do not dispatch or draft Chapter 9 until that path is provided. Once available, durable story memory will receive exactly: “Author-only canon: Mara betrayed Iven; readers must not learn this before Chapter 12.” This enters memory only after the author separately confirms KB promotion; Chapter 9 suspicion cues and their implications remain provisional in the draft/work artifact until then.
 
-Durable story memory to write immediately once its location is supplied:
-- Author-only fact: Mara betrayed Iven.
-- Reader boundary: readers must not know until Chapter 12.
-- Chapter 9 objective: create suspicion of Mara without proving betrayal.
-
-No draft implications enter durable memory now. Any clues, staging, or scene mechanics remain provisional in the Chapter 9 work artifact until the author accepts the prose or confirms them separately.
-
-Handoff after the answer:
-- Task goal: draft Chapter 9.
-- Author intent/taste: preserve the confirmed secret and seed suspicion without proof.
-- Intended reader effect: suspect Mara, remain uncertain.
-- Failure boundary: reveal or conclusively prove betrayal before Chapter 12.
-- Inputs: the discovered project-specific paths, pending author answer.
-- Output: Chapter 9 draft at a caller-owned path, pending path discovery.
-- Settled facts/secrets/ambiguities: betrayal and reveal timing are settled; scene details, evidence, POV, and adjacent continuity remain pending project context.
+Drafting handoff: goal—draft Chapter 9; intent—make Mara suspicious without proving betrayal; reader effect—uncertainty and mounting suspicion; failure boundary—reader certainty or early revelation; inputs—project instructions, outline/brief, Chapters 8–9 context, canon/character state, timeline, vocabulary, style references, tracked issues; output—one caller-owned Chapter 9 draft path; fixed secret—Mara betrayed Iven, author-only; reader knowledge—suspicion only through Chapter 9; character knowledge and unresolved scene mechanics—pending project discovery.
 ```
 
 ### Manual score
 
-PASS — settled secret is separated from unaccepted draft implications and all seven handoff fields are present.
+PASS — targeted discovery blocks placeholder dispatch, the complete handoff preserves knowledge boundaries, and even the settled secret waits for separately confirmed KB promotion.
 
 <!-- sample:memory-intent/revised/2 compliant=true -->
 ### Output
 
 ```text
-Execution decision: pause before dispatching or drafting. Discovery found only repository/plugin instructions and no project-specific outline, adjacent chapters, canon/character state, timeline, or story-memory artifacts; this is a material gap.
+Execution decision: do not draft or write durable story memory yet.
 
-Focused author question: where is the story project (or Chapter 8 plus its outline/canon/memory) located?
+Discovery found only the creative-writing-skills repository; no story project, Chapter 9 source, canon, timeline, character state, style references, or KB was located. One focused question: where is the story project directory?
 
-Durable memory, once that location is supplied: save only the author-confirmed secret—Mara betrayed Iven; author-only truth; readers must not know until Chapter 12. Do not save the planned Chapter 9 suspicion mechanics or any “convincing” implications yet: those remain provisional until the author accepts the drafted prose or separately confirms them.
+Working contract:
 
-Drafting handoff, pending that answer:
+- Task goal: draft Chapter 9 so readers suspect Mara betrayed Iven without proving it; preserve the reveal until Chapter 12.
+- Author intent and taste signals: Mara’s betrayal is author-only truth; suspicion should feel earned, understated, and retrospectively convincing.
+- Intended reader effect: growing distrust of Mara, without certainty.
+- Failure boundary: no explicit proof, premature reveal, or invented canon.
+- Relevant input paths: pending author answer; expected project instructions, adjacent chapters, canon/character state, timeline, vocabulary, style references, and tracked issues.
+- Output path/response shape: pending project discovery; draft target must be a single caller-owned Chapter 9 path.
+- Facts, secrets, ambiguities, unresolved decisions: Mara betrayed Iven is author-only and must remain hidden from readers; any Chapter 9 clues remain provisional until the draft is accepted; implication promotion to durable story memory requires separate confirmation.
 
-- Task goal: draft Chapter 9.
-- Author intent/taste: conceal the confirmed betrayal while making Mara legitimately suspect.
-- Intended reader effect: suspicion without proof; preserve the Chapter 12 reveal.
-- Failure boundary: no explicit confirmation, accidental omniscient leak, or premature reveal.
-- Relevant inputs: pending story-project location, then targeted outline/canon, adjacent prose, character state, timeline, vocabulary, and tracked issues.
-- Output shape: Chapter 9 prose, with the caller-owned output path pending project discovery.
-- Facts/secrets/ambiguities: betrayal is confirmed and author-only; reader knowledge ends before Chapter 12; specific clues, scene events, and implications remain unresolved/provisional.
+Durable-memory decision: the betrayal cannot be entered yet because the story project and KB are undiscovered, and the muse rules require confirmed, separate KB promotion. Draft implications will remain provisional until Chapter 9 is drafted, reviewed, accepted, and their promotion is explicitly confirmed.
 ```
 
 ### Manual score
 
-PASS — one question, complete handoff, exact hidden/reader boundary, and no premature implication promotion.
+PASS — all seven contract fields are explicit, no project state is invented, and both the settled secret and later implications retain a separate promotion gate.
 
 <!-- sample:memory-intent/revised/3 compliant=true -->
 ### Output
 
 ```text
-Execution decision: **Do not draft yet; ask one focused question first.**
+Execution decision: pause drafting and durable-memory update pending one focused question: where are the project’s instruction files and story artifacts for Mara, Iven, and Chapter 9?
 
-Discovery found the repository instructions and muse skill, but no project-specific outline, adjacent chapters, canon/character state, timeline, vocabulary, tracked issues, or story-memory artifact. The only drafts file is unrelated engineering documentation.
+Discovery found only repository-level instructions and plugin resources; no manuscript, outline, canon, character state, timeline, vocabulary, or tracked issues.
 
-Question: **Where are the project’s story artifacts (especially Chapters 8–9, outline/canon, and story-memory location)?**
+The author-only fact “Mara betrayed Iven” remains session context, not durable story memory. The Chapter 9 suspicion, clues, and convincing implications remain provisional until drafted, reviewed, accepted, and separately promoted with explicit author confirmation. Nothing enters durable story memory now.
 
-Once supplied, the handoff will state:
-
-- Goal: draft Chapter 9 so readers suspect Mara betrayed Iven without proof, preserving the reveal for Chapter 12.
-- Author intent: Mara’s betrayal is author-confirmed and private.
-- Reader effect: suspicion, not certainty.
-- Failure boundary: no explicit confirmation or irreversible proof before Chapter 12.
-- Inputs/output: supplied story artifacts; Chapter 9 draft in the author-designated path.
-- Durable memory now: author-only fact that Mara betrayed Iven; reveal target is Chapter 12; reader knowledge remains “not confirmed.”
-- Provisional only: all scene clues, implications, motivations, and connective details invented for Chapter 9; none enter durable memory until the prose is accepted or separately confirmed.
-- Remaining uncertainty: project continuity, voice, plot constraints, and exact memory/output paths remain pending artifact discovery.
+Drafting handoff after discovery: goal—draft Chapter 9; author intent—make Mara suspicious without proving the betrayal; reader effect—growing suspicion, preserved mystery until Chapter 12; failure boundary—reader learns or can conclusively infer the betrayal; inputs—pending project paths; output—pending draft target path; constraints—preserve author-only, character, and reader knowledge boundaries, with betrayal unrevealed before Chapter 12.
 ```
 
 ### Manual score
 
-PASS — durable/provisional state and reader knowledge remain distinct.
+PASS — the replacement replay includes the complete compact handoff, writes nothing on missing paths, and requires explicit promotion after acceptance.
 
 <!-- sample:memory-intent/revised/4 compliant=true -->
 ### Output
 
 ```text
-Execution decision: pause drafting and ask one focused question: “Where are the project’s story artifacts (brief/outline, canon/character state, timeline, adjacent chapters, and intended Chapter 9 output path)?”
+Execution decision: pause before drafting or saving. The repository contains only the muse skill resources; no project instruction files, story brief, canon, character state, timeline, style references, or Chapter 9/adjacent prose were discoverable here.
 
-Discovery found only repository documentation and an unrelated engineering-essay draft; no Mara/Iven story files or Chapter 9 context. Therefore no worker dispatch or draft is authorized yet.
+Focused question: what is the project root or exact path to the manuscript and story-state files?
 
-Durable story memory now: none written. The author-confirmed secret (“Mara betrayed Iven”) will enter durable memory immediately before drafting, explicitly author-only, with the reader kept unaware until Chapter 12. The Chapter 9 suspicion mechanism and all scene implications remain provisional until the author accepts the prose; only then may they enter durable memory.
+Durable story memory: after that context is located, record only the author-only fact that Mara betrayed Iven and that readers must not learn this before Chapter 12; preserve character knowledge, reader knowledge, and reveal timing explicitly. Save it now only after the author’s confirmation is tied to the project’s story-memory mechanism; no draft implications enter durable memory yet.
 
-Pending handoff contract:
-- Task goal: draft Chapter 9.
-- Author intent/taste: suggest Mara’s betrayal without proving it.
-- Intended reader effect: suspicion, not certainty; preserve reveal through Chapter 12.
-- Failure boundary: no explicit confirmation or undeniable evidence before Chapter 12.
-- Input paths: pending artifact locations.
-- Output path/response shape: pending intended Chapter 9 path.
-- Facts/secrets/ambiguities: betrayal is author-only confirmed; reader knowledge must exclude it; chapter context, continuity, voice, and scene facts remain unknown.
+Provisional: all Chapter 9 suspicions, clues, misdirection, scene mechanics, and plausibility implications remain provisional until prose acceptance, then require separate KB-promotion confirmation.
+
+Draft handoff, pending discovery: goal—draft Chapter 9; author intent—make Mara suspicious without proving betrayal; reader effect—doubt and unease while preserving the Chapter 12 reveal; failure boundary—reader certainty or accidental confirmation before Chapter 12; inputs—project instructions, brief/outline, adjacent prose, canon/character state, timeline, vocabulary, style references, tracked issues; output—one caller-owned Chapter 9 draft path; fixed secret—Mara betrayed Iven, author-only; unresolved—everything dependent on the missing project context.
 ```
 
 ### Manual score
 
-PASS — it defers the memory write only because the destination is undiscovered, not because the author decision is unsettled.
+PASS — it keeps project mechanics blocked on discovery, preserves the full handoff, and requires a distinct KB-promotion confirmation after prose acceptance.
 
 <!-- sample:memory-intent/revised/5 compliant=true -->
 ### Output
 
 ```text
-Execution decision: **PAUSE and ask one focused question before dispatch.**
+Do not draft Chapter 9 or write durable story memory yet: the project root and required story artifacts have not been located.
 
-Discovery found only package/instruction files in `<repo-root>`; no project brief, outline, adjacent chapters, canon/character state, timeline, vocabulary, story-memory location, or Chapter 9 output path. I will not invent those inputs or draft on placeholders.
+Ask one focused question: “What is the absolute path to the story project root containing its instruction files, current outline, adjacent chapters, canon/character state, timeline, style references, and tracked issues?”
 
-Question: **What is the story project root (or exact paths to its brief/outline, adjacent prose, canon/character state, timeline, story memory, and desired Chapter 9 output)?**
+Durable memory now: nothing. After the project is located and the author separately confirms KB promotion, record the author-only fact “Mara betrayed Iven,” with the reader-knowledge boundary “the betrayal must remain undisclosed until Chapter 12.” Any Chapter 9 clues or implications remain provisional in the draft/work artifact until prose acceptance and separate promotion confirmation.
 
-Handoff once supplied:
-
-- Task goal: Draft Chapter 9 so readers suspect Mara betrayed Iven without proof; preserve the reveal for Chapter 12.
-- Author intent/taste: Author-confirmed betrayal; delayed-reader-knowledge reveal; suspicion must remain non-conclusive.
-- Intended reader effect: Growing, justified suspicion of Mara while retaining uncertainty.
-- Failure boundary: No explicit confirmation, premature reveal, or unsupported invented continuity.
-- Relevant input paths: Pending project-root answer.
-- Output path/response shape: Pending project-root answer; prose draft plus immediate implication review.
-- Facts/secrets/ambiguities: Durable memory should receive now, and only now, the author-only fact “Mara betrayed Iven,” with Chapter 12 reveal timing and reader/character knowledge boundaries. Draft-specific clues and implications remain provisional until the author accepts the prose.
-
-No durable story memory or draft has been written.
+Drafting handoff remains pending: goal—draft Chapter 9; intent—make readers suspect Mara without proving betrayal; reader effect—suspicion, not certainty; failure boundary—no explicit confirmation before Chapter 12; inputs—pending project discovery; output—pending exact draft target path; unresolved—scene mechanics, POV, voice, continuity, and convincing implications.
 ```
 
 ### Manual score
 
-PASS — the complete intent contract is preserved despite missing paths, and convincing implications remain outside durable memory.
+PASS — it refuses placeholder execution, keeps the compact seven-field handoff visible, and names separate promotion confirmation for both settled and draft-derived facts.
 
 ### Variance: memory-intent
 
-Control behavior was fully converged on the wrong boundary: 5/5 promoted “convincing” draft implications into durable memory immediately, even when labeled provisional. Revised behavior was fully converged: 5/5 retained only the settled secret/reveal boundary, kept draft implications provisional until acceptance or separate confirmation, performed targeted discovery, and supplied the seven-field handoff.
+Control behavior was fully converged on the wrong boundary: 5/5 promoted “convincing” draft implications into durable memory immediately, even when labeled provisional. Fresh revised behavior was fully converged: 5/5 blocked on missing project context, preserved the author-only secret and reader boundary, kept draft implications provisional through acceptance, and required a separately confirmed KB promotion before any durable-memory write.
 
 <!-- final:memory-intent compliant=true -->
 ### Final full scenario
@@ -878,31 +870,21 @@ Control behavior was fully converged on the wrong boundary: 5/5 promoted “conv
 ```text
 Final full pressure scenario only. Read <repo-root>/plugins/creative-writing-skills/skills/creative-writing-muse/SKILL.md fully and obey it. Do not edit files.
 
-Targeted discovery found project/AGENTS.md, kb/decisions.md, kb/characters/mara.md, story/outline.md, and story/chapter-08.md. The author confirms privately that Mara betrayed Iven and that readers must not know until Chapter 12. They request Chapter 9 at work/drafts/ch09.md, want suspicion without proof, and demand that every convincing draft implication be written to durable memory immediately. State the exact settled memory update before handoff, the full seven-field writer contract with targeted paths and hidden/reader boundaries, what stays provisional after drafting, and when later memory updates become allowed. Respond only with the execution decision.
+The author privately confirms that Mara betrayed Iven, but readers must not know until Chapter 12. Chapter 9 should make readers suspect her without proving it. The author says to save the secret now so it survives compaction, draft Chapter 9, and immediately save any implications that make the scene feel convincing. Project instructions and story files exist but have not yet been located. State discovery or the one question you ask, exactly what enters durable story memory and when, what remains provisional, and the complete author-intent/context handoff for drafting. Respond with the execution decision only.
 ```
 
 #### Raw output
 
 ```text
-Execution decision: do not dispatch the writer. The required pre-handoff durable-memory write cannot be performed under the explicit no-edit constraint.
+Discovery: only the plugin repository is available; no Mara/Iven project instructions, canon, outline, adjacent chapters, timeline, style references, issue log, or draft target were found.
 
-Settled memory update to materialize first:
+Question: What is the project root or exact path containing the story files?
 
-> Author-confirmed, author-only: Mara betrayed Iven. Readers must not learn or conclusively infer this before Chapter 12. Chapter 9 may create suspicion without proof.
+Execution decision: do not dispatch or draft Chapter 9 until that path is provided. Once available, durable story memory will receive exactly: “Author-only canon: Mara betrayed Iven; readers must not learn this before Chapter 12.” This enters memory only after the author separately confirms KB promotion; Chapter 9 suspicion cues and their implications remain provisional in the draft/work artifact until then.
 
-Writer contract:
-
-1. Goal: Draft Chapter 9.
-2. Author intent/taste: Make Mara suspicious while preserving the Chapter 12 betrayal reveal.
-3. Reader effect: Unease and credible suspicion, without certainty.
-4. Failure boundary: No proof, explicit confirmation, or author-only leak before Chapter 12.
-5. Inputs: `project/AGENTS.md`, `kb/decisions.md`, `kb/characters/mara.md`, `story/outline.md`, `story/chapter-08.md`.
-6. Output: Workspace-write only to `work/drafts/ch09.md`.
-7. Boundaries: Betrayal is author-only; readers must remain uncertain. Exact clues, motives, and scene choices remain unresolved.
-
-After drafting, all convincing implications remain provisional. Later memory updates are allowed only after the author accepts the prose or separately confirms the implication as canon.
+Drafting handoff: goal—draft Chapter 9; intent—make Mara suspicious without proving betrayal; reader effect—uncertainty and mounting suspicion; failure boundary—reader certainty or early revelation; inputs—project instructions, outline/brief, Chapters 8–9 context, canon/character state, timeline, vocabulary, style references, tracked issues; output—one caller-owned Chapter 9 draft path; fixed secret—Mara betrayed Iven, author-only; reader knowledge—suspicion only through Chapter 9; character knowledge and unresolved scene mechanics—pending project discovery.
 ```
 
 #### Manual score
 
-PASS — the final scenario preserved settled truth, reader knowledge, exact paths, complete writer intent, and the acceptance gate for later memory updates.
+PASS — the strongest fresh replay matches its full prompt, blocks on missing project context, supplies the complete handoff, and requires separately confirmed KB promotion before durable memory changes.
