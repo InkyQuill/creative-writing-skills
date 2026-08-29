@@ -15,10 +15,13 @@ python3 <project-maintenance-skill>/resources/cli/cw.py check all <project>
 ```
 
 Keep the command's working path inside the user's requested project. Preview
-every mutation first; add `--apply` only after its complete diff is understood
-and remains within the request. The CLI performs the deterministic mechanics
-the agent requests. The agent owns hashes, tags, indexes, base revisions,
-repair-command selection and execution, and runtime setup.
+every journaled mutation first; add `--apply` only after its complete diff is
+understood and remains within the request. Derived cache is separate:
+`context --snapshot` writes a restricted snapshot immediately without
+`--apply`, and `clean-context` never enters transaction history. The CLI
+performs the deterministic mechanics the agent requests. The agent owns hashes,
+tags, indexes, base revisions, repair-command selection and execution, and
+runtime setup.
 
 Interpret results agent-first: exit 0 continues; exit 1 means inspect the
 findings, repair what is safe, and continue unrelated creative work; exit 2

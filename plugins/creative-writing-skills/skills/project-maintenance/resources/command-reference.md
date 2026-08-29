@@ -37,7 +37,7 @@ draft rebase <draft>
 draft accept <draft>
 draft abandon <draft>
 migrate --plan
-migrate --preview <plan.json>
+migrate --preview <plan.json> --expect-plan-hash <hash>
 migrate --apply <plan.json> --expect-plan-hash <hash>
 ```
 

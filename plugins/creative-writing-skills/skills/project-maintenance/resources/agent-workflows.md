@@ -35,10 +35,59 @@ draft so it moves to archive without becoming canon.
 
 ## Migrate an older layout
 
-Run `migrate --plan`, review classifications with the author where literary
-meaning is ambiguous, then run `migrate --preview <plan.json>`. Apply only that
-reviewed plan with its expected plan hash. Preserve unknown files and never
-reinterpret ambiguous material as canon automatically.
+Run `migrate --plan --format json` from the legacy project and save its output
+as an agent working file. Inspect every object in `unresolved`. Ask the author
+only for a semantic decision when a source's role or merged meaning is
+ambiguous; the agent edits the plan and manages its hash.
+
+For each resolved item, remove it from `unresolved` and add one or more strict
+operations. Use only these JSON shapes and canonical schema-v1 destinations:
+
+```json
+{"source": "chapters/one.md", "destination": "story/chapters/one.md", "action": "move"}
+{"source": "story/chapters/one.md", "destination": "story/chapters/one.md", "action": "preserve"}
+{"sources": ["kb/timeline/a.md", "kb/timeline/b.md"], "destination": "kb/continuity/timeline.md", "action": "merge", "content": "# Reviewed merged content\n"}
+```
+
+A `move` has one source and a different destination. A `preserve` has identical
+source and destination. A `merge` has a non-empty unique `sources` list and
+the exact reviewed UTF-8 output in `content`; it does not ask the CLI to invent
+the merge. Assign each source once, keep destinations unique, preserve unknown
+files, and never reinterpret ambiguous material as canon automatically. Do not
+continue until every item is resolved and the plan contains `"unresolved": []`.
+
+After any plan edit, recompute and update `plan-hash` with the bundled canonical
+function. This agent-only snippet accepts the CLI package directory and plan
+path as its two arguments:
+
+```bash
+python3 - <project-maintenance-skill>/resources/cli <plan.json> <<'PY'
+import json
+import sys
+from pathlib import Path
+
+sys.path.insert(0, sys.argv[1])
+from cwcli.migration import canonical_plan_hash
+
+path = Path(sys.argv[2])
+payload = json.loads(path.read_text(encoding="utf-8"))
+payload["plan-hash"] = canonical_plan_hash(payload)
+path.write_text(
+    json.dumps(payload, ensure_ascii=False, indent=2) + "\n",
+    encoding="utf-8",
+)
+PY
+```
+
+Copy the resulting lowercase hash exactly into both commands:
+
+```text
+migrate --preview <plan.json> --expect-plan-hash <hash>
+migrate --apply <plan.json> --expect-plan-hash <hash>
+```
+
+Run apply only after preview validates the same file and shows the intended
+full diff. Any further plan edit requires another rehash and preview.
 
 ## Correct a mistake or interrupted write
 

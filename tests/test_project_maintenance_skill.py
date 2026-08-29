@@ -12,6 +12,8 @@ SKILL_ROOT = (
     / "project-maintenance"
 )
 SKILL = SKILL_ROOT / "SKILL.md"
+COMMAND_REFERENCE = SKILL_ROOT / "resources" / "command-reference.md"
+AGENT_WORKFLOWS = SKILL_ROOT / "resources" / "agent-workflows.md"
 RESOURCE_NAMES = (
     "command-reference.md",
     "project-contract.md",
@@ -37,6 +39,31 @@ class ProjectMaintenanceSkillTests(unittest.TestCase):
         self.assertIn("python", text.lower())
         self.assertIn("preview", text.lower())
         self.assertIn("--apply", text)
+
+    def test_top_level_distinguishes_transaction_preview_from_context_snapshot(self):
+        text = SKILL.read_text(encoding="utf-8")
+        self.assertRegex(text, r"(?is)preview\s+every (journaled|transactional) mutation")
+        self.assertRegex(text, r"(?is)context --snapshot.{0,120}without\s+`--apply`")
+        self.assertNotIn("Preview every mutation first", text)
+
+    def test_migration_preview_and_apply_include_expected_plan_hash(self):
+        text = COMMAND_REFERENCE.read_text(encoding="utf-8")
+        self.assertIn(
+            "migrate --preview <plan.json> --expect-plan-hash <hash>", text
+        )
+        self.assertIn(
+            "migrate --apply <plan.json> --expect-plan-hash <hash>", text
+        )
+
+    def test_migration_workflow_resolves_unresolved_and_rehashes_plan(self):
+        text = AGENT_WORKFLOWS.read_text(encoding="utf-8")
+        for action in ('"action": "move"', '"action": "preserve"', '"action": "merge"'):
+            self.assertIn(action, text)
+        self.assertIn('"content"', text)
+        self.assertIn('"unresolved": []', text)
+        self.assertIn("canonical_plan_hash", text)
+        self.assertRegex(text, r"(?is)recomput.{0,100}plan-hash")
+        self.assertNotRegex(text, r"(?i)ask the author to (edit|update).*(plan|hash)")
 
     def test_contract_covers_complete_workflow_and_exit_handling(self):
         text = all_runtime_markdown()
