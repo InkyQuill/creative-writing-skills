@@ -78,15 +78,15 @@ In multi-critic parallel lanes, keep your report focused on your assigned area. 
 
 ## Optional: Mechanical Analysis
 
-A bundled script measures mechanical prose properties: sentence length
+A bundled `$project-maintenance` check measures mechanical prose properties: sentence length
 distribution, opener variety, dialogue ratio, repetition, pronoun distribution.
 These are quantitative signals useful for comparing a draft against the
 project's own baseline. Read-only agents (critic, continuity-checker) should
-request this data from the orchestrator; agents with bash access can run it
-directly:
+request this data from the orchestrator; agents with bash access can run the
+canonical project check directly:
 
 ```bash
-python3 resources/prose-critique/analyze.py <file.md> [window_size]
+cw check prose [project]
 ```
 
 ## Resources

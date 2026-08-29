@@ -365,18 +365,22 @@ class DistributionScaffoldTests(unittest.TestCase):
         self.assertIn("Use `$md-validation` for link checking", text)
         self.assertNotIn("Use `/md-validation` for link checking", text)
 
-    def test_prose_analyzer_commands_use_packaged_path_and_python3(self):
+    def test_story_checks_use_canonical_bundled_cli(self):
         root = PLUGIN_ROOT / "skills/story-review/resources"
         documents = (
             root / "prose-critique.md",
-            root / "prose-critique/analyze.py",
             root / "prose-critique/baseline.md",
+            root / "prose-critique/continuity.md",
         )
-        expected = "python3 resources/prose-critique/analyze.py"
         for path in documents:
             text = path.read_text()
-            self.assertIn(expected, text, str(path))
-            self.assertNotIn("uv run resources/analyze.py", text, str(path))
+            self.assertIn("cw check ", text, str(path))
+        self.assertFalse(
+            (PLUGIN_ROOT / "skills/story-memory/resources/continuity_check.py").exists()
+        )
+        self.assertFalse(
+            (root / "prose-critique/analyze.py").exists()
+        )
 
     def test_story_memory_evidence_examples_use_full_source_anchors(self):
         root = PLUGIN_ROOT / "skills/story-memory"

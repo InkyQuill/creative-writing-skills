@@ -1,4 +1,3 @@
-import importlib.util
 import os
 import tempfile
 import unittest
@@ -10,29 +9,12 @@ from cwcli import project
 from cwcli.checks import prose
 
 
-LEGACY_ANALYZER_PATH = (
-    Path(__file__).resolve().parents[2]
-    / "plugins/creative-writing-skills/skills/story-review/resources/prose-critique/analyze.py"
-)
-
-
-def load_legacy_analyzer():
-    specification = importlib.util.spec_from_file_location("task2_legacy_prose", LEGACY_ANALYZER_PATH)
-    assert specification is not None and specification.loader is not None
-    module = importlib.util.module_from_spec(specification)
-    specification.loader.exec_module(module)
-    return module
-
-
 class ProseMetricTests(unittest.TestCase):
     def test_metrics_are_immutable_and_match_representative_legacy_counts(self):
         text = "Она вошла. Он молчал тихо.\n"
         metrics = prose.analyze_prose(text, language="ru")
-        legacy = load_legacy_analyzer()
-
-        self.assertEqual(metrics.word_count, len(legacy.words(text)))
-        self.assertEqual(metrics.sentence_count, len(legacy.get_sentences(text)))
         self.assertEqual((metrics.word_count, metrics.sentence_count), (5, 2))
+        self.assertEqual(metrics.sentence_lengths, (2, 3))
         self.assertEqual(metrics.language, "ru")
         with self.assertRaises(FrozenInstanceError):
             metrics.word_count = 0
@@ -40,10 +22,8 @@ class ProseMetricTests(unittest.TestCase):
     def test_english_words_apostrophes_and_sentences_match_legacy_behavior(self):
         text = "She can't wait. They're here!\n"
         metrics = prose.analyze_prose(text, language="en-US")
-        legacy = load_legacy_analyzer()
-
-        self.assertEqual(metrics.word_count, len(legacy.words(text)))
-        self.assertEqual(metrics.sentence_count, len(legacy.get_sentences(text)))
+        self.assertEqual((metrics.word_count, metrics.sentence_count), (5, 2))
+        self.assertEqual(metrics.sentence_lengths, (3, 2))
         self.assertEqual(metrics.language, "en")
 
     def test_russian_pronoun_openings_are_retained_as_repetition_signals(self):
@@ -98,13 +78,14 @@ class ProseMetricTests(unittest.TestCase):
         self.assertEqual(metrics.language, "en")
 
     def test_sentence_splitting_matches_legacy_whitespace_boundary(self):
-        legacy = load_legacy_analyzer()
-        for text in ('"Go." she said. Then left.', "Hello!Next. Last one."):
+        for text, expected in (
+            ('"Go." she said. Then left.', (2, (3, 2))),
+            ("Hello!Next. Last one.", (2, (2, 2))),
+            ("Стемнело быстро. Ветер стих! Мы ушли… Дом молчал", (4, (2, 2, 2, 2))),
+        ):
             with self.subTest(text=text):
                 metrics = prose.analyze_prose(text, language="en")
-                cleaned = legacy.strip_markdown(legacy.strip_frontmatter_and_fences(text))
-                expected = legacy.get_sentences(cleaned)
-                self.assertEqual(metrics.sentence_count, len(expected))
+                self.assertEqual((metrics.sentence_count, metrics.sentence_lengths), expected)
 
     def test_preprocessing_matches_legacy_paragraph_words_and_dialogue(self):
         text = (
@@ -113,32 +94,58 @@ class ProseMetricTests(unittest.TestCase):
             "After words.\n"
         )
         metrics = prose.analyze_prose(text, language="en")
-        legacy = load_legacy_analyzer()
-        cleaned = legacy.strip_markdown(legacy.strip_frontmatter_and_fences(text))
-        dense_lines = [line for line in cleaned.splitlines() if line.strip()]
-
-        self.assertEqual(metrics.word_count, len(legacy.words(cleaned)))
-        self.assertEqual(metrics.paragraph_count, len(legacy.paragraphs(cleaned)))
+        self.assertEqual(metrics.word_count, 7)
         self.assertEqual(metrics.paragraph_count, 1)
         self.assertEqual(metrics.dialogue_ratio, 0.5)
-        self.assertEqual(len(dense_lines), 2)
 
     def test_punctuation_only_sentences_and_paragraphs_match_legacy_behavior(self):
         text = "!!! Text.\n\n...\n\nAlpha alpha alpha.\n"
         metrics = prose.analyze_prose(text, language="en")
-        legacy = load_legacy_analyzer()
-        cleaned = legacy.strip_markdown(legacy.strip_frontmatter_and_fences(text))
-        legacy_sentences = legacy.get_sentences(cleaned)
-        legacy_paragraphs = legacy.paragraphs(cleaned)
-
-        self.assertEqual(len(legacy_sentences), metrics.sentence_count)
-        self.assertEqual(len(legacy_paragraphs), metrics.paragraph_count)
-        self.assertEqual(
-            tuple(len(legacy.words(sentence)) for sentence in legacy_sentences if legacy.words(sentence)),
-            metrics.sentence_lengths,
-        )
         self.assertEqual((4, 3), (metrics.sentence_count, metrics.paragraph_count))
+        self.assertEqual(metrics.sentence_lengths, (1, 3))
         self.assertIn(("alpha", 1, 3, 3), metrics.windowed_repetitions)
+
+    def test_legacy_russian_pronoun_groups_and_openers_remain_exact(self):
+        grouped = prose.analyze_prose(
+            "Мое решение в моем письме, твое мнение в твоем ответе и ее выбор.",
+            language="ru",
+        )
+        self.assertEqual(
+            dict(grouped.pronoun_distribution),
+            {
+                "first-singular": 2,
+                "first-plural": 0,
+                "second": 2,
+                "third-masculine": 0,
+                "third-feminine": 1,
+                "third-plural": 0,
+                "third-neuter": 0,
+            },
+        )
+
+        opened = prose.analyze_prose(
+            "Мое решение принято. Твое письмо пришло. Ее ответ готов.",
+            language="ru",
+        )
+        self.assertEqual(dict(opened.opener_categories)["pronouns"], 3)
+
+    def test_legacy_russian_sample_keeps_full_run_metrics(self):
+        sample = """# Глава 1
+
+Я вернулся в дом, когда стемнело, и долго стоял у крыльца, слушая,
+как скрипит под ветром старая яблоня — та самая, под которой мы
+когда-то зарыли жестяную коробку с письмами.
+
+— Ты опять был там? — спросила мать, не оборачиваясь.
+
+— Был, — сказал я и соврал ей впервые за много лет.
+
+Она вздохнула, и в этом вздохе поместилось всё, что она не сказала.
+"""
+        metrics = prose.analyze_prose(sample, language="ru")
+        self.assertGreater(metrics.word_count, 0)
+        self.assertGreater(metrics.sentence_count, 0)
+        self.assertEqual(metrics.dialogue_ratio, 2 / 7)
 
 
 class ProseCheckTests(unittest.TestCase):

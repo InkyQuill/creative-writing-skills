@@ -1,5 +1,4 @@
 import os
-import importlib.util
 import tempfile
 import unittest
 from pathlib import Path
@@ -7,20 +6,6 @@ from pathlib import Path
 from tests.cw_cli import helpers  # noqa: F401
 from cwcli import project
 from cwcli.checks import continuity
-
-
-LEGACY_CHECKER_PATH = (
-    Path(__file__).resolve().parents[2]
-    / "plugins/creative-writing-skills/skills/story-memory/resources/continuity_check.py"
-)
-
-
-def load_legacy_checker():
-    specification = importlib.util.spec_from_file_location("task1_legacy_continuity", LEGACY_CHECKER_PATH)
-    assert specification is not None and specification.loader is not None
-    module = importlib.util.module_from_spec(specification)
-    specification.loader.exec_module(module)
-    return module
 
 
 TIMELINE = """# Timeline
@@ -378,34 +363,18 @@ class ContinuityParityTests(unittest.TestCase):
                        "current-chapter is missing" in item.message)
         self.assertEqual(finding.severity, "error")
 
-    def test_legacy_and_new_checkers_cover_equivalent_detection_categories(self):
+    def test_representative_legacy_fixture_keeps_all_detection_categories(self):
         self.write_records()
-        legacy_temporary = tempfile.TemporaryDirectory()
-        self.addCleanup(legacy_temporary.cleanup)
-        legacy_root = Path(legacy_temporary.name)
-        legacy_records = legacy_root / "kb"
-        (legacy_records / "scenes").mkdir(parents=True)
-        for name in ("timeline.md", "state.md", "promises.md", "questions.md"):
-            (legacy_records / name).write_bytes((self.continuity / name).read_bytes())
-        (legacy_records / "scenes/ch-004.md").write_bytes(
-            (self.continuity / "scenes/ch-004.md").read_bytes()
-        )
-
-        legacy = load_legacy_checker().check(legacy_root)
         current_codes = {item.code for item in self.findings()}
-        category_map = {
-            "state:": continuity.STATE,
-            "promises:": continuity.PROMISE,
-            "questions:": continuity.QUESTION,
-            "timeline:": continuity.TIMELINE,
-        }
-        for marker, code in category_map.items():
-            self.assertTrue(any(marker in line for line in legacy), marker)
+        for code in (
+            continuity.STATE,
+            continuity.PROMISE,
+            continuity.QUESTION,
+            continuity.TIMELINE,
+            continuity.DEATH,
+            continuity.SCENE,
+        ):
             self.assertIn(code, current_codes)
-        self.assertTrue(any("Present after death" in line for line in legacy))
-        self.assertIn(continuity.DEATH, current_codes)
-        self.assertTrue(any("POV" in line and "Present" in line for line in legacy))
-        self.assertIn(continuity.SCENE, current_codes)
 
 
 if __name__ == "__main__":

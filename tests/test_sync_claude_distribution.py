@@ -448,15 +448,18 @@ class ClaudeDistributionRenderTests(unittest.TestCase):
             self.assertIn("/story-review", worker_resource)
             self.assertNotIn("$story-review", worker_resource)
 
-            source_script = Path(
-                "plugins/creative-writing-skills/skills/story-review/"
-                "resources/prose-critique/analyze.py"
-            ).read_bytes()
-            rendered_script = (
-                output_root
-                / "skills/story-review/resources/prose-critique/analyze.py"
-            ).read_bytes()
-            self.assertEqual(source_script, rendered_script)
+            self.assertFalse(
+                (
+                    output_root
+                    / "skills/story-review/resources/prose-critique/analyze.py"
+                ).exists()
+            )
+            self.assertFalse(
+                (
+                    output_root
+                    / "skills/story-memory/resources/continuity_check.py"
+                ).exists()
+            )
 
             critic = (output_root / "agents/critic.md").read_text()
             researcher = (output_root / "agents/web-researcher.md").read_text()

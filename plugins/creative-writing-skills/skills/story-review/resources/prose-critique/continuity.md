@@ -55,7 +55,7 @@ When flagging a potential break, note whether it could be intentional. "Characte
 
 ## Deterministic Floor
 
-When the project keeps continuity records (`$story-memory` continuity-records format: timeline, promises, questions, state snapshot, scene records), run its checker first — `continuity_check.py` in `$story-memory`'s resources, run with `python3` against the project root.
+When the project keeps continuity records (`$story-memory` continuity-records format: timeline, promises, questions, state snapshot, scene records), run the bundled `$project-maintenance` check first: `cw check continuity [project]`.
 
 Its output — ordering violations, lifecycle mismatches, stale state, anchor conflicts, Chekhov gaps — is the confirmed floor. Verify each finding against the prose, then judge what the script cannot see: intentionality, context, and the items in this resource. Deterministic findings get reported, never auto-repaired.
 
