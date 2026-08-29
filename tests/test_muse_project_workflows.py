@@ -160,6 +160,22 @@ class MuseProjectWorkflowTests(unittest.TestCase):
                 self.assertIn("never directly mutate accepted manuscript or kb", lower)
                 self.assertIn("never make unjournaled changes", lower)
 
+    def test_report_workers_write_only_direct_files_under_work_reviews(self):
+        for name in ("style-creator", "web-researcher"):
+            prompt = self.all_prompts[name]
+            lower = re.sub(r"\s+", " ", prompt.lower())
+            with self.subTest(worker=name):
+                self.assertEqual(
+                    re.findall(r"`(work/[^`]*)`", prompt),
+                    ["work/reviews/"],
+                )
+                self.assertRegex(
+                    lower,
+                    r"caller-assigned paths.{0,100}assigned exact path.{0,100}direct file",
+                )
+                self.assertRegex(lower, r"(?:no|not|never).{0,100}nested director")
+                self.assertNotIn("under canonical `work/`", lower)
+
     def test_continuity_worker_uses_canonical_bundled_check(self):
         prompt = self.prompts["continuity-checker"]
         self.assertIn("cw check continuity", prompt)

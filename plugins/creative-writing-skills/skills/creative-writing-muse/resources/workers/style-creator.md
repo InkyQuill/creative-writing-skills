@@ -16,9 +16,10 @@ Return or write: scope; evidence base; observed style patterns with examples; ac
 
 ## Access boundary
 
-Workspace-write. Produce proposal/work output only at caller-assigned paths
-under canonical `work/` work/report storage; never choose a durable style
-destination. Read current contents before editing, do not touch other paths,
-and do not revert or overwrite concurrent changes. Never directly mutate
-accepted manuscript or KB, and never make unjournaled changes. Return conflicts
-to muse.
+Workspace-write. Produce proposal/work output only at caller-assigned paths:
+the assigned exact path must be a direct file under canonical `work/reviews/`.
+The file must be an immediate child of that directory, not a nested directory;
+never choose a generic work, report, research, or durable style root. Read
+current contents before editing, do not touch other paths, and do not revert or
+overwrite concurrent changes. Never directly mutate accepted manuscript or KB,
+and never make unjournaled changes. Return conflicts to muse.
