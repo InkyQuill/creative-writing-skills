@@ -39,9 +39,8 @@ develops.
 **Styles**: voice reference files derived from prose samples. Drafting and
 critique passes depend on these for voice consistency.
 
-**Vocab**: canonical story terms, aliases, and exclusions. Project-wide terms
-live in `kb/vocab.md`; domain terms live beside the domain they govern, such as
-`kb/world/vocab.md`.
+**Vocab**: canonical story terms, aliases, and exclusions live in
+`kb/vocab.md`.
 
 **Issues**: tracked writing problems that span multiple chapters (recurring
 tics, pacing patterns, continuity errors). See the story-memory skill.
@@ -60,27 +59,24 @@ when they were written (`session-3-notes.md`).
 ### Organization
 
 ```text
-kb/
-  characters/
-    <name>.md              # one file per character
-  vocab.md                 # project-wide canonical terms
-  world/
-    vocab.md               # worldbuilding terms when needed
-    <topic>.md             # locations, factions, systems
-    <domain>/
-      vocab.md             # subdomain terms when needed
-      <topic>.md           # nest when a domain has many pages
-  timeline/
-    <arc-or-period>.md     # chronological entries
-  canon/
-    <chapter-or-arc>.md    # hard facts per chapter/arc
-  styles/
-    <style-name>.md        # voice reference files
-  issues/
-    <issue-name>.md        # tracked writing problems
+kb/vocab.md                              # canonical terms
+kb/characters/<name>.md                  # character pages
+kb/world/<topic>.md                      # locations, factions, systems
+kb/canon/<chapter-or-arc>.md             # hard facts
+kb/styles/<style-name>.md                # voice references
+kb/samples/<sample-name>.md              # approved prose samples
+kb/issues/<issue-name>.md                # persistent writing problems
+kb/continuity/timeline.md                # master chronology
+kb/continuity/promises.md
+kb/continuity/questions.md
+kb/continuity/state.md
+kb/continuity/scenes/<chapter>.md
 ```
 
-The project's `AGENTS.md` may customize this. Read it first.
+Schema v1 accepts authored KB pages only as direct children of the listed
+managed content directories, plus the exact continuity paths above. Local
+instructions cannot customize or change managed roots. Use links and page
+content to express subdomains instead of nesting another directory.
 
 ### Linking
 
@@ -134,14 +130,19 @@ concepts.
 - Promoted facts after a draft completes → `kb/canon/` or relevant wiki page
 
 Use `$story-memory` for routine fact extraction from completed chapters.
-Direct kb edits are for the author or muse when capturing decisions
-interactively.
+Author direct edits are valid and authoritative input; always re-read them.
+An agent or muse must not make any unjournaled direct write. Every agent or muse
+KB mutation uses `$project-maintenance`: form the exact edit or batch, preview
+the complete recoverable transaction, and apply it only after the preview and
+semantic confirmation still match. If the result was mistaken, inspect history
+and preview `cw undo <transaction-id>` rather than overwriting current bytes.
 
 ## Promotion Is a Separate Decision
 
 Draft or manuscript acceptance does not promote anything into the KB. After an
 author accepts prose, propose a separate KB promotion transaction containing
 only durable facts, the exact destination pages, and provenance back to the
-accepted passage or confirmed decision. Apply that transaction only after
-separate author confirmation. Preserve source tags and knowledge boundaries;
-acceptance never turns an AI suggestion into author-stated canon.
+accepted passage or confirmed decision. Preview the recoverable transaction and
+apply it only after separate author confirmation. Preserve source tags and
+knowledge boundaries; acceptance never turns an AI suggestion into
+author-stated canon.

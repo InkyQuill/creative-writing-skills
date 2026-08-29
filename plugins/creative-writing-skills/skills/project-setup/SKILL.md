@@ -12,11 +12,13 @@ do not duplicate its command reference or construct managed files by hand.
 
 ## Discover Before Changing
 
-Read an existing `AGENTS.md`, indexes, and populated content before proposing
-anything. Ask only for creative information the files do not answer: project
-kind and stage, language, POV and timeline shape, voice goals, naming and
-spoiler conventions, and the intended role of genuinely ambiguous legacy
-material.
+Read canonical `project.md`, generated indexes, and populated content before
+proposing anything. Platform instruction files such as `AGENTS.md` may constrain
+the current agent, but they remain unmanaged, optional migration inputs rather
+than the durable story-project contract. Ask only for creative information the
+managed files do not answer: project kind and stage, language, POV and timeline
+shape, voice goals, naming and spoiler conventions, and the intended role of
+genuinely ambiguous legacy material.
 
 Classify the folder without moving anything:
 
@@ -39,7 +41,9 @@ alternative layout choice.
 
 ## Propose the Writing Contract
 
-Draft the project-specific `AGENTS.md` guidance for the author to review. Cover:
+Draft the project-specific writing contract in the body of `project.md` for the
+author to review. That authored body is the durable writing contract; preserve
+the CLI-owned frontmatter and do not move the contract into `AGENTS.md`. Cover:
 
 - project overview, current stage, language, and punctuation conventions;
 - voice, POV, timeline, naming, chapter, spoiler, and source-tagging rules;
@@ -54,10 +58,13 @@ style files, vocabulary pages, or other auxiliary artifacts.
 
 ## Apply Safely
 
-Follow `$project-maintenance` preview/apply boundaries. The agent owns hashes,
-indexes, base revisions, migration mechanics, and repair commands; never ask
-the author to maintain SHA values or other CLI metadata. Ask the author only
-for literary meaning and approval.
+Follow `$project-maintenance` preview/apply boundaries. For a new scaffold,
+preview and apply `cw init`, then use a previewed exact edit transaction for the
+approved `project.md` body. For an existing canonical project or an approved
+migration, update that body through the same recoverable transaction path. The
+agent owns hashes, indexes, base revisions, migration mechanics, and repair
+commands; never ask the author to maintain SHA values or other CLI metadata.
+Ask the author only for literary meaning and approval.
 
 Interpret repairable mechanical warnings internally and continue the requested
 semantic setup work. The only mechanical reason to stop that work is when a

@@ -235,7 +235,8 @@ class DistributionScaffoldTests(unittest.TestCase):
         self.assertRegex(proposal.lower(), r"keep writing samples and voice analysis provisional")
         self.assertRegex(proposal.lower(), r"exact role and\s+destination are approved")
         self.assertIn("approval of the core project does not imply approval", proposal.lower())
-        self.assertIn("draft the project-specific `agents.md` guidance", proposal.lower())
+        self.assertRegex(proposal.lower(), r"draft the project-specific writing contract.{0,120}body of `project\.md`")
+        self.assertNotIn("draft the project-specific `agents.md` guidance", proposal.lower())
         self.assertIn("ask the author only", apply.lower())
 
     def test_project_setup_initializes_or_extends_the_canonical_layout(self):
@@ -268,6 +269,8 @@ class DistributionScaffoldTests(unittest.TestCase):
             "`.creative-writing/`",
         ):
             self.assertIn(path, text)
+        self.assertRegex(text, r"(?is)body of.{0,80}`project\.md`.{0,180}(durable|writing contract)")
+        self.assertRegex(text, r"(?is)platform instruction files?.{0,180}(unmanaged|optional)")
 
     def test_llm_writing_requires_an_authorized_artifact_path_for_disk_drafts(self):
         text = (PLUGIN_ROOT / "skills/llm-writing/SKILL.md").read_text()

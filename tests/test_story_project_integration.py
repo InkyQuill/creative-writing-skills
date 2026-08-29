@@ -1,10 +1,15 @@
 import re
+import sys
 import unittest
 from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
 SKILLS = ROOT / "plugins" / "creative-writing-skills" / "skills"
+CLI_ROOT = SKILLS / "project-maintenance" / "resources" / "cli"
+sys.path.insert(0, str(CLI_ROOT))
+
+from cwcli.schema import allowed_document_kind  # noqa: E402
 DOMAIN_SKILLS = (
     "project-setup",
     "kb-management",
@@ -28,6 +33,9 @@ class StoryProjectIntegrationTests(unittest.TestCase):
         self.assertIn("cw init", text)
         for path in ("project.md", "story/chapters/", "work/drafts/", "kb/continuity/"):
             self.assertIn(path, text)
+        self.assertRegex(text, r"(?is)body of.{0,80}`project\.md`.{0,180}(durable|writing contract)")
+        self.assertRegex(text, r"(?is)(AGENTS\.md|platform instruction).{0,180}(unmanaged|optional)")
+        self.assertNotRegex(text, r"(?is)(working|durable|project-specific) `AGENTS\.md`")
 
     def test_setup_routes_legacy_content_through_reviewed_migration_preview(self):
         text = all_runtime_markdown("project-setup")
@@ -57,6 +65,38 @@ class StoryProjectIntegrationTests(unittest.TestCase):
         self.assertIn("kb/continuity/scenes/", text)
         self.assertIn("cw check continuity", text)
         self.assertRegex(text, r"(?is)(author|direct).{0,80}edits?.{0,120}(valid|tolerat|preserv)")
+
+    def test_kb_paths_match_schema_v1_allowed_locations(self):
+        text = all_runtime_markdown("kb-management")
+        allowed_paths = (
+            "kb/vocab.md",
+            "kb/characters/<name>.md",
+            "kb/world/<topic>.md",
+            "kb/canon/<chapter-or-arc>.md",
+            "kb/styles/<style-name>.md",
+            "kb/samples/<sample-name>.md",
+            "kb/issues/<issue-name>.md",
+            "kb/continuity/timeline.md",
+        )
+        for path in allowed_paths:
+            with self.subTest(path=path):
+                self.assertIn(path, text)
+                concrete = path.replace("<name>", "sera").replace("<topic>", "harbor")
+                concrete = concrete.replace("<chapter-or-arc>", "chapter-1")
+                concrete = concrete.replace("<style-name>", "narrator")
+                concrete = concrete.replace("<sample-name>", "sample-1")
+                concrete = concrete.replace("<issue-name>", "pacing")
+                self.assertIsNotNone(allowed_document_kind(concrete))
+        self.assertNotIn("kb/world/<domain>/", text)
+        self.assertNotIn("kb/timeline/", text)
+        self.assertRegex(text, r"(?is)local\s+instructions.{0,120}(cannot|do not).{0,80}(customize|change).{0,80}managed")
+
+    def test_agent_kb_writes_are_previewed_recoverable_transactions(self):
+        text = all_runtime_markdown("kb-management")
+        self.assertRegex(text, r"(?is)(agent|muse).{0,160}(never|must not).{0,100}unjournaled direct write")
+        self.assertRegex(text, r"(?is)(agent|muse).{0,180}KB (mutation|edit).{0,220}preview.{0,180}(transaction|apply)")
+        self.assertIn("cw undo", text)
+        self.assertRegex(text, r"(?is)author direct edits?.{0,120}(valid|authoritative)")
 
     def test_review_prepares_context_and_continues_through_repairable_warnings(self):
         text = all_runtime_markdown("story-review")
