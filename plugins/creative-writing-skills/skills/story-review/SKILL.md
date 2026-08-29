@@ -10,6 +10,20 @@ Analytical review of existing prose. This skill is for diagnosis, not
 rewriting. Keep `$reader-sim` separate when the task needs a felt first-time
 reader experience rather than analytical critique.
 
+## Prepare the Review
+
+Use `$project-maintenance` before reading: run the checks relevant to the
+requested review and prepare focused context with `cw context draft` for an
+active draft (or the matching chapter context for accepted prose). Inspect the
+draft, intent or outline, relevant style and vocab, neighboring prose, and
+continuity state selected by that context plan before beginning the review.
+
+Interpret repairable warnings internally and continue the review with the
+readable evidence, naming any limitation in the report. A required target that
+cannot be read safely is the only mechanical reason to stop the requested
+review. The agent owns hashes, indexes, base revisions, migration mechanics,
+and repair commands; never ask the author to maintain SHA values.
+
 Choose the review level before reading. Start big before small unless the
 caller explicitly asks for a late-stage pass. The edit levels move from
 structural to surface, and each assumes the levels above it are stable:
@@ -40,3 +54,11 @@ When review incorporates reader-sim data:
 
 - `resources/reader-sim-signal.md` — how to interpret and synthesize
   reader-sim output alongside analytical critique.
+
+## Acceptance Boundary
+
+A review may recommend draft acceptance, but it never applies acceptance
+without author confirmation and a reviewed `$project-maintenance` preview.
+Acceptance does not update the KB or knowledge base. KB promotion is a separate
+author-confirmed decision and transaction, with durable provenance handled by
+`$kb-management`.

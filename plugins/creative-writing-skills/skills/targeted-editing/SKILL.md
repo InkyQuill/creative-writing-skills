@@ -14,6 +14,13 @@ establish what is being edited, where it sits, and what the change touches.
 Then edit at the level the problem actually lives at, and verify the joins
 afterward.
 
+Use `$project-maintenance` for mechanical checks, exact edit operations,
+preview/apply, and transaction recovery. Interpret repairable warnings
+internally and continue the literary edit when its required text is readable.
+A required target that cannot be read safely is the only mechanical reason to
+stop. The agent owns hashes, indexes, base revisions, migration mechanics, and
+repair commands; never ask the author to maintain SHA values.
+
 ## Locate Before Editing
 
 - Name the target precisely: which chapter, which scene, which beat or
@@ -65,6 +72,20 @@ Trace what the edit touches:
   point in the story.
 - **Canon and vocab** — does the edit contradict established canon or settled
   terminology? Flag the contradiction; the author decides canon.
+
+## Form an Exact Operation Plan
+
+Choose the literary scope first: target and change level, intended reader
+effect, and ripple boundaries. Only then translate the approved change into an
+exact-anchor operation or a batch of exact operations. Read current bytes just
+before planning. Each repeated match needs an explicit expected-count assertion;
+never let a common phrase silently select the first occurrence.
+
+Preview the exact operation or complete batch before apply. Inspect every
+changed passage and precondition, then use `--apply` only while the preview
+still represents the requested edit. If an applied edit was a mistake, inspect
+history, preview `cw undo <transaction-id>`, and apply that inverse transaction
+instead of hand-restoring remembered text.
 
 ## Edit, Then Verify
 

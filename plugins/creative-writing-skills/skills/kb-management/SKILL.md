@@ -13,6 +13,19 @@ The knowledge base (`kb/`) is the project's durable memory. Drafting, critique,
 planning, and research passes read from it for context. This skill covers how
 to maintain it well.
 
+## Establish the Mechanical Floor
+
+Use `$project-maintenance` to run `cw check kb` before the semantic audit. Read
+and interpret its findings yourself. Repairable mechanical warnings do not
+block the requested knowledge work: continue wherever the required sources and
+target page are readable, and schedule bounded repairs separately. A required
+target that cannot be read safely is the only mechanical reason to stop that
+semantic work.
+
+The agent owns hashes, indexes, base revisions, migration mechanics, and repair
+commands. Author edits are valid project input; never ask the author to maintain
+SHA values or generated indexes.
+
 ## Layers
 
 **Canon**: established facts the story has committed to. Once a chapter is
@@ -123,3 +136,12 @@ concepts.
 Use `$story-memory` for routine fact extraction from completed chapters.
 Direct kb edits are for the author or muse when capturing decisions
 interactively.
+
+## Promotion Is a Separate Decision
+
+Draft or manuscript acceptance does not promote anything into the KB. After an
+author accepts prose, propose a separate KB promotion transaction containing
+only durable facts, the exact destination pages, and provenance back to the
+accepted passage or confirmed decision. Apply that transaction only after
+separate author confirmation. Preserve source tags and knowledge boundaries;
+acceptance never turns an AI suggestion into author-stated canon.

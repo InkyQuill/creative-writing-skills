@@ -231,72 +231,43 @@ class DistributionScaffoldTests(unittest.TestCase):
 
     def test_project_setup_keeps_discovery_material_provisional_until_approval(self):
         text = (PLUGIN_ROOT / "skills/project-setup/SKILL.md").read_text()
-        discovery, creation = text.split("## Create the Files", 1)
-        self.assertRegex(
-            discovery.lower(),
-            r"keep\s+samples and voice goals provisional",
-        )
-        self.assertIn("do not save", discovery.lower())
-        self.assertIn("once approved", creation.lower())
-        self.assertIn("author confirmed", creation.lower())
-        self.assertIn("draft project instructions for `AGENTS.md`", text)
-        self.assertNotIn("draft an `AGENTS.md`", text)
+        proposal, apply = text.split("## Apply Safely", 1)
+        self.assertRegex(proposal.lower(), r"keep writing samples and voice analysis provisional")
+        self.assertRegex(proposal.lower(), r"exact role and\s+destination are approved")
+        self.assertIn("approval of the core project does not imply approval", proposal.lower())
+        self.assertIn("draft the project-specific `agents.md` guidance", proposal.lower())
+        self.assertIn("ask the author only", apply.lower())
 
-    def test_project_setup_selects_and_extends_the_established_layout(self):
+    def test_project_setup_initializes_or_extends_the_canonical_layout(self):
         text = (PLUGIN_ROOT / "skills/project-setup/SKILL.md").read_text()
-        self.assertRegex(text, r"indexes and populated\s+directories")
-        for index_name in ("`_index.md`", "`index.md`", "`INDEX.md`", "`README.md`"):
-            self.assertIn(index_name, text)
-        self.assertIn("use Layout A", text)
-        self.assertIn("use Layout B", text)
-        self.assertIn("population score", text)
-        self.assertRegex(text, r"populated\s+core role directories")
-        self.assertIn("durable files", text)
-        self.assertIn("higher population score", text)
-        self.assertRegex(text, r"Never create the\s+competing layout")
+        self.assertIn("cw init", text)
+        self.assertIn("existing canonical project is extended in place", text)
+        self.assertRegex(text, r"Do not reinitialize or\s+reorganize")
+        self.assertIn("one canonical on-disk", text)
+        self.assertNotIn("Layout A", text)
+        self.assertNotIn("Layout B", text)
 
-    def test_project_setup_requires_one_confirmed_layout_decision_when_ambiguous(self):
+    def test_project_setup_requires_reviewed_migration_for_legacy_content(self):
         text = (PLUGIN_ROOT / "skills/project-setup/SKILL.md").read_text()
-        self.assertIn("If neither layout has evidence", text)
-        self.assertRegex(
-            text,
-            r"recommend one layout with a project-specific\s+rationale",
-        )
-        self.assertIn("wait for explicit confirmation", text)
-        self.assertIn("If both have the same population score", text)
-        self.assertRegex(text, r"ask one focused\s+choice")
-        self.assertIn("Do not propose paths or create files until", text)
+        self.assertIn("recognized legacy content uses `cw migrate --plan`", text)
+        self.assertRegex(text, r"Preview the\s+completed migration plan")
+        self.assertRegex(text, r"author confirms the semantic mapping and approves\s+the reviewed preview")
+        self.assertRegex(text, r"unknown files or intentionally unmanaged material untouched")
 
-    def test_project_setup_proposal_and_creation_paths_are_layout_conditional(self):
+    def test_project_setup_routes_canonical_creation_through_maintenance(self):
         text = (PLUGIN_ROOT / "skills/project-setup/SKILL.md").read_text()
-        self.assertIn("### Layout A paths", text)
-        self.assertIn("### Layout B paths", text)
-        layout_a, layout_b = text.split("### Layout A paths", 1)[1].split(
-            "### Layout B paths", 1
-        )
+        self.assertIn("$project-maintenance", text)
+        self.assertIn("do not duplicate its command reference", text)
+        self.assertIn("construct managed files by hand", text)
         for path in (
-            "`worldbuilding/`",
-            "`characters/`",
-            "`chapters/`",
-            "`drafts/`",
-            "`plot/`",
-        ):
-            self.assertIn(path, layout_a)
-        self.assertIn("Do not create a `kb/`, `story/`", layout_a)
-        for path in (
-            "`kb/world/`",
-            "`kb/characters/`",
-            "`story/`",
+            "`project.md`",
+            "`story/chapters/`",
             "`work/drafts/`",
-            "`work/outline/`",
-            "`kb/samples/`",
-            "`kb/styles/`",
+            "`kb/`",
+            "`kb/continuity/`",
+            "`.creative-writing/`",
         ):
-            self.assertIn(path, layout_b)
-        self.assertIn("author-confirmed", layout_a.lower())
-        self.assertIn("author-confirmed", layout_b.lower())
-        self.assertIn("local conventions", layout_a.lower())
-        self.assertIn("local conventions", layout_b.lower())
+            self.assertIn(path, text)
 
     def test_llm_writing_requires_an_authorized_artifact_path_for_disk_drafts(self):
         text = (PLUGIN_ROOT / "skills/llm-writing/SKILL.md").read_text()

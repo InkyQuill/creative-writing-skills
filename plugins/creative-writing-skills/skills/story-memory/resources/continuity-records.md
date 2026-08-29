@@ -13,12 +13,20 @@ issue log or brainstorm notes instead.
 
 ## Where They Live
 
-Follow the project layout: under `plot/` in Layout A projects and `kb/` in
-Layout B projects. Record the exact paths in the project instructions. The
-checker discovers the records by name, so keep the file names below. If both
-roots contain continuity records, stop and resolve the selected root in the
-project instructions; the checker treats the layout as ambiguous rather than
-silently choosing one.
+The canonical continuity root is `kb/continuity/`:
+
+- `kb/continuity/timeline.md`
+- `kb/continuity/promises.md`
+- `kb/continuity/questions.md`
+- `kb/continuity/state.md`
+- `kb/continuity/scenes/`
+
+These paths are consumed by `cw check continuity`. Use `$project-maintenance`
+for the check and migration mechanics. Direct author edits are valid input:
+re-read current bytes, tolerate author formatting and prose changes that still
+meet the record contract, and report semantic conflicts without overwriting
+them. Repairable warnings do not block the continuity reading; only a required
+target that cannot be read safely stops that part of the audit.
 
 ## Timeline
 
@@ -152,17 +160,8 @@ quietly re-time, re-cast, or resolve.
 
 ## Deterministic Check First
 
-Run the checker before judging continuity by reading. Set the working directory
-to the installed `story-memory` skill directory, then pass the story project
-root as the argument:
-
-```bash
-STORY_PROJECT_ROOT="$(cd "<project-root>" && pwd -P)"
-cd "<story-memory-skill-directory>"
-python3 resources/continuity_check.py "$STORY_PROJECT_ROOT"
-```
-
-It reports ordering violations (payoff before plant, answer before question,
+Run `cw check continuity` through `$project-maintenance` before judging
+continuity by reading. It reports ordering violations (payoff before plant, answer before question,
 appearance after death), lifecycle mismatches, stale state, anchor conflicts,
 and Chekhov gaps — promises planted three or more chapters back with no
 payoff. Once any continuity record exists, the full five-record set is
