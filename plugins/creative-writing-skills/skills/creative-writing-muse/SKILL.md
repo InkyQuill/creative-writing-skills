@@ -16,6 +16,21 @@ Before completing the working contract, find and read the project's instruction 
 
 If targeted discovery leaves one material gap, ask the author one focused question that would resolve it. Do not replace discoverable project context with a broad questionnaire or invention.
 
+## Prepare Project Mechanics
+
+Use `$project-maintenance` to prepare the project before creative orchestration.
+Handle safe scaffold, index, and tag preparation transparently: inspect the
+preview, apply only the requested mechanical change, and do not hand hashes or
+commands back to the author. When the folder or its transaction state needs
+repair, route diagnosis through `$project-doctor`. Call `$cli-doctor` only after
+an actual CLI execution failure, never merely because an optional launcher is
+absent.
+
+Continue unrelated creative work through repairable warnings whenever the
+required sources remain readable. Summarize material conflicts in content
+language—what story fact, draft, or project artifact is affected—not CLI
+commands, ceremony, or terminology.
+
 ## Capture Intent First
 
 Before dispatch, establish the working contract:
@@ -44,6 +59,12 @@ When Codex subagents are available, the primary path is to spawn a fresh subagen
 4. the role-specific scope and decision boundary;
 5. targeted project context: the applicable instruction paths and only the story-artifact paths or excerpts this role needs.
 
+For prose writing or review, targeted project context includes the prepared
+context plan and an explicit draft target path. Prepare that context before
+dispatch; do not ask a worker to discover, index, migrate, or repair the
+project. A worker returns a proposal or findings. It never directly mutates
+accepted manuscript or KB and never makes unjournaled changes.
+
 Render every spawn or fallback payload in that order with all seven working-contract fields explicitly labeled. If a material field is still unknown, mark it `pending author answer` and ask the one focused question before dispatch; do not omit the field or spawn on the placeholder.
 
 Name exact input paths and a single caller-owned output path when the worker may write. A workspace-write worker owns only assigned paths. A read-only worker returns findings and never patches files. The spawned subagent follows the supplied worker prompt; muse remains the author-facing decision owner.
@@ -56,6 +77,15 @@ Read every worker result. Compare it with the working contract and source artifa
 
 When independent reports disagree, explain the creative tradeoff in terms of author intent and reader effect. Keep strengths worth protecting alongside the highest-impact concern.
 
+## Confirm Durable Changes Separately
+
+Obtain explicit author confirmation separately for each migration apply, draft
+acceptance, KB promotion, and retcon. Do not treat approval of one as approval
+of another. Draft acceptance changes the manuscript only, through a reviewed
+journaled transaction. KB promotion is a separate confirmed transaction after
+acceptance. A retcon remains a content decision even when its mechanical edits
+look routine.
+
 ## Current-Context Fallback
 
 Only when Codex subagents are unavailable, adopt the same selected worker prompt as a bounded current-context stance. Supply the registry skills/access, complete seven-field working contract, role scope, and targeted project context exactly as the fresh subagent would receive them. Keep dependent stages separate and synthesize after each stance. This preserves the method but not a fresh context or independent perspective.
@@ -64,6 +94,6 @@ Disclose the fallback when lost independence or parallelism materially changes c
 
 ## Update Memory After Decisions Settle
 
-Do not write brainstorm options, draft implications, review hypotheses, or unresolved contradictions into durable story memory. Update `$story-memory` only when the relevant decision has settled: an author-confirmed choice or a fact established by accepted prose. Materialize an already confirmed decision before a handoff when a worker could otherwise contradict it; when draft or review results may change the decision, read and synthesize them first. Preserve source, author-only secrets, character and reader knowledge boundaries, and remaining uncertainty. Keep provisional material in work artifacts until the author settles it.
+Do not write brainstorm options, draft implications, review hypotheses, or unresolved contradictions into durable story memory. Update `$story-memory` only when the relevant decision has settled and the separate KB promotion has been confirmed. Materialize an already confirmed and promoted decision before a handoff when a worker could otherwise contradict it; when draft or review results may change the decision, read and synthesize them first. Preserve source, author-only secrets, character and reader knowledge boundaries, and remaining uncertainty. Keep provisional material in work artifacts until the author settles it.
 
 A clue or implication that merely makes a draft feel convincing is still provisional. It enters durable memory only after the author accepts the prose or separately confirms that fact; until then, retain it in the draft or a caller-owned work artifact.
