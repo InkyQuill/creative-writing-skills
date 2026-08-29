@@ -30,14 +30,23 @@ from scripts.sync_claude_distribution import transform_skill
 
 
 EXPECTED_SKILLS = {
-    "character-sim", "creative-research", "creative-writing-craft",
+    "character-sim", "cli-doctor", "creative-research", "creative-writing-craft",
     "creative-writing-modes", "creative-writing-muse", "grill-with-docs",
     "information-hierarchy", "intent-modeling", "kb-management",
-    "knowledge-layers", "llm-writing", "md-validation", "project-maintenance",
-    "project-setup", "qi-layer", "reader-sim", "reflect", "shared-dao", "story-memory",
+    "knowledge-layers", "llm-writing", "md-validation", "project-doctor",
+    "project-feedback", "project-maintenance", "project-setup", "qi-layer",
+    "reader-sim", "reflect", "shared-dao", "story-memory",
     "story-planning", "story-review", "structured-artifact",
     "targeted-editing", "world-creation", "writing-principles",
     "writing-staffing", "zoom-out",
+}
+
+EXPECTED_AUTHORED_SKILLS = {
+    "character-sim", "cli-doctor", "creative-research", "creative-writing-craft",
+    "creative-writing-modes", "creative-writing-muse", "kb-management",
+    "project-doctor", "project-feedback", "project-maintenance", "project-setup",
+    "reader-sim", "shared-dao", "story-memory", "story-planning", "story-review",
+    "targeted-editing", "world-creation", "writing-principles", "writing-staffing",
 }
 
 EXPECTED_WORKERS = {
@@ -535,7 +544,9 @@ class DistributionScaffoldTests(unittest.TestCase):
     def test_distribution_config_lists_exact_skill_set(self):
         config = load_json(REPO_ROOT / "config" / "distribution.json")
         self.assertEqual(set(config["canonical_skills"]), EXPECTED_SKILLS)
-        self.assertEqual(len(config["authored_skills"]), 17)
+        self.assertEqual(set(config["authored_skills"]), EXPECTED_AUTHORED_SKILLS)
+        self.assertEqual(len(config["canonical_skills"]), 30)
+        self.assertEqual(len(config["authored_skills"]), 20)
         self.assertEqual(len(config["vendored_skills"]), 10)
         self.assertEqual(
             ["reflect", "structured-artifact"],
@@ -547,6 +558,11 @@ class DistributionScaffoldTests(unittest.TestCase):
                 "root": "cw",
                 "manifest": ".zcode-plugin/plugin.json",
                 "marketplace": "marketplace.json",
+                "icon": (
+                    "https://raw.githubusercontent.com/InkyQuill/"
+                    "creative-writing-skills/main/plugins/creative-writing-skills/"
+                    "assets/scroll-quill.png"
+                ),
             },
         )
 
@@ -838,13 +854,7 @@ class ValidatorTests(unittest.TestCase):
         }
         self._write_json(self.root / ".agents" / "plugins" / "marketplace.json", marketplace)
 
-        authored = {
-            "character-sim", "creative-research", "creative-writing-craft",
-            "creative-writing-modes", "creative-writing-muse", "kb-management",
-            "project-maintenance", "project-setup", "reader-sim", "shared-dao", "story-memory",
-            "story-planning", "story-review", "targeted-editing",
-            "world-creation", "writing-principles", "writing-staffing",
-        }
+        authored = EXPECTED_AUTHORED_SKILLS
         config = {
             "canonical_skills": sorted(EXPECTED_SKILLS),
             "authored_skills": sorted(authored),

@@ -29,6 +29,7 @@ from scripts.sync_claude_distribution import (
 
 EXPECTED_SKILLS = {
     "character-sim",
+    "cli-doctor",
     "creative-research",
     "creative-writing-craft",
     "creative-writing-modes",
@@ -40,6 +41,8 @@ EXPECTED_SKILLS = {
     "knowledge-layers",
     "llm-writing",
     "md-validation",
+    "project-doctor",
+    "project-feedback",
     "project-maintenance",
     "project-setup",
     "qi-layer",
@@ -72,6 +75,26 @@ EXPECTED_WORKERS = {
 
 
 class ArchiveContractTests(unittest.TestCase):
+    def test_project_maintenance_archive_bundles_public_cli_and_checkers(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            output = Path(temporary)
+            skill = Path("cw/skills/project-maintenance")
+
+            create_skill_zip(skill, output)
+
+            with zipfile.ZipFile(output / "project-maintenance.skill") as archive:
+                names = set(archive.namelist())
+            prefix = "project-maintenance/resources/cli/"
+            self.assertLessEqual(
+                {
+                    prefix + "cw.py",
+                    prefix + "cwcli/app.py",
+                    prefix + "cwcli/checks/continuity.py",
+                    prefix + "cwcli/checks/prose.py",
+                },
+                names,
+            )
+
     def test_archive_validation_rejects_missing_skill(self):
         with self.assertRaisesRegex(ValueError, "missing: world-creation"):
             validate_skill_set(
@@ -373,7 +396,12 @@ class ClaudeDistributionRenderTests(unittest.TestCase):
 
             render_distribution(output_root)
 
-            for relative in ("resources/cli/cw.py", "resources/cli/cwcli/app.py"):
+            for relative in (
+                "resources/cli/cw.py",
+                "resources/cli/cwcli/app.py",
+                "resources/cli/cwcli/checks/continuity.py",
+                "resources/cli/cwcli/checks/prose.py",
+            ):
                 source = Path(
                     "plugins/creative-writing-skills/skills/project-maintenance"
                 ) / relative
@@ -408,10 +436,10 @@ class ClaudeDistributionRenderTests(unittest.TestCase):
             self.assertIn("CLAUDE.md", project_setup)
             self.assertNotIn("AGENTS.md", project_setup)
             self.assertIn(
-                "draft project instructions for `CLAUDE.md`",
+                "authored body is the durable writing contract",
                 project_setup,
             )
-            self.assertNotIn("draft an `CLAUDE.md`", project_setup)
+            self.assertIn("remain unmanaged", project_setup)
             self.assertIn("Project conventions in `CLAUDE.md`", grill)
             self.assertNotIn("AGENTS.md", grill)
             for resource in (
@@ -433,31 +461,16 @@ class ClaudeDistributionRenderTests(unittest.TestCase):
             self.assertNotIn("AGENTS.md", bootstrap)
             self.assertIn("Use `/md-validation` for link checking", bootstrap)
             self.assertNotIn("Use `$md-validation` for link checking", bootstrap)
-            for branch in (
-                "use Layout A",
-                "use Layout B",
-                "If neither layout has evidence",
-                "If both have the same population score",
-                "higher population score",
-                "wait for explicit confirmation",
-                "### Layout A paths",
-                "### Layout B paths",
-            ):
-                self.assertIn(branch, project_setup)
-            self.assertRegex(project_setup, r"Never create the\s+competing layout")
             for path in (
-                "`worldbuilding/`",
-                "`characters/`",
-                "`chapters/`",
-                "`drafts/`",
-                "`plot/`",
-                "`kb/world/`",
-                "`kb/characters/`",
-                "`story/`",
+                "`project.md`",
+                "`story/chapters/`",
+                "`kb/`",
                 "`work/drafts/`",
-                "`work/outline/`",
+                "`.creative-writing/`",
             ):
                 self.assertIn(path, project_setup)
+            self.assertIn("There is no\nalternative layout choice", project_setup)
+            self.assertIn("Use `/project-maintenance`", project_setup)
             generated_cards = (
                 output_root
                 / "skills/structured-artifact/resources/card-grid.md"
@@ -1042,7 +1055,7 @@ class ClaudeDistributionCliTests(unittest.TestCase):
                 apply_status = main(["--apply"], repo_root=repo_root)
 
             self.assertEqual(0, apply_status)
-            self.assertEqual(27, apply_output.getvalue().count("synced skill "))
+            self.assertEqual(30, apply_output.getvalue().count("synced skill "))
             self.assertEqual(11, apply_output.getvalue().count("synced agent "))
             marketplace = json.loads(marketplace_path.read_text())
             canonical_manifest = json.loads(

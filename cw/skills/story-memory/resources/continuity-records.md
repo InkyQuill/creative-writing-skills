@@ -13,12 +13,20 @@ issue log or brainstorm notes instead.
 
 ## Where They Live
 
-Follow the project layout: under `plot/` in Layout A projects and `kb/` in
-Layout B projects. Record the exact paths in the project instructions. The
-checker discovers the records by name, so keep the file names below. If both
-roots contain continuity records, stop and resolve the selected root in the
-project instructions; the checker treats the layout as ambiguous rather than
-silently choosing one.
+The canonical continuity root is `kb/continuity/`:
+
+- `kb/continuity/timeline.md`
+- `kb/continuity/promises.md`
+- `kb/continuity/questions.md`
+- `kb/continuity/state.md`
+- `kb/continuity/scenes/`
+
+These paths are consumed by `cw check continuity`. Use `/project-maintenance`
+for the check and migration mechanics. Direct author edits are valid input:
+re-read current bytes, tolerate author formatting and prose changes that still
+meet the record contract, and report semantic conflicts without overwriting
+them. Repairable warnings do not block the continuity reading; only a required
+target that cannot be read safely stops that part of the audit.
 
 ## Timeline
 
@@ -88,7 +96,7 @@ use the full chapter-scene citation in `Introduced` and `Answered`.
 ## State Snapshot
 
 `state.md` — the mutable present at the writing front. Rewritten as the story
-advances; the other records in the selected continuity root keep durable
+advances; the other records in the canonical continuity root keep durable
 chronology and lifecycle history, while this file keeps only current state.
 
 ```markdown
@@ -141,28 +149,24 @@ appear in `Mentions` after their death, never in `Present`.
 
 ## Updating the Records
 
-Records update when decisions settle, not during exploration: after the author
-accepts prose, confirms a decision, or an edit lands. Fact extraction writes
-scene records and timeline rows from the accepted chapter, moves promises and
-questions to their new statuses, and refreshes `state.md` to the new writing
-front. An edit that changes events, knowledge, or deaths ripples into the same
-records before the pass reports done. When a record and the prose disagree,
-the record is flagged to the author — the author decides canon; agents never
-quietly re-time, re-cast, or resolve.
+Acceptance does not itself write continuity records. After acceptance, fact
+extraction re-reads the prose and synchronizes scene records, timeline rows,
+promise and question status changes, and `state.md` facts that the text directly
+and unambiguously establishes. Use `/project-maintenance` to preview and apply
+that separate recoverable transaction without asking for reconfirmation.
+
+Keep ambiguity, inference or implication, canon conflict, retcon, uncertain
+source tag, and uncertain character or reader knowledge boundary as a proposal.
+Ask only when different answers would materially change canon or knowledge
+boundaries. If an applied update was mistaken, preview
+`cw undo <transaction-id>`. When a record and prose disagree, flag it to the
+author — the author decides canon; agents never quietly re-time, re-cast,
+resolve, or write around the conflict.
 
 ## Deterministic Check First
 
-Run the checker before judging continuity by reading. Set the working directory
-to the installed `story-memory` skill directory, then pass the story project
-root as the argument:
-
-```bash
-STORY_PROJECT_ROOT="$(cd "<project-root>" && pwd -P)"
-cd "<story-memory-skill-directory>"
-python3 resources/continuity_check.py "$STORY_PROJECT_ROOT"
-```
-
-It reports ordering violations (payoff before plant, answer before question,
+Run `cw check continuity` through `/project-maintenance` before judging
+continuity by reading. It reports ordering violations (payoff before plant, answer before question,
 appearance after death), lifecycle mismatches, stale state, anchor conflicts,
 and Chekhov gaps — promises planted three or more chapters back with no
 payoff. Once any continuity record exists, the full five-record set is
@@ -171,4 +175,7 @@ compares anchored timeline tables embedded in character and subplot entries
 with the master timeline. Exit is nonzero when it finds errors. Treat its
 output as the fixed floor: resolve or flag every finding, then apply reader
 judgment for what a script cannot see. Deterministic findings are reported,
-not auto-repaired; record updates that change canon wait for the author.
+not auto-repaired. Direct and unambiguous facts established by accepted prose
+follow the separate previewed, recoverable synchronization above without
+reconfirmation. Ask the author only for ambiguity, inference, conflict, retcon,
+source-tag uncertainty, or character/reader knowledge-boundary uncertainty.

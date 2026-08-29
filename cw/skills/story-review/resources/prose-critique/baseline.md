@@ -6,14 +6,11 @@ Baselines are also language-specific. Sentence length, lexical variety, and dial
 
 ## Building the Baseline
 
-Run `analyze.py` against each published chapter and record the results:
+Run the bundled `/project-maintenance` prose check from the project root and
+record its per-document metrics:
 
 ```bash
-for chapter in story/chapter*/[0-9]*chapter.md; do
-    echo "=== $(basename "$chapter") ==="
-    python3 resources/prose-critique/analyze.py "$chapter"
-    echo ""
-done > baseline_report.txt
+cw check prose . > baseline_report.txt
 ```
 
 From the collected results, note:
@@ -25,7 +22,8 @@ From the collected results, note:
 
 ## Comparing a Draft
 
-Run the same script against the draft, then compare section by section against the baseline. Look for:
+Run the same `cw check prose` command with the draft in its managed project
+path, then compare section by section against the baseline. Look for:
 
 - **Metrics that fall outside the project's established range**: these are investigation triggers, not automatic problems. A chapter that breaks pattern might be doing so intentionally (a tense scene with shorter sentences, a reflective passage with longer ones).
 - **Sudden shifts within a single document**: if the first half of a chapter has dramatically different metrics than the second half, that's worth examining. It may indicate a voice drift, especially in AI-assisted drafts where the model's tendencies gradually override the project style.

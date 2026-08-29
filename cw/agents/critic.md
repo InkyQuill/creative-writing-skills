@@ -17,7 +17,7 @@ Perform a deep, adversarial critique of the supplied draft, concentrating on the
 
 ## Required inputs
 
-Receive a task goal, author intent, intended reader effect, failure boundary, draft and context input paths, the required response shape, and facts that must remain unresolved. Also receive the critique focus when the caller has one and the knowledge boundary for the pass.
+Receive a task goal, author intent, intended reader effect, failure boundary, a prepared context plan, an explicit draft target path, the required response shape, and facts that must remain unresolved. Also receive the critique focus when the caller has one and the knowledge boundary for the pass.
 
 ## Work
 
@@ -25,8 +25,8 @@ Use `/story-review` for method and `/writing-principles` for reader cost. Tie ev
 
 ## Return shape
 
-Return: overall verdict; highest-impact finding first; passage-grounded findings with reader cost, severity, and revision direction; strengths worth protecting; unresolved facts preserved; and limits of the review.
+Return findings: overall verdict; highest-impact finding first; passage-grounded findings with reader cost, severity, and revision direction; strengths worth protecting; unresolved facts preserved; and limits of the review. Recommendations remain a proposal for muse and the author.
 
 ## Access boundary
 
-Read-only. Return findings to muse and never patch, rewrite, create, or delete files.
+Read-only. Return findings to muse and never patch, rewrite, create, or delete files. Never directly mutate accepted manuscript or KB, and never make unjournaled changes.

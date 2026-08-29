@@ -77,7 +77,7 @@ Upload them under **Customize → Skills**, enable `creative-writing-muse`, and
 describe the writing task. Skills-only chat uses the muse's single-agent
 fallback.
 
-To build the same 27 archives locally:
+To build the same 30 archives locally:
 
 ```bash
 python3 scripts/sync_claude_distribution.py --check
@@ -91,6 +91,10 @@ The archives are written to `zips/` from the generated `cw/skills/` tree.
 | Skill | Purpose |
 |---|---|
 | `creative-writing-muse` | Author-facing orchestration, synthesis, and fallback workflow |
+| `project-maintenance` | Bundled story-project transactions, drafts, checks, and recovery used by agents |
+| `project-doctor` | Project-level diagnosis and safe repair planning |
+| `cli-doctor` | Diagnosis of the bundled `cw` command infrastructure |
+| `project-feedback` | Reports reproducible problems in this plugin without capturing unrelated skills or projects |
 | `story-planning` | Brainstorming, outlining, and story architecture |
 | `creative-writing-modes` | Fresh drafts, revisions, bridges, alternatives, and polish |
 | `creative-writing-craft` | Prose, scene, style, voice, and genre technique |
@@ -98,11 +102,11 @@ The archives are written to `zips/` from the generated `cw/skills/` tree.
 | `targeted-editing` | Locating, scoping, and ripple-checking edits to existing prose |
 | `reader-sim` | Persona-bound first-time reader simulation |
 | `character-sim` | In-character voice and relationship exploration |
-| `world-creation` | Context-first worldbuilding with confirmation before canonization |
+| `world-creation` | Context-first worldbuilding that persists direct settled author answers without redundant confirmation |
 | `story-memory` | Durable facts, continuity records with a deterministic checker, canon, terminology, and issue tracking |
 | `writing-staffing` | Small, purpose-built specialist compositions |
 
-All 27 installed skills are listed in `config/distribution.json`.
+All 30 installed skills are listed in `config/distribution.json`.
 
 ## Story Project Layout
 
@@ -116,8 +120,16 @@ my-story/
 └── kb/                     # Characters, world, timeline, canon, styles, issues
 ```
 
+This is one story-project model across planning, drafting, review, and durable
+knowledge. Authors may keep editing the Markdown files directly; the bundled
+`cw` command is agent infrastructure, not a separate dependency authors must
+install, operate, or administer. Git integration is available when useful but
+Git is optional.
+
 Project setup does not reorganize an existing manuscript or canonize
-provisional ideas without confirmation.
+provisional ideas. Direct settled author answers can be persisted immediately;
+the agent asks only when ambiguity, inference, conflict, or another real
+decision boundary requires the author.
 
 ## Contributing
 

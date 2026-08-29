@@ -1,7 +1,7 @@
 ---
 name: story-memory
 description: >
-  Extracting factual state changes from written chapters into the kb. Use when a chapter needs its canon, timeline, character state, and terminology captured.
+  Extract factual state changes from accepted prose for previewed KB synchronization. Use when a chapter needs its canon, timeline, character state, and terminology captured or an ambiguous change needs author review.
 ---
 
 # Fact Extraction
@@ -24,13 +24,34 @@ Common categories to look for, but don't treat as exhaustive:
 
 If something the chapter establishes doesn't fit the common categories but still feels load-bearing, capture it anyway. Closed taxonomies lose information.
 
-## Writing to the KB
+## Prepare the Promotion Proposal
 
-Update existing entries rather than creating duplicates. A character entry should grow chapter by chapter as their state evolves: each chapter adds to their entry rather than creating a new file.
+Fact extraction prepares the KB promotion proposal; it does not write to the KB
+itself. Acceptance of the source chapter writes manuscript state only, not KB
+state. After acceptance, re-read the prose and synchronize direct and
+unambiguous facts through the separate previewed, recoverable transaction below
+without redundant confirmation. Describe updates to existing entries instead
+of proposing duplicates. A character entry should grow chapter by chapter as
+their state evolves rather than gaining a parallel file.
 
 Cross-link between entries. If a chapter establishes a relationship change between two characters, both character entries should reflect it, and the timeline entry should reference the event. When an event lands on a character sub-timeline as well as the main timeline, record it once with its shared anchor on both, and keep the two synchronized on every later update. If updating one side would desynchronize the other — shifted order, stretched duration, knowledge arriving too early — flag it as a conflict rather than re-timing silently.
 
-Maintain the continuity records as part of extraction, using `resources/continuity-records.md` only as the format guide. Discover the project's selected `plot/` or `kb/` continuity root from its instructions, then write the chapter's scene record and timeline rows, move promises and questions to their new statuses with their chapter references, and refresh the state snapshot in that root. Never write project records inside the installed skill directory. Run the deterministic checker when extraction finishes; report its findings alongside the extraction report rather than silently repairing records.
+Include proposed continuity changes using `resources/continuity-records.md` as
+the format guide and fixed `kb/continuity/` paths: proposed scene record and
+timeline rows, promise and question status changes with chapter references, and
+the refreshed state snapshot. Run `cw check continuity` through
+`/project-maintenance` before finalizing the proposal; report its findings
+alongside the extraction report rather than silently repairing records.
+
+After acceptance, distinguish facts the prose establishes directly and
+unambiguously from inference or implication. Synchronize the direct facts and
+their exact destinations through a separate previewed, recoverable
+`/project-maintenance` transaction without asking for reconfirmation. A separate
+transaction is not automatically a separate confirmation. Ask only about
+ambiguity, inference, canon conflict, retcon, uncertain source tags, or uncertain
+character and reader knowledge boundaries. If the applied promotion was
+mistaken, inspect history and preview `cw undo <transaction-id>` instead of
+making a direct restorative write.
 
 Check for conflicts between what the chapter establishes and what's already in the kb. If the chapter contradicts existing canon or uses a term differently from the relevant vocab file, flag it in your report; preserve the existing record until the author or orchestrator resolves the conflict. The contradiction may be an error in the chapter, an intentional retcon, or a vocabulary decision that needs recording.
 
@@ -40,8 +61,8 @@ Entries are compressed, annotated, factual. "The protagonist learned that the
 mentor's secret project started three years before her arrival — Chapter 7: Scene where the protagonist learns when the mentor's secret project began" is
 specific, sourced, factual. Cite prose evidence as `Chapter N: Scene where X
 discovers Y` and project-document evidence by path, such as `magic-system.md`.
-Treat vocab cautiously: update existing vocab
-entries only when the canonical term is already settled. Otherwise report
+Treat vocab cautiously: propose an existing vocab entry update only when the
+canonical term is already settled. Otherwise report
 candidate terms, aliases actually used, and chapter sources for the author or
 orchestrator to ratify. Future agents read these to maintain continuity; vague
 entries create vague continuity.

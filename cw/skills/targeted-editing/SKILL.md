@@ -10,6 +10,13 @@ establish what is being edited, where it sits, and what the change touches.
 Then edit at the level the problem actually lives at, and verify the joins
 afterward.
 
+Use `/project-maintenance` for mechanical checks, exact edit operations,
+preview/apply, and transaction recovery. Interpret repairable warnings
+internally and continue the literary edit when its required text is readable.
+A required target that cannot be read safely is the only mechanical reason to
+stop. The agent owns hashes, indexes, base revisions, migration mechanics, and
+repair commands; never ask the author to maintain SHA values.
+
 ## Locate Before Editing
 
 - Name the target precisely: which chapter, which scene, which beat or
@@ -62,6 +69,20 @@ Trace what the edit touches:
 - **Canon and vocab** — does the edit contradict established canon or settled
   terminology? Flag the contradiction; the author decides canon.
 
+## Form an Exact Operation Plan
+
+Choose the literary scope first: target and change level, intended reader
+effect, and ripple boundaries. Only then translate the approved change into an
+exact-anchor operation or a batch of exact operations. Read current bytes just
+before planning. Each repeated match needs an explicit expected-count assertion;
+never let a common phrase silently select the first occurrence.
+
+Preview the exact operation or complete batch before apply. Inspect every
+changed passage and precondition, then use `--apply` only while the preview
+still represents the requested edit. If an applied edit was a mistake, inspect
+history, preview `cw undo <transaction-id>`, and apply that inverse transaction
+instead of hand-restoring remembered text.
+
 ## Edit, Then Verify
 
 Make the edit, then re-read the edited passage together with the scene before
@@ -71,13 +92,15 @@ where it lands. Identify the corresponding continuity-record changes
 or state changed; timeline rows when events, order, or duration moved; promise
 and question statuses when the edit plants, pays off, raises, or answers
 anything; the state snapshot when knowledge, location, injuries, or
-relationships moved. Propose those record changes with their evidence, but do
-not write them until the author or orchestrator confirms the edited prose and
-its durable facts. After confirmation, apply the record changes and run the
-deterministic checker; report its findings rather than silently repairing
-them.
+relationships moved. After the edited prose is accepted, re-read it and apply
+record changes it directly and unambiguously establishes through a separate
+previewed, recoverable transaction without asking for re-approval. Then run the
+deterministic checker and report its findings rather than silently repairing
+them. Keep ambiguity, inference or implication, canon conflict, retcon, uncertain
+source tag, and uncertain character or reader knowledge boundary as a proposal;
+ask only when different answers would materially change canon or knowledge.
 
 Report the placement decision — what level, where, why — along with any
-ripple that could not be fully verified and any contradiction found. When the
-edit changes durable facts, keep the `/story-memory` update provisional until
-the author or orchestrator confirms it.
+ripple that could not be fully verified and any contradiction found. Keep only
+unresolved or inferred `/story-memory` updates provisional; accepted prose is
+evidence for facts it establishes explicitly.

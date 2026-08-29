@@ -32,19 +32,21 @@ else:
 PLUGIN_NAME = "creative-writing-skills"
 REPOSITORY = "https://github.com/InkyQuill/creative-writing-skills"
 EXPECTED_SKILLS = {
-    "character-sim", "creative-research", "creative-writing-craft",
+    "character-sim", "cli-doctor", "creative-research", "creative-writing-craft",
     "creative-writing-modes", "creative-writing-muse", "grill-with-docs",
     "information-hierarchy", "intent-modeling", "kb-management",
-    "knowledge-layers", "llm-writing", "md-validation", "project-maintenance",
-    "project-setup", "qi-layer", "reader-sim", "reflect", "shared-dao", "story-memory",
+    "knowledge-layers", "llm-writing", "md-validation", "project-doctor",
+    "project-feedback", "project-maintenance", "project-setup", "qi-layer",
+    "reader-sim", "reflect", "shared-dao", "story-memory",
     "story-planning", "story-review", "structured-artifact",
     "targeted-editing", "world-creation", "writing-principles",
     "writing-staffing", "zoom-out",
 }
 AUTHORED_SKILLS = {
-    "character-sim", "creative-research", "creative-writing-craft",
+    "character-sim", "cli-doctor", "creative-research", "creative-writing-craft",
     "creative-writing-modes", "creative-writing-muse", "kb-management",
-    "project-maintenance", "project-setup", "reader-sim", "shared-dao", "story-memory",
+    "project-doctor", "project-feedback", "project-maintenance", "project-setup",
+    "reader-sim", "shared-dao", "story-memory",
     "story-planning", "story-review", "targeted-editing", "world-creation",
     "writing-principles", "writing-staffing",
 }

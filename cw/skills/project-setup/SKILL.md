@@ -5,137 +5,67 @@ description: "One-time project setup for creative writing. Interviews the author
 
 # Project Setup
 
-Guide the author through setting up their creative writing project. The goal is
-a working `CLAUDE.md` and one coherent directory layout that future sessions
-and delegated workers read for project-specific conventions. Preserve every
-existing project file. Do not create or modify the workspace until the author
-explicitly confirms the proposed structure and content.
+Establish the project-specific writing conventions and one canonical on-disk
+contract. Use `/project-maintenance` for all scaffold and migration mechanics;
+do not duplicate its command reference or construct managed files by hand.
 
-## Discover the Project and Its Layout
+## Discover Before Changing
 
-Ask what kind of project this is, how far along it is, its POV and timeline
-shape, and how much worldbuilding it needs. Before asking where files should
-go, inspect existing indexes and populated directories for both supported
-layouts. Read `CLAUDE.md` first when it exists. Look for `_index.md`,
-`index.md`, `INDEX.md`, and `README.md` at the project root and inside likely
-content directories, then inspect filenames and contents rather than treating
-empty directory names as established convention.
+Read canonical `project.md`, generated indexes, and populated content before
+proposing anything. Platform instruction files such as `CLAUDE.md` may constrain
+the current agent, but they remain unmanaged, optional migration inputs rather
+than the durable story-project contract. Ask only for creative information the
+managed files do not answer: project kind and stage, language, POV and timeline
+shape, voice goals, naming and spoiler conventions, and the intended role of
+genuinely ambiguous legacy material.
 
-Use these equivalent roles:
+Classify the folder without moving anything:
 
-| Concern | Layout A | Layout B |
-|---|---|---|
-| World lore | `worldbuilding/` | `kb/world/` |
-| Characters | `characters/` | `kb/characters/` |
-| Canonical prose | `chapters/` | `story/` |
-| Draft prose | `drafts/` | `work/drafts/` |
-| Planning | `plot/` | `work/outline/` |
+- An ordinary folder without recognized story-project content is initialized
+  with `cw init` after its title and language are known.
+- A folder with recognized legacy content uses `cw migrate --plan`. The agent
+  resolves mechanical fields, reviews every proposed destination, and preserves
+  unknown files or intentionally unmanaged material untouched. Preview the
+  completed migration plan, show the meaningful moves and merges to the author,
+  and apply it only after the author confirms the semantic mapping and approves
+  the reviewed preview.
+- An existing canonical project is extended in place. Do not reinitialize or
+  reorganize it merely because optional material is absent.
 
-Select the layout before proposing any file path:
+The canonical layout is rooted by `project.md`. Manuscript chapters live in
+`story/chapters/`; draft work in `work/drafts/`; durable knowledge in `kb/`;
+and machine-checkable story state in `kb/continuity/`. The scaffold also owns
+its generated indexes and `.creative-writing/` maintenance state. There is no
+alternative layout choice.
 
-For each layout, calculate a population score as the ordered pair `(populated
-core role directories, durable files)`. First count how many of its five core
-role directories contain at least one nonempty regular project file, including
-an index; then count all nonempty regular project files recursively within
-those five directories. Compare the first count, then use the second count as
-the tie-breaker. Root or parent indexes that explicitly map the roles are
-layout evidence, but do not add to the population score.
+## Propose the Writing Contract
 
-- If only Layout A has indexes or populated role directories, use Layout A
-  and extend it.
-- If only Layout B has indexes or populated role directories, use Layout B
-  and extend it.
-- If both have evidence, use the layout with the higher population score and
-  explain both counts. If both have the same population score, ask one focused
-  choice between the two, with a recommendation grounded in the files already
-  present, and wait for the author's answer.
-- If neither layout has evidence, recommend one layout with a project-specific
-  rationale and wait for explicit confirmation.
+Draft the project-specific writing contract in the body of `project.md` for the
+author to review. That authored body is the durable writing contract; preserve
+the CLI-owned frontmatter and do not move the contract into `CLAUDE.md`. Cover:
 
-Do not propose paths or create files until a layout is selected from clear
-existing evidence or explicitly confirmed by the author. Never create the
-competing layout in an established project, and never migrate between layouts
-silently.
+- project overview, current stage, language, and punctuation conventions;
+- voice, POV, timeline, naming, chapter, spoiler, and source-tagging rules;
+- established vocabulary and terms to distinguish or avoid;
+- any sample, style, research, or work-support material that would help; and
+- how existing legacy paths map to the canonical roles when migrating.
 
-## Writing Samples and Style
+Keep writing samples and voice analysis provisional until their exact role and
+destination are approved. Preserve unrelated instructions and unknown files.
+Approval of the core project does not imply approval for optional samples,
+style files, vocabulary pages, or other auxiliary artifacts.
 
-Ask whether the author has sample chapters, scenes, writing from other
-projects, published style references, or voice goals. During discovery, keep
-samples and voice goals provisional in the conversation. Do not save samples,
-write style files, or capture voice goals in `CLAUDE.md` yet.
+## Apply Safely
 
-If there is enough material, propose analysis with the
-`/creative-writing-craft` methodology as part of the workspace plan. If the
-project is starting fresh, include voice goals in the proposed `CLAUDE.md`
-content so style files can be derived from early drafts after approval.
+Follow `/project-maintenance` preview/apply boundaries. For a new scaffold,
+preview and apply `cw init`, then use a previewed exact edit transaction for the
+approved `project.md` body. For an existing canonical project or an approved
+migration, update that body through the same recoverable transaction path. The
+agent owns hashes, indexes, base revisions, migration mechanics, and repair
+commands; never ask the author to maintain SHA values or other CLI metadata.
+Ask the author only for literary meaning and approval.
 
-## Propose and Iterate
-
-After the layout is selected, draft project instructions for `CLAUDE.md` and
-show them to the author. The proposal identifies the selected layout and lists
-only paths from its matching section below. For an existing project, propose
-extensions to its established indexes and populated directories; do not
-reorganize existing files.
-
-Cover:
-
-- the project overview and current stage;
-- the manuscript's language and its punctuation and quotation conventions
-  (quote style, dash and dialogue formatting, serial-comma policy), since
-  every later craft pass must respect the language's own norms;
-- where world lore, characters, canonical prose, drafts, and planning live;
-- voice, style, naming, chapter, POV, timeline, and spoiler conventions;
-- shared vocabulary, aliases, invented terms, and terms to avoid or
-  distinguish;
-- the exact missing directories or files proposed for creation; and
-- any sample, style, vocabulary, index, or work-support path as a separate
-  optional item requiring author confirmation.
-
-Present the draft, let the author adjust it, and iterate until both its content
-and every proposed path are approved.
-
-## Create the Files
-
-Once approved, preserve existing content and make only the agreed additions or
-updates. Write or update `CLAUDE.md` with the agreed instructions. Create only
-missing role paths from the selected layout and only when they were included in
-the approved proposal. Auxiliary paths are created only when the author
-confirmed their purpose and exact local name.
-
-### Layout A paths
-
-For selected Layout A, use `worldbuilding/`, `characters/`, `chapters/`,
-`drafts/`, and `plot/` for the five core roles. Do not create a `kb/`, `story/`,
-or `work/` counterpart. Add sample, style, or vocabulary paths only as
-author-confirmed auxiliary paths consistent with local conventions—for example
-an existing `samples/`, `style/`, `glossary/`, or `vocab.md` convention.
-Continuity records (timeline, promises, questions, state snapshot, scene
-records, in the `/story-memory` continuity-records format) may live under
-`plot/`; propose them as separate author-confirmed items, never create them
-by default. Create or update an index only when the folder has multiple
-durable files and the author confirmed that index role.
-
-### Layout B paths
-
-For selected Layout B, use `kb/world/`, `kb/characters/`, `story/`,
-`work/drafts/`, and `work/outline/` for the five core roles. Do not create a
-`worldbuilding/`, `characters/`, `chapters/`, `drafts/`, or `plot/` counterpart.
-Create `kb/samples/` and `kb/styles/` only as author-confirmed auxiliary paths.
-Create `kb/vocab.md`, domain vocabulary files, `kb/index.md`, and additional
-work support such as `work/critique-reports/` or `work/brainstorm/` only when
-the author confirmed them and they match local conventions. Continuity
-records (timeline, promises, questions, state snapshot, scene records, in the
-`/story-memory` continuity-records format) may live under `kb/`; propose them
-as separate author-confirmed items, never create them by default.
-
-Save samples or produce initial style analysis only at the exact approved path
-for the selected layout. Never infer approval for auxiliary files from approval
-of the core layout.
-
-## Existing Projects
-
-If project instructions already contain creative-writing conventions, suggest
-the smallest updates instead of overwriting them. Leave other instruction and
-configuration files intact unless the author explicitly asks to change them.
-When a local folder or index uses a more specific name than the table, preserve
-that established name and record its role in `CLAUDE.md`.
+Interpret repairable mechanical warnings internally and continue the requested
+semantic setup work. The only mechanical reason to stop that work is when a
+required target cannot be read safely; report the exact target and preserve all
+bytes until it can be inspected.

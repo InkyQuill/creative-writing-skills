@@ -278,6 +278,20 @@
         "resources": [],
         "source": "canonical plugin"
       },
+      "cli-doctor": {
+        "name": "cli-doctor",
+        "path": "plugins/creative-writing-skills/skills/cli-doctor/SKILL.md",
+        "description": "Diagnose and directly invoke the bundled cw story-project CLI when its runtime path, Python interpreter, or optional launcher is unavailable or stale.",
+        "type": "canonical skill",
+        "modelInvocable": true,
+        "loads": [
+          "project-maintenance"
+        ],
+        "resources": [
+          "resources/launcher-setup.md"
+        ],
+        "source": "canonical plugin"
+      },
       "creative-research": {
         "name": "creative-research",
         "path": "plugins/creative-writing-skills/skills/creative-research/SKILL.md",
@@ -534,6 +548,33 @@
         "loads": [],
         "resources": [
           "resources/mermaid-authoring.md"
+        ],
+        "source": "canonical plugin"
+      },
+      "project-doctor": {
+        "name": "project-doctor",
+        "path": "plugins/creative-writing-skills/skills/project-doctor/SKILL.md",
+        "description": "Diagnose a canonical creative-writing project and plan safe repairs when its structure, transactions, indexes, or canon checks report problems.",
+        "type": "canonical skill",
+        "modelInvocable": true,
+        "loads": [
+          "cli-doctor",
+          "project-maintenance"
+        ],
+        "resources": [
+          "resources/repair-policy.md"
+        ],
+        "source": "canonical plugin"
+      },
+      "project-feedback": {
+        "name": "project-feedback",
+        "path": "plugins/creative-writing-skills/skills/project-feedback/SKILL.md",
+        "description": "Report a suspected bug, regression, confusing behavior, broken script, invalid generated Claude or ZCode output, or incorrect or contradictory instruction owned by this repository's Creative Writing Skills plugin, bundled cw CLI, canonical skills, or docs and contracts that define or ship them.",
+        "type": "canonical skill",
+        "modelInvocable": true,
+        "loads": [],
+        "resources": [
+          "resources/issue-reporting.md"
         ],
         "source": "canonical plugin"
       },

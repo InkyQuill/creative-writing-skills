@@ -42,4 +42,8 @@ Good index files:
 - keep descriptions brief and discoverability-focused
 - avoid duplicating detailed canon from topic files
 
-When adding or retitling a durable topic file, update the nearest relevant index after the user confirms the file change. Do not create a new index unless the folder has several durable files and the user confirms that an index would help.
+When adding or retitling a durable topic file, update the nearest relevant index
+in the same previewed, recoverable `/project-maintenance` transaction. The agent
+owns reindexing and does not ask the author to maintain indexes. Create a new
+index only when several durable files make it materially useful; ask only if
+the index scope or taxonomy is genuinely ambiguous.

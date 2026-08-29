@@ -9,6 +9,19 @@ The knowledge base (`kb/`) is the project's durable memory. Drafting, critique,
 planning, and research passes read from it for context. This skill covers how
 to maintain it well.
 
+## Establish the Mechanical Floor
+
+Use `/project-maintenance` to run `cw check kb` before the semantic audit. Read
+and interpret its findings yourself. Repairable mechanical warnings do not
+block the requested knowledge work: continue wherever the required sources and
+target page are readable, and schedule bounded repairs separately. A required
+target that cannot be read safely is the only mechanical reason to stop that
+semantic work.
+
+The agent owns hashes, indexes, base revisions, migration mechanics, and repair
+commands. Author edits are valid project input; never ask the author to maintain
+SHA values or generated indexes.
+
 ## Layers
 
 **Canon**: established facts the story has committed to. Once a chapter is
@@ -22,9 +35,8 @@ develops.
 **Styles**: voice reference files derived from prose samples. Drafting and
 critique passes depend on these for voice consistency.
 
-**Vocab**: canonical story terms, aliases, and exclusions. Project-wide terms
-live in `kb/vocab.md`; domain terms live beside the domain they govern, such as
-`kb/world/vocab.md`.
+**Vocab**: canonical story terms, aliases, and exclusions live in
+`kb/vocab.md`.
 
 **Issues**: tracked writing problems that span multiple chapters (recurring
 tics, pacing patterns, continuity errors). See the story-memory skill.
@@ -43,27 +55,24 @@ when they were written (`session-3-notes.md`).
 ### Organization
 
 ```text
-kb/
-  characters/
-    <name>.md              # one file per character
-  vocab.md                 # project-wide canonical terms
-  world/
-    vocab.md               # worldbuilding terms when needed
-    <topic>.md             # locations, factions, systems
-    <domain>/
-      vocab.md             # subdomain terms when needed
-      <topic>.md           # nest when a domain has many pages
-  timeline/
-    <arc-or-period>.md     # chronological entries
-  canon/
-    <chapter-or-arc>.md    # hard facts per chapter/arc
-  styles/
-    <style-name>.md        # voice reference files
-  issues/
-    <issue-name>.md        # tracked writing problems
+kb/vocab.md                              # canonical terms
+kb/characters/<name>.md                  # character pages
+kb/world/<topic>.md                      # locations, factions, systems
+kb/canon/<chapter-or-arc>.md             # hard facts
+kb/styles/<style-name>.md                # voice references
+kb/samples/<sample-name>.md              # approved prose samples
+kb/issues/<issue-name>.md                # persistent writing problems
+kb/continuity/timeline.md                # master chronology
+kb/continuity/promises.md
+kb/continuity/questions.md
+kb/continuity/state.md
+kb/continuity/scenes/<chapter>.md
 ```
 
-The project's `CLAUDE.md` may customize this. Read it first.
+Schema v1 accepts authored KB pages only as direct children of the listed
+managed content directories, plus the exact continuity paths above. Local
+instructions cannot customize or change managed roots. Use links and page
+content to express subdomains instead of nesting another directory.
 
 ### Linking
 
@@ -117,5 +126,26 @@ concepts.
 - Promoted facts after a draft completes → `kb/canon/` or relevant wiki page
 
 Use `/story-memory` for routine fact extraction from completed chapters.
-Direct kb edits are for the author or muse when capturing decisions
-interactively.
+Author direct edits are valid and authoritative input; always re-read them.
+An agent or muse must not make any unjournaled direct write. Every agent or muse
+KB mutation uses `/project-maintenance`: form the exact edit or batch, preview
+the complete recoverable transaction, and apply it only after the preview and
+semantic confirmation still match. If the result was mistaken, inspect history
+and preview `cw undo <transaction-id>` rather than overwriting current bytes.
+
+## Promotion Uses a Separate Transaction
+
+Draft or manuscript acceptance does not itself write anything into the KB.
+After acceptance, re-read the prose and split extraction into settled evidence
+and material questions. Synchronize facts directly and unambiguously established
+by the text through a separate previewed, recoverable `/project-maintenance`
+transaction without asking for re-approval. Separate transaction does not mean
+separate confirmation. Include exact destination pages and provenance back to
+the accepted passage or prior direct author answer.
+
+Ask only when ambiguity, inference or implication, a canon conflict, a retcon,
+an uncertain source tag, or an uncertain character or reader knowledge boundary
+means different answers would materially change canon or knowledge boundaries.
+Keep those items as promotion proposals until resolved. Preserve source tags
+and knowledge boundaries; acceptance never turns an AI suggestion into
+author-stated canon. Do not ask redundant confirmation for every promotion.
