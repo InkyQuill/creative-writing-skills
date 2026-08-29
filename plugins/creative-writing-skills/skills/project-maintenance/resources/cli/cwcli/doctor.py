@@ -12,6 +12,7 @@ from .checks import CHECKERS, run_checks
 from .context import snapshot_status
 from .findings import ExecutionError, Finding
 from .project import Project
+from .schema import SCAFFOLD_DIRECTORIES
 
 
 @dataclass(frozen=True)
@@ -157,14 +158,20 @@ def _commands(
         for finding in all_findings
     )
     reindex_blocked = any(
-        finding.code
-        in {
-            "CW-LINK-090",
-            "CW-STRUCT-001",
-            "CW-STRUCT-011",
-            "CW-STRUCT-020",
-            "CW-STRUCT-050",
-        }
+        (
+            finding.code
+            in {
+                "CW-LINK-090",
+                "CW-STRUCT-001",
+                "CW-STRUCT-011",
+                "CW-STRUCT-020",
+                "CW-STRUCT-050",
+            }
+            or (
+                finding.code == "CW-STRUCT-010"
+                and finding.path in SCAFFOLD_DIRECTORIES
+            )
+        )
         for finding in all_findings
     )
     for finding in findings:

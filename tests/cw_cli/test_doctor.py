@@ -3,6 +3,7 @@ import io
 import json
 import os
 import shlex
+import shutil
 import subprocess
 import tempfile
 import unittest
@@ -224,6 +225,36 @@ class DoctorTests(unittest.TestCase):
         self.assertTrue(all(not group.commands for group in report.groups))
         corrupt = next(item for item in report.groups[4].findings if item.code == "CW-CONTEXT-CORRUPT")
         self.assertIn("manually", corrupt.next_action)
+
+    def test_missing_required_index_parent_suppresses_reindex(self):
+        shutil.rmtree(self.root / "kb/styles")
+
+        report = doctor.diagnose_project(self.project)
+
+        missing = [
+            item
+            for item in report.findings
+            if item.code == "CW-STRUCT-010" and item.path == "kb/styles"
+        ]
+        self.assertEqual(1, len(missing))
+        self.assertEqual((), report.groups[2].commands)
+
+    def test_missing_generated_index_with_existing_parent_remains_repairable(self):
+        (self.root / "kb/styles/_index.md").unlink()
+
+        report = doctor.diagnose_project(self.project)
+
+        self.assertTrue((self.root / "kb/styles").is_dir())
+        missing = [
+            item
+            for item in report.findings
+            if item.code == "CW-STRUCT-010" and item.path == "kb/styles/_index.md"
+        ]
+        self.assertEqual(1, len(missing))
+        self.assertEqual(
+            (("cw", "reindex"), ("cw", "reindex", "--apply")),
+            tuple(command.argv for command in report.groups[2].commands),
+        )
 
 
 if __name__ == "__main__":
