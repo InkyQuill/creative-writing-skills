@@ -11,6 +11,9 @@
   "skills": "./skills/",
   "interface": {
     "displayName": "Creative Writing Skills",
+    "composerIcon": "./assets/scroll-quill.svg",
+    "logo": "./assets/scroll-quill.png",
+    "logoDark": "./assets/scroll-quill.png",
     "shortDescription": "Plan, draft, and improve fiction.",
     "longDescription": "Creative-writing workflows for research, planning, drafting, revision, continuity, and story knowledge management.",
     "developerName": "InkyQuill",
