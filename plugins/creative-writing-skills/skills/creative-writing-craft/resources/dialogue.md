@@ -328,11 +328,12 @@ Interface details:
 - The same-speaker run is strict: a narration line or an unattributed reply
   between two same-speaker lines breaks the run, so the reported maximum
   counts only unbroken sequences of attributed lines.
-- Vocabulary overlap has a small nonzero floor because attribution verbs
-  are part of each line's vocabulary. Read it as a same-voice signal, not a
-  zero-baseline metric, and compare speakers against each other rather
-  than against zero. Speakers with fewer than three attributed lines are
-  not compared.
+- Vocabulary overlap excludes the speaker names and counts the rest of each
+  attributed line, so it can be nonzero when qualifying vocabulary is
+  genuinely shared — including the same attribution verb — but no floor is
+  guaranteed. Read it as a same-voice signal and compare speakers against
+  each other rather than against zero. Speakers with fewer than three
+  attributed lines are not compared.
 
 These are numbers, not verdicts. What the counts cannot tell you: whether
 subtext exists, whether pacing fits the scene, whether a voice is

@@ -11,12 +11,23 @@ class ProseShapeMetricTests(unittest.TestCase):
         m = prose.analyze_prose(text, language="ru")
         lengths = sorted(m.sentence_lengths)
         n = len(lengths)
-        self.assertEqual(m.sentence_length_p90, lengths[min(n - 1, int(0.9 * n))])
+        # Independent nearest-rank P90: the value at rank ceil(0.9 * n),
+        # i.e. zero-based index ceil(0.9 * n) - 1, clamped to the list.
+        expected_index = max(0, min(n - 1, -(-9 * n // 10) - 1))
+        self.assertEqual(m.sentence_length_p90, lengths[expected_index])
         step = sum(
             abs(m.sentence_lengths[i] - m.sentence_lengths[i + 1])
             for i in range(len(m.sentence_lengths) - 1)
         ) / (len(m.sentence_lengths) - 1)
         self.assertAlmostEqual(m.sentence_length_step, step)
+
+    def test_p90_is_nearest_rank_not_maximum_at_ten_sentences(self):
+        # With ten sentences, nearest-rank P90 is the 9th value (index 8),
+        # not the maximum that a truncating index would pick.
+        text = " ".join(["Короткая фраза."] * 9) + " Одна длинная фраза со многими словами внутри."
+        m = prose.analyze_prose(text, language="ru")
+        self.assertEqual(len(m.sentence_lengths), 10)
+        self.assertEqual(m.sentence_length_p90, 2)
 
     def test_single_sentence_has_zero_step(self):
         m = prose.analyze_prose("Одно целое предложение.", language="ru")

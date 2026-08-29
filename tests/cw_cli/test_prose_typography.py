@@ -43,6 +43,16 @@ class TypographyWarningRuleTests(unittest.TestCase):
     def test_nbsp_after_single_letter_word_is_not_flagged(self):
         self.assertEqual(scan("Он шёл в\u00a0школу."), ())
 
+    def test_uppercase_single_letter_word_is_warning(self):
+        # Sentence-initial «И» and a post-dash «— О чём?» carry the same
+        # line-end hazard as lowercase single-letter words.
+        hits = scan("И вот тогда он понял.")
+        self.assertEqual([h.code for h in hits], ["CW-PROSE-103"])
+
+    def test_uppercase_single_letter_after_dash_is_warning(self):
+        hits = scan("— О чём ты думаешь?")
+        self.assertEqual([h.code for h in hits], ["CW-PROSE-103"])
+
     def test_compound_hyphen_is_not_flagged(self):
         self.assertEqual(scan("Где-то там был светло-жёлтый дом."), ())
 
@@ -75,6 +85,28 @@ class TypographyInfoRuleTests(unittest.TestCase):
     def test_ordinal_suffix(self):
         hits = scan("Это был 1ый раз.")
         self.assertEqual([h.code for h in hits], ["CW-PROSE-113"])
+
+    def test_unhyphenated_single_letter_ordinal(self):
+        hits = scan("Это был 1й раз.")
+        self.assertEqual([h.code for h in hits], ["CW-PROSE-113"])
+
+    def test_hyphenated_full_ordinal_endings(self):
+        # One line per ordinal: CW-PROSE-113 reports one hit per line. The
+        # valid hyphenated minimal forms stay silent on the third line.
+        hits = prose_typography.scan_lines(
+            [(1, "2-ая линия,"), (2, "10-ом этаже."), (3, "1-й и 5-го молчат.")]
+        )
+        # The third line's standalone "и" fires CW-PROSE-103 by design; the
+        # ordinals themselves contribute no findings.
+        self.assertEqual(
+            [(h.line, h.code) for h in hits],
+            [(1, "CW-PROSE-113"), (2, "CW-PROSE-113"), (3, "CW-PROSE-103")],
+        )
+
+    def test_valid_hyphenated_ordinals_stay_silent(self):
+        self.assertEqual(
+            scan("1-й, 2-я, 3-е, 5-м, 5-х, 5-го, 5-му, 20-ми."), ()
+        )
 
     def test_closed_up_abbreviation(self):
         # Same CW-PROSE-103 isolation as test_numero_forms.

@@ -116,7 +116,15 @@ Design questions:
 
 ## Culture Generation Process
 
-1. **Choose a position on each axis.** Rate each axis on a 1-5 scale: Integration Philosophy (Purist 1 ← → 5 Synthesis), Temporal Rigidity (Strict 1 ← → 5 Fluid), Boundary Permeability (Closed 1 ← → 5 Open), Death Orthodoxy (Traditional 1 ← → 5 Innovative), Power Concentration (Centralized 1 ← → 5 Distributed).
+1. **Choose a position on each axis.** Position the culture using the named
+   categories from the axis tables above, with intermediate positions
+   allowed between named anchors: Integration Philosophy (Purist /
+   Pragmatic / Synthesis, with Amnesiac as the off-spectrum case of ignoring
+   tracking entirely), Temporal Dynamics (Strict / Managed / Fluid — how
+   strictly the timeframes are enforced), Boundary Management (Closed /
+   Semi-permeable / Open, per physical, social, economic, and political
+   layer), Death and Continuity (Traditional / Balanced / Innovative), Power
+   Structures (Centralized / Professional / Distributed).
 2. **Identify tension points.** Where do the positions create internal contradictions — open boundaries but strict integration timelines? Synthesis philosophy but concentrated power? Fluid boundaries but orthodox death practices? These tensions generate the most interesting conflicts and story opportunities.
 3. **Develop practical expressions.** Daily life manifestations: breathing protocols (conscious, unconscious, ritualized), eating customs (communal, isolated, timed), sleep arrangements (shared air, private chambers), work segregation (by integration level, by origin). Milestone markers: birth practices (debt acknowledgment, matter blessing), coming of age (first full breath, integration ceremony), partnership forms (metabolic mingling, maintained separation), professional advancement (tied to integration, independent). Crisis responses: contamination events (panic, acceptance, investigation), resource shortages (rationing by integration, equal distribution), external threats (unity response, fragment by origin), system failures (technical fix, social reorganization).
 4. **Create unique innovations.** Language elements: terms for different integration levels, metaphors based on metabolic reality, insults and compliments unique to the culture, untranslatable concepts. Technology adaptations: integration tracking methods, boundary management tools, death handling systems, communication protocols. Social structures: family forms beyond genetics, professional hierarchies, educational systems, conflict resolution methods.
@@ -153,19 +161,19 @@ Conflict categories:
 
 ### The Orthodox Loop
 
-Integration 1 (Purist), Temporal 1 (Strict), Boundaries 1 (Closed), Death 1 (Traditional), Power 2 (Concentrated). Story focus: purity vs contamination, exile horror, generational power.
+Integration: Purist. Temporal: Strict. Boundaries: Closed. Death: Traditional. Power: Concentrated. Story focus: purity vs contamination, exile horror, generational power.
 
 ### The Frontier Mixer
 
-Integration 5 (Synthesis), Temporal 4 (Fluid), Boundaries 5 (Open), Death 3 (Balanced), Power 4 (Distributed). Story focus: identity fluidity, cultural fusion, innovation through diversity.
+Integration: Synthesis. Temporal: Fluid. Boundaries: Open. Death: Balanced. Power: Distributed. Story focus: identity fluidity, cultural fusion, innovation through diversity.
 
 ### The Trading Ship
 
-Integration 3 (Pragmatic), Temporal 3 (Managed), Boundaries 4 (Semi-permeable), Death 2 (Mostly traditional), Power 3 (Professional). Story focus: code-switching, diplomatic challenges, economic survival.
+Integration: Pragmatic. Temporal: Managed. Boundaries: Semi-permeable. Death: Mostly traditional. Power: Professional. Story focus: code-switching, diplomatic challenges, economic survival.
 
 ### The Forgotten Station
 
-Integration 3 (Irrelevant), Temporal 5 (No tracking), Boundaries 2 (Confused), Death 3 (Uncertain), Power 4 (Distributed by default). Story focus: rediscovering history, identity without markers, anxious freedom.
+Integration: Amnesiac (tracking irrelevant). Temporal: Fluid (untracked). Boundaries: Confused. Death: Uncertain. Power: Distributed by default. Story focus: rediscovering history, identity without markers, anxious freedom.
 
 ## Cultural Blind Spots
 
@@ -216,4 +224,4 @@ Each culture develops an inability to see certain solutions:
 
 ## Output
 
-Deliver the proposal into the parent world-creation session: the 1-5 axis positions, two to three major tension points, daily life details, unique language and technology innovations, the historical development, planned interactions with one or two other cultures, three to five potential story conflicts, the economic implications, and the culture's blind spots. Nothing here is canon until the author confirms it; once confirmed, the session persists it through its normal lore-file transaction. Check `$story-memory` conventions for cross-session artifact handling. Culturally specific dialogue and character identity transitions are prose territory — route them to `$creative-writing-craft`.
+Deliver the proposal into the parent world-creation session: the axis positions (named categories, with intermediate positions where used), two to three major tension points, daily life details, unique language and technology innovations, the historical development, planned interactions with one or two other cultures, three to five potential story conflicts, the economic implications, and the culture's blind spots. Nothing here is canon until the author confirms it; once confirmed, the session persists it through its normal lore-file transaction. Check `$story-memory` conventions for cross-session artifact handling. Culturally specific dialogue and character identity transitions are prose territory — route them to `$creative-writing-craft`.

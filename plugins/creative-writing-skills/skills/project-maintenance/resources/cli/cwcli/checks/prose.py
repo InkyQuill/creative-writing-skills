@@ -647,7 +647,13 @@ def _sentence_length_p90(lengths: tuple[int, ...]) -> int:
     if not lengths:
         return 0
     sorted_lengths = sorted(lengths)
-    return sorted_lengths[min(len(sorted_lengths) - 1, int(0.90 * len(sorted_lengths)))]
+    count = len(sorted_lengths)
+    # Nearest-rank P90: the value at rank ceil(0.90 * n), i.e. the zero-based
+    # index one below it. The integer form of the rank avoids float-edge
+    # drift; truncating instead would pick the maximum whenever n is a
+    # multiple of ten, which is not what "p90" names.
+    rank_index = max(0, min(count - 1, (9 * count + 9) // 10 - 1))
+    return sorted_lengths[rank_index]
 
 
 def _sentence_length_step(lengths: tuple[int, ...]) -> float:

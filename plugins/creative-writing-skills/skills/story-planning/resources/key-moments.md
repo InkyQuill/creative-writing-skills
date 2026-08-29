@@ -168,8 +168,12 @@ experiences the author wants readers to have, then the elemental genres
 that deliver them.
 
 **Select the critical moments.** Choose 3-5 essential moments from the
-primary genre and 2-3 supporting moments from each secondary genre. Ensure
-the set creates emotional variety and progression, not repetition.
+primary genre and 2-3 supporting moments from the secondary genre, keeping
+the total within the 5-8 moment budget that the failure states and the
+Output section enforce: with no secondary genre take five primary moments,
+and with multiple secondary genres let the primary genre claim the larger
+share and trim secondary support to fit. Ensure the set creates emotional
+variety and progression, not repetition.
 
 **Sequence for impact.** Arrange chronologically as a starting point, then
 adjust for emotional pacing and tension curves; allow non-linear

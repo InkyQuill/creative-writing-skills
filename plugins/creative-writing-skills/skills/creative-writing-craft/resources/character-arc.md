@@ -95,10 +95,15 @@ When a transformation is not working, identify which state applies.
 
 ### A1: No Transformation
 
-**Key Question:** Is the character different at the end?
+**Key Question:** Is the character different at the end — and is the story
+built on an arc where they should be?
 **Symptoms:** Essentially the same person closes the book as opened it;
 the plot was solved without anyone changing.
-**Intervention:** Identify what false belief needs to die.
+**Intervention:** Identify what false belief needs to die. In a flat arc
+this state does not apply: the protagonist already holds the truth and
+changes the world instead, so check whether the world and the surrounding
+characters transformed around their steadfastness. The false-belief
+intervention is for positive and negative arcs only.
 
 ### A2: Unearned Transformation
 

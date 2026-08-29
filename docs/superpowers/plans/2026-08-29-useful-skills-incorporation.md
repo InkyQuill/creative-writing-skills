@@ -71,10 +71,9 @@ Source material (read-only inputs, git-ignored): `useful/ru-text/skills/ru-text/
 ```markdown
 ## Russian editorial layer
 
-The `resources/prose/editorial/ru/` files in `creative-writing-craft`, the
-Russian typography findings and prose-shape additions in the bundled `cw`
-CLI, and `resources/dialogue_audit.py` are local InkyQuill-authored
-derivatives that incorporate and adapt
+The `resources/prose/editorial/ru/` files in `creative-writing-craft` and
+the Russian typography findings and prose-shape additions in the bundled
+`cw` CLI are local InkyQuill-authored derivatives that incorporate and adapt
 [`talkstream/ru-text`](https://github.com/talkstream/ru-text) (MIT; see
 `LICENSES/MIT-ru-text.txt`), particularly `skills/ru-text/references/{typography,editorial-punctuation,editorial-grammar,info-style,anti-patterns,addenda}.md`
 and the metric design of `tools/measure-prose-shape.py`. The UX-writing and
@@ -84,9 +83,11 @@ imperative rewrite, and Python integration.
 
 ## Craft and worldbuilding resources
 
-The `humor.md`, `dialogue.md`, `scene-sequencing.md`, `endings.md`, and
-`character-arc.md` resources in `creative-writing-craft`, `key-moments.md`
-in `story-planning`, and the `resources/generators/` pack in
+The `humor.md`, `dialogue.md` (with its ported `resources/dialogue_audit.py`,
+a Python re-implementation of the deterministic core of the upstream
+`dialogue` skill's TypeScript scripts), `scene-sequencing.md`, `endings.md`,
+and `character-arc.md` resources in `creative-writing-craft`,
+`key-moments.md` in `story-planning`, and the `resources/generators/` pack in
 `world-creation` are local InkyQuill-authored derivatives that incorporate
 and adapt skills from
 [`jwynia/agent-skills`](https://github.com/jwynia/agent-skills) (MIT; see
@@ -143,7 +144,7 @@ Curation rules (apply to all three): write in Russian; imperative instructions (
 
 - [ ] **Step 5: Update the exact-tree test.** Read `tests/test_language_prose_rules.py:28-53`; add the six paths (this task adds three, Task 3 adds the rest — add all six now and create the remaining files as part of Task 3; alternatively add three now and three in Task 3; choose one and keep the test green at each task boundary by adding only what exists):
 
-```
+```text
 resources/prose/editorial/ru/typography.md
 resources/prose/editorial/ru/punctuation.md
 resources/prose/editorial/ru/grammar.md
@@ -451,7 +452,7 @@ Run: `git add plugins/creative-writing-skills/skills/project-maintenance cw && g
 
 **Interfaces:**
 - Produces on `ProseMetrics` (append fields, keep dataclass frozen and field order after existing `skipped_metrics`):
-  - `sentence_length_p90: int` (0 when no sentences; percentile index `sorted_values[min(n - 1, int(0.90 * n))]`),
+  - `sentence_length_p90: int` (0 when no sentences; nearest-rank percentile index `sorted_values[max(0, min(n - 1, ceil(0.90 * n) - 1))]`),
   - `sentence_length_step: float` (mean absolute difference between adjacent sentence lengths in original order; 0.0 when fewer than two sentences),
   - `em_dash_count: int` (count of `U+2014` or `U+2013` with whitespace or `U+00A0` on both sides, on the stripped prose text),
   - `subordination_mean: float | None` (mean subordinating-conjunction/pronoun hits per sentence; `None` unless the normalized language is `ru`),
@@ -745,7 +746,7 @@ Run: `git add plugins/creative-writing-skills/skills/creative-writing-craft/reso
 
 - [ ] **Step 1: Write `dialogue.md`** porting: the three subtext layers (surface text / what characters actually want / what they hide), flat-dialogue and same-voice diagnosis with their diagnostic states, the audit method, and the improvement interventions. Replace the upstream TypeScript script instructions with:
 
-```markdown
+````markdown
 ## Deterministic Measurements
 
 Run the bundled audit for counts a reader can re-derive:
@@ -758,7 +759,7 @@ It reports speaker-tag ratio, the longest same-speaker run, dialogue-line
 ratio, and cross-speaker vocabulary overlap. High overlap between speakers
 is a same-voice signal, not a verdict: interpret it against the scene's
 intent. Subtext, timing, and voice authenticity require judgment.
-```
+````
 
 - [ ] **Step 2: Verify links and commit**
 
@@ -881,7 +882,7 @@ Run: `git add plugins/creative-writing-skills/skills/world-creation cw && git co
 
 - [ ] **Step 3: Full verification loop**
 
-Run all five, all must pass:
+Run all six, all must pass:
 
 ```bash
 PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tests

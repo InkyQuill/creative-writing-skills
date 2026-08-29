@@ -142,7 +142,12 @@ def audit_dialogue(text: str, *, language: str) -> DialogueStats:
         attribution_lines += 1
         speaker = match.group(1)
         speaker_counts[speaker] = speaker_counts.get(speaker, 0) + 1
-        speaker_vocab.setdefault(speaker, set()).update(_speaker_vocabulary(line))
+        # Vocabulary comes from the line minus the captured speaker name: the
+        # name is attribution machinery, not the character's spoken content.
+        name_stripped = line[: match.start(1)] + line[match.end(1):]
+        speaker_vocab.setdefault(speaker, set()).update(
+            _speaker_vocabulary(name_stripped)
+        )
         if speaker == current_speaker:
             current_run += 1
         else:

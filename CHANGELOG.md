@@ -7,7 +7,8 @@
   typography, punctuation, grammar, stop-word, anti-pattern, and neuroslop
   references adapted from ru-text, loaded for proofreading and line-editing
   passes on `ru`-language projects.
-- Added deterministic Russian typography findings (`CW-PROSE-100`…`114`) to
+- Added deterministic Russian typography findings (`CW-PROSE-100`–`103`
+  and `CW-PROSE-110`–`114`) to
   `cw check prose`, gated on the project language and reported as
   warnings/info that project conventions may override.
 - Added prose-shape flattening metrics (sentence-length p90, adjacent step,

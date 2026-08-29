@@ -146,39 +146,46 @@ Track each domain separately, then check cross-domain coherence: technology (fea
 
 ## Worked Example: The Borrower's Market
 
-**Initial divergence:** a marketplace where people can trade years of their life for years of someone else's talents or abilities.
+**Divergence point (Level 1):** a marketplace where people can trade years
+of their life for years of someone else's talents or abilities.
 
-**Level 1 — Economy:**
+The stages below walk one domain per step in rising consequence order.
+They are domain stages, not framework levels: map each onto the Levels 2-5
+orders as you go — the earliest stage lands as direct consequences, the
+later ones feed the cultural-evolution depth and the Level 5 intersection
+analysis.
+
+**Stage 1 — Economy (direct consequences, Level 2):**
 
 - Underground markets emerge.
 - Talent brokers create infrastructure.
 - Legal gray zones develop.
 
-**Level 2 — Social structure:**
+**Stage 2 — Social structure (systemic adaptations, Level 3):**
 
 - Class divisions between buyers and sellers.
 - Talent donors vs. lifespan donors stratification.
 - New forms of debt and obligation.
 
-**Level 3 — Belief systems:**
+**Stage 3 — Belief systems (systemic adaptations, Level 3):**
 
 - Naturalists who reject all exchange.
 - Exchangists who see talent fluidity as liberation.
 - Philosophical debates about life and talent as commodities.
 
-**Level 4 — Conflicts:**
+**Stage 4 — Conflicts (cultural evolution, Level 4):**
 
 - Talent thieves who take without consent.
 - Government regulation attempts.
 - Religious extremists on both sides.
 
-**Level 5 — Control systems:**
+**Stage 5 — Control systems (cultural evolution, Level 4):**
 
 - Broker's Guild regulating trades.
 - Talent purity standards.
 - Scientific research into mechanisms.
 
-**Level 6 — Geography:**
+**Stage 6 — Geography (intersection analysis, Level 5):**
 
 - Origin point becomes pilgrimage site.
 - Physical manifestation of the concept in architecture.

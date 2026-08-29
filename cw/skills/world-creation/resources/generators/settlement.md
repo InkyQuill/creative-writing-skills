@@ -130,8 +130,8 @@ The method has two load-bearing ideas. **Layered development:** urban spaces evo
 
 ### By Scale and Complexity
 
-| Type | Population range |
-|------|------------------|
+| Type | Typical scale |
+|------|----------------|
 | **Isolated homestead** | Single family/small group |
 | **Hamlet** | Small cluster, no specialization |
 | **Village** | Basic community, simple division of labor |

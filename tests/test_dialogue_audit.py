@@ -52,6 +52,25 @@ class DialogueAuditTests(unittest.TestCase):
         self.assertEqual(stats.attribution_lines, 2)
         self.assertEqual(stats.max_same_speaker_run, 1)
 
+    def test_speaker_names_are_excluded_from_vocabulary(self):
+        # Three attributed lines per speaker with disjoint content words and
+        # one shared attribution verb: each speaker's vocabulary is four
+        # words, so Jaccard is exactly 1/7 over the name-stripped union.
+        # With names left in the vocabulary the union would be nine words
+        # and the score 1/9, so the exact value pins the exclusion.
+        text = (
+            "— Слушай, — сказал Иван.\n"
+            "— Осторожно, — сказал Иван.\n"
+            "— Тихо, — сказал Иван.\n"
+            "— Смотри, — сказал Пётр.\n"
+            "— Быстро, — сказал Пётр.\n"
+            "— Долго, — сказал Пётр.\n"
+        )
+        stats = self.mod.audit_dialogue(text, language="ru")
+        self.assertEqual(
+            stats.speaker_overlap, (("Иван", "Пётр", 1 / 7),)
+        )
+
     def test_main_returns_two_on_missing_file(self):
         self.assertEqual(self.mod.main([str(_REPO / "no-such-file.md")]), 2)
         self.assertEqual(self.mod.main([]), 2)

@@ -111,7 +111,8 @@ Warning severity:
 - a hyphen with whitespace on both sides, where a dash is meant;
 - a literal three-dot sequence where `…` is expected;
 - an ordinary breakable space after a single-letter word (`в`, `к`, `с`, `о`,
-  `у`, `и`, `а`, `я`) mid-sentence, where a non-breaking space is expected.
+  `у`, `и`, `а`, `я`) in either letter case, where a non-breaking space is
+  expected.
 
 Info severity:
 
@@ -119,7 +120,9 @@ Info severity:
   expected;
 - a decimal point between digits, where a comma is expected;
 - `No.` or `#` where `№` is expected;
-- ordinals such as `1ый` where `1-й` is expected;
+- malformed ordinals — full or unhyphenated suffixes such as `1ый`, `1-ый`,
+  `2-ая`, `10-ом` — where the minimal hyphenated forms (`1-й`, `5-го`) are
+  expected;
 - closed-up abbreviations such as `т.д.` where `т. д.` is expected.
 
 Exclusions and carve-outs:
@@ -227,7 +230,7 @@ registry changes.
 
 ## Attribution
 
-`LICENSES/` gains `MIT-ru-text.txt` and `MIT-jwynia-creative.txt` containing
+`LICENSES/` gains `MIT-ru-text.txt` and `MIT-jwynia-agent-skills.txt` containing
 the respective upstream license texts.
 `THIRD_PARTY_NOTICES.md` gains two sections in the existing local-derivative
 style used by `world-creation`: pinned source locations, and a file-by-file

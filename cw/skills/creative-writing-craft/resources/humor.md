@@ -75,7 +75,9 @@ When a joke or a comic passage is not working:
 3. **Measure properties** — which system properties are miscalibrated?
 4. **Identify the state** — match to the diagnostic states above.
 5. **Recommend intervention** — the specific adjustment to make.
-6. **Demonstrate transformation** — show before/after if helpful.
+6. **Demonstrate transformation** — show a constructed before/after example
+   rather than rewriting the author's prose; actual drafting or revision of
+   manuscript text belongs to `/creative-writing-modes`.
 
 Work in order: diagnosis before transformation, property measurement before
 adjustment, transformation before evaluation. Independent jokes can be

@@ -22,16 +22,25 @@ _EDIT_NEXT_ACTION = (
 _STRAIGHT_QUOTE_RE = re.compile(r'"([^"]*)"|"')
 _THREE_DOTS_RE = re.compile(r"(?<!\.)\.\.\.(?!\.)")
 _SPACED_HYPHEN_RE = re.compile(r"(?<=[\s\u00a0])-(?=[\s\u00a0])")
-# A standalone single-letter word followed by an ordinary space.
+# A standalone single-letter word, in either letter case, followed by an
+# ordinary space (sentence-initial «И вот…» and post-dash «— И что?» are the
+# same line-end hazard as lowercase «в школе»).
 _BREAKABLE_SINGLE_RE = re.compile(
-    r"(?<![А-Яа-яЁёA-Za-z0-9])[вксоуиая] (?=[А-Яа-яЁёA-Za-z0-9«„\u2014])"
+    r"(?<![А-Яа-яЁёA-Za-z0-9])[вксоуиаяВКСОУИАЯ] (?=[А-Яа-яЁёA-Za-z0-9«„\u2014])"
 )
 _LATIN_LETTER = re.compile(r"[A-Za-z]")
 
 _DIGIT_RUN_RE = re.compile(r"(?<!\d)\d{5,}(?!\d)")
 _DECIMAL_POINT_RE = re.compile(r"(?<=\d)\.(?=\d)")
 _NUMERO_RE = re.compile(r"\bNo\.\s*\d|#(?=\d)")
-_ORDINAL_RE = re.compile(r"\d(?:ый|ой|ий|ая|ое|ые)\b")
+# Malformed ordinals: any suffix glued to the digit without a hyphen, or a
+# full adjectival ending behind a hyphen. The minimal hyphenated forms
+# (1-й, 2-я, 3-е, 5-м, 5-х) and the two-letter conditioned forms (5-го,
+# 5-му, 20-ми) stay silent.
+_ORDINAL_RE = re.compile(
+    r"\d(?:ый|ой|ий|ая|ое|ые|ом|го|му|ми|й|я|е|м|х)\b"
+    r"|\d-(?:ый|ой|ий|ая|ое|ые|ом)\b"
+)
 _ABBREV_RE = re.compile(r"т\.(?:д|п|е|к)\.")
 
 
