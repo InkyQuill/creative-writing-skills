@@ -122,7 +122,7 @@ class DraftRebasePlanTests(unittest.TestCase):
         current_revision = documents.logical_hash(target.read_bytes())
         self.assertEqual(current_revision, rebased.metadata["base-revision"])
         self.assertEqual("working", rebased.metadata["status"])
-        self.assertEqual("Harbor", rebased.metadata["title"])
+        self.assertEqual("Harbor revised", rebased.metadata["title"])
         self.assertEqual("one\nTWO\nTHREE\n", rebased.body)
         self.assertEqual(target.read_bytes(), store.load_revision(current_revision))
         self.assertEqual(before_draft, draft_path.read_bytes())
@@ -154,7 +154,7 @@ class DraftRebasePlanTests(unittest.TestCase):
         plan = drafts.plan_rebase_draft(model, "work/drafts/ch-001.md", store)
         rebased = documents.parse_document(plan.changes[0].after)
         self.assertEqual("one\r\nCURRENT\r\n", rebased.body)
-        self.assertEqual("Harbor", rebased.metadata["title"])
+        self.assertEqual("Changed", rebased.metadata["title"])
 
     def test_bare_cr_frontmatter_and_body_support_disjoint_rebase(self):
         base = b"---\rnumber: 1\rtitle: Harbor\r---\rone\rtwo\rthree\r"
@@ -184,7 +184,7 @@ class DraftRebasePlanTests(unittest.TestCase):
         )
         draft_path.write_bytes(draft_source)
         target.write_bytes(
-            b"---\nnumber: 1\ntitle: Changed\n---\none\ntwo\nTHREE\n"
+            b"---\nnumber: 1\ntitle: Harbor\n---\none\ntwo\nTHREE\n"
         )
         new_revision = documents.logical_hash(target.read_bytes())
 
@@ -240,6 +240,49 @@ class DraftRebasePlanTests(unittest.TestCase):
         }
         self.assertEqual(before, after)
         self.assertEqual(before_draft, draft_path.read_bytes())
+
+    def test_user_metadata_uses_three_way_semantics_and_conflicts_before_revision(self):
+        base = b"---\nnumber: 1\ntitle: Harbor\nsummary: Base\n---\none\n"
+        _root, model, store, target, draft_path = self.make_draft(base, "DRAFT\n")
+        draft_document = documents.parse_document(draft_path.read_bytes())
+        draft_metadata = dict(draft_document.metadata)
+        draft_metadata["summary"] = "Draft summary"
+        draft_path.write_bytes(
+            documents.render_document(
+                documents.Document(draft_metadata, draft_document.body, "\n", False)
+            )
+        )
+        target.write_bytes(
+            b"---\nnumber: 1\ntitle: Current title\nsummary: Base\n---\nDRAFT\n"
+        )
+        plan = drafts.plan_rebase_draft(model, "work/drafts/ch-001.md", store)
+        rebased = documents.parse_document(plan.changes[0].after)
+        self.assertEqual("Current title", rebased.metadata["title"])
+        self.assertEqual("Draft summary", rebased.metadata["summary"])
+
+        target.write_bytes(
+            b"---\nnumber: 1\ntitle: Current title\nsummary: Author summary\n---\nCURRENT\n"
+        )
+        before = draft_path.read_bytes()
+        with self.assertRaises(drafts.DraftConflict) as raised:
+            drafts.plan_rebase_draft(model, "work/drafts/ch-001.md", store)
+        conflict = next(item for item in raised.exception.conflicts if item.start == -1)
+        self.assertIn("Draft summary", conflict.draft[0])
+        self.assertIn("Author summary", conflict.current[0])
+        self.assertEqual(before, draft_path.read_bytes())
+
+    def test_connected_overlap_is_one_complete_truthful_conflict_region(self):
+        result = rebase.three_way_rebase(
+            "a\nb\nc\nd\n",
+            "a\nDRAFT B\nDRAFT C\nDRAFT D\n",
+            "a\nAUTHOR B\nc\nAUTHOR D\n",
+        )
+        self.assertIsNone(result.text)
+        self.assertEqual(1, len(result.conflicts))
+        conflict = result.conflicts[0]
+        self.assertEqual(("b\n", "c\n", "d\n"), conflict.base)
+        self.assertEqual(("DRAFT B\n", "DRAFT C\n", "DRAFT D\n"), conflict.draft)
+        self.assertEqual(("AUTHOR B\n", "c\n", "AUTHOR D\n"), conflict.current)
 
     def test_missing_and_corrupt_base_are_actionable_and_non_mutating(self):
         base = b"---\nnumber: 1\n---\none\n"

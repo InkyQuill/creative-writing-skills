@@ -48,6 +48,7 @@ def plan_reindex(
     *,
     overlay: Iterable[Change] = (),
     index_ids: Iterable[str] | None = None,
+    skip_unparseable: bool = False,
 ) -> TransactionPlan:
     """Plan exact replacements for every stale generated registry."""
 
@@ -71,7 +72,12 @@ def plan_reindex(
             "vocabulary",
         }:
             continue
-        document = parse_document(path.read_bytes())
+        try:
+            document = parse_document(path.read_bytes())
+        except (UnicodeError, ValueError):
+            if skip_unparseable:
+                continue
+            raise
         if _is_indexable(relative_id, document):
             documents[relative_id] = document
 
@@ -85,7 +91,13 @@ def plan_reindex(
         kind = allowed_document_kind(change.path)
         if kind == "generated-index":
             continue
-        document = parse_document(change.after)
+        try:
+            document = parse_document(change.after)
+        except (UnicodeError, ValueError):
+            if skip_unparseable:
+                documents.pop(change.path, None)
+                continue
+            raise
         if _is_indexable(change.path, document):
             documents[change.path] = document
         else:

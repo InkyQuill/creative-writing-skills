@@ -52,27 +52,10 @@ def three_way_rebase(base: str, draft: str, current: str) -> RebaseResult:
     draft_edits = _extract_edits(base_lines, draft_lines)
     current_edits = _extract_edits(base_lines, current_lines)
 
-    conflicts: list[RebaseConflict] = []
-    seen_conflicts: set[RebaseConflict] = set()
-    for draft_edit in draft_edits:
-        for current_edit in current_edits:
-            if draft_edit == current_edit or not _conflict(draft_edit, current_edit):
-                continue
-            start = min(draft_edit.start, current_edit.start)
-            end = max(draft_edit.end, current_edit.end)
-            conflict = RebaseConflict(
-                start=start,
-                end=end,
-                base=base_lines[start:end],
-                draft=_fragment(base_lines, draft_edit, start, end),
-                current=_fragment(base_lines, current_edit, start, end),
-            )
-            if conflict not in seen_conflicts:
-                conflicts.append(conflict)
-                seen_conflicts.add(conflict)
+    conflicts = _conflict_groups(base_lines, draft_edits, current_edits)
 
     if conflicts:
-        return RebaseResult(None, tuple(conflicts))
+        return RebaseResult(None, conflicts)
 
     edits = sorted(set((*draft_edits, *current_edits)))
     merged: list[str] = []
@@ -110,10 +93,81 @@ def _conflict(left: TextEdit, right: TextEdit) -> bool:
     return max(left.start, right.start) < min(left.end, right.end)
 
 
-def _fragment(
-    base: tuple[str, ...], edit: TextEdit, start: int, end: int
+def _conflict_groups(
+    base: tuple[str, ...],
+    draft_edits: tuple[TextEdit, ...],
+    current_edits: tuple[TextEdit, ...],
+) -> tuple[RebaseConflict, ...]:
+    """Return connected competing regions with complete variant fragments."""
+
+    edges = {
+        (draft_index, current_index)
+        for draft_index, draft_edit in enumerate(draft_edits)
+        for current_index, current_edit in enumerate(current_edits)
+        if draft_edit != current_edit and _conflict(draft_edit, current_edit)
+    }
+    conflicts: list[RebaseConflict] = []
+    while edges:
+        pending_drafts = {next(iter(edges))[0]}
+        group_drafts: set[int] = set()
+        group_currents: set[int] = set()
+        while pending_drafts:
+            draft_index = pending_drafts.pop()
+            if draft_index in group_drafts:
+                continue
+            group_drafts.add(draft_index)
+            currents = {right for left, right in edges if left == draft_index}
+            for current_index in currents - group_currents:
+                group_currents.add(current_index)
+                pending_drafts.update(
+                    left for left, right in edges if right == current_index
+                )
+        edges = {
+            edge
+            for edge in edges
+            if edge[0] not in group_drafts and edge[1] not in group_currents
+        }
+        selected_draft = tuple(draft_edits[index] for index in sorted(group_drafts))
+        selected_current = tuple(
+            current_edits[index] for index in sorted(group_currents)
+        )
+        start = min(edit.start for edit in (*selected_draft, *selected_current))
+        end = max(edit.end for edit in (*selected_draft, *selected_current))
+        selected_draft = tuple(
+            edit for edit in draft_edits if _edit_in_region(edit, start, end)
+        )
+        selected_current = tuple(
+            edit for edit in current_edits if _edit_in_region(edit, start, end)
+        )
+        conflicts.append(
+            RebaseConflict(
+                start=start,
+                end=end,
+                base=base[start:end],
+                draft=_apply_fragment(base, selected_draft, start, end),
+                current=_apply_fragment(base, selected_current, start, end),
+            )
+        )
+    return tuple(sorted(conflicts, key=lambda item: (item.start, item.end)))
+
+
+def _edit_in_region(edit: TextEdit, start: int, end: int) -> bool:
+    if edit.start == edit.end:
+        return start <= edit.start <= end
+    return edit.start < end and edit.end > start
+
+
+def _apply_fragment(
+    base: tuple[str, ...], edits: tuple[TextEdit, ...], start: int, end: int
 ) -> tuple[str, ...]:
-    return base[start : edit.start] + edit.replacement + base[edit.end : end]
+    rendered: list[str] = []
+    cursor = start
+    for edit in sorted(edits):
+        rendered.extend(base[cursor : edit.start])
+        rendered.extend(edit.replacement)
+        cursor = edit.end
+    rendered.extend(base[cursor:end])
+    return tuple(rendered)
 
 
 def _logical_text(text: str) -> str:

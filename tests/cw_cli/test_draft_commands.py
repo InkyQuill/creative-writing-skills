@@ -146,6 +146,30 @@ class DraftCommandTests(unittest.TestCase):
         self.assertEqual(1, status)
         self.assertEqual("conflict", payload["status"])
 
+    def test_inactive_duplicate_warns_but_does_not_block_new_draft(self):
+        inactive = self.root / "work/drafts/old.md"
+        inactive.write_bytes(
+            b"---\ntarget: story/chapters/ch-001.md\nbase-revision: broken\nstatus: abandoned\n---\nOld\n"
+        )
+        status, payload, error = self.run_cli(
+            [
+                "draft", "create", "story/chapters/ch-001.md",
+                "--draft-path", "work/drafts/new.md", "--format", "json",
+            ]
+        )
+        self.assertEqual((0, ""), (status, error))
+        self.assertEqual("preview", payload["status"])
+        findings = draft_checks.check_drafts(
+            project.discover_project(self.root),
+            transactions.TransactionStore(project.discover_project(self.root)),
+        )
+        inactive_codes = {
+            finding.code for finding in findings if finding.path == "work/drafts/old.md"
+        }
+        self.assertIn(draft_checks.ABANDONED_ACTIVE, inactive_codes)
+        self.assertIn(draft_checks.UNRECOVERABLE_BASE, inactive_codes)
+        self.assertNotIn(draft_checks.DUPLICATE_TARGET, inactive_codes)
+
     def test_accept_allocates_archive_id_before_preview_and_reuses_it_on_apply(self):
         draft_path = self.apply_create()
         document = documents.parse_document(draft_path.read_bytes())

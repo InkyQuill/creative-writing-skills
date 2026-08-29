@@ -22,7 +22,7 @@ from .drafts import (
     plan_set_draft_status,
 )
 from .edits import EditConflict, EditPlanError, load_operations, plan_edits
-from .findings import ExecutionError, Report
+from .findings import ExecutionError, Finding, Report
 from .indexes import plan_reindex
 from .migration import (
     MigrationPlanError,
@@ -123,7 +123,12 @@ def _parser(*, error_stream: TextIO) -> argparse.ArgumentParser:
     migrate = commands.add_parser("migrate", error_stream=error_stream)
     migrate_mode = migrate.add_mutually_exclusive_group(required=True)
     migrate_mode.add_argument("--plan", action="store_true")
-    migrate_mode.add_argument("--apply", metavar="PLAN")
+    migrate_mode.add_argument(
+        "--preview", metavar="PLAN", help="validate a plan and show its full transaction diff without writing"
+    )
+    migrate_mode.add_argument(
+        "--apply", metavar="PLAN", help="commit a previously reviewed migration plan"
+    )
     migrate.add_argument("--expect-plan-hash")
     _format_option(migrate)
 
@@ -445,23 +450,71 @@ def _run_migrate(args: argparse.Namespace, *, cwd: Path, stdout: TextIO, stderr:
     try:
         if args.plan:
             if args.expect_plan_hash is not None:
-                raise MigrationPlanError("--expect-plan-hash is valid only with --apply")
+                raise MigrationPlanError("--expect-plan-hash is valid only with --preview or --apply")
             planned = plan_migration(root)
             _write_command_data(planned.to_payload(), output_format=args.format, stdout=stdout)
             return 0
         if args.expect_plan_hash is None:
-            raise MigrationPlanError("--expect-plan-hash is required with --apply")
-        loaded = load_migration_plan(_from_cwd(cwd, args.apply))
+            raise MigrationPlanError("--expect-plan-hash is required with --preview or --apply")
+        plan_path = args.preview if args.preview is not None else args.apply
+        loaded = load_migration_plan(_from_cwd(cwd, plan_path))
         plan = plan_apply_migration(root, loaded, args.expect_plan_hash)
         project = migration_project(root)
         engine = TransactionEngine(project)
         preview = engine.preview(plan)
+        if args.preview is not None:
+            _write_command_data(
+                {
+                    "status": "preview",
+                    "transaction_id": None,
+                    "plan_hash": loaded.plan_hash,
+                    **preview,
+                },
+                output_format=args.format,
+                stdout=stdout,
+            )
+            return 0
         record = engine.apply(plan)
+        findings: list[Finding] = []
+        execution_errors: list[ExecutionError] = []
+        try:
+            committed_project = discover_project(root)
+        except (DocumentError, OSError, ProjectDiscoveryError) as error:
+            execution_errors.extend(
+                ExecutionError(check=name, message=str(error))
+                for name in ("structure", "drafts")
+            )
+        else:
+            try:
+                findings.extend(check_structure(committed_project))
+            except (DocumentError, OSError, ValueError) as error:
+                execution_errors.append(
+                    ExecutionError(check="structure", message=str(error))
+                )
+            try:
+                findings.extend(
+                    check_drafts(
+                        committed_project,
+                        TransactionEngine(committed_project).store,
+                    )
+                )
+            except (DocumentError, OSError, TransactionError, ValueError) as error:
+                execution_errors.append(
+                    ExecutionError(check="drafts", message=str(error))
+                )
+        post_report = Report(
+            findings,
+            checks=["structure", "drafts"],
+            execution_errors=execution_errors,
+        )
         _write_command_data(
             {
                 "status": record.state,
                 "transaction_id": record.id,
                 "plan_hash": loaded.plan_hash,
+                "checks": post_report.checks,
+                "findings": post_report.as_json()["findings"],
+                "execution_errors": post_report.as_json()["execution_errors"],
                 **preview,
             },
             output_format=args.format,

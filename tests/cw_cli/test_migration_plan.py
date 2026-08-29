@@ -180,7 +180,7 @@ class MigrationPlanningTests(unittest.TestCase):
                 operation_pairs(plan),
             )
 
-    def test_case_collisions_are_unresolved_and_nonportable_sources_are_rejected(self):
+    def test_case_collisions_and_nonportable_sources_become_stable_unresolved(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             materialize(
@@ -198,8 +198,20 @@ class MigrationPlanningTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             materialize(root, {"chapters/CON.md": "Reserved\n"})
-            with self.assertRaisesRegex(migration.MigrationPlanError, "Windows reserved"):
-                migration.plan_migration(root)
+            plan = migration.plan_migration(root)
+            self.assertEqual("nonportable-source", plan.unresolved[0]["reason"].split(":", 1)[0])
+            self.assertEqual(("chapters/CON.md",), plan.unresolved[0]["sources"])
+
+    def test_nfd_legacy_source_becomes_stable_unresolved_without_crashing(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = "chapters/e\u0301.md"
+            materialize(root, {source: "Accent\n"})
+            plan = migration.plan_migration(root)
+            self.assertEqual((), plan.operations)
+            self.assertEqual((source,), plan.unresolved[0]["sources"])
+            self.assertTrue(plan.unresolved[0]["reason"].startswith("nonportable-source"))
+            self.assertEqual(plan, migration.load_migration_plan(write_plan(root, plan.to_payload())))
 
     def test_planning_is_stable_unicode_safe_and_read_only(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -223,13 +235,27 @@ class MigrationPlanningTests(unittest.TestCase):
             loaded = migration.load_migration_plan(write_plan(root, first.to_payload()))
             self.assertEqual(first, loaded)
 
-    def test_nonportable_unknown_path_fails_before_plan_hashing(self):
+    def test_control_character_unknown_path_is_stably_unresolved(self):
         for name in ("unknown\nrole.md", "unknown\x7frole.md"):
             with self.subTest(name=name), tempfile.TemporaryDirectory() as directory:
                 root = Path(directory)
                 materialize(root, {name: "# Unknown\n"})
-                with self.assertRaisesRegex(migration.MigrationPlanError, "control character"):
-                    migration.plan_migration(root)
+                plan = migration.plan_migration(root)
+                self.assertEqual("unknown-role", plan.unresolved[0]["reason"])
+
+    def test_plain_manifest_is_upgradeable_but_malformed_frontmatter_is_unresolved(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            materialize(root, {"project.md": "Legacy instructions\r\n", "chapters/a.md": "A\n"})
+            plan = migration.plan_migration(root)
+            self.assertFalse(any(item["reason"].startswith("manifest-upgrade") for item in plan.unresolved))
+            self.assertIn(("project.md", "project.md", "preserve"), operation_pairs(plan))
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            materialize(root, {"project.md": "---\ntitle: broken\nBody\n"})
+            plan = migration.plan_migration(root)
+            self.assertTrue(any(item["reason"].startswith("manifest-upgrade") for item in plan.unresolved))
 
     @unittest.skipUnless(hasattr(os, "symlink"), "symlinks are unavailable")
     def test_planning_does_not_follow_links_or_nested_projects(self):
@@ -267,6 +293,35 @@ class MigrationPlanLoadingTests(unittest.TestCase):
             payload = self.base_payload()
             loaded = migration.load_migration_plan(write_plan(root, payload))
             self.assertEqual(payload, loaded.to_payload())
+
+    def test_loader_accepts_only_strict_content_bearing_merge_shape(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            payload = self.base_payload()
+            payload["operations"] = [
+                {
+                    "sources": ["kb/timeline/a.md", "kb/timeline/b.md"],
+                    "destination": "kb/continuity/timeline.md",
+                    "action": "merge",
+                    "content": "---\ntitle: Timeline\n---\n# Reviewed\n",
+                }
+            ]
+            loaded = migration.load_migration_plan(write_plan(root, payload))
+            self.assertEqual(payload, loaded.to_payload())
+
+            for mutation in (
+                lambda operation: operation.pop("content"),
+                lambda operation: operation.__setitem__("sources", []),
+                lambda operation: operation.__setitem__("content", 1),
+                lambda operation: operation.__setitem__("source", "extra.md"),
+            ):
+                with self.subTest(mutation=mutation):
+                    candidate = self.base_payload()
+                    operation = dict(payload["operations"][0])
+                    mutation(operation)
+                    candidate["operations"] = [operation]
+                    with self.assertRaises(migration.MigrationPlanError):
+                        migration.load_migration_plan(write_plan(root, candidate))
 
     def test_loader_rejects_unknown_missing_and_type_invalid_keys(self):
         mutations = (

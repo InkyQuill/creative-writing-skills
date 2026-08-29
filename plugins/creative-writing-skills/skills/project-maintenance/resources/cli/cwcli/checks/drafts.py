@@ -108,7 +108,12 @@ def check_drafts(project: Project, store: TransactionStore) -> list[Finding]:
                     )
                 )
             else:
-                targets.setdefault(_identity(target), []).append(relative)
+                # Only active lifecycle artifacts contend for a target. Inactive
+                # files retain their own repair warnings but must not block work.
+                if status not in ACTIVE_STATUSES:
+                    target_path = None
+                else:
+                    targets.setdefault(_identity(target), []).append(relative)
 
         base = document.metadata.get("base-revision")
         if base is None:

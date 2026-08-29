@@ -343,6 +343,39 @@ class DraftLifecycleTests(unittest.TestCase):
                         "tx-hidden-metadata",
                     )
 
+    def test_accept_strips_balanced_ai_from_metadata_and_rejects_malformed_metadata(self):
+        draft_path, _ = self.make_draft(body="<AI>Body</AI>\n")
+        document = documents.parse_document(draft_path.read_bytes())
+        metadata = dict(document.metadata)
+        metadata["title"] = "<AI>Accepted title</AI>"
+        metadata["aliases"] = ["Plain", "<AI>Suggested</AI>"]
+        draft_path.write_bytes(
+            documents.render_document(
+                documents.Document(metadata, document.body, document.newline, document.bom)
+            )
+        )
+        plan = drafts.plan_accept_draft(
+            self.model, "work/drafts/ch-004.md", self.store, "tx-ai-metadata"
+        )
+        accepted_change = next(
+            change for change in plan.changes if change.path == "story/chapters/ch-004.md"
+        )
+        accepted = documents.parse_document(accepted_change.after)
+        self.assertEqual("Accepted title", accepted.metadata["title"])
+        self.assertEqual(["Plain", "Suggested"], accepted.metadata["aliases"])
+        self.assertNotIn(b"<AI", accepted_change.after)
+
+        metadata["title"] = "<AI>broken"
+        draft_path.write_bytes(
+            documents.render_document(
+                documents.Document(metadata, document.body, document.newline, document.bom)
+            )
+        )
+        with self.assertRaisesRegex(drafts.DraftError, "unbalanced"):
+            drafts.plan_accept_draft(
+                self.model, "work/drafts/ch-004.md", self.store, "tx-bad-ai-metadata"
+            )
+
     def test_archive_ids_are_safe_and_collisions_refuse_overwrite(self):
         self.make_draft()
         for transaction_id in ("", "../escape", "tx.dot", "транзакция", "space id"):
@@ -399,6 +432,37 @@ class DraftLifecycleTests(unittest.TestCase):
         self.assertEqual(story_before, after_story)
         engine.apply(engine.inverse("tx-abandon"), transaction_id="tx-abandon-undo")
         self.assertEqual(before, self.managed_files())
+
+    def test_abandon_repairs_parseable_inactive_invalid_and_duplicate_drafts(self):
+        draft_path, _ = self.make_draft(status="working")
+        valid = documents.parse_document(draft_path.read_bytes())
+        duplicate = self.root / "work/drafts/duplicate.md"
+        duplicate.write_bytes(
+            documents.render_document(
+                documents.Document(
+                    {**valid.metadata, "status": "abandoned"},
+                    "Inactive duplicate\n",
+                    "\n",
+                    False,
+                )
+            )
+        )
+        invalid = self.root / "work/drafts/invalid.md"
+        invalid.write_bytes(
+            b"---\ntarget: ../outside.md\nbase-revision: broken\nstatus: accepted\n---\nKept\n"
+        )
+        for relative in ("work/drafts/duplicate.md", "work/drafts/invalid.md"):
+            with self.subTest(relative=relative):
+                plan = drafts.plan_abandon_draft(self.model, relative, "tx-repair")
+                self.assertFalse(any(change.path.startswith("story/") for change in plan.changes))
+                archive = next(
+                    change.after
+                    for change in plan.changes
+                    if change.path.startswith("work/archive/")
+                )
+                self.assertEqual(
+                    "abandoned", documents.parse_document(archive).metadata["status"]
+                )
 
 
 if __name__ == "__main__":

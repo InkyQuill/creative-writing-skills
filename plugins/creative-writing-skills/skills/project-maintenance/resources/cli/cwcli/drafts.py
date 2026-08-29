@@ -204,12 +204,22 @@ def plan_rebase_draft(
     result = three_way_rebase(
         base_document.body, draft_document.body, current_document.body
     )
-    if result.conflicts:
-        raise DraftConflict(result.conflicts)
+    merged_metadata, metadata_conflicts = _merge_user_metadata(
+        base_document.metadata,
+        draft_document.metadata,
+        current_document.metadata,
+    )
+    conflicts = metadata_conflicts + result.conflicts
+    if conflicts:
+        raise DraftConflict(conflicts)
     assert result.text is not None
 
     after = _render_rebased_draft(
-        draft_source, draft_document, result.text, current_revision
+        draft_source,
+        draft_document,
+        result.text,
+        current_revision,
+        merged_metadata,
     )
     # Save the exact target revision only after the complete conflict scan. A
     # subsequent rebase must be able to recover the new base named by the
@@ -262,7 +272,7 @@ def plan_accept_draft(
     manuscript_body = _normalize_newlines(manuscript_body, manuscript_newline)
 
     manuscript_metadata = {
-        key: value
+        key: _strip_ai_from_metadata(value)
         for key, value in document.metadata.items()
         if key not in _CLI_MANAGED_METADATA
         and key not in _ARCHIVE_TRANSACTION_METADATA
@@ -275,6 +285,7 @@ def plan_accept_draft(
             bom=manuscript_bom,
         )
     )
+    _validate_accepted_manuscript(manuscript)
     archive = _render_archive(
         document, status="accepted", transaction_id=transaction_id
     )
@@ -305,7 +316,13 @@ def plan_abandon_draft(
 ) -> TransactionPlan:
     """Plan abandonment without creating or changing manuscript content."""
 
-    draft, source, document = _load_lifecycle_draft(project, draft_path)
+    _validate_draft_path(draft_path)
+    try:
+        source_path = project.resolve(draft_path, for_write=True)
+        source = _read_regular_file(source_path, f"draft {draft_path}")
+        document = parse_document(source)
+    except (OSError, UnicodeError, ValueError, ProjectPathError) as error:
+        raise DraftError(f"cannot parse draft {draft_path}: {error}") from error
     archive_id = _archive_id(project, draft_path, transaction_id)
     archive = _render_archive(
         document, status="abandoned", transaction_id=transaction_id
@@ -315,14 +332,17 @@ def plan_abandon_draft(
         Change(draft_path, source, None),
     )
     derived = plan_reindex(
-        project, overlay=primary, index_ids=_ABANDON_INDEXES
+        project,
+        overlay=primary,
+        index_ids=_ABANDON_INDEXES,
+        skip_unparseable=True,
     ).changes
     return TransactionPlan(
         command=("draft", "abandon", draft_path),
         changes=primary + derived,
         metadata={
             "draft": draft_path,
-            "target": draft.target,
+            "target": document.metadata.get("target"),
             "archive": archive_id,
             "undoable": True,
         },
@@ -435,6 +455,20 @@ def _strip_balanced_ai_wrappers(body: str) -> str:
     return without_valid_tags
 
 
+def _strip_ai_from_metadata(value: Scalar | list[str]) -> Scalar | list[str]:
+    if isinstance(value, str):
+        return _strip_balanced_ai_wrappers(value)
+    if isinstance(value, list):
+        return [_strip_balanced_ai_wrappers(item) for item in value]
+    return value
+
+
+def _validate_accepted_manuscript(source: bytes) -> None:
+    text = source.decode("utf-8-sig")
+    if any(token in text for token in ("<AI", "</AI", "<hidden", "</hidden")):
+        raise DraftError("accepted manuscript contains unresolved source tags")
+
+
 def _reject_hidden_material(source: bytes) -> None:
     try:
         text = source.decode("utf-8-sig")
@@ -528,7 +562,30 @@ def _render_rebased_draft(
     document: Document,
     body: str,
     base_revision: str,
+    user_metadata: dict[str, Scalar | list[str]],
 ) -> bytes:
+    draft_user_metadata = {
+        key: value
+        for key, value in document.metadata.items()
+        if key not in _CLI_MANAGED_METADATA
+        and key not in _ARCHIVE_TRANSACTION_METADATA
+    }
+    if user_metadata != draft_user_metadata:
+        metadata = dict(user_metadata)
+        metadata.update(
+            {
+                key: value
+                for key, value in document.metadata.items()
+                if key in _CLI_MANAGED_METADATA
+                or key in _ARCHIVE_TRANSACTION_METADATA
+            }
+        )
+        metadata["base-revision"] = base_revision
+        normalized_body = _normalize_newlines(body, document.newline)
+        return render_document(
+            Document(metadata, normalized_body, document.newline, document.bom)
+        )
+
     original_body = document.body.encode("utf-8")
     if not source.endswith(original_body):
         raise DraftError("cannot identify the draft body without rewriting frontmatter")
@@ -543,6 +600,51 @@ def _render_rebased_draft(
     if reparsed.metadata != expected_metadata or reparsed.body != rendered_body.decode("utf-8"):
         raise DraftError("rebased draft could not be rendered safely")
     return rendered
+
+
+_MISSING = object()
+
+
+def _merge_user_metadata(
+    base: dict[str, Scalar | list[str]],
+    draft: dict[str, Scalar | list[str]],
+    current: dict[str, Scalar | list[str]],
+) -> tuple[dict[str, Scalar | list[str]], tuple[RebaseConflict, ...]]:
+    """Three-way merge author-editable fields without overwriting either side."""
+
+    keys = (
+        set(base) | set(draft) | set(current)
+    ) - _CLI_MANAGED_METADATA - _ARCHIVE_TRANSACTION_METADATA
+    merged: dict[str, Scalar | list[str]] = {}
+    conflicts: list[RebaseConflict] = []
+    for key in sorted(keys):
+        base_value = base.get(key, _MISSING)
+        draft_value = draft.get(key, _MISSING)
+        current_value = current.get(key, _MISSING)
+        if draft_value == current_value:
+            selected = draft_value
+        elif draft_value == base_value:
+            selected = current_value
+        elif current_value == base_value:
+            selected = draft_value
+        else:
+            conflicts.append(
+                RebaseConflict(
+                    start=-1,
+                    end=-1,
+                    base=(f"{key}: {_metadata_fragment(base_value)}",),
+                    draft=(f"{key}: {_metadata_fragment(draft_value)}",),
+                    current=(f"{key}: {_metadata_fragment(current_value)}",),
+                )
+            )
+            continue
+        if selected is not _MISSING:
+            merged[key] = selected  # type: ignore[assignment]
+    return merged, tuple(conflicts)
+
+
+def _metadata_fragment(value: object) -> str:
+    return "<absent>" if value is _MISSING else repr(value)
 
 
 def _replace_base_revision_value(prefix: bytes, base_revision: str) -> bytes:
@@ -584,8 +686,17 @@ def _reject_duplicate_target(project: Project, target: str) -> None:
         if path.name == "_index.md" or path.suffix.casefold() != ".md":
             continue
         relative = project.relative_id(path)
-        draft = load_draft(project, relative)
-        if _portable_identity(draft.target) == _portable_identity(target):
+        try:
+            document = parse_document(_read_regular_file(path, f"draft {relative}"))
+        except (OSError, UnicodeError, ValueError):
+            continue
+        existing_target = document.metadata.get("target")
+        status = document.metadata.get("status")
+        if (
+            status in ACTIVE_STATUSES
+            and isinstance(existing_target, str)
+            and _portable_identity(existing_target) == _portable_identity(target)
+        ):
             raise DraftError(f"active draft already targets {target}: {relative}")
 
 

@@ -12,7 +12,7 @@ from pathlib import Path, PurePosixPath, PureWindowsPath
 from types import MappingProxyType
 from typing import Mapping
 
-from .documents import parse_document
+from .documents import Document, parse_document, render_document
 from .indexes import plan_reindex
 from .project import Project
 from .scaffold import render_scaffold
@@ -25,7 +25,8 @@ TARGET_SCHEMA = 1
 _PLAN_KEYS = frozenset(
     {"plan-version", "source-schema", "target-schema", "operations", "unresolved", "plan-hash"}
 )
-_OPERATION_KEYS = frozenset({"source", "destination", "action"})
+_MOVE_OPERATION_KEYS = frozenset({"source", "destination", "action"})
+_MERGE_OPERATION_KEYS = frozenset({"sources", "destination", "action", "content"})
 _UNRESOLVED_KEYS = frozenset({"sources", "destination", "reason"})
 _A_ROOTS = frozenset(
     {"chapters", "drafts", "characters", "worldbuilding", "samples", "style", "styles", "plot"}
@@ -47,9 +48,28 @@ class MigrationPlanError(ValueError):
 class MigrationOperation:
     """One mechanical migration operation over project-relative paths."""
 
-    source: str
+    source: str | None
     destination: str
     action: str
+    sources: tuple[str, ...] = ()
+    content: str | None = None
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "sources", tuple(self.sources))
+
+    def to_payload(self) -> dict[str, object]:
+        if self.action == "merge":
+            return {
+                "sources": list(self.sources),
+                "destination": self.destination,
+                "action": self.action,
+                "content": self.content,
+            }
+        return {
+            "source": self.source,
+            "destination": self.destination,
+            "action": self.action,
+        }
 
 
 @dataclass(frozen=True)
@@ -87,14 +107,7 @@ class MigrationPlan:
             "plan-version": self.plan_version,
             "source-schema": self.source_schema,
             "target-schema": self.target_schema,
-            "operations": [
-                {
-                    "source": operation.source,
-                    "destination": operation.destination,
-                    "action": operation.action,
-                }
-                for operation in self.operations
-            ],
+            "operations": [operation.to_payload() for operation in self.operations],
             "unresolved": [
                 {
                     "sources": list(item["sources"]),
@@ -131,8 +144,6 @@ def plan_migration(root: Path) -> MigrationPlan:
     root = Path(root).absolute()
     _require_real_directory(root, "migration root")
     paths = _walk_markdown(root)
-    for path in paths:
-        _strict_path(path, "discovered migration path")
     path_set = set(paths)
     source_schema = _source_schema(root)
     if source_schema > TARGET_SCHEMA:
@@ -145,6 +156,18 @@ def plan_migration(root: Path) -> MigrationPlan:
     operations: list[MigrationOperation] = []
     unresolved: list[dict[str, object]] = []
     handled: set[str] = set()
+
+    if "project.md" in path_set and source_schema == 0:
+        try:
+            _legacy_manifest_document(
+                _read_regular_file_no_follow(root / "project.md", "project manifest"),
+                root.name or "Migrated Story",
+            )
+        except (MigrationPlanError, UnicodeError, ValueError) as error:
+            unresolved.append(
+                _unresolved(("project.md",), "project.md", f"manifest-upgrade: {error}")
+            )
+            handled.add("project.md")
 
     instruction_paths = tuple(path for path in paths if _is_platform_instruction(path))
     for path in instruction_paths:
@@ -185,16 +208,34 @@ def plan_migration(root: Path) -> MigrationPlan:
             unresolved.append(_unresolved((path,), None, "unknown-role"))
             continue
         try:
-            _strict_path(path, "migration source")
+            _source_path(path, "migration source")
+            _strict_path(path, "portable migration source")
+            destination = _portable_destination(destination)
             _strict_path(destination, "migration destination")
         except MigrationPlanError as error:
-            raise MigrationPlanError(f"cannot represent migration operation for {path}: {error}") from error
+            proposed_destination = _portable_destination(destination)
+            try:
+                _strict_path(proposed_destination, "migration destination")
+            except MigrationPlanError:
+                proposed_destination = None
+            unresolved.append(
+                _unresolved(
+                    (path,), proposed_destination, f"nonportable-source: {error}"
+                )
+            )
+            continue
         action = "preserve" if path == destination else "move"
         operations.append(MigrationOperation(path, destination, action))
 
     operations, collision_records = _remove_destination_collisions(operations, path_set)
     unresolved.extend(collision_records)
-    operations.sort(key=lambda item: (_path_sort_key(item.destination), _path_sort_key(item.source), item.action))
+    operations.sort(
+        key=lambda item: (
+            _path_sort_key(item.destination),
+            tuple(_path_sort_key(source) for source in _operation_sources(item)),
+            item.action,
+        )
+    )
     unresolved.sort(key=_unresolved_sort_key)
     _validate_generated_plan(operations, unresolved)
 
@@ -203,7 +244,7 @@ def plan_migration(root: Path) -> MigrationPlan:
         "source-schema": source_schema,
         "target-schema": TARGET_SCHEMA,
         "operations": [
-            {"source": item.source, "destination": item.destination, "action": item.action}
+            item.to_payload()
             for item in operations
         ],
         "unresolved": unresolved,
@@ -222,6 +263,7 @@ def load_migration_plan(path: Path, root: Path | None = None) -> MigrationPlan:
     """Load a plan, checking filesystem boundaries only against an explicit root."""
 
     path = Path(path).absolute()
+    migration_root = Path(root).absolute() if root is not None else None
     try:
         raw = _read_regular_file_no_follow(path, "migration plan")
         payload = json.loads(raw.decode("utf-8"), object_pairs_hook=_unique_object)
@@ -258,23 +300,54 @@ def load_migration_plan(path: Path, root: Path | None = None) -> MigrationPlan:
     for index, item in enumerate(raw_operations):
         if not isinstance(item, dict):
             raise MigrationPlanError(f"operations[{index}] must be an object")
-        _require_exact_keys(item, _OPERATION_KEYS, f"operations[{index}]")
-        source = _strict_path(item["source"], f"operations[{index}].source")
+        action = item.get("action")
+        expected_keys = _MERGE_OPERATION_KEYS if action == "merge" else _MOVE_OPERATION_KEYS
+        _require_exact_keys(item, expected_keys, f"operations[{index}]")
         destination = _strict_path(item["destination"], f"operations[{index}].destination")
-        action = item["action"]
-        if action not in {"move", "preserve"}:
-            raise MigrationPlanError(f"operations[{index}].action must be move or preserve")
-        if (source == destination) != (action == "preserve"):
-            raise MigrationPlanError("source=destination is valid only for preserve operations")
-        source_identity = _portable_path_identity(source)
+        if action == "merge":
+            raw_sources = item["sources"]
+            if not isinstance(raw_sources, list) or not raw_sources:
+                raise MigrationPlanError(f"operations[{index}].sources must be a non-empty array")
+            sources = tuple(
+                _source_path(value, f"operations[{index}].sources")
+                for value in raw_sources
+            )
+            if len(set(sources)) != len(sources):
+                raise MigrationPlanError(f"operations[{index}].sources contains duplicates")
+            content = item["content"]
+            if not isinstance(content, str):
+                raise MigrationPlanError(f"operations[{index}].content must be UTF-8 text")
+            try:
+                content.encode("utf-8")
+            except UnicodeEncodeError as error:
+                raise MigrationPlanError(f"operations[{index}].content must be UTF-8 text") from error
+            source = None
+        else:
+            if action not in {"move", "preserve"}:
+                raise MigrationPlanError(f"operations[{index}].action must be move, preserve, or merge")
+            source = _source_path(item["source"], f"operations[{index}].source")
+            sources = (source,)
+            content = None
+            if (source == destination) != (action == "preserve"):
+                raise MigrationPlanError("source=destination is valid only for preserve operations")
         destination_identity = _portable_path_identity(destination)
-        if source_identity in source_identities:
-            raise MigrationPlanError(f"duplicate or case-colliding source: {source}")
+        for operation_source in sources:
+            source_identity = _source_path_identity(operation_source)
+            if source_identity in source_identities:
+                raise MigrationPlanError(f"duplicate source: {operation_source}")
+            source_identities.add(source_identity)
         if destination_identity in destination_identities:
             raise MigrationPlanError(f"duplicate or case-colliding destination: {destination}")
-        source_identities.add(source_identity)
         destination_identities.add(destination_identity)
-        operations.append(MigrationOperation(source, destination, action))
+        operations.append(
+            MigrationOperation(
+                source,
+                destination,
+                action,
+                sources if action == "merge" else (),
+                content,
+            )
+        )
 
     raw_unresolved = payload["unresolved"]
     if not isinstance(raw_unresolved, list):
@@ -287,7 +360,7 @@ def load_migration_plan(path: Path, root: Path | None = None) -> MigrationPlan:
         sources = item["sources"]
         if not isinstance(sources, list) or not sources:
             raise MigrationPlanError(f"unresolved[{index}].sources must be a non-empty array")
-        validated_sources = [_strict_path(value, f"unresolved[{index}].sources") for value in sources]
+        validated_sources = [_source_path(value, f"unresolved[{index}].sources") for value in sources]
         if len(set(validated_sources)) != len(validated_sources):
             raise MigrationPlanError(f"unresolved[{index}].sources contains duplicates")
         destination = item["destination"]
@@ -299,10 +372,11 @@ def load_migration_plan(path: Path, root: Path | None = None) -> MigrationPlan:
         unresolved.append(_unresolved(tuple(validated_sources), destination, reason))
 
     if root is not None:
-        migration_root = Path(root).absolute()
+        assert migration_root is not None
         _require_real_directory(migration_root, "migration root")
         for operation in operations:
-            _reject_nested_boundary(migration_root, operation.source)
+            for source in _operation_sources(operation):
+                _reject_nested_boundary(migration_root, source)
             _reject_nested_boundary(migration_root, operation.destination)
 
     return MigrationPlan(
@@ -338,14 +412,24 @@ def plan_apply_migration(
             f"found {actual_schema}"
         )
     for operation in plan.operations:
-        _reject_nested_boundary(migration_root, operation.source)
+        for source in _operation_sources(operation):
+            _reject_nested_boundary(migration_root, source)
         _reject_nested_boundary(migration_root, operation.destination)
 
-    moving = tuple(operation for operation in plan.operations if operation.action == "move")
     for operation in plan.operations:
-        _require_source_entry(migration_root, operation.source)
-    for operation in moving:
-        _require_absent_destination(migration_root, operation.destination)
+        for source in _operation_sources(operation):
+            _require_source_entry(migration_root, source)
+    for operation in plan.operations:
+        if operation.action == "move":
+            _require_absent_destination(migration_root, operation.destination)
+        elif operation.action == "merge" and operation.destination not in operation.sources:
+            destination = migration_root / PurePosixPath(operation.destination)
+            if os.path.lexists(destination) and (
+                destination.is_symlink() or not destination.is_file()
+            ):
+                raise MigrationPlanError(
+                    f"migration merge destination is unsafe: {operation.destination}"
+                )
 
     scaffold = render_scaffold(migration_root.name or "Migrated Story", "und")
     project = migration_project(migration_root, scaffold["project.md"])
@@ -362,14 +446,59 @@ def plan_apply_migration(
     # Only after every destination, source kind, and project boundary succeeds do
     # we read source bytes. This makes all validation failures mutation-free and
     # prevents a partially readable plan from influencing the transaction.
-    primary: list[Change] = []
-    for operation in moving:
-        source = _read_regular_file_no_follow(
-            migration_root / PurePosixPath(operation.source),
-            f"migration source {operation.source}",
+    primary_by_path: dict[str, Change] = {}
+    for operation in plan.operations:
+        if operation.action == "preserve":
+            continue
+        if operation.action == "move":
+            assert operation.source is not None
+            source = _read_regular_file_no_follow(
+                migration_root / PurePosixPath(operation.source),
+                f"migration source {operation.source}",
+                root=migration_root,
+            )
+            primary_by_path[operation.source] = Change(operation.source, source, None)
+            primary_by_path[operation.destination] = Change(
+                operation.destination, None, source
+            )
+            continue
+
+        assert operation.action == "merge" and operation.content is not None
+        before_sources = {
+            source: _read_regular_file_no_follow(
+                migration_root / PurePosixPath(source),
+                f"migration source {source}",
+                root=migration_root,
+            )
+            for source in operation.sources
+        }
+        destination_before = before_sources.get(operation.destination)
+        if destination_before is None:
+            destination_path = migration_root / PurePosixPath(operation.destination)
+            if os.path.lexists(destination_path):
+                destination_before = _read_regular_file_no_follow(
+                    destination_path,
+                    f"migration destination {operation.destination}",
+                    root=migration_root,
+                )
+        for source, before in before_sources.items():
+            if source != operation.destination:
+                primary_by_path[source] = Change(source, before, None)
+        primary_by_path[operation.destination] = Change(
+            operation.destination,
+            destination_before,
+            operation.content.encode("utf-8"),
         )
-        primary.append(Change(operation.source, source, None))
-        primary.append(Change(operation.destination, None, source))
+
+    primary = list(primary_by_path.values())
+
+    if "project.md" not in primary_by_path:
+        manifest_change = _manifest_upgrade_change(
+            migration_root, scaffold["project.md"]
+        )
+        if manifest_change is not None:
+            primary_by_path["project.md"] = manifest_change
+            primary = list(primary_by_path.values())
 
     occupied = {change.path for change in primary}
     for relative_id, after in scaffold.items():
@@ -385,7 +514,9 @@ def plan_apply_migration(
         primary.append(Change(relative_id, None, after))
         occupied.add(relative_id)
 
-    derived = plan_reindex(project, overlay=tuple(primary)).changes
+    derived = plan_reindex(
+        project, overlay=tuple(primary), skip_unparseable=True
+    ).changes
     changes = tuple(primary) + tuple(derived)
     return TransactionPlan(
         command=("migrate", "apply"),
@@ -407,10 +538,66 @@ def migration_project(root: Path, manifest: bytes | None = None) -> Project:
     if manifest is None:
         manifest_path = root / "project.md"
         if manifest_path.is_file() and not manifest_path.is_symlink():
-            manifest = manifest_path.read_bytes()
+            source = _read_regular_file_no_follow(
+                manifest_path, "project manifest", root=root
+            )
+            try:
+                parsed = parse_document(source)
+            except (UnicodeError, ValueError):
+                parsed = None
+            if parsed is not None and parsed.metadata.get("schema-version") == TARGET_SCHEMA:
+                manifest = source
+            else:
+                manifest = render_scaffold(root.name or "Migrated Story", "und")["project.md"]
         else:
             manifest = render_scaffold(root.name or "Migrated Story", "und")["project.md"]
     return Project(root=root, manifest=parse_document(manifest))
+
+
+def _manifest_upgrade_change(root: Path, scaffold_manifest: bytes) -> Change | None:
+    path = root / "project.md"
+    if not os.path.lexists(path):
+        return None
+    before = _read_regular_file_no_follow(path, "project manifest")
+    if _source_schema(root) == TARGET_SCHEMA:
+        return None
+    template = parse_document(scaffold_manifest)
+    legacy = _legacy_manifest_document(before, root.name or "Migrated Story")
+    metadata = dict(legacy.metadata)
+    metadata["schema-version"] = TARGET_SCHEMA
+    metadata.setdefault("title", template.metadata["title"])
+    metadata.setdefault("language", template.metadata["language"])
+    metadata.setdefault("status", template.metadata["status"])
+    after = render_document(
+        Document(metadata, legacy.body, legacy.newline, legacy.bom)
+    )
+    return None if after == before else Change("project.md", before, after)
+
+
+def _legacy_manifest_document(source: bytes, title: str) -> Document:
+    try:
+        text = source.decode("utf-8-sig")
+    except UnicodeDecodeError as error:
+        raise MigrationPlanError("legacy project.md is not UTF-8") from error
+    bom = source.startswith(b"\xef\xbb\xbf")
+    newline = _detected_newline(text)
+    if text.startswith("---"):
+        try:
+            return parse_document(source)
+        except ValueError as error:
+            raise MigrationPlanError(
+                "legacy project.md has malformed frontmatter"
+            ) from error
+    return Document({}, text, newline, bom)
+
+
+def _detected_newline(text: str) -> str:
+    positions = [
+        (position, token)
+        for token in ("\r\n", "\n", "\r")
+        if (position := text.find(token)) >= 0
+    ]
+    return min(positions)[1] if positions else "\n"
 
 
 def _validate_apply_plan(plan: MigrationPlan, expected_hash: str) -> None:
@@ -443,16 +630,31 @@ def _validate_apply_plan(plan: MigrationPlan, expected_hash: str) -> None:
     ]
     _validate_generated_plan(list(plan.operations), unresolved)
     for operation in plan.operations:
+        for source in _operation_sources(operation):
+            _strict_path(source, "transactional migration source")
         kind = allowed_document_kind(operation.destination)
         root_manifest = (
             operation.destination == "project.md"
             and operation.source == "project.md"
             and operation.action == "preserve"
         )
+        merge_manifest = operation.action == "merge" and operation.destination == "project.md"
+        if merge_manifest:
+            assert operation.content is not None
+            try:
+                merged_manifest = parse_document(operation.content.encode("utf-8"))
+            except (UnicodeError, ValueError) as error:
+                raise MigrationPlanError(
+                    "merged project.md content must be a parseable schema-v1 manifest"
+                ) from error
+            if merged_manifest.metadata.get("schema-version") != TARGET_SCHEMA:
+                raise MigrationPlanError(
+                    "merged project.md content must declare schema-version 1"
+                )
         if (
             kind is None
             or kind == "generated-index"
-            or (kind == "manifest" and not root_manifest)
+            or (kind == "manifest" and not (root_manifest or merge_manifest))
         ):
             raise MigrationPlanError(
                 f"migration destination is not a canonical schema-v1 content role: "
@@ -469,6 +671,9 @@ def _validate_apply_plan(plan: MigrationPlan, expected_hash: str) -> None:
 
 def _require_source_entry(root: Path, relative: str) -> None:
     path = root / PurePosixPath(relative)
+    if not _secure_dirfd_supported():
+        _fallback_regular_identity(path, f"migration source {relative}", root=root)
+        return
     parent_descriptor = _open_directory_no_follow(path.parent, f"migration source parent {relative}")
     try:
         try:
@@ -714,7 +919,7 @@ def _remove_destination_collisions(
             unresolved.append(_unresolved(tuple(sorted(sources, key=_path_sort_key)), destination, "destination-collision"))
             preserves = sorted(
                 (item for item in group if item.action == "preserve"),
-                key=lambda item: _path_sort_key(item.source),
+                key=lambda item: _path_sort_key(item.source or ""),
             )
             if preserves:
                 kept.append(preserves[0])
@@ -779,7 +984,46 @@ def _strict_path(value: object, label: str) -> str:
     return value
 
 
+def _source_path(value: object, label: str) -> str:
+    """Validate an existing lexical identity without imposing new-path portability."""
+
+    if not isinstance(value, str) or not value:
+        raise MigrationPlanError(f"{label} must be a non-empty string")
+    try:
+        value.encode("utf-8")
+    except UnicodeEncodeError as error:
+        raise MigrationPlanError(f"{label} must contain valid Unicode") from error
+    if "\\" in value:
+        raise MigrationPlanError(f"{label} must use forward slashes")
+    posix = PurePosixPath(value)
+    windows = PureWindowsPath(value)
+    if posix.is_absolute() or windows.is_absolute() or windows.drive or windows.root:
+        raise MigrationPlanError(f"{label} must be project-relative")
+    if value != posix.as_posix() or any(part in {"", ".", ".."} for part in posix.parts):
+        raise MigrationPlanError(f"{label} is not a normalized project-relative path")
+    return value
+
+
+def _portable_destination(value: str) -> str:
+    return PurePosixPath(
+        *(unicodedata.normalize("NFC", part) for part in PurePosixPath(value).parts)
+    ).as_posix()
+
+
 def _reject_nested_boundary(root: Path, relative: str) -> None:
+    if not _secure_dirfd_supported():
+        current = root
+        for part in PurePosixPath(relative).parts[:-1]:
+            current /= part
+            if not os.path.lexists(current):
+                return
+            mode = current.lstat().st_mode
+            if stat.S_ISLNK(mode) or not stat.S_ISDIR(mode):
+                raise MigrationPlanError(f"operation crosses unsafe boundary: {relative}")
+            manifest = current / "project.md"
+            if os.path.lexists(manifest) and stat.S_ISREG(manifest.lstat().st_mode):
+                raise MigrationPlanError(f"operation crosses nested project boundary: {relative}")
+        return
     descriptor = _open_directory_no_follow(root, "migration root")
     try:
         for part in PurePosixPath(relative).parts[:-1]:
@@ -820,19 +1064,35 @@ def _validate_generated_plan(
     source_identities: set[tuple[str, ...]] = set()
     destination_identities: set[tuple[str, ...]] = set()
     for index, operation in enumerate(operations):
-        source = _strict_path(operation.source, f"operations[{index}].source")
         destination = _strict_path(operation.destination, f"operations[{index}].destination")
-        if operation.action not in {"move", "preserve"}:
-            raise MigrationPlanError(f"operations[{index}].action must be move or preserve")
-        if (source == destination) != (operation.action == "preserve"):
-            raise MigrationPlanError("source=destination is valid only for preserve operations")
-        source_identity = _portable_path_identity(source)
+        if operation.action == "merge":
+            if operation.source is not None or not operation.sources or not isinstance(operation.content, str):
+                raise MigrationPlanError(f"operations[{index}] has an invalid merge shape")
+            sources = tuple(
+                _source_path(value, f"operations[{index}].sources")
+                for value in operation.sources
+            )
+            try:
+                operation.content.encode("utf-8")
+            except UnicodeEncodeError as error:
+                raise MigrationPlanError(f"operations[{index}].content must be UTF-8 text") from error
+        else:
+            if operation.action not in {"move", "preserve"} or operation.source is None:
+                raise MigrationPlanError(f"operations[{index}].action must be move, preserve, or merge")
+            source = _source_path(operation.source, f"operations[{index}].source")
+            sources = (source,)
+            if operation.sources not in {(), (source,)} or operation.content is not None:
+                raise MigrationPlanError(f"operations[{index}] has invalid fields")
+            if (source == destination) != (operation.action == "preserve"):
+                raise MigrationPlanError("source=destination is valid only for preserve operations")
         destination_identity = _portable_path_identity(destination)
-        if source_identity in source_identities:
-            raise MigrationPlanError(f"duplicate or case-colliding source: {source}")
+        for source in sources:
+            source_identity = _source_path_identity(source)
+            if source_identity in source_identities:
+                raise MigrationPlanError(f"duplicate source: {source}")
+            source_identities.add(source_identity)
         if destination_identity in destination_identities:
             raise MigrationPlanError(f"duplicate or case-colliding destination: {destination}")
-        source_identities.add(source_identity)
         destination_identities.add(destination_identity)
 
     for index, item in enumerate(unresolved):
@@ -840,7 +1100,7 @@ def _validate_generated_plan(
         sources = item["sources"]
         if not isinstance(sources, list) or not sources:
             raise MigrationPlanError(f"unresolved[{index}].sources must be a non-empty array")
-        validated_sources = [_strict_path(value, f"unresolved[{index}].sources") for value in sources]
+        validated_sources = [_source_path(value, f"unresolved[{index}].sources") for value in sources]
         if len(set(validated_sources)) != len(validated_sources):
             raise MigrationPlanError(f"unresolved[{index}].sources contains duplicates")
         destination = item["destination"]
@@ -883,7 +1143,26 @@ def _require_real_directory(path: Path, label: str) -> None:
         raise MigrationPlanError(f"{label} must be a real directory: {path}")
 
 
-def _read_regular_file_no_follow(path: Path, label: str) -> bytes:
+def _read_regular_file_no_follow(
+    path: Path, label: str, *, root: Path | None = None
+) -> bytes:
+    if not _secure_dirfd_supported():
+        descriptor = _fallback_regular_identity(path, label, root=root)
+        try:
+            opened_identity = _stat_identity(os.fstat(descriptor))
+            with os.fdopen(descriptor, "rb") as stream:
+                descriptor = -1
+                data = stream.read()
+            revalidated = _fallback_regular_identity(path, label, root=root)
+            try:
+                if _stat_identity(os.fstat(revalidated)) != opened_identity:
+                    raise MigrationPlanError(f"{label} changed while it was read")
+            finally:
+                os.close(revalidated)
+            return data
+        finally:
+            if descriptor >= 0:
+                os.close(descriptor)
     parent_descriptor = _open_directory_no_follow(path.parent, f"{label} parent")
     try:
         try:
@@ -966,14 +1245,76 @@ def _open_child_directory(parent_descriptor: int, name: str, label: str) -> int:
 
 
 def _require_secure_dirfd_support() -> None:
-    if (
-        not getattr(os, "O_NOFOLLOW", 0)
-        or not getattr(os, "O_DIRECTORY", 0)
-        or os.open not in os.supports_dir_fd
-        or os.stat not in os.supports_dir_fd
-        or os.stat not in os.supports_follow_symlinks
-    ):
+    if not _secure_dirfd_supported():
         raise MigrationPlanError("safe no-follow file loading is unsupported on this platform")
+
+
+def _secure_dirfd_supported() -> bool:
+    return bool(
+        getattr(os, "O_NOFOLLOW", 0)
+        and getattr(os, "O_DIRECTORY", 0)
+        and os.open in os.supports_dir_fd
+        and os.stat in os.supports_dir_fd
+        and os.stat in os.supports_follow_symlinks
+    )
+
+
+def _fallback_regular_identity(
+    path: Path, label: str, *, root: Path | None = None
+) -> int:
+    """Windows-safe path walk plus open/fstat/revalidation identity checks."""
+
+    absolute = Path(os.path.abspath(path))
+    if root is not None:
+        _require_contained(Path(root).absolute(), absolute, label)
+    anchor = Path(absolute.anchor)
+    ancestors: list[tuple[Path, tuple[int, int, int]]] = []
+    current = anchor
+    for component in absolute.relative_to(anchor).parts[:-1]:
+        current /= component
+        try:
+            info = current.lstat()
+        except OSError as error:
+            raise MigrationPlanError(f"{label} has a missing ancestor") from error
+        if stat.S_ISLNK(info.st_mode) or not stat.S_ISDIR(info.st_mode):
+            raise MigrationPlanError(f"{label} has an unsafe ancestor")
+        ancestors.append((current, _stat_identity(info)))
+    try:
+        before = absolute.lstat()
+    except OSError as error:
+        raise MigrationPlanError(f"{label} must be a real file without links: {path}") from error
+    if stat.S_ISLNK(before.st_mode) or not stat.S_ISREG(before.st_mode):
+        raise MigrationPlanError(f"{label} must be a real file without links: {path}")
+    try:
+        descriptor = os.open(absolute, os.O_RDONLY | getattr(os, "O_CLOEXEC", 0))
+    except OSError as error:
+        raise MigrationPlanError(f"{label} could not be opened safely: {path}") from error
+    try:
+        opened = os.fstat(descriptor)
+        after = absolute.lstat()
+        if (
+            _stat_identity(before) != _stat_identity(opened)
+            or _stat_identity(after) != _stat_identity(opened)
+        ):
+            raise MigrationPlanError(f"{label} changed while it was opened")
+        for ancestor, identity in ancestors:
+            if _stat_identity(ancestor.lstat()) != identity:
+                raise MigrationPlanError(f"{label} ancestor changed while it was opened")
+        return descriptor
+    except BaseException:
+        os.close(descriptor)
+        raise
+
+
+def _stat_identity(info: os.stat_result) -> tuple[int, int, int]:
+    return (info.st_dev, info.st_ino, stat.S_IFMT(info.st_mode))
+
+
+def _require_contained(root: Path, path: Path, label: str) -> None:
+    try:
+        path.relative_to(root)
+    except ValueError as error:
+        raise MigrationPlanError(f"{label} is outside the migration root") from error
 
 
 def _unresolved(sources: tuple[str, ...], destination: str | None, reason: str) -> dict[str, object]:
@@ -995,6 +1336,17 @@ def _path_sort_key(path: str) -> tuple[str, str]:
 
 def _portable_path_identity(path: str) -> tuple[str, ...]:
     return tuple(unicodedata.normalize("NFC", part).casefold() for part in PurePosixPath(path).parts)
+
+
+def _source_path_identity(path: str) -> tuple[str, ...]:
+    return PurePosixPath(path).parts
+
+
+def _operation_sources(operation: MigrationOperation) -> tuple[str, ...]:
+    if operation.action == "merge":
+        return operation.sources
+    assert operation.source is not None
+    return (operation.source,)
 
 
 def _parts(path: str) -> tuple[str, ...]:

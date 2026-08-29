@@ -7,7 +7,7 @@ from pathlib import Path
 from unittest import mock
 
 from . import helpers  # Adds the canonical CLI directory to sys.path.
-from cwcli import app, migration
+from cwcli import app, documents, migration
 
 
 class MigrationApplyTests(unittest.TestCase):
@@ -72,6 +72,112 @@ class MigrationApplyTests(unittest.TestCase):
         self.assertEqual(unknown, (self.root / "notes.bin").read_bytes())
         for relative in ("story", "work", "kb"):
             self.assertFalse((self.root / relative).exists())
+
+    def test_preview_exposes_full_transaction_diff_without_writes(self):
+        plan_path, expected = self.preview()
+        before = {
+            path.relative_to(self.root).as_posix(): path.read_bytes()
+            for path in self.root.rglob("*")
+            if path.is_file()
+        }
+        status, preview, error = self.run_cli(
+            [
+                "migrate", "--preview", str(plan_path),
+                "--expect-plan-hash", expected, "--format", "json",
+            ]
+        )
+        self.assertEqual((0, ""), (status, error))
+        self.assertEqual("preview", preview["status"])
+        self.assertTrue(any(item["path"] == "story/chapters/ch-001.md" for item in preview["changes"]))
+        self.assertTrue(all("diff" in item for item in preview["changes"]))
+        text_status, text_preview, text_error = self.run_cli(
+            [
+                "migrate", "--preview", str(plan_path),
+                "--expect-plan-hash", expected,
+            ]
+        )
+        self.assertEqual((0, ""), (text_status, text_error))
+        self.assertEqual(preview, text_preview)
+        self.assertEqual(
+            before,
+            {
+                path.relative_to(self.root).as_posix(): path.read_bytes()
+                for path in self.root.rglob("*")
+                if path.is_file()
+            },
+        )
+
+    def test_content_merge_applies_atomically_and_undo_restores_every_source(self):
+        first = self.root / "kb/timeline/a.md"
+        second = self.root / "kb/timeline/b.md"
+        first.parent.mkdir(parents=True)
+        first.write_bytes(b"First\r\n")
+        second.write_bytes(b"Second\n")
+        self.legacy.unlink()
+        merged = "---\ntitle: Timeline\n---\n# Reviewed merge\n"
+        payload = {
+            "plan-version": 1,
+            "source-schema": 0,
+            "target-schema": 1,
+            "operations": [
+                {
+                    "sources": ["kb/timeline/a.md", "kb/timeline/b.md"],
+                    "destination": "kb/continuity/timeline.md",
+                    "action": "merge",
+                    "content": merged,
+                }
+            ],
+            "unresolved": [],
+        }
+        payload["plan-hash"] = migration.canonical_plan_hash(payload)
+        plan_path = self.write_plan(payload)
+        status, applied, error = self.run_cli(
+            ["migrate", "--apply", str(plan_path), "--expect-plan-hash", payload["plan-hash"], "--format", "json"]
+        )
+        self.assertEqual((0, ""), (status, error))
+        self.assertEqual(merged.encode(), (self.root / "kb/continuity/timeline.md").read_bytes())
+        self.assertFalse(first.exists())
+        self.assertFalse(second.exists())
+        status, _, _ = self.run_cli(
+            ["undo", applied["transaction_id"], "--apply", "--format", "json"]
+        )
+        self.assertEqual(0, status)
+        self.assertEqual(b"First\r\n", first.read_bytes())
+        self.assertEqual(b"Second\n", second.read_bytes())
+        self.assertFalse((self.root / "kb/continuity/timeline.md").exists())
+
+    def test_plain_manifest_body_is_upgraded_and_exactly_restored_by_undo(self):
+        legacy_manifest = b"Legacy instructions\r\nKeep every word.\r\n"
+        (self.root / "project.md").write_bytes(legacy_manifest)
+        plan_path, expected = self.preview()
+        status, applied, _ = self.run_cli(
+            ["migrate", "--apply", str(plan_path), "--expect-plan-hash", expected, "--format", "json"]
+        )
+        self.assertEqual(0, status)
+        manifest = documents.parse_document((self.root / "project.md").read_bytes())
+        self.assertEqual(1, manifest.metadata["schema-version"])
+        self.assertEqual("Legacy instructions\r\nKeep every word.\r\n", manifest.body)
+        self.run_cli(["undo", applied["transaction_id"], "--apply", "--format", "json"])
+        self.assertEqual(legacy_manifest, (self.root / "project.md").read_bytes())
+
+    def test_malformed_markdown_bytes_survive_and_post_checks_are_reported(self):
+        malformed = b"---\ntitle: [unsupported]\n---\nBody\r\n"
+        self.legacy.write_bytes(malformed)
+        plan_path, expected = self.preview()
+        status, applied, error = self.run_cli(
+            ["migrate", "--apply", str(plan_path), "--expect-plan-hash", expected, "--format", "json"]
+        )
+        self.assertEqual((0, ""), (status, error))
+        self.assertEqual(malformed, (self.root / "story/chapters/ch-001.md").read_bytes())
+        self.assertEqual(["structure", "drafts"], applied["checks"])
+        self.assertTrue(applied["findings"])
+
+    def test_fallback_no_follow_path_supports_plan_and_source_reads(self):
+        plan_path, expected = self.preview()
+        with mock.patch.object(migration, "_secure_dirfd_supported", return_value=False):
+            loaded = migration.load_migration_plan(plan_path, root=self.root)
+            plan = migration.plan_apply_migration(self.root, loaded, expected)
+        self.assertTrue(plan.changes)
 
     def test_tamper_hash_unresolved_and_destination_collision_are_conflicts_without_mutation(self):
         plan_path, shown_hash = self.preview()
