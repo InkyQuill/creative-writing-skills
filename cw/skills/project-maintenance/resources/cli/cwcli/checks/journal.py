@@ -6,11 +6,13 @@ import hashlib
 import json
 import os
 import stat
-from pathlib import Path, PurePosixPath
+import unicodedata
+from pathlib import Path, PurePosixPath, PureWindowsPath
 
 from ..documents import logical_hash
 from ..findings import Finding, Severity
 from ..project import Project
+from ..transactions import TransactionError, TransactionStore
 
 
 INVALID_LAYOUT = "CW-JOURNAL-001"
@@ -23,16 +25,19 @@ INCOMPLETE_TRANSACTION = "CW-JOURNAL-050"
 _TERMINAL_STATES = frozenset({"committed", "rolled-back"})
 _ACTIVE_STATES = frozenset({"prepared", "applying"})
 _DIGITS = frozenset("0123456789abcdef")
+_WINDOWS_RESERVED = frozenset(
+    {"CON", "PRN", "AUX", "NUL"}
+    | {f"COM{number}" for number in range(1, 10)}
+    | {f"LPT{number}" for number in range(1, 10)}
+)
 
 
 def check_journal(project: Project) -> list[Finding]:
     """Validate journal records and snapshots without recovery or cleanup."""
 
-    root = project.root / ".creative-writing" / "transactions"
-    if _path_kind(root) == "missing":
-        return [_finding(INVALID_LAYOUT, "warning", "transaction journal directory is missing", ".creative-writing/transactions", "Restore the protected transaction directory without deleting project content.")]
-    if _path_kind(root) != "directory":
-        return [_finding(INVALID_LAYOUT, "error", "transaction journal must be an ordinary directory without links", ".creative-writing/transactions", "Move the conflicting entry aside without following it, then restore an ordinary directory.")]
+    root, boundary_finding = _journal_root(project)
+    if boundary_finding is not None:
+        return [boundary_finding]
 
     findings: list[Finding] = []
     referenced_blobs: dict[str, set[str | None]] = {}
@@ -43,6 +48,9 @@ def check_journal(project: Project) -> list[Finding]:
             findings.extend(_check_revisions(project, entry))
             continue
         relative = f".creative-writing/transactions/{entry.name}"
+        if not _valid_transaction_id(entry.name):
+            findings.append(_finding(INVALID_LAYOUT, "error", "transaction directory has an unsafe identifier", relative, "Preserve the entry and rename it only from trusted journal evidence."))
+            continue
         if _path_kind(entry) != "directory":
             findings.append(_finding(INVALID_LAYOUT, "error", "transaction entry must be an ordinary directory without links", relative, "Preserve the entry and repair the journal layout; do not follow or delete it automatically."))
             continue
@@ -52,7 +60,7 @@ def check_journal(project: Project) -> list[Finding]:
         except (OSError, UnicodeError, json.JSONDecodeError) as error:
             findings.append(_finding(INVALID_MANIFEST, "error", f"transaction manifest cannot be read safely: {error}", _journal_path(relative, "manifest.json"), "Preserve the journal record and restore its valid manifest from a trusted copy before undo or recovery."))
             continue
-        errors, blobs = _validate_manifest(manifest)
+        errors, blobs = _validate_manifest(project, manifest)
         for identifier, logicals in blobs.items():
             referenced_blobs.setdefault(identifier, set()).update(logicals)
         for message in errors:
@@ -61,14 +69,14 @@ def check_journal(project: Project) -> list[Finding]:
             continue
         state = manifest.get("state")
         if state in _ACTIVE_STATES:
-            findings.append(_finding(INCOMPLETE_TRANSACTION, "warning", f"transaction is incomplete in state {state}", _journal_path(relative, "manifest.json"), f"Run cw recover {entry.name} --apply to restore before-snapshots and mark it rolled-back."))
-        findings.extend(_intent_findings(manifest, _journal_path(relative, "manifest.json")))
+            findings.append(_finding(INCOMPLETE_TRANSACTION, "warning", f"transaction is incomplete in state {state}", _journal_path(relative, "manifest.json"), f"cw recover {entry.name} --apply"))
+        findings.extend(_intent_findings(project, manifest, _journal_path(relative, "manifest.json")))
 
     findings.extend(_check_blobs(project, root / "blobs", referenced_blobs))
     return sorted(findings, key=lambda item: (item.path or "", item.code, item.message))
 
 
-def _validate_manifest(value: object) -> tuple[list[str], dict[str, set[str | None]]]:
+def _validate_manifest(project: Project, value: object) -> tuple[list[str], dict[str, set[str | None]]]:
     if not isinstance(value, dict):
         return ["transaction manifest must be a JSON object"], {}
     errors: list[str] = []
@@ -81,16 +89,28 @@ def _validate_manifest(value: object) -> tuple[list[str], dict[str, set[str | No
     for field in ("command", "completed", "intents", "changes"):
         if not isinstance(value.get(field), list):
             errors.append(f"transaction {field} must be an array")
+    for field in ("command", "completed", "intents"):
+        rendered = value.get(field)
+        if isinstance(rendered, list) and not all(isinstance(item, str) for item in rendered):
+            errors.append(f"transaction {field} must contain only strings")
     if not isinstance(value.get("metadata"), dict):
         errors.append("transaction metadata must be an object")
+    if not isinstance(value.get("timestamp"), str) or not value.get("timestamp"):
+        errors.append("transaction timestamp must be a non-empty string")
     changes = value.get("changes")
+    change_paths: list[str] = []
     if isinstance(changes, list):
         for index, change in enumerate(changes):
-            if not isinstance(change, dict) or not {"path", "before", "after", "diff"}.issubset(change):
+            if not isinstance(change, dict) or set(change) != {"path", "before", "after", "diff"}:
                 errors.append(f"change {index} has an invalid shape")
                 continue
-            if not isinstance(change.get("path"), str) or not change["path"]:
+            path = change.get("path")
+            if not isinstance(path, str) or not _safe_project_path(project, path):
                 errors.append(f"change {index} has an invalid path")
+            else:
+                change_paths.append(path)
+            if not isinstance(change.get("diff"), str):
+                errors.append(f"change {index} diff must be a string")
             for side in ("before", "after"):
                 reference = change.get(side)
                 if not isinstance(reference, dict) or set(reference) != {"blob", "byte_hash", "logical_hash"}:
@@ -106,11 +126,20 @@ def _validate_manifest(value: object) -> tuple[list[str], dict[str, set[str | No
                     errors.append(f"change {index} {side} contains invalid snapshot hashes")
                 else:
                     blobs.setdefault(blob, set()).add(logical)
+    if len(change_paths) != len(set(change_paths)):
+        errors.append("transaction contains duplicate change targets")
     return errors, blobs
 
 
-def _intent_findings(manifest: dict[str, object], path: str) -> list[Finding]:
-    findings: list[Finding] = []
+def _intent_findings(project: Project, manifest: dict[str, object], path: str) -> list[Finding]:
+    return [
+        _finding(INVALID_INTENT, "error", message, path, action)
+        for message, action in _intent_errors(project, manifest)
+    ]
+
+
+def _intent_errors(project: Project, manifest: dict[str, object]) -> list[tuple[str, str]]:
+    errors: list[tuple[str, str]] = []
     intents = manifest.get("intents")
     completed = manifest.get("completed")
     changes = manifest.get("changes")
@@ -124,24 +153,30 @@ def _intent_findings(manifest: dict[str, object], path: str) -> list[Finding]:
     directory_changes = metadata.get("directory-changes") if isinstance(metadata, dict) else None
     if directory_changes is not None:
         if not isinstance(directory_changes, dict) or set(directory_changes) != {"create", "remove"}:
-            findings.append(_finding(INVALID_INTENT, "error", "directory-changes must contain exactly create and remove arrays", path, "Repair directory intent metadata only from the original reviewed transaction plan."))
+            errors.append(("directory-changes must contain exactly create and remove arrays", "Repair directory intent metadata only from the original reviewed transaction plan."))
         else:
+            groups: dict[str, list[str]] = {}
             for action in ("create", "remove"):
                 paths = directory_changes.get(action)
-                if not isinstance(paths, list) or not all(isinstance(item, str) and item for item in paths):
-                    findings.append(_finding(INVALID_INTENT, "error", f"directory-changes.{action} must be a path array", path, "Repair directory intent metadata only from the original reviewed transaction plan."))
+                if not isinstance(paths, list) or not all(isinstance(item, str) and _safe_directory_path(project, item) for item in paths):
+                    errors.append((f"directory-changes.{action} must be a safe normalized path array", "Repair directory intent metadata only from the original reviewed transaction plan."))
                     continue
+                groups[action] = paths
+                if len(paths) != len(set(paths)):
+                    errors.append((f"directory-changes.{action} contains duplicates", "Repair directory intent metadata only from the original reviewed transaction plan."))
                 allowed_directories.update(f"@directory:{action}:{item}" for item in paths)
+            if set(groups.get("create", ())).intersection(groups.get("remove", ())):
+                errors.append(("a directory cannot be both created and removed", "Repair conflicting directory intents only from the original reviewed transaction plan."))
     allowed = allowed_files | allowed_directories
     for field, values in (("intents", intents), ("completed", completed)):
         if not isinstance(values, list):
             continue
         if len(values) != len(set(item for item in values if isinstance(item, str))):
-            findings.append(_finding(INVALID_INTENT, "error", f"{field} contains duplicate entries", path, "Restore the exact progress list from durable transaction evidence."))
+            errors.append((f"{field} contains duplicate entries", "Restore the exact progress list from durable transaction evidence."))
         for value in values:
             if not isinstance(value, str) or value not in allowed:
-                findings.append(_finding(INVALID_INTENT, "error", f"{field} contains an unplanned file or directory intent", path, "Restore the exact progress list from durable transaction evidence."))
-    return findings
+                errors.append((f"{field} contains an unplanned file or directory intent", "Restore the exact progress list from durable transaction evidence."))
+    return errors
 
 
 def _check_blobs(project: Project, directory: Path, referenced: dict[str, set[str | None]]) -> list[Finding]:
@@ -211,6 +246,101 @@ def _check_revisions(project: Project, directory: Path) -> list[Finding]:
     return findings
 
 
+def is_committed_decision(project: Project, transaction_id: str) -> bool:
+    """Return whether an ID names one strict, committed, no-follow transaction."""
+
+    if not _valid_transaction_id(transaction_id):
+        return False
+    _root, boundary_finding = _journal_root(project)
+    if boundary_finding is not None:
+        return False
+    store = TransactionStore(project)
+    try:
+        transaction_dir = store._transaction_dir(transaction_id)
+        if _path_kind(transaction_dir) != "directory":
+            return False
+        manifest = store.manifest(transaction_id)
+    except (OSError, TransactionError, TypeError, UnicodeError, ValueError):
+        return False
+    errors, blobs = _validate_manifest(project, manifest)
+    intent_errors = _intent_errors(project, manifest) if isinstance(manifest, dict) else [("invalid", "invalid")]
+    if errors or intent_errors or manifest.get("state") != "committed":
+        return False
+    try:
+        for identifier, logicals in blobs.items():
+            data = store.read_blob(identifier)
+            if hashlib.sha256(data).hexdigest() != identifier:
+                return False
+            for expected in logicals:
+                if expected is not None and logical_hash(data) != expected:
+                    return False
+    except (OSError, TransactionError, TypeError, UnicodeError, ValueError):
+        return False
+    return True
+
+
+def _journal_root(project: Project) -> tuple[Path, Finding | None]:
+    protected = project.root / ".creative-writing"
+    root = protected / "transactions"
+    protected_kind = _path_kind(protected)
+    if protected_kind == "missing":
+        return root, _finding(INVALID_LAYOUT, "warning", "protected journal directory is missing", ".creative-writing", "Restore the protected directory without deleting project content.")
+    if protected_kind != "directory":
+        return root, _finding(INVALID_LAYOUT, "error", "protected journal ancestor must be an ordinary directory without links", ".creative-writing", "Move the conflicting entry aside without following it, then restore an ordinary directory.")
+    root_kind = _path_kind(root)
+    if root_kind == "missing":
+        return root, _finding(INVALID_LAYOUT, "warning", "transaction journal directory is missing", ".creative-writing/transactions", "Restore the protected transaction directory without deleting project content.")
+    if root_kind != "directory":
+        return root, _finding(INVALID_LAYOUT, "error", "transaction journal must be an ordinary directory without links", ".creative-writing/transactions", "Move the conflicting entry aside without following it, then restore an ordinary directory.")
+    return root, None
+
+
+def _safe_project_path(project: Project, path: str) -> bool:
+    if not _normalized_relative_path(path):
+        return False
+    try:
+        project.resolve(path, for_write=True)
+    except (OSError, ValueError):
+        return False
+    return True
+
+
+def _safe_directory_path(project: Project, path: object) -> bool:
+    if not isinstance(path, str) or not _normalized_relative_path(path):
+        return False
+    if path == ".creative-writing/context":
+        if _path_kind(project.root / ".creative-writing") != "directory":
+            return False
+        return _path_kind(project.root / path) in {"missing", "directory"}
+    return _safe_project_path(project, path)
+
+
+def _normalized_relative_path(path: object) -> bool:
+    if not isinstance(path, str) or not path or "\\" in path or "\x00" in path:
+        return False
+    posix = PurePosixPath(path)
+    windows = PureWindowsPath(path)
+    if posix.is_absolute() or windows.is_absolute() or windows.drive or windows.root:
+        return False
+    return not any(segment in {"", ".", ".."} for segment in path.split("/"))
+
+
+def _valid_transaction_id(transaction_id: object) -> bool:
+    if not isinstance(transaction_id, str) or not transaction_id or "\x00" in transaction_id:
+        return False
+    if transaction_id in {".", "..", "blobs", "revisions"}:
+        return False
+    if (
+        unicodedata.normalize("NFC", transaction_id) != transaction_id
+        or transaction_id.endswith((".", " "))
+        or any(ord(character) < 32 or character in '<>:"/\\|?*' for character in transaction_id)
+        or transaction_id.rstrip(". ").split(".", 1)[0].upper() in _WINDOWS_RESERVED
+    ):
+        return False
+    candidate = Path(transaction_id)
+    return candidate.name == transaction_id
+
+
 def _path_kind(path: Path) -> str:
     try:
         mode = path.lstat().st_mode
@@ -250,4 +380,4 @@ def _finding(code: str, severity: Severity, message: str, path: str, next_action
     return Finding(code=code, severity=severity, message=message, path=path, next_action=next_action)
 
 
-__all__ = ["INCOMPLETE_TRANSACTION", "INVALID_BLOB", "INVALID_INTENT", "INVALID_LAYOUT", "INVALID_MANIFEST", "INVALID_REVISION", "check_journal"]
+__all__ = ["INCOMPLETE_TRANSACTION", "INVALID_BLOB", "INVALID_INTENT", "INVALID_LAYOUT", "INVALID_MANIFEST", "INVALID_REVISION", "check_journal", "is_committed_decision"]

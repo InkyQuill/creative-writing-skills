@@ -3,10 +3,11 @@ import json
 import os
 import tempfile
 import unittest
+from io import StringIO
 from pathlib import Path
 
 from . import helpers  # Adds the canonical CLI directory to sys.path.
-from cwcli import documents, project, scaffold, transactions
+from cwcli import app, documents, project, scaffold, transactions
 from cwcli.checks import journal
 
 
@@ -21,6 +22,82 @@ def make_project(root: Path) -> project.Project:
 
 
 class JournalCheckTests(unittest.TestCase):
+    def test_symlinked_protected_ancestor_is_reported_without_reading_outside(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory) / "project"
+            model = make_project(root)
+            outside = Path(directory) / "outside"
+            outside.mkdir()
+            (outside / "transactions").mkdir()
+            sentinel = outside / "transactions" / "secret"
+            sentinel.mkdir()
+            (sentinel / "manifest.json").write_text("not json", encoding="utf-8")
+            protected = root / ".creative-writing"
+            for child in tuple(protected.iterdir()):
+                if child.is_dir():
+                    child.rmdir()
+            protected.rmdir()
+            os.symlink(outside, protected)
+
+            findings = journal.check_journal(model)
+
+            self.assertEqual([journal.INVALID_LAYOUT], [item.code for item in findings])
+            self.assertNotIn("secret", " ".join(item.path or "" for item in findings))
+
+    def test_recovery_critical_manifest_corruption_is_reported(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory) / "project"
+            model = make_project(root)
+            store = transactions.TransactionStore(model)
+            plan = transactions.TransactionPlan(
+                command=("edit",),
+                changes=(transactions.Change("story/new.md", None, b"new\n"),),
+                metadata={"directory-changes": {"create": ["work/new"], "remove": []}},
+            )
+            store.prepare(plan, transaction_id="tx-corrupt")
+            manifest_path = store.root / "tx-corrupt/manifest.json"
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            manifest["changes"].append(dict(manifest["changes"][0]))
+            manifest["changes"].append(dict(manifest["changes"][0]))
+            manifest["changes"][0]["path"] = "../outside.md"
+            manifest["metadata"]["directory-changes"] = {
+                "create": ["work/new", "work/new"],
+                "remove": ["work/new"],
+            }
+            manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+
+            findings = journal.check_journal(model)
+
+            messages = " ".join(item.message for item in findings)
+            self.assertIn("invalid path", messages)
+            self.assertIn("duplicate change", messages)
+            self.assertIn("duplicates", messages)
+            self.assertIn("both created and removed", messages)
+
+    def test_recover_cli_previews_then_applies_and_refuses_terminal_state(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory) / "project"
+            model = make_project(root)
+            store = transactions.TransactionStore(model)
+            plan = transactions.TransactionPlan(command=("edit",), changes=(), metadata={})
+            store.prepare(plan, transaction_id="tx-recover")
+
+            stdout, stderr = StringIO(), StringIO()
+            preview_status = app.run(["recover", "tx-recover", "--format", "json"], cwd=root, stdout=stdout, stderr=stderr)
+            self.assertEqual(0, preview_status)
+            self.assertEqual("prepared", store.load("tx-recover").state)
+            self.assertEqual("preview", json.loads(stdout.getvalue())["status"])
+
+            stdout, stderr = StringIO(), StringIO()
+            apply_status = app.run(["recover", "tx-recover", "--apply", "--format", "json"], cwd=root, stdout=stdout, stderr=stderr)
+            self.assertEqual(0, apply_status)
+            self.assertEqual("rolled-back", json.loads(stdout.getvalue())["status"])
+
+            stdout, stderr = StringIO(), StringIO()
+            refused = app.run(["recover", "tx-recover", "--apply"], cwd=root, stdout=stdout, stderr=stderr)
+            self.assertEqual(2, refused)
+            self.assertIn("cannot recover", stderr.getvalue())
+
     def test_missing_manifest_and_symlinked_revision_descriptor_do_not_abort_peers(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory) / "project"
@@ -52,7 +129,16 @@ class JournalCheckTests(unittest.TestCase):
 
             incomplete = [item for item in findings if item.code == journal.INCOMPLETE_TRANSACTION]
             self.assertEqual(1, len(incomplete))
-            self.assertEqual("Run cw recover tx-prepared --apply to restore before-snapshots and mark it rolled-back.", incomplete[0].next_action)
+            self.assertEqual("cw recover tx-prepared --apply", incomplete[0].next_action)
+            stdout, stderr = StringIO(), StringIO()
+            command_status = app.run(
+                incomplete[0].next_action.split()[1:],
+                cwd=root,
+                stdout=stdout,
+                stderr=stderr,
+            )
+            self.assertEqual(0, command_status)
+            self.assertEqual("rolled-back", store.load("tx-prepared").state)
 
     def test_missing_corrupt_and_symlink_blobs_are_independent_errors(self):
         with tempfile.TemporaryDirectory() as directory:

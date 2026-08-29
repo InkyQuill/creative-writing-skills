@@ -20,6 +20,7 @@ TARGET_CLASS = "CW-LINK-020"
 ORPHAN_PAGE = "CW-LINK-030"
 INDEX_DRIFT = "CW-LINK-040"
 UNREADABLE_SOURCE = "CW-LINK-090"
+MALFORMED_LINK = "CW-LINK-001"
 
 _LINK_RE = re.compile(r"(?<!!)\[([^\]]*)\]\(([^)]+)\)")
 _EXTERNAL_SCHEMES = frozenset({"http", "https", "mailto"})
@@ -43,40 +44,16 @@ def check_links(project: Project) -> list[Finding]:
             continue
         for line_number, line in enumerate(text.splitlines(), 1):
             for match in _LINK_RE.finditer(line):
-                rendered = _link_destination(match.group(2))
-                if rendered is None:
-                    continue
-                destination, _fragment = rendered
-                parsed = urlsplit(destination)
-                if parsed.scheme.casefold() in _EXTERNAL_SCHEMES or destination.startswith("//"):
-                    continue
-                if parsed.scheme or parsed.netloc:
-                    findings.append(_finding(EXTERNAL_REFERENCE, "info", "link uses an external or unsupported URI scheme and is not followed", relative_source, line_number, "Review this external reference manually if it is required as context."))
-                    continue
-
-                reference = unquote(parsed.path)
-                if not reference:
-                    continue
-                target = Path(os.path.normpath(source.parent / reference))
-                boundary = _boundary_kind(project, target)
-                if boundary is not None:
-                    findings.append(_finding(EXTERNAL_REFERENCE, "info", f"link is outside the nearest project boundary ({boundary}) and is not followed", relative_source, line_number, "Review the external reference manually; keep managed context inside this project."))
-                    continue
-
-                relative_target = target.relative_to(project.root).as_posix()
-                actual_kind = _path_kind(target)
-                if actual_kind == "missing":
-                    findings.append(_finding(MISSING_TARGET, "warning", f"local link target does not exist: {relative_target}", relative_source, line_number, "Create the intended target or correct the explicit Markdown link."))
-                    continue
-                if actual_kind == "symlink":
-                    findings.append(_finding(EXTERNAL_REFERENCE, "info", "local link target is a filesystem link and is not followed", relative_source, line_number, "Review the linked location manually; use a regular in-project target for managed context."))
-                    continue
-                expected = "directory" if reference.endswith("/") else "file"
-                if actual_kind != expected:
-                    findings.append(_finding(TARGET_CLASS, "warning", f"link syntax expects a {expected}, but target is a {actual_kind}", relative_source, line_number, "Correct the link destination or point it at the intended target class."))
-                    continue
-                if actual_kind == "file":
-                    inbound.add(relative_target)
+                findings.extend(
+                    _inspect_link(
+                        project,
+                        source,
+                        relative_source,
+                        line_number,
+                        match.group(2),
+                        inbound,
+                    )
+                )
 
     for relative_id in sorted(authored - inbound):
         findings.append(_finding(ORPHAN_PAGE, "info", "authored managed page has no inbound explicit Markdown link", relative_id, None, "Add an explicit link from a relevant authored page if this artifact should be discoverable."))
@@ -92,6 +69,54 @@ def check_links(project: Project) -> list[Finding]:
     return sorted(findings, key=_finding_key)
 
 
+def _inspect_link(
+    project: Project,
+    source: Path,
+    relative_source: str,
+    line_number: int,
+    raw: str,
+    inbound: set[str],
+) -> list[Finding]:
+    try:
+        rendered = _link_destination(raw)
+        if rendered is None:
+            return []
+        destination, _fragment = rendered
+        if "\x00" in destination:
+            raise ValueError("link destination contains NUL")
+        parsed = urlsplit(destination)
+        decoded_path = _strict_unquote(parsed.path)
+        if "\x00" in decoded_path:
+            raise ValueError("decoded link path contains NUL")
+        if parsed.scheme.casefold() in _EXTERNAL_SCHEMES or destination.startswith("//"):
+            return []
+        if parsed.scheme or parsed.netloc:
+            return [_finding(EXTERNAL_REFERENCE, "info", "link uses an external or unsupported URI scheme and is not followed", relative_source, line_number, "Review this external reference manually if it is required as context.")]
+
+        reference = decoded_path
+        if not reference:
+            return []
+        target = Path(os.path.normpath(source.parent / reference))
+        boundary = _boundary_kind(project, target)
+        if boundary is not None:
+            return [_finding(EXTERNAL_REFERENCE, "info", f"link is outside the nearest project boundary ({boundary}) and is not followed", relative_source, line_number, "Review the external reference manually; keep managed context inside this project.")]
+
+        relative_target = target.relative_to(project.root).as_posix()
+        actual_kind = _path_kind(target)
+        if actual_kind == "missing":
+            return [_finding(MISSING_TARGET, "warning", f"local link target does not exist: {relative_target}", relative_source, line_number, "Create the intended target or correct the explicit Markdown link.")]
+        if actual_kind == "symlink":
+            return [_finding(EXTERNAL_REFERENCE, "info", "local link target is a filesystem link and is not followed", relative_source, line_number, "Review the linked location manually; use a regular in-project target for managed context.")]
+        expected = "directory" if reference.endswith("/") else "file"
+        if actual_kind != expected:
+            return [_finding(TARGET_CLASS, "warning", f"link syntax expects a {expected}, but target is a {actual_kind}", relative_source, line_number, "Correct the link destination or point it at the intended target class.")]
+        if actual_kind == "file":
+            inbound.add(relative_target)
+        return []
+    except (OSError, UnicodeError, ValueError) as error:
+        return [_finding(MALFORMED_LINK, "warning", f"Markdown link path cannot be interpreted safely: {error}", relative_source, line_number, "Correct or percent-encode the explicit link destination without NUL or invalid UTF-8 bytes.")]
+
+
 def _link_destination(raw: str) -> tuple[str, str] | None:
     value = raw.strip()
     if not value:
@@ -102,6 +127,12 @@ def _link_destination(raw: str) -> tuple[str, str] | None:
         value = value.split(None, 1)[0]
     destination, marker, fragment = value.partition("#")
     return destination, fragment if marker else ""
+
+
+def _strict_unquote(value: str) -> str:
+    if re.search(r"%(?![0-9A-Fa-f]{2})", value):
+        raise ValueError("path contains an invalid percent escape")
+    return unquote(value, errors="strict")
 
 
 def _boundary_kind(project: Project, target: Path) -> str | None:
@@ -164,4 +195,4 @@ def _finding_key(item: Finding) -> tuple[str, str, int, str]:
     return (item.path or "", item.code, item.line or 0, item.message)
 
 
-__all__ = ["EXTERNAL_REFERENCE", "INDEX_DRIFT", "MISSING_TARGET", "ORPHAN_PAGE", "TARGET_CLASS", "check_links"]
+__all__ = ["EXTERNAL_REFERENCE", "INDEX_DRIFT", "MALFORMED_LINK", "MISSING_TARGET", "ORPHAN_PAGE", "TARGET_CLASS", "check_links"]

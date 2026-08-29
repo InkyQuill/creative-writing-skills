@@ -4,7 +4,7 @@ import unittest
 from pathlib import Path
 
 from . import helpers  # Adds the canonical CLI directory to sys.path.
-from cwcli import project, scaffold
+from cwcli import project, scaffold, transactions
 from cwcli.checks import kb
 
 
@@ -25,9 +25,12 @@ class KnowledgeCheckTests(unittest.TestCase):
             model = make_project(root)
             (root / "story/chapters/one.md").write_text("---\nnumber: 1\n---\nStory\n", encoding="utf-8")
             (root / "work/brainstorm/idea.md").write_text("---\n---\nIdea\n", encoding="utf-8")
-            tx = root / ".creative-writing/transactions/tx-confirm"
-            tx.mkdir()
-            (tx / "manifest.json").write_text(json.dumps({"state": "committed"}), encoding="utf-8")
+            store = transactions.TransactionStore(model)
+            store.prepare(
+                transactions.TransactionPlan(command=("confirm",), changes=(), metadata={}),
+                transaction_id="tx-confirm",
+            )
+            store.write_state("tx-confirm", "committed")
             pages = {
                 "story.md": ["story/chapters/one.md"],
                 "kb.md": ["kb/world/story.md"],
@@ -75,3 +78,52 @@ class KnowledgeCheckTests(unittest.TestCase):
             invalid = [item for item in kb.check_kb(model) if item.code == kb.INVALID_SOURCE]
 
             self.assertEqual(2, len(invalid))
+
+    def test_invalid_companions_do_not_hide_work_only_and_bad_paths_stay_contained(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory) / "project"
+            model = make_project(root)
+            (root / "work/brainstorm/idea.md").write_text("---\n---\n", encoding="utf-8")
+            (root / "kb/world/ref.md").write_text(
+                "---\nsources:\n  - work/brainstorm/idea.md\n  - missing.md\n  - bad%00.md\n  - '%FF.md'\n---\n",
+                encoding="utf-8",
+            )
+
+            findings = kb.check_kb(model)
+
+            self.assertEqual(1, sum(item.code == kb.WORK_ONLY_SOURCE for item in findings))
+            self.assertEqual(3, sum(item.code == kb.INVALID_SOURCE for item in findings))
+
+    def test_generated_story_index_is_not_durable_provenance(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory) / "project"
+            model = make_project(root)
+            (root / "kb/world/ref.md").write_text(
+                "---\nsources:\n  - story/chapters/_index.md\n---\n",
+                encoding="utf-8",
+            )
+
+            findings = kb.check_kb(model)
+
+            self.assertEqual(1, sum(item.code == kb.INVALID_SOURCE for item in findings))
+
+    def test_decision_sources_require_safe_id_and_strict_committed_manifest(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory) / "project"
+            model = make_project(root)
+            transaction_root = root / ".creative-writing/transactions"
+            for transaction_id in ("blobs", "minimal"):
+                transaction = transaction_root / transaction_id
+                transaction.mkdir(exist_ok=True)
+                (transaction / "manifest.json").write_text(json.dumps({"state": "committed"}), encoding="utf-8")
+            malformed = transaction_root / "malformed"
+            malformed.mkdir()
+            (malformed / "manifest.json").write_text("[]", encoding="utf-8")
+            (root / "kb/world/ref.md").write_text(
+                "---\nsources:\n  - decision:.\n  - decision:blobs\n  - decision:minimal\n  - decision:malformed\n---\n",
+                encoding="utf-8",
+            )
+
+            findings = kb.check_kb(model)
+
+            self.assertEqual(4, sum(item.code == kb.INVALID_SOURCE for item in findings))

@@ -18,6 +18,21 @@ def make_project(root: Path) -> project.Project:
 
 
 class LinkCheckTests(unittest.TestCase):
+    def test_malformed_percent_decoding_and_nul_do_not_abort_peer_links(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory) / "project"
+            model = make_project(root)
+            chapter = root / "story/chapters/one.md"
+            chapter.write_text(
+                "---\nnumber: 1\n---\n[bad](%FF.md) [nul](bad%00.md) [missing](missing.md)\n",
+                encoding="utf-8",
+            )
+
+            findings = links.check_links(model)
+
+            self.assertEqual(2, sum(item.code == links.MALFORMED_LINK for item in findings))
+            self.assertEqual(1, sum(item.code == links.MISSING_TARGET for item in findings))
+
     def test_missing_external_parent_and_nested_links_are_classified_without_following(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory) / "project"

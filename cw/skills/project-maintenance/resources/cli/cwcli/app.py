@@ -161,6 +161,10 @@ def _parser(*, error_stream: TextIO) -> argparse.ArgumentParser:
     undo = commands.add_parser("undo", error_stream=error_stream)
     undo.add_argument("transaction_id")
     _mutation_options(undo)
+
+    recover = commands.add_parser("recover", error_stream=error_stream)
+    recover.add_argument("transaction_id")
+    _mutation_options(recover)
     return parser
 
 
@@ -229,6 +233,9 @@ def run(argv: list[str], *, cwd: Path, stdout: TextIO, stderr: TextIO) -> int:
 
     if args.command == "undo":
         return _run_undo(args, cwd=cwd, stdout=stdout, stderr=stderr)
+
+    if args.command == "recover":
+        return _run_recover(args, cwd=cwd, stdout=stdout, stderr=stderr)
 
     if args.command == "reindex":
         return _run_reindex(args, cwd=cwd, stdout=stdout, stderr=stderr)
@@ -317,6 +324,41 @@ def _run_undo(args: argparse.Namespace, *, cwd: Path, stdout: TextIO, stderr: Te
         return _write_command_error(error, conflict=True, output_format=args.format, stdout=stdout, stderr=stderr)
     except (DocumentError, OSError, ProjectDiscoveryError, TransactionError, UnicodeError, ValueError) as error:
         return _write_command_error(error, conflict=False, output_format=args.format, stdout=stdout, stderr=stderr)
+
+
+def _run_recover(args: argparse.Namespace, *, cwd: Path, stdout: TextIO, stderr: TextIO) -> int:
+    try:
+        engine = TransactionEngine(discover_project(cwd))
+        record = engine.store.load(args.transaction_id)
+        if record.state not in {"prepared", "applying"}:
+            raise TransactionError(
+                f"cannot recover transaction {args.transaction_id} in state {record.state}"
+            )
+        if args.apply:
+            record = engine.recover(args.transaction_id)
+            status = record.state
+        else:
+            status = "preview"
+        _write_command_data(
+            {
+                "action": "restore-before-snapshots",
+                "completed": list(record.completed),
+                "state": record.state,
+                "status": status,
+                "transaction_id": record.id,
+            },
+            output_format=args.format,
+            stdout=stdout,
+        )
+        return 0
+    except (DocumentError, KeyError, OSError, ProjectDiscoveryError, TransactionError, TypeError, UnicodeError, ValueError) as error:
+        return _write_command_error(
+            error,
+            conflict=False,
+            output_format=args.format,
+            stdout=stdout,
+            stderr=stderr,
+        )
 
 
 def _run_init(args: argparse.Namespace, *, cwd: Path, stdout: TextIO, stderr: TextIO) -> int:
