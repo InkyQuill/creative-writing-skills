@@ -67,7 +67,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Build 25 Claude.ai skill packages
+      - name: Build 31 Claude.ai skill packages
         run: python3 scripts/create_skill_zips.py
 
       - name: Create GitHub Release
