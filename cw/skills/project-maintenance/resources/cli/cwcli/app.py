@@ -12,6 +12,7 @@ from . import __version__
 from .checks import CHECKERS, run_checks
 from .checks.structure import check_structure
 from .checks.drafts import check_drafts
+from .context import ContextPlanError, plan_context
 from .documents import DocumentError, logical_hash
 from .drafts import (
     DraftConflict,
@@ -94,6 +95,12 @@ def _parser(*, error_stream: TextIO) -> argparse.ArgumentParser:
         check_command = check_commands.add_parser(name, error_stream=error_stream)
         check_command.add_argument("path", nargs="?", default=".")
         _report_options(check_command)
+
+    context = commands.add_parser("context", error_stream=error_stream)
+    context.add_argument("context_kind", choices=("draft", "chapter", "kb"))
+    context.add_argument("path")
+    context.add_argument("--as", dest="context_role", default="trusted")
+    _format_option(context)
 
     init = commands.add_parser("init", error_stream=error_stream)
     init.add_argument("path", nargs="?", default=".")
@@ -208,6 +215,9 @@ def run(argv: list[str], *, cwd: Path, stdout: TextIO, stderr: TextIO) -> int:
     if args.command == "migrate":
         return _run_migrate(args, cwd=cwd, stdout=stdout, stderr=stderr)
 
+    if args.command == "context":
+        return _run_context(args, cwd=cwd, stdout=stdout, stderr=stderr)
+
     if args.command == "check":
         names = sorted(CHECKERS) if args.check_command == "all" else [args.check_command]
         try:
@@ -254,6 +264,30 @@ def _write_report(report: Report, *, output_format: str, strict: bool, stdout: T
         for error in report.execution_errors:
             stdout.write(f"CW-CHECK-EXEC [error] {error.check}: {error.message}\n")
     return report.exit_status(strict=strict)
+
+
+def _run_context(args: argparse.Namespace, *, cwd: Path, stdout: TextIO, stderr: TextIO) -> int:
+    try:
+        project = discover_project(cwd)
+        planned = plan_context(project, args.context_kind, args.path, args.context_role)
+        _write_command_data(planned.as_dict(), output_format=args.format, stdout=stdout)
+        return 0
+    except (
+        ContextPlanError,
+        DocumentError,
+        OSError,
+        ProjectDiscoveryError,
+        ProjectPathError,
+        UnicodeError,
+        ValueError,
+    ) as error:
+        return _write_command_error(
+            error,
+            conflict=False,
+            output_format=args.format,
+            stdout=stdout,
+            stderr=stderr,
+        )
 
 
 def _from_cwd(cwd: Path, path: str) -> Path:
