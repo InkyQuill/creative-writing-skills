@@ -8,6 +8,11 @@ CW_PROSE_100 = "CW-PROSE-100"  # straight double quote
 CW_PROSE_101 = "CW-PROSE-101"  # hyphen with whitespace on both sides
 CW_PROSE_102 = "CW-PROSE-102"  # literal three-dot ellipsis
 CW_PROSE_103 = "CW-PROSE-103"  # breakable space after single-letter word
+CW_PROSE_110 = "CW-PROSE-110"  # unseparated run of five or more digits
+CW_PROSE_111 = "CW-PROSE-111"  # decimal point between digits
+CW_PROSE_112 = "CW-PROSE-112"  # No. / # where № is expected
+CW_PROSE_113 = "CW-PROSE-113"  # ordinal suffix like 1ый
+CW_PROSE_114 = "CW-PROSE-114"  # closed-up abbreviation т.д.
 
 _EDIT_NEXT_ACTION = (
     "Confirm the project's typography conventions in project.md and apply "
@@ -22,6 +27,12 @@ _BREAKABLE_SINGLE_RE = re.compile(
     r"(?<![А-Яа-яЁёA-Za-z0-9])[вксоуиая] (?=[А-Яа-яЁёA-Za-z0-9«„\u2014])"
 )
 _LATIN_LETTER = re.compile(r"[A-Za-z]")
+
+_DIGIT_RUN_RE = re.compile(r"(?<!\d)\d{5,}(?!\d)")
+_DECIMAL_POINT_RE = re.compile(r"(?<=\d)\.(?=\d)")
+_NUMERO_RE = re.compile(r"\bNo\.\s*\d|#(?=\d)")
+_ORDINAL_RE = re.compile(r"\d(?:ый|ой|ий|ая|ое|ые)\b")
+_ABBREV_RE = re.compile(r"т\.(?:д|п|е|к)\.")
 
 
 @dataclass(frozen=True)
@@ -71,6 +82,38 @@ def scan_lines(lines: Iterable[Tuple[int, str]]) -> tuple[TypographyHit, ...]:
                 "non-breaking space.",
                 _EDIT_NEXT_ACTION,
             ))
+        if _DIGIT_RUN_RE.search(text):
+            hits.append(TypographyHit(
+                line_no, CW_PROSE_110, "info",
+                "Unseparated digit run; group digits with non-breaking "
+                "spaces (1 000 000).",
+                _EDIT_NEXT_ACTION,
+            ))
+        if _DECIMAL_POINT_RE.search(text):
+            hits.append(TypographyHit(
+                line_no, CW_PROSE_111, "info",
+                "Decimal point; Russian convention is a decimal comma (3,14).",
+                _EDIT_NEXT_ACTION,
+            ))
+        for _match in _NUMERO_RE.finditer(text):
+            hits.append(TypographyHit(
+                line_no, CW_PROSE_112, "info",
+                "`No.`/`#`; use `№` with a non-breaking space.",
+                _EDIT_NEXT_ACTION,
+            ))
+        if _ORDINAL_RE.search(text):
+            hits.append(TypographyHit(
+                line_no, CW_PROSE_113, "info",
+                "Ordinal suffix; use the hyphenated form (1-й, 2-я).",
+                _EDIT_NEXT_ACTION,
+            ))
+        for _match in _ABBREV_RE.finditer(text):
+            hits.append(TypographyHit(
+                line_no, CW_PROSE_114, "info",
+                "Closed-up abbreviation; use `т. д.` with a non-breaking "
+                "space.",
+                _EDIT_NEXT_ACTION,
+            ))
     return tuple(hits)
 
 
@@ -79,6 +122,11 @@ __all__ = [
     "CW_PROSE_101",
     "CW_PROSE_102",
     "CW_PROSE_103",
+    "CW_PROSE_110",
+    "CW_PROSE_111",
+    "CW_PROSE_112",
+    "CW_PROSE_113",
+    "CW_PROSE_114",
     "TypographyHit",
     "scan_lines",
 ]

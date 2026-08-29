@@ -50,6 +50,40 @@ class TypographyWarningRuleTests(unittest.TestCase):
         self.assertEqual(scan("«Сроки поедут», — предупредила Петрова."), ())
 
 
+class TypographyInfoRuleTests(unittest.TestCase):
+    def test_long_unseparated_digit_run(self):
+        hits = scan("Он выиграл 1000000 рублей.")
+        self.assertEqual([h.code for h in hits], ["CW-PROSE-110"])
+        self.assertEqual(hits[0].severity, "info")
+
+    def test_four_digit_number_not_flagged(self):
+        # 1937-й is the correct form: four digits stay below CW-PROSE-110's
+        # five-digit threshold and the hyphenated suffix is not closed up,
+        # so no rule may fire.
+        self.assertEqual(scan("Год 1937-й."), ())
+
+    def test_decimal_point(self):
+        hits = scan("Почти 3.14 метра.")
+        self.assertEqual([h.code for h in hits], ["CW-PROSE-111"])
+
+    def test_numero_forms(self):
+        # A standalone "и" would also fire CW-PROSE-103 (Task 4 scope), so
+        # this line isolates CW-PROSE-112 without the conjunction.
+        hits = scan("Договор No. 5, приказ #7.")
+        self.assertEqual([h.code for h in hits], ["CW-PROSE-112", "CW-PROSE-112"])
+
+    def test_ordinal_suffix(self):
+        hits = scan("Это был 1ый раз.")
+        self.assertEqual([h.code for h in hits], ["CW-PROSE-113"])
+
+    def test_closed_up_abbreviation(self):
+        # Same CW-PROSE-103 isolation as test_numero_forms.
+        hits = scan("Формы т.д., т.п. написаны слитно.")
+        self.assertEqual(
+            sorted(h.code for h in hits), ["CW-PROSE-114", "CW-PROSE-114"]
+        )
+
+
 class TypographyProseCheckTests(unittest.TestCase):
     def setUp(self):
         temporary = tempfile.TemporaryDirectory()

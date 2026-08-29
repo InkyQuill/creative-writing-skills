@@ -34,6 +34,14 @@ language, the check explicitly omits those language-sensitive metrics, reports t
 structured `skipped_metrics`, and continues without a failing status or an
 English fallback.
 
+Russian-language projects additionally receive deterministic typography
+findings (`CW-PROSE-100`…`CW-PROSE-103` warnings for straight quotes,
+spaced hyphens, three-dot ellipses, and breakable spaces after
+single-letter words; `CW-PROSE-110`…`CW-PROSE-114` info findings for digit
+grouping, decimal points, `№`, ordinals, and abbreviation spacing). They
+report typographic norms as warnings the project's `project.md`
+conventions may override; they never fail `check all` without `--strict`.
+
 ## Project and draft lifecycle
 
 ```text
