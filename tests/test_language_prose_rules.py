@@ -34,6 +34,12 @@ class LanguageProseRulesTests(unittest.TestCase):
     def test_prose_resource_tree_separates_languages_and_profiles(self):
         expected = {
             "resources/prose/base.md",
+            "resources/prose/editorial/ru/typography.md",
+            "resources/prose/editorial/ru/punctuation.md",
+            "resources/prose/editorial/ru/grammar.md",
+            "resources/prose/editorial/ru/stop-words.md",
+            "resources/prose/editorial/ru/anti-patterns.md",
+            "resources/prose/editorial/ru/neuroslop.md",
             "resources/prose/languages/en.md",
             "resources/prose/languages/ru.md",
             "resources/prose/profiles/light-novel/base.md",

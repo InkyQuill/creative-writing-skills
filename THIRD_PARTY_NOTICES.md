@@ -46,6 +46,39 @@ that incorporates and adapts:
 The resulting integration is modified for this plugin, including its
 dual-layout discovery and immutable prose boundaries.
 
+## Russian editorial layer
+
+The `resources/prose/editorial/ru/` files in `creative-writing-craft`
+and the Russian typography findings and prose-shape additions in the
+bundled `cw` CLI are local InkyQuill-authored derivatives that
+incorporate and adapt
+[`talkstream/ru-text`](https://github.com/talkstream/ru-text) (MIT; see
+`LICENSES/MIT-ru-text.txt`), particularly `skills/ru-text/references/{typography,editorial-punctuation,editorial-grammar,info-style,anti-patterns,addenda}.md`
+and the metric design of `tools/measure-prose-shape.py`. The UX-writing and
+business-writing references, the scoring rubric, and the repository tooling
+were not incorporated. Local modifications: curation for fiction-prose use,
+imperative rewrite, and Python integration.
+
+## Craft and worldbuilding resources
+
+The `humor.md`, `dialogue.md` (with its ported
+`resources/dialogue_audit.py`, a Python re-implementation of the
+deterministic core of the upstream `dialogue` skill's TypeScript
+scripts), `scene-sequencing.md`, `endings.md`, and `character-arc.md`
+resources in `creative-writing-craft`, `key-moments.md` in
+`story-planning`, and the `resources/generators/` pack in `world-creation`
+are local InkyQuill-authored derivatives that incorporate and adapt skills
+from
+[`jwynia/agent-skills`](https://github.com/jwynia/agent-skills) (MIT; see
+`LICENSES/MIT-jwynia-agent-skills.txt`): `joke-engineering`, `dialogue`,
+`scene-sequencing`, `endings`, `character-arc`, `key-moments`, and the
+worldbuilding generators `belief-systems`, `economic-systems`,
+`governance-systems`, `settlement-design`, `metabolic-cultures`,
+`systemic-worldbuilding`, and `oblique-worldbuilding` (skill version 1.0).
+The upstream TypeScript scripts were not incorporated; deterministic logic
+was re-implemented in Python where noted in the spec. Local modifications:
+curation and imperative rewrite for this plugin's conventions.
+
 ## Continuity records, checker, beat sheets, tells, and preflight checks
 
 The `story-memory` continuity-record formats and deterministic checker

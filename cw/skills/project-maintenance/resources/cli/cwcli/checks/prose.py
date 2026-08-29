@@ -12,6 +12,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Pattern
 
+from .prose_typography import scan_lines
 from ..documents import parse_document
 from ..findings import Finding
 from ..markdown_links import closes_markdown_fence, markdown_fence_marker
@@ -29,9 +30,34 @@ WINDOWED_REPETITION = "CW-PROSE-041"
 
 _TAG_RE = re.compile(r"</?(?:AI|hidden)>")
 _INLINE_CODE_RE = re.compile(r"(`+)(.*?)\1")
+_LINK_TARGET_RE = re.compile(r"\]\([^)]*\)")
 _SENTENCE_SPLIT_RE = re.compile(r"(?<=[.!?…])\s+")
 _WORD_JOINERS = frozenset(("'", "’", "-", "‐", "‑"))
 _LANGUAGE_TAG_RE = re.compile(r"^[a-z]{2,8}(?:-[a-z0-9]{1,8})*$", re.ASCII)
+
+# Prose-shape (flattening) counters adapted from the ru-text measure-prose-shape tool.
+# Abbreviation-guard decision: _SENTENCE_SPLIT_RE and _sentences above deliberately keep
+# their legacy whitespace-boundary semantics (no abbreviation guard for «т. д.» or
+# initials). Those semantics are pinned by tests and the preprocessing contract, and the
+# flattening use case compares two runs of the same text, so a constant «т. д.» split bias
+# cancels in the delta — the upstream tool's own argument. The subordination and
+# intensifier lists are closed on purpose: these are counters, not rules, and a counter
+# that guesses is worse than none.
+_RU_SUBORDINATION_RE = re.compile(
+    r"(?<![\w-])(?:что|чтобы|который|которая|которое|которые|которых|которым|"
+    r"которого|которой|если|когда|пока|потому|поскольку|так как|хотя|несмотря|"
+    r"чем|будто|словно|ибо|дабы|кто|где|куда|откуда|зачем|почему|сколько|"
+    r"насколько|пусть|раз)(?![\w-])",
+    re.IGNORECASE,
+)
+_RU_INTENSIFIER_RE = re.compile(
+    r"(?<![А-Яа-яЁё-])(?:честно|реально|правда|прямо|вообще|совсем|очень|крайне|"
+    r"весьма|довольно|просто|буквально|разумеется|конечно|пожалуй|кажется|"
+    r"похоже|скорее|вроде|наверное|видимо|как бы|всё же|всё-таки|как раз|"
+    r"именно)(?![А-Яа-яЁё-])",
+    re.IGNORECASE,
+)
+_SPACED_DASH_COUNT_RE = re.compile(r"(?<=[\s\u00a0])[\u2014\u2013](?=[\s\u00a0])")
 
 UNIVERSAL_METRICS = (
     "word-count",
@@ -130,6 +156,11 @@ class ProseMetrics:
     windowed_repetitions: tuple[tuple[str, int, int, int], ...]
     pronoun_distribution: tuple[tuple[str, int], ...] | None
     skipped_metrics: tuple[str, ...]
+    sentence_length_p90: int = 0
+    sentence_length_step: float = 0.0
+    em_dash_count: int = 0
+    subordination_mean: float | None = None
+    intensifier_count: int | None = None
 
 
 @dataclass(frozen=True)
@@ -171,6 +202,17 @@ def analyze_prose(text: str, *, language: str) -> ProseMetrics:
         if capability is not None
         else None
     )
+    if normalized_language == "ru":
+        subordination_hits = sum(
+            len(_RU_SUBORDINATION_RE.findall(sentence)) for sentence in sentence_list
+        )
+        subordination_mean: float | None = (
+            subordination_hits / len(sentence_list) if sentence_list else 0.0
+        )
+        intensifier_count: int | None = len(_RU_INTENSIFIER_RE.findall(prose_text))
+    else:
+        subordination_mean = None
+        intensifier_count = None
 
     return ProseMetrics(
         word_count=len(word_list),
@@ -207,6 +249,11 @@ def analyze_prose(text: str, *, language: str) -> ProseMetrics:
             else None
         ),
         skipped_metrics=() if capability is not None else LANGUAGE_SENSITIVE_METRICS,
+        sentence_length_p90=_sentence_length_p90(sentence_lengths),
+        sentence_length_step=_sentence_length_step(sentence_lengths),
+        em_dash_count=len(_SPACED_DASH_COUNT_RE.findall(prose_text)),
+        subordination_mean=subordination_mean,
+        intensifier_count=intensifier_count,
     )
 
 
@@ -259,6 +306,18 @@ def check_prose(project: Project) -> list[Finding]:
             continue
 
         document_language = _prose_language(relative_id, source, language)
+        if _normalize_language(document_language) == "ru":
+            for hit in scan_lines(_typography_lines(visible.lines)):
+                findings.append(
+                    Finding(
+                        code=hit.code,
+                        severity=hit.severity,
+                        message=hit.message,
+                        path=relative_id,
+                        line=hit.line,
+                        next_action=hit.next_action,
+                    )
+                )
         metrics = analyze_prose(text, language=document_language)
         if metrics.word_count == 0:
             findings.append(
@@ -305,6 +364,9 @@ def check_prose(project: Project) -> list[Finding]:
                 f"sentence-min={min(metrics.sentence_lengths, default=0)}",
                 f"sentence-max={max(metrics.sentence_lengths, default=0)}",
                 f"sentence-stdev={metrics.sentence_length_stdev:.3f}",
+                f"sentence-p90={metrics.sentence_length_p90}",
+                f"sentence-step={metrics.sentence_length_step:.3f}",
+                f"em-dashes={metrics.em_dash_count}",
                 f"language={metrics.language}",
             ]
         )
@@ -312,6 +374,10 @@ def check_prose(project: Project) -> list[Finding]:
             message_parts.append(f"openers={dict(metrics.opener_categories)}")
         if metrics.pronoun_distribution is not None:
             message_parts.append(f"pronouns={dict(metrics.pronoun_distribution)}")
+        if metrics.subordination_mean is not None:
+            message_parts.append(f"subordination={metrics.subordination_mean:.3f}")
+        if metrics.intensifier_count is not None:
+            message_parts.append(f"intensifiers={metrics.intensifier_count}")
         if metrics.skipped_metrics:
             message_parts.append(f"skipped={','.join(metrics.skipped_metrics)}")
         measured_metrics = list(UNIVERSAL_METRICS)
@@ -330,6 +396,11 @@ def check_prose(project: Project) -> list[Finding]:
                     "language_capability": metrics.language_capability,
                     "measured_metrics": measured_metrics,
                     "skipped_metrics": list(metrics.skipped_metrics),
+                    "sentence_length_p90": metrics.sentence_length_p90,
+                    "sentence_length_step": metrics.sentence_length_step,
+                    "em_dash_count": metrics.em_dash_count,
+                    "subordination_mean": metrics.subordination_mean,
+                    "intensifier_count": metrics.intensifier_count,
                 },
             )
         )
@@ -529,6 +600,15 @@ def _strip_inline_code(line: str) -> str:
     return _INLINE_CODE_RE.sub("", line)
 
 
+def _typography_lines(lines: tuple[tuple[int, str], ...]) -> list[tuple[int, str]]:
+    """Prepare visible lines for the typography scanner: no code, no link targets."""
+
+    return [
+        (line_number, _LINK_TARGET_RE.sub("", _strip_inline_code(line)))
+        for line_number, line in lines
+    ]
+
+
 def _words(text: str) -> list[str]:
     words: list[str] = []
     current: list[str] = []
@@ -561,6 +641,30 @@ def _paragraphs(text: str) -> list[str]:
 
 def _sentences(text: str) -> list[str]:
     return [part.strip() for part in _SENTENCE_SPLIT_RE.split(text) if part.strip()]
+
+
+def _sentence_length_p90(lengths: tuple[int, ...]) -> int:
+    if not lengths:
+        return 0
+    sorted_lengths = sorted(lengths)
+    count = len(sorted_lengths)
+    # Nearest-rank P90: the value at rank ceil(0.90 * n), i.e. the zero-based
+    # index one below it. The integer form of the rank avoids float-edge
+    # drift; truncating instead would pick the maximum whenever n is a
+    # multiple of ten, which is not what "p90" names.
+    rank_index = max(0, min(count - 1, (9 * count + 9) // 10 - 1))
+    return sorted_lengths[rank_index]
+
+
+def _sentence_length_step(lengths: tuple[int, ...]) -> float:
+    # The step is computed on the ORIGINAL order: it is the rhythm of alternation,
+    # and sorting would destroy exactly what it measures.
+    if len(lengths) < 2:
+        return 0.0
+    differences = (
+        abs(lengths[index] - lengths[index + 1]) for index in range(len(lengths) - 1)
+    )
+    return sum(differences) / (len(lengths) - 1)
 
 
 def _first_word(text: str) -> str | None:

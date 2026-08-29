@@ -172,6 +172,13 @@ format in [world-file-format.md](./references/world-file-format.md) for
 worldbuilding files, and preserve compatible author formatting in character or
 other Markdown files unless normalization is explicitly requested.
 
+When proposing new world structure rather than recording settled lore, draw on
+the parameter-level generators under `resources/generators/` — belief,
+economic, governance, settlement, metabolic, systemic, and oblique references
+supplying parameter tables, typologies, and consequence patterns. Generator
+output is subject to the confirmation boundary above: proposals become world
+knowledge only after the author confirms them.
+
 Worldbuilding files should contain durable setting facts, not transcripts, discarded alternatives, or long reasoning. Keep them concise but complete enough that future sessions can reconstruct the canon.
 
 Character files should contain durable character facts and constraints, not scene rewrites. If a decision changes how a character should behave in prose, record the constraint in the character file and flag the affected story material for a future prose-level review.

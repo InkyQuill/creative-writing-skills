@@ -2,6 +2,24 @@
 
 ## [Unreleased]
 
+### Added
+- Added the Russian editorial layer to `creative-writing-craft`: curated
+  typography, punctuation, grammar, stop-word, anti-pattern, and neuroslop
+  references adapted from ru-text, loaded for proofreading and line-editing
+  passes on `ru`-language projects.
+- Added deterministic Russian typography findings (`CW-PROSE-100`–`103`
+  and `CW-PROSE-110`–`114`) to
+  `cw check prose`, gated on the project language and reported as
+  warnings/info that project conventions may override.
+- Added prose-shape flattening metrics (sentence-length p90, adjacent step,
+  em-dash count, Russian subordination and intensifier counts) to
+  `cw check prose` output for before/after edit comparison.
+- Added craft references to `creative-writing-craft`: humor engineering,
+  dialogue (with the deterministic `dialogue_audit.py` script),
+  scene sequencing, endings, and character arcs.
+- Added the key-moments planning reference to `story-planning` and seven
+  worldbuilding generator references to `world-creation`.
+
 ## [0.7.0] - 2026-08-29
 
 ### Added

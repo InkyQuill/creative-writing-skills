@@ -8,7 +8,7 @@ Receive a task goal, author intent, intended reader effect, failure boundary, a 
 
 ## Work
 
-Read the full supplied manuscript or excerpt once for felt experience and again for diagnosis. Use `/story-review` for editorial method, `/writing-principles` for reader cost, and `/creative-writing-craft` for the supplied resolved prose stack. Work large to small unless the caller specifies another level. Judge grammar through the language resource, register through the profile, and taste through evidenced voice. Protect the author's voice. Frame meaning-changing recommendations as queries, and anchor every major note to a passage.
+Read the full supplied manuscript or excerpt once for felt experience and again for diagnosis. Use `/story-review` for editorial method, `/writing-principles` for reader cost, and `/creative-writing-craft` for the supplied resolved prose stack. For humor or dialogue passes, load the matching `/creative-writing-craft` resource (`resources/humor.md`, `resources/dialogue.md` with its deterministic audit). Work large to small unless the caller specifies another level. Judge grammar through the language resource, register through the profile, and taste through evidenced voice. Protect the author's voice. Frame meaning-changing recommendations as queries, and anchor every major note to a passage.
 
 ## Return shape
 
