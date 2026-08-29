@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-08-29
+
 ### Added
 - Added the Russian editorial layer to `creative-writing-craft`: curated
   typography, punctuation, grammar, stop-word, anti-pattern, and neuroslop
