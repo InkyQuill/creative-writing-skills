@@ -18,6 +18,7 @@ from scripts.distribution import split_frontmatter
 from scripts.sync_claude_distribution import (
     UnsupportedTransformError,
     _commit_candidate,
+    _render_zcode_marketplace,
     _transform_resource_markdown,
     main,
     render_agent,
@@ -343,6 +344,29 @@ class ClaudeTransformTests(unittest.TestCase):
 
 
 class ClaudeDistributionRenderTests(unittest.TestCase):
+    def test_zcode_marketplace_uses_caller_supplied_icon(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            repo_root = Path(temporary)
+            manifest_path = (
+                repo_root
+                / "plugins/creative-writing-skills/.codex-plugin/plugin.json"
+            )
+            manifest_path.parent.mkdir(parents=True)
+            manifest_path.write_text(
+                json.dumps(
+                    {
+                        "name": "creative-writing-skills",
+                        "description": "Creative writing skills.",
+                        "version": "0.6.0",
+                    }
+                )
+            )
+            icon = "https://assets.example.test/custom-icon.png"
+
+            marketplace = _render_zcode_marketplace(repo_root, icon)
+
+            self.assertEqual(icon, marketplace["plugins"][0]["icon"])
+
     def test_render_distribution_preserves_project_maintenance_cli_bytes(self):
         with tempfile.TemporaryDirectory() as temporary:
             output_root = Path(temporary) / "cw"
@@ -1129,6 +1153,16 @@ class ClaudeDistributionCliTests(unittest.TestCase):
                 generated["plugins"][0]["version"],
             )
             self.assertEqual("./cw", generated["plugins"][0]["source"])
+            self.assertEqual(
+                json.loads((repo_root / "config/distribution.json").read_text())["zcode"][
+                    "icon"
+                ],
+                generated["plugins"][0]["icon"],
+            )
+            claude_marketplace = json.loads(
+                (repo_root / ".claude-plugin/marketplace.json").read_text()
+            )
+            self.assertNotIn("icon", claude_marketplace["plugins"][0])
             zcode_marketplace.write_text("{}\n")
 
             output = io.StringIO()
@@ -1157,6 +1191,9 @@ class ClaudeDistributionCliTests(unittest.TestCase):
             ),
             "extra ZCode key": lambda config, outside: config["zcode"].update(
                 {"extra": "value"}
+            ),
+            "relative icon": lambda config, outside: config["zcode"].update(
+                {"icon": "./assets/scroll-quill.png"}
             ),
         }
         for label, mutate in cases.items():

@@ -6,7 +6,8 @@
       "name": "creative-writing-skills",
       "description": "Composable skills for planning, drafting, and revising creative writing.",
       "version": "0.6.0",
-      "source": "./cw"
+      "source": "./cw",
+      "icon": "https://raw.githubusercontent.com/InkyQuill/creative-writing-skills/main/plugins/creative-writing-skills/assets/scroll-quill.png"
     }
   ]
 }

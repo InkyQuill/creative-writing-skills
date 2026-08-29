@@ -9,6 +9,7 @@ import stat
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
+from urllib.parse import urlsplit
 
 if __package__:
     from scripts.distribution import (
@@ -76,6 +77,7 @@ _ZCODE_CONFIG_KEYS = {
     "root",
     "manifest",
     "marketplace",
+    "icon",
 }
 _ZCODE_PLUGIN_NAME_RE = re.compile(r"[a-z0-9][a-z0-9._-]{0,127}\Z")
 _KNOWLEDGE_BOOTSTRAP_CANONICAL_VALIDATION = (
@@ -141,6 +143,7 @@ class DistributionContext:
     cw_root: Path
     marketplace_path: Path
     zcode_marketplace_path: Path
+    zcode_icon: str
     skill_names: tuple[str, ...]
     known_skills: frozenset[str]
     claude_disable_model_invocation: frozenset[str]
@@ -316,6 +319,22 @@ def _load_context(repo_root: Path) -> DistributionContext:
         raise ValueError("distribution ZCode fields do not match schema")
     if any(zcode.get(key) != value for key, value in _ZCODE_PATH_CONFIG.items()):
         raise ValueError("distribution ZCode paths are not canonical")
+    zcode_icon = zcode.get("icon")
+    try:
+        parsed_zcode_icon = (
+            urlsplit(zcode_icon) if isinstance(zcode_icon, str) else None
+        )
+    except ValueError:
+        parsed_zcode_icon = None
+    if (
+        parsed_zcode_icon is None
+        or parsed_zcode_icon.scheme != "https"
+        or not parsed_zcode_icon.netloc
+        or not parsed_zcode_icon.path
+        or parsed_zcode_icon.query
+        or parsed_zcode_icon.fragment
+    ):
+        raise ValueError("distribution ZCode icon must be an absolute HTTPS URL")
     if zcode.get("root") != claude.get("root"):
         raise ValueError("distribution ZCode root must match the Claude root")
     disable_model_invocation = claude.get("disable_model_invocation")
@@ -425,6 +444,7 @@ def _load_context(repo_root: Path) -> DistributionContext:
         cw_root=cw_root,
         marketplace_path=marketplace_path,
         zcode_marketplace_path=zcode_marketplace_path,
+        zcode_icon=zcode_icon,
         skill_names=tuple(skill_values),
         known_skills=frozenset(skill_values),
         claude_disable_model_invocation=frozenset(disable_model_invocation),
@@ -820,7 +840,10 @@ def _render_marketplace(repo_root: Path) -> dict[str, object]:
     }
 
 
-def _render_zcode_marketplace(repo_root: Path) -> dict[str, object]:
+def _render_zcode_marketplace(
+    repo_root: Path,
+    icon: str,
+) -> dict[str, object]:
     manifest = load_json(
         repo_root
         / "plugins"
@@ -845,6 +868,7 @@ def _render_zcode_marketplace(repo_root: Path) -> dict[str, object]:
                 "description": manifest["description"],
                 "version": manifest["version"],
                 "source": "./cw",
+                "icon": icon,
             }
         ],
     }
@@ -1061,7 +1085,10 @@ def _sync(apply: bool, repo_root: Path) -> int:
         )
         _render_distribution(candidate_cw, repo_root, context)
         _write_json(candidate_marketplace, _render_marketplace(repo_root))
-        _write_json(candidate_zcode_marketplace, _render_zcode_marketplace(repo_root))
+        _write_json(
+            candidate_zcode_marketplace,
+            _render_zcode_marketplace(repo_root, context.zcode_icon),
+        )
 
         if not apply:
             problems = _distribution_drift(candidate_cw, cw_root, "cw")

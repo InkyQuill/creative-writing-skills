@@ -32,6 +32,7 @@
   "zcode": {
     "root": "cw",
     "manifest": ".zcode-plugin/plugin.json",
-    "marketplace": "marketplace.json"
+    "marketplace": "marketplace.json",
+    "icon": "https://raw.githubusercontent.com/InkyQuill/creative-writing-skills/main/plugins/creative-writing-skills/assets/scroll-quill.png"
   }
 }

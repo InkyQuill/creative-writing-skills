@@ -6,6 +6,10 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 PLUGIN_ROOT = REPO_ROOT / "plugins" / "creative-writing-skills"
+ZCODE_ICON_URL = (
+    "https://raw.githubusercontent.com/InkyQuill/creative-writing-skills/main/"
+    "plugins/creative-writing-skills/assets/scroll-quill.png"
+)
 
 
 class PluginIconTests(unittest.TestCase):
@@ -46,6 +50,19 @@ class PluginIconTests(unittest.TestCase):
             with self.subTest(manifest=relative_path):
                 manifest = json.loads((REPO_ROOT / relative_path).read_text())
                 self.assertNotIn("interface", manifest)
+
+    def test_zcode_marketplace_uses_configured_icon_without_claude_leakage(self):
+        config = json.loads((REPO_ROOT / "config/distribution.json").read_text())
+        zcode_marketplace = json.loads((REPO_ROOT / "marketplace.json").read_text())
+        claude_marketplace = json.loads(
+            (REPO_ROOT / ".claude-plugin/marketplace.json").read_text()
+        )
+
+        self.assertEqual(ZCODE_ICON_URL, config["zcode"]["icon"])
+        self.assertEqual(
+            config["zcode"]["icon"], zcode_marketplace["plugins"][0]["icon"]
+        )
+        self.assertNotIn("icon", claude_marketplace["plugins"][0])
 
 
 if __name__ == "__main__":

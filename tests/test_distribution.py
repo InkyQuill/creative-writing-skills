@@ -862,6 +862,11 @@ class ValidatorTests(unittest.TestCase):
                 "root": "cw",
                 "manifest": ".zcode-plugin/plugin.json",
                 "marketplace": "marketplace.json",
+                "icon": (
+                    "https://raw.githubusercontent.com/InkyQuill/"
+                    "creative-writing-skills/main/plugins/"
+                    "creative-writing-skills/assets/scroll-quill.png"
+                ),
             },
         }
         self._write_json(self.root / "config" / "distribution.json", config)
@@ -960,6 +965,7 @@ class ValidatorTests(unittest.TestCase):
                 "description": self.manifest["description"],
                 "version": self.manifest["version"],
                 "source": "./cw",
+                "icon": config["zcode"]["icon"],
             }],
         }
         self._write_json(self.root / "marketplace.json", zcode_marketplace)
@@ -1185,6 +1191,26 @@ class ValidatorTests(unittest.TestCase):
         self.assertIn(
             "ZCode marketplace plugin source must be ./cw",
             validate(self.root),
+        )
+
+    def test_validator_rejects_zcode_marketplace_icon_drift(self):
+        path = self.root / "marketplace.json"
+        marketplace = json.loads(path.read_text())
+        marketplace["plugins"][0]["icon"] = "https://example.com/wrong.png"
+        self._write_json(path, marketplace)
+        self.assertIn(
+            "ZCode marketplace plugin icon does not match distribution config",
+            validate(self.root),
+        )
+
+    def test_validator_rejects_non_https_zcode_icon_config(self):
+        path = self.root / "config" / "distribution.json"
+        config = json.loads(path.read_text())
+        config["zcode"]["icon"] = "./assets/scroll-quill.png"
+        self._write_json(path, config)
+        self.assertIn(
+            "distribution config ZCode icon must be an absolute HTTPS URL",
+            validate(self.root, canonical_only=True),
         )
 
     def test_validator_rejects_zcode_manifest_version_drift(self):

@@ -7,7 +7,7 @@ import os
 import re
 import stat
 from pathlib import Path, PurePosixPath
-from urllib.parse import unquote
+from urllib.parse import unquote, urlsplit
 
 if __package__:
     from scripts.distribution import (
@@ -779,6 +779,7 @@ def _validate_config(repo_root: Path, problems: list[str]) -> dict[str, object] 
         "root",
         "manifest",
         "marketplace",
+        "icon",
     }
     if not isinstance(zcode, dict) or set(zcode) != expected_zcode_keys:
         problems.append("distribution config ZCode fields do not match schema")
@@ -789,6 +790,22 @@ def _validate_config(repo_root: Path, problems: list[str]) -> dict[str, object] 
         or zcode.get("marketplace") != "marketplace.json"
     ):
         problems.append("distribution config ZCode paths are not canonical")
+    icon = zcode.get("icon")
+    try:
+        parsed_icon = urlsplit(icon) if isinstance(icon, str) else None
+    except ValueError:
+        parsed_icon = None
+    if (
+        parsed_icon is None
+        or parsed_icon.scheme != "https"
+        or not parsed_icon.netloc
+        or not parsed_icon.path
+        or parsed_icon.query
+        or parsed_icon.fragment
+    ):
+        problems.append(
+            "distribution config ZCode icon must be an absolute HTTPS URL"
+        )
     return config
 
 
@@ -1310,10 +1327,12 @@ def _validate_zcode_distribution(
 ) -> None:
     zcode_root_value: object = "cw"
     marketplace_value: object = "marketplace.json"
+    icon_value: object = None
     if config is not None and isinstance(config.get("zcode"), dict):
         zcode_config = config["zcode"]
         zcode_root_value = zcode_config.get("root", zcode_root_value)
         marketplace_value = zcode_config.get("marketplace", marketplace_value)
+        icon_value = zcode_config.get("icon")
 
     marketplace_candidate = repo_root / Path(str(marketplace_value))
     if _reject_control_symlink(
@@ -1353,6 +1372,10 @@ def _validate_zcode_distribution(
                     problems.append(f"ZCode marketplace plugin name must be {PLUGIN_NAME}")
                 if entry.get("source") != "./cw":
                     problems.append("ZCode marketplace plugin source must be ./cw")
+                if entry.get("icon") != icon_value:
+                    problems.append(
+                        "ZCode marketplace plugin icon does not match distribution config"
+                    )
                 if entry.get("description") != canonical_manifest.get("description"):
                     problems.append(
                         "ZCode marketplace plugin description does not match canonical manifest"
