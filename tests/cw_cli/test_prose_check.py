@@ -76,6 +76,41 @@ class ProseMetricTests(unittest.TestCase):
         self.assertEqual(prose.analyze_prose("Тихий вечер.", language="unknown").language, "ru")
         self.assertEqual(prose.analyze_prose("Quiet evening.", language="").language, "en")
 
+    def test_unicode_tokenizer_accepts_letters_and_internal_joiners_only(self):
+        metrics = prose.analyze_prose(
+            "naïve co-operate l’amour Ελληνικά 漢字 × ÷ ҂ ҈ ́",
+            language="unknown",
+        )
+
+        self.assertEqual(metrics.word_count, 5)
+        self.assertEqual(metrics.language, "en")
+
+    def test_sentence_splitting_matches_legacy_whitespace_boundary(self):
+        legacy = load_legacy_analyzer()
+        for text in ('"Go." she said. Then left.', "Hello!Next. Last one."):
+            with self.subTest(text=text):
+                metrics = prose.analyze_prose(text, language="en")
+                cleaned = legacy.strip_markdown(legacy.strip_frontmatter_and_fences(text))
+                expected = legacy.get_sentences(cleaned)
+                self.assertEqual(metrics.sentence_count, len(expected))
+
+    def test_preprocessing_matches_legacy_paragraph_words_and_dialogue(self):
+        text = (
+            "Before `\"inline quote\" code` words.\n"
+            "```python\nignored = 'quoted code'\n```\n"
+            "After words.\n"
+        )
+        metrics = prose.analyze_prose(text, language="en")
+        legacy = load_legacy_analyzer()
+        cleaned = legacy.strip_markdown(legacy.strip_frontmatter_and_fences(text))
+        dense_lines = [line for line in cleaned.splitlines() if line.strip()]
+
+        self.assertEqual(metrics.word_count, len(legacy.words(cleaned)))
+        self.assertEqual(metrics.paragraph_count, len(legacy.paragraphs(cleaned)))
+        self.assertEqual(metrics.paragraph_count, 1)
+        self.assertEqual(metrics.dialogue_ratio, 0.5)
+        self.assertEqual(len(dense_lines), 2)
+
 
 class ProseCheckTests(unittest.TestCase):
     def setUp(self):
@@ -95,16 +130,47 @@ class ProseCheckTests(unittest.TestCase):
     def findings(self):
         return prose.check_prose(project.discover_project(self.root))
 
-    def test_balanced_tags_and_fences_have_no_integrity_warning(self):
+    def test_allowed_balanced_tags_and_fences_have_no_integrity_warning(self):
         self.write(
-            "story/chapters/ch-001.md",
-            "---\nnumber: 1\n---\n<AI>Текст <hidden>граница</hidden></AI>\n\n"
+            "work/plans/outline.md",
+            "---\nstatus: working\n---\n<AI>Текст <hidden>граница</hidden></AI>\n\n"
             "```html\n<AI>literal example\n```\n",
         )
 
         codes = {item.code for item in self.findings()}
         self.assertNotIn(prose.SOURCE_TAG, codes)
+        self.assertNotIn(prose.SOURCE_TAG_POLICY, codes)
         self.assertNotIn(prose.MARKDOWN_FENCE, codes)
+
+    def test_balanced_tags_still_obey_story_draft_and_kb_layer_policy(self):
+        self.write(
+            "story/chapters/ch-001.md",
+            "---\nnumber: 1\n---\n<AI>Accepted</AI> <hidden>Secret</hidden>\n",
+        )
+        self.write("work/drafts/ch-002.md", "---\nstatus: working\n---\n<AI>Draft</AI>\n")
+        self.write("kb/world/rules.md", "<AI>Unconfirmed</AI> <hidden>Allowed</hidden>\n")
+
+        policy = [item for item in self.findings() if item.code == prose.SOURCE_TAG_POLICY]
+        self.assertEqual(
+            [(item.path, item.message) for item in policy],
+            [
+                ("kb/world/rules.md", "<AI> source tags are not allowed in durable KB documents"),
+                ("story/chapters/ch-001.md", "<AI> source tags are not allowed in accepted story documents"),
+                ("story/chapters/ch-001.md", "<hidden> source tags are not allowed in accepted story documents"),
+                ("work/drafts/ch-002.md", "<AI> source tags are not allowed in working draft prose"),
+            ],
+        )
+
+    def test_integrity_scans_non_prose_managed_markdown_but_metrics_do_not(self):
+        self.write("kb/canon/fact.md", "<hidden>Unclosed boundary\n")
+        self.write("work/reviews/review.md", "~~~text\nunclosed fence\n")
+        self.write("story/chapters/ch-001.md", "---\nnumber: 1\n---\nChapter text.\n")
+
+        findings = self.findings()
+        self.assertTrue(any(item.code == prose.SOURCE_TAG and item.path == "kb/canon/fact.md" for item in findings))
+        self.assertTrue(any(item.code == prose.MARKDOWN_FENCE and item.path == "work/reviews/review.md" for item in findings))
+        metric_paths = [item.path for item in findings if item.code == prose.METRICS]
+        self.assertEqual(metric_paths, ["story/chapters/ch-001.md"])
 
     def test_unbalanced_and_crossed_source_tags_report_stable_lines(self):
         self.write(
@@ -160,7 +226,8 @@ class ProseCheckTests(unittest.TestCase):
         self.assertIn("language=ru", metrics.message)
 
     def test_malformed_file_does_not_abort_other_files_and_check_does_not_mutate(self):
-        malformed = self.root / "story/chapters/bad.md"
+        malformed = self.root / "kb/world/bad.md"
+        malformed.parent.mkdir(parents=True)
         malformed.write_bytes(b"---\nnumber: 1\n---\n\xff\n")
         self.write("story/chapters/good.md", "---\nnumber: 2\n---\nReadable chapter.\n")
         before = {
