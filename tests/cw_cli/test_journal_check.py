@@ -98,6 +98,26 @@ class JournalCheckTests(unittest.TestCase):
             self.assertEqual(2, refused)
             self.assertIn("cannot recover", stderr.getvalue())
 
+    def test_recovery_preflight_conflict_is_read_only_and_never_advertises_apply(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory) / "project"
+            model = make_project(root)
+            target = root / "story/existing.md"
+            target.write_bytes(b"before\n")
+            store = transactions.TransactionStore(model)
+            plan = transactions.TransactionPlan(("edit",), (transactions.Change("story/existing.md", b"before\n", b"after\n"),), {})
+            store.prepare(plan, transaction_id="tx-conflict")
+            store.write_state("tx-conflict", "applying", intents=("story/existing.md",))
+            target.write_bytes(b"manual\n")
+            before = target.read_bytes()
+            stdout, stderr = StringIO(), StringIO()
+            status = app.run(["recover", "tx-conflict", "--format", "json"], cwd=root, stdout=stdout, stderr=stderr)
+            self.assertEqual(1, status)
+            self.assertEqual(before, target.read_bytes())
+            findings = journal.check_journal(model)
+            self.assertNotIn(journal.INCOMPLETE_TRANSACTION, {item.code for item in findings})
+            self.assertFalse(any(item.next_action and "--apply" in item.next_action for item in findings))
+
     def test_missing_manifest_and_symlinked_revision_descriptor_do_not_abort_peers(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory) / "project"

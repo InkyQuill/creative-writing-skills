@@ -10,6 +10,7 @@ from urllib.parse import unquote, urlsplit
 
 from ..findings import Finding, Severity
 from ..indexes import plan_reindex
+from ..markdown_links import extract_links
 from ..project import Project
 from ..schema import GENERATED_INDEX_FILES, allowed_document_kind
 
@@ -22,7 +23,6 @@ INDEX_DRIFT = "CW-LINK-040"
 UNREADABLE_SOURCE = "CW-LINK-090"
 MALFORMED_LINK = "CW-LINK-001"
 
-_LINK_RE = re.compile(r"(?<!!)\[([^\]]*)\]\(([^)]+)\)")
 _EXTERNAL_SCHEMES = frozenset({"http", "https", "mailto"})
 
 
@@ -42,18 +42,17 @@ def check_links(project: Project) -> list[Finding]:
         except (OSError, UnicodeError) as error:
             findings.append(_finding(UNREADABLE_SOURCE, "warning", f"cannot inspect explicit links: {error}", relative_source, None, "Preserve the bytes and repair the file path kind or UTF-8 encoding."))
             continue
-        for line_number, line in enumerate(text.splitlines(), 1):
-            for match in _LINK_RE.finditer(line):
-                findings.extend(
-                    _inspect_link(
-                        project,
-                        source,
-                        relative_source,
-                        line_number,
-                        match.group(2),
-                        inbound,
-                    )
+        for link in extract_links(text):
+            findings.extend(
+                _inspect_link(
+                    project,
+                    source,
+                    relative_source,
+                    link.line,
+                    link.destination,
+                    inbound,
                 )
+            )
 
     for relative_id in sorted(authored - inbound):
         findings.append(_finding(ORPHAN_PAGE, "info", "authored managed page has no inbound explicit Markdown link", relative_id, None, "Add an explicit link from a relevant authored page if this artifact should be discoverable."))

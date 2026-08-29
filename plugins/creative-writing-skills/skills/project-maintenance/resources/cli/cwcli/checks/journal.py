@@ -14,7 +14,7 @@ from pathlib import Path, PurePosixPath, PureWindowsPath
 from ..documents import logical_hash
 from ..findings import Finding, Severity
 from ..project import Project
-from ..transactions import TransactionError, TransactionStore
+from ..transactions import TransactionEngine, TransactionError, TransactionStore
 
 
 INVALID_LAYOUT = "CW-JOURNAL-001"
@@ -71,15 +71,28 @@ def check_journal(project: Project) -> list[Finding]:
             continue
         state = manifest.get("state")
         if state in _ACTIVE_STATES:
-            findings.append(
-                _finding(
-                    INCOMPLETE_TRANSACTION,
-                    "warning",
-                    f"transaction is incomplete in state {state}",
-                    _journal_path(relative, "manifest.json"),
-                    _render_argv(("cw", "recover", entry.name, "--apply")),
+            try:
+                TransactionEngine(project).preflight_recovery(entry.name)
+            except (OSError, TransactionError, UnicodeError, ValueError) as error:
+                findings.append(
+                    _finding(
+                        INVALID_INTENT,
+                        "error",
+                        f"transaction cannot be recovered without conflict: {error}",
+                        _journal_path(relative, "manifest.json"),
+                        "Preserve current project bytes and the journal; resolve the conflict manually before recovery.",
+                    )
                 )
-            )
+            else:
+                findings.append(
+                    _finding(
+                        INCOMPLETE_TRANSACTION,
+                        "warning",
+                        f"transaction is incomplete in state {state}",
+                        _journal_path(relative, "manifest.json"),
+                        _render_argv(("cw", "recover", entry.name, "--apply")),
+                    )
+                )
         findings.extend(_intent_findings(project, manifest, _journal_path(relative, "manifest.json")))
 
     findings.extend(_check_blobs(project, root / "blobs", referenced_blobs))

@@ -23,12 +23,13 @@ class MarkdownTable:
 
     headers: tuple[str, ...]
     rows: tuple[TableRow, ...]
+    header_line: int = 0
 
 
 def parse_tables(text: str) -> tuple[MarkdownTable, ...]:
     """Parse only header/delimiter tables, without interpreting column roles."""
 
-    lines = text.splitlines()
+    lines = _visible_table_lines(text)
     tables: list[MarkdownTable] = []
     index = 0
     while index + 1 < len(lines):
@@ -46,7 +47,7 @@ def parse_tables(text: str) -> tuple[MarkdownTable, ...]:
                 break
             rows.append(TableRow(cells=cells, line=cursor + 1))
             cursor += 1
-        tables.append(MarkdownTable(headers=header, rows=tuple(rows)))
+        tables.append(MarkdownTable(headers=header, rows=tuple(rows), header_line=index + 1))
         index = max(cursor, index + 2)
     return tuple(tables)
 
@@ -54,7 +55,7 @@ def parse_tables(text: str) -> tuple[MarkdownTable, ...]:
 def table_header_lines(text: str) -> tuple[int, ...]:
     """Return one-based header lines in the same order as :func:`parse_tables`."""
 
-    lines = text.splitlines()
+    lines = _visible_table_lines(text)
     result: list[int] = []
     index = 0
     while index + 1 < len(lines):
@@ -77,7 +78,7 @@ def table_header_lines(text: str) -> tuple[int, ...]:
 def malformed_table_lines(text: str) -> tuple[int, ...]:
     """Locate credible broken table sequences without treating isolated prose pipes as tables."""
 
-    lines = text.splitlines()
+    lines = _visible_table_lines(text)
     issues: set[int] = set()
     for index in range(len(lines) - 1):
         header = _split_row(lines[index])
@@ -99,6 +100,31 @@ def malformed_table_lines(text: str) -> tuple[int, ...]:
                 break
             cursor += 1
     return tuple(sorted(issues))
+
+
+def malformed_table_headers(text: str) -> tuple[tuple[int, tuple[str, ...]], ...]:
+    """Return credible malformed table headers for semantic fail-closed checks."""
+
+    lines = _visible_table_lines(text)
+    result: list[tuple[int, tuple[str, ...]]] = []
+    for index in range(len(lines) - 1):
+        header = _split_row(lines[index])
+        delimiter = _split_row(lines[index + 1])
+        if header is None or delimiter is None or not _looks_like_delimiter(delimiter):
+            continue
+        if _valid_header(lines, index) is None:
+            result.append((index + 1, header))
+            continue
+        cursor = index + 2
+        while cursor < len(lines):
+            cells = _split_row(lines[cursor])
+            if cells is None:
+                break
+            if len(cells) != len(header):
+                result.append((index + 1, header))
+                break
+            cursor += 1
+    return tuple(result)
 
 
 def _valid_header(lines: list[str], index: int) -> tuple[tuple[str, ...], tuple[str, ...]] | None:
@@ -154,10 +180,39 @@ def _is_escaped(text: str, index: int) -> bool:
     return backslashes % 2 == 1
 
 
+def _visible_table_lines(text: str) -> list[str]:
+    lines = text.splitlines()
+    visible: list[str] = []
+    fence: tuple[str, int] | None = None
+    for line in lines:
+        stripped = line.lstrip(" \t")
+        indent = len(line) - len(stripped)
+        marker: tuple[str, int] | None = None
+        if stripped and stripped[0] in "`~":
+            character = stripped[0]
+            length = len(stripped) - len(stripped.lstrip(character))
+            if length >= 3:
+                marker = (character, length)
+        if fence is not None:
+            visible.append("")
+            if marker is not None and marker[0] == fence[0] and marker[1] >= fence[1]:
+                fence = None
+            continue
+        if marker is not None and indent <= 3:
+            fence = marker
+            visible.append("")
+        elif line.startswith("    ") or line.startswith("\t"):
+            visible.append("")
+        else:
+            visible.append(line)
+    return visible
+
+
 __all__ = [
     "MarkdownTable",
     "TableRow",
     "malformed_table_lines",
+    "malformed_table_headers",
     "parse_tables",
     "table_header_lines",
 ]

@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 import errno
+import ctypes
 import hashlib
 import json
 import os
 import re
 import stat
 import unicodedata
+import uuid
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from pathlib import Path, PurePosixPath, PureWindowsPath
@@ -18,19 +20,19 @@ from . import __version__
 from .checks.continuity import check_continuity
 from .documents import Document, canonical_text, logical_hash, parse_document
 from .findings import Finding
-from .markdown_tables import malformed_table_lines, parse_tables, table_header_lines
+from .markdown_tables import malformed_table_headers, malformed_table_lines, parse_tables, table_header_lines
+from .markdown_links import extract_links
 from .project import Project
 from .schema import allowed_document_kind
 
 
 _KINDS = frozenset({"draft", "chapter", "kb"})
-_LINK_START = re.compile(r"(?<!!)\[[^\]]*\]\(")
 _ACTIVE_PLAN = frozenset({"active", "planned", "ready", "review", "working"})
 _ACTIVE_ISSUE = frozenset({"active", "blocked", "open", "review", "working"})
 _SELECTABLE_KINDS = frozenset(
     {"chapter", "work-artifact", "kb-content", "continuity-record", "continuity-scene", "vocabulary"}
 )
-_DIRECT_KEYS = ("related", "context", "links")
+_DIRECT_KEYS = ("related", "context", "links", "sources", "subject")
 _CONTINUITY = (
     "kb/continuity/state.md",
     "kb/continuity/timeline.md",
@@ -123,9 +125,14 @@ class ContextCleanupResult:
 
     status: str
     directories: tuple[str, ...]
+    findings: tuple[Finding, ...] = ()
 
     def as_dict(self) -> dict[str, object]:
-        return {"status": self.status, "directories": list(self.directories)}
+        return {
+            "status": self.status,
+            "directories": list(self.directories),
+            "findings": [asdict(finding) for finding in self.findings],
+        }
 
 
 def plan_context(project: Project, kind: str, path: str, role: str) -> ContextPlan:
@@ -182,7 +189,10 @@ def plan_context(project: Project, kind: str, path: str, role: str) -> ContextPl
         )
         if resolved is not None:
             anchors.add(resolved)
-    for raw in _markdown_references(subject_document.body):
+    dependency_body = subject_document.body
+    if role != "trusted":
+        dependency_body = _remove_hidden(dependency_body)
+    for raw in _markdown_references(dependency_body):
         resolved = _add_reference(
             project,
             raw,
@@ -218,7 +228,7 @@ def plan_context(project: Project, kind: str, path: str, role: str) -> ContextPl
     documents = _scan_documents(project, warnings)
     for relative, document in documents:
         if relative.startswith("work/plans/") and _explicitly_active(document, _ACTIVE_PLAN):
-            if _document_points_to(project, relative, document, anchors, warnings):
+            if _document_points_to(project, relative, document, anchors, warnings, restricted=role != "trusted"):
                 _add_selected_path(
                     project, relative, suggested, catalog=catalog,
                     unresolved=unresolved, warnings=warnings,
@@ -229,7 +239,7 @@ def plan_context(project: Project, kind: str, path: str, role: str) -> ContextPl
             continue
         if relative.startswith("work/plans/") or relative.startswith("kb/issues/"):
             continue
-        if _document_points_to(project, relative, document, anchors, warnings):
+        if _document_points_to(project, relative, document, anchors, warnings, restricted=role != "trusted"):
             _add_selected_path(
                 project, relative, suggested, catalog=catalog,
                 unresolved=unresolved, warnings=warnings,
@@ -237,7 +247,7 @@ def plan_context(project: Project, kind: str, path: str, role: str) -> ContextPl
 
     for relative, document in documents:
         if relative.startswith("kb/issues/") and _explicitly_active(document, _ACTIVE_ISSUE):
-            if _document_points_to(project, relative, document, anchors, warnings):
+            if _document_points_to(project, relative, document, anchors, warnings, restricted=role != "trusted"):
                 _add_selected_path(
                     project, relative, suggested, catalog=catalog,
                     unresolved=unresolved, warnings=warnings,
@@ -301,7 +311,7 @@ def render_snapshot(project: Project, plan: ContextPlan) -> SnapshotResult:
     for relative in selected:
         if not _safe_regular(project, relative):
             raise ContextSnapshotError(f"snapshot source is missing, linked, nested, or unsafe: {relative}")
-        raw = _read_regular_bytes(project.root / relative)
+        raw = _read_project_relative(project, relative)
         try:
             rendered, warns = _redact_source(raw, character=character)
             source_logical_hash = logical_hash(raw)
@@ -339,32 +349,40 @@ def render_snapshot(project: Project, plan: ContextPlan) -> SnapshotResult:
     }
     destination = cache_root / snapshot_id
     relative_directory = f".creative-writing/context/{snapshot_id}"
+    _cleanup_recognized_partials(cache_root, snapshot_id)
+    temporary = cache_root / f".partial-{snapshot_id}-{uuid.uuid4().hex}"
     try:
-        reservation_identity = _reserve_snapshot_directory(cache_root, destination)
+        reservation_identity = _reserve_snapshot_directory(cache_root, temporary)
     except FileExistsError:
-        return _reuse_snapshot_winner(
-            cache_root,
-            destination,
-            snapshot_id=snapshot_id,
-            relative_directory=relative_directory,
-            role=plan.role,
-            files=files,
-            manifest=manifest,
-            boundary_warning=boundary_warning,
-        )
+        raise ContextSnapshotError("could not reserve a unique owned snapshot partial")
     try:
         for relative, data in files.items():
-            _write_new_file(destination / "files" / PurePosixPath(relative), data, root=destination)
-        _sync_tree(destination)
+            _write_new_file(temporary / "files" / PurePosixPath(relative), data, root=temporary)
+        _sync_tree(temporary)
         _write_new_file(
-            destination / "manifest.json",
+            temporary / "manifest.json",
             _canonical_json(manifest) + b"\n",
-            root=destination,
+            root=temporary,
         )
-        _fsync_directory(destination)
+        _fsync_directory(temporary)
+        _validate_snapshot_files(temporary, manifest)
+        try:
+            _rename_no_replace(temporary, destination)
+        except FileExistsError:
+            _cleanup_owned_reservation(cache_root, temporary, reservation_identity)
+            return _reuse_snapshot_winner(
+                cache_root,
+                destination,
+                snapshot_id=snapshot_id,
+                relative_directory=relative_directory,
+                role=plan.role,
+                files=files,
+                manifest=manifest,
+                boundary_warning=boundary_warning,
+            )
         _fsync_directory(cache_root)
     except BaseException:
-        _cleanup_owned_reservation(cache_root, destination, reservation_identity)
+        _cleanup_owned_reservation(cache_root, temporary, reservation_identity)
         raise
 
     return SnapshotResult(
@@ -413,7 +431,7 @@ def snapshot_status(project: Project) -> list[Finding]:
                 )
                 continue
             try:
-                data = _read_regular_bytes(project.root / source_path)
+                data = _read_project_relative(project, source_path)
                 current_exact = _exact_hash(data)
                 current_logical = logical_hash(data)
             except (OSError, UnicodeError, ValueError) as error:
@@ -427,7 +445,19 @@ def snapshot_status(project: Project) -> list[Finding]:
                         relative,
                     )
                 )
-    return findings
+        try:
+            current_plan = plan_context(
+                project,
+                str(manifest["kind"]),
+                str(manifest["subject"]),
+                str(manifest["role"]),
+            )
+        except (ContextPlanError, ContextSnapshotError, OSError, UnicodeError, ValueError) as error:
+            findings.append(_context_finding("CW-CONTEXT-STALE", f"snapshot plan can no longer be reproduced: {error}", relative))
+        else:
+            if list(current_plan.required) != manifest["required"] or list(current_plan.suggested) != manifest["suggested"] or current_plan.unresolved:
+                findings.append(_context_finding("CW-CONTEXT-STALE", "snapshot context plan changed or is now ambiguous", relative))
+    return sorted(findings, key=lambda item: (item.path or "", item.code, item.message))
 
 
 def clean_context(project: Project, *, apply: bool = False) -> ContextCleanupResult:
@@ -435,23 +465,31 @@ def clean_context(project: Project, *, apply: bool = False) -> ContextCleanupRes
 
     cache_root = _cache_root(project, create=False)
     if cache_root is None:
-        return ContextCleanupResult("applied" if apply else "preview", ())
+        return ContextCleanupResult("applied" if apply else "preview", (), ())
 
+    status_findings = tuple(snapshot_status(project))
+    blocked = any(item.code in {"CW-CONTEXT-CORRUPT", "CW-CONTEXT-UNSAFE"} for item in status_findings)
     validated: list[Path] = []
     for entry in sorted(cache_root.iterdir(), key=lambda item: item.name):
-        if entry.is_symlink() or not entry.is_dir() or _SNAPSHOT_ID.fullmatch(entry.name) is None:
+        info = entry.lstat()
+        if _unsafe_reparse(info) or not stat.S_ISDIR(info.st_mode) or _SNAPSHOT_ID.fullmatch(entry.name) is None:
             raise ContextSnapshotError(f"unsafe or unknown context cache entry: {entry.name}")
-        manifest = _load_snapshot_manifest(cache_root, entry)
-        _validate_snapshot_files(entry, manifest)
-        _validate_cleanup_tree(entry, manifest)
+        try:
+            manifest = _load_snapshot_manifest(cache_root, entry)
+            _validate_snapshot_files(entry, manifest)
+            _validate_cleanup_tree(entry, manifest)
+        except (ContextSnapshotError, OSError, UnicodeError, ValueError):
+            continue
         validated.append(entry)
 
     directories = tuple(f".creative-writing/context/{entry.name}" for entry in validated)
+    if apply and blocked:
+        raise ContextSnapshotError("context cleanup is blocked by corrupt, unsafe, or unknown cache entries")
     if apply:
         for entry in validated:
             _remove_tree_no_follow(cache_root, entry)
         _fsync_directory(cache_root)
-    return ContextCleanupResult("applied" if apply else "preview", directories)
+    return ContextCleanupResult("applied" if apply else "preview", directories, status_findings)
 
 
 def _stable_sources(plan: ContextPlan) -> tuple[str, ...]:
@@ -469,9 +507,15 @@ def _stable_sources(plan: ContextPlan) -> tuple[str, ...]:
 def _redact_source(data: bytes, *, character: str | None) -> tuple[bytes, bool]:
     text = canonical_text(data)
     text = _remove_hidden(text)
-    if malformed_table_lines(text):
-        lines = ", ".join(str(line) for line in malformed_table_lines(text))
-        raise ContextSnapshotError(f"malformed Markdown table at line(s) {lines}")
+    if character is not None:
+        unsafe_lines = [
+            line
+            for line, headers in malformed_table_headers(text)
+            if {"character", "knower"} & {_identity(header) for header in headers}
+        ]
+        if unsafe_lines:
+            lines = ", ".join(str(line) for line in unsafe_lines)
+            raise ContextSnapshotError(f"malformed character-knowledge table at line(s) {lines}")
     if character is not None:
         text = _filter_character_tables(text, character)
     return text.encode("utf-8"), _has_unmarked_prose(text)
@@ -523,7 +567,7 @@ def _filter_character_tables(text: str, character: str) -> str:
     lines = text.splitlines(keepends=True)
     remove: set[int] = set()
     expected = _identity(character.strip())
-    for header_line, table in zip(table_header_lines(text), parse_tables(text)):
+    for table in parse_tables(text):
         normalized_headers = tuple(_identity(header.strip()) for header in table.headers)
         column = next(
             (index for index, header in enumerate(normalized_headers) if header in {"character", "knower"}),
@@ -574,7 +618,7 @@ def _cache_root(project: Project, *, create: bool) -> Path | None:
             _mkdir_exclusive_no_follow(current, component, label)
             entry = target.lstat()
             _fsync_directory(current)
-        if stat.S_ISLNK(entry.st_mode) or not stat.S_ISDIR(entry.st_mode):
+        if _unsafe_reparse(entry) or not stat.S_ISDIR(entry.st_mode):
             raise ContextSnapshotError(f"unsafe {label}: expected an ordinary directory without links")
         descriptor = _open_directory_no_follow(target, label)
         os.close(descriptor)
@@ -602,7 +646,10 @@ def _mkdir_exclusive_no_follow(parent: Path, name: str, label: str) -> None:
 def _reserve_snapshot_directory(cache_root: Path, destination: Path) -> tuple[int, int]:
     """Exclusively reserve a stable ID without replacing any existing inode."""
 
-    if destination.parent != cache_root or _SNAPSHOT_ID.fullmatch(destination.name) is None:
+    valid_name = _SNAPSHOT_ID.fullmatch(destination.name) is not None or bool(
+        re.fullmatch(r"\.partial-[0-9a-f]{64}-[0-9a-f]{32}", destination.name)
+    )
+    if destination.parent != cache_root or not valid_name:
         raise ContextSnapshotError("invalid snapshot reservation target")
     parent_descriptor = _open_directory_no_follow(cache_root, "context cache root")
     try:
@@ -619,7 +666,7 @@ def _reserve_snapshot_directory(cache_root: Path, destination: Path) -> tuple[in
             destination.mkdir(mode=0o700)
             parent_after = cache_root.lstat()
             if (
-                stat.S_ISLNK(parent_after.st_mode)
+                _unsafe_reparse(parent_after)
                 or (parent_after.st_dev, parent_after.st_ino)
                 != (parent_before.st_dev, parent_before.st_ino)
             ):
@@ -672,7 +719,7 @@ def _cleanup_owned_reservation(
     except FileNotFoundError:
         return
     if (
-        stat.S_ISLNK(entry.st_mode)
+        _unsafe_reparse(entry)
         or not stat.S_ISDIR(entry.st_mode)
         or (entry.st_dev, entry.st_ino) != identity
     ):
@@ -685,12 +732,42 @@ def _cleanup_owned_reservation(
         return
 
 
+def _cleanup_recognized_partials(cache_root: Path, snapshot_id: str) -> None:
+    pattern = re.compile(rf"^\.partial-{re.escape(snapshot_id)}-[0-9a-f]{{32}}$")
+    for entry in tuple(cache_root.iterdir()):
+        if not pattern.fullmatch(entry.name):
+            continue
+        try:
+            info = entry.lstat()
+            if stat.S_ISDIR(info.st_mode) and not _unsafe_reparse(info):
+                _remove_tree_no_follow(cache_root, entry)
+        except (ContextSnapshotError, OSError):
+            continue
+
+
+def _rename_no_replace(source: Path, destination: Path) -> None:
+    if os.name == "nt":
+        os.rename(source, destination)
+        return
+    libc = ctypes.CDLL(None, use_errno=True)
+    renameat2 = getattr(libc, "renameat2", None)
+    if renameat2 is None:
+        raise ContextSnapshotError("atomic no-replace snapshot publication is unavailable")
+    result = renameat2(-100, os.fsencode(source), -100, os.fsencode(destination), 1)
+    if result == 0:
+        return
+    error = ctypes.get_errno()
+    if error in {errno.EEXIST, errno.ENOTEMPTY}:
+        raise FileExistsError(destination)
+    raise OSError(error, os.strerror(error), destination)
+
+
 def _load_snapshot_manifest(cache_root: Path, directory: Path) -> dict[str, object]:
     if directory.parent != cache_root or directory.is_symlink() or not directory.is_dir():
         raise ContextSnapshotError("snapshot directory is outside the exact cache root or unsafe")
     if _SNAPSHOT_ID.fullmatch(directory.name) is None:
         raise ContextSnapshotError("snapshot directory has an invalid identifier")
-    data = _read_regular_bytes(directory / "manifest.json")
+    data = _read_relative_from_directory(directory, "manifest.json")
     try:
         payload = json.loads(data.decode("utf-8"))
     except (UnicodeError, json.JSONDecodeError) as error:
@@ -777,8 +854,7 @@ def _validate_snapshot_files(directory: Path, manifest: dict[str, object]) -> No
         assert isinstance(source, dict)
         snapshot_path = source["snapshot_path"]
         assert isinstance(snapshot_path, str)
-        path = directory / PurePosixPath(snapshot_path)
-        data = _read_regular_bytes(path)
+        data = _read_relative_from_directory(directory, snapshot_path)
         if _exact_hash(data) != source["snapshot_exact_hash"]:
             raise ContextSnapshotError(f"derived snapshot file hash mismatch: {snapshot_path}")
 
@@ -794,22 +870,7 @@ def _validate_cleanup_tree(directory: Path, manifest: dict[str, object]) -> None
         while parent.as_posix() != ".":
             expected_directories.add(parent.as_posix())
             parent = parent.parent
-    actual_files: set[str] = set()
-    actual_directories: set[str] = set()
-    for root, directories, files in os.walk(directory, topdown=True, followlinks=False):
-        root_path = Path(root)
-        for name in list(directories):
-            child = root_path / name
-            if child.is_symlink():
-                raise ContextSnapshotError(f"unsafe symlink in snapshot tree: {child.relative_to(directory)}")
-            if not stat.S_ISDIR(child.lstat().st_mode):
-                raise ContextSnapshotError(f"unsafe directory entry in snapshot tree: {child.relative_to(directory)}")
-            actual_directories.add(child.relative_to(directory).as_posix())
-        for name in files:
-            child = root_path / name
-            if child.is_symlink() or not child.is_file():
-                raise ContextSnapshotError(f"unsafe entry in snapshot tree: {child.relative_to(directory)}")
-            actual_files.add(child.relative_to(directory).as_posix())
+    actual_files, actual_directories = _directory_inventory(directory)
     if actual_files != expected_files or actual_directories != expected_directories:
         raise ContextSnapshotError("snapshot tree contains missing or unknown files or directories")
 
@@ -821,17 +882,21 @@ def _remove_tree_no_follow(cache_root: Path, directory: Path) -> None:
         raise ContextSnapshotError("snapshot cleanup target is outside the cache root") from error
     if directory.parent != cache_root or directory.is_symlink() or not directory.is_dir():
         raise ContextSnapshotError("snapshot cleanup target is unsafe")
-    for entry in sorted(directory.iterdir(), key=lambda item: item.name):
-        if entry.is_symlink():
-            raise ContextSnapshotError(f"snapshot cleanup refuses symlink: {entry.name}")
-        if entry.is_dir():
-            _remove_directory_contents_no_follow(cache_root, entry)
-            entry.rmdir()
-        elif entry.is_file():
-            entry.unlink()
+    if not all(function in os.supports_dir_fd for function in (os.open, os.stat, os.unlink, os.rmdir)):
+        _remove_directory_contents_no_follow(cache_root, directory)
+        directory.rmdir()
+        return
+    parent_descriptor = _open_directory_no_follow(cache_root, "context cache root")
+    descriptor = _open_directory_no_follow(directory, "snapshot cleanup target")
+    try:
+        _remove_directory_descriptor(descriptor)
+        if os.rmdir in os.supports_dir_fd:
+            os.rmdir(directory.name, dir_fd=parent_descriptor)
         else:
-            raise ContextSnapshotError(f"snapshot cleanup refuses unknown entry: {entry.name}")
-    directory.rmdir()
+            directory.rmdir()
+    finally:
+        os.close(descriptor)
+        os.close(parent_descriptor)
 
 
 def _remove_directory_contents_no_follow(cache_root: Path, directory: Path) -> None:
@@ -840,15 +905,114 @@ def _remove_directory_contents_no_follow(cache_root: Path, directory: Path) -> N
     except (FileNotFoundError, ValueError) as error:
         raise ContextSnapshotError("snapshot cleanup descendant escaped the cache root") from error
     for entry in sorted(directory.iterdir(), key=lambda item: item.name):
-        if entry.is_symlink():
+        info = entry.lstat()
+        if _unsafe_reparse(info):
             raise ContextSnapshotError(f"snapshot cleanup refuses symlink: {entry.name}")
-        if entry.is_dir():
+        if stat.S_ISDIR(info.st_mode):
             _remove_directory_contents_no_follow(cache_root, entry)
             entry.rmdir()
-        elif entry.is_file():
+        elif stat.S_ISREG(info.st_mode):
             entry.unlink()
         else:
             raise ContextSnapshotError(f"snapshot cleanup refuses unknown entry: {entry.name}")
+
+
+def _directory_inventory(directory: Path) -> tuple[set[str], set[str]]:
+    files: set[str] = set()
+    directories: set[str] = set()
+    if os.open not in os.supports_dir_fd or os.stat not in os.supports_dir_fd:
+        return _directory_inventory_fallback(directory)
+    root = _open_directory_no_follow(directory, "snapshot tree")
+
+    def visit(descriptor: int, prefix: PurePosixPath) -> None:
+        try:
+            names = sorted(os.listdir(descriptor))
+        except (TypeError, NotImplementedError):
+            raise ContextSnapshotError("descriptor-relative snapshot enumeration is unavailable")
+        for name in names:
+            info = os.stat(name, dir_fd=descriptor, follow_symlinks=False)
+            relative = (prefix / name).as_posix()
+            if _unsafe_reparse(info):
+                raise ContextSnapshotError(f"unsafe symlink in snapshot tree: {relative}")
+            if stat.S_ISDIR(info.st_mode):
+                directories.add(relative)
+                child = os.open(
+                    name,
+                    os.O_RDONLY | getattr(os, "O_DIRECTORY", 0) | getattr(os, "O_NOFOLLOW", 0),
+                    dir_fd=descriptor,
+                )
+                try:
+                    visit(child, prefix / name)
+                finally:
+                    os.close(child)
+            elif stat.S_ISREG(info.st_mode):
+                files.add(relative)
+            else:
+                raise ContextSnapshotError(f"unsafe entry in snapshot tree: {relative}")
+
+    try:
+        visit(root, PurePosixPath())
+    finally:
+        os.close(root)
+    return files, directories
+
+
+def _directory_inventory_fallback(directory: Path) -> tuple[set[str], set[str]]:
+    root_info = directory.lstat()
+    if _unsafe_reparse(root_info) or not stat.S_ISDIR(root_info.st_mode):
+        raise ContextSnapshotError("unsafe snapshot tree root")
+    files: set[str] = set()
+    directories: set[str] = set()
+    for root, child_directories, child_files in os.walk(directory, topdown=True, followlinks=False):
+        root_path = Path(root)
+        for name in child_directories:
+            child = root_path / name
+            info = child.lstat()
+            if _unsafe_reparse(info) or not stat.S_ISDIR(info.st_mode):
+                raise ContextSnapshotError(f"unsafe directory entry in snapshot tree: {child.relative_to(directory)}")
+            directories.add(child.relative_to(directory).as_posix())
+        for name in child_files:
+            child = root_path / name
+            info = child.lstat()
+            if _unsafe_reparse(info) or not stat.S_ISREG(info.st_mode):
+                raise ContextSnapshotError(f"unsafe entry in snapshot tree: {child.relative_to(directory)}")
+            files.add(child.relative_to(directory).as_posix())
+    after = directory.lstat()
+    if (after.st_dev, after.st_ino) != (root_info.st_dev, root_info.st_ino) or _unsafe_reparse(after):
+        raise ContextSnapshotError("snapshot tree changed during fallback enumeration")
+    return files, directories
+
+
+def _unsafe_reparse(info: os.stat_result) -> bool:
+    attributes = getattr(info, "st_file_attributes", 0)
+    reparse = getattr(stat, "FILE_ATTRIBUTE_REPARSE_POINT", 0x400)
+    return stat.S_ISLNK(info.st_mode) or bool(attributes & reparse)
+
+
+def _remove_directory_descriptor(descriptor: int) -> None:
+    try:
+        names = sorted(os.listdir(descriptor), reverse=True)
+    except (TypeError, NotImplementedError) as error:
+        raise ContextSnapshotError("descriptor-relative snapshot removal is unavailable") from error
+    for name in names:
+        info = os.stat(name, dir_fd=descriptor, follow_symlinks=False)
+        if _unsafe_reparse(info):
+            raise ContextSnapshotError(f"snapshot cleanup refuses symlink: {name}")
+        if stat.S_ISDIR(info.st_mode):
+            child = os.open(
+                name,
+                os.O_RDONLY | getattr(os, "O_DIRECTORY", 0) | getattr(os, "O_NOFOLLOW", 0),
+                dir_fd=descriptor,
+            )
+            try:
+                _remove_directory_descriptor(child)
+            finally:
+                os.close(child)
+            os.rmdir(name, dir_fd=descriptor)
+        elif stat.S_ISREG(info.st_mode):
+            os.unlink(name, dir_fd=descriptor)
+        else:
+            raise ContextSnapshotError(f"snapshot cleanup refuses unknown entry: {name}")
 
 
 def _write_new_file(path: Path, data: bytes, *, root: Path) -> None:
@@ -856,10 +1020,31 @@ def _write_new_file(path: Path, data: bytes, *, root: Path) -> None:
         path.relative_to(root)
     except ValueError as error:
         raise ContextSnapshotError("derived snapshot path escaped its temporary root") from error
-    path.parent.mkdir(parents=True, exist_ok=True)
     flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0)
-    descriptor = os.open(path, flags, 0o600)
+    parts = path.relative_to(root).parts
+    parent = _open_directory_no_follow(root, "temporary snapshot root")
+    descriptor = -1
     try:
+        if os.open in os.supports_dir_fd and os.mkdir in os.supports_dir_fd:
+            for component in parts[:-1]:
+                try:
+                    info = os.stat(component, dir_fd=parent, follow_symlinks=False)
+                except FileNotFoundError:
+                    os.mkdir(component, mode=0o700, dir_fd=parent)
+                    info = os.stat(component, dir_fd=parent, follow_symlinks=False)
+                if _unsafe_reparse(info) or not stat.S_ISDIR(info.st_mode):
+                    raise ContextSnapshotError("unsafe temporary snapshot directory")
+                child = os.open(
+                    component,
+                    os.O_RDONLY | getattr(os, "O_DIRECTORY", 0) | getattr(os, "O_NOFOLLOW", 0),
+                    dir_fd=parent,
+                )
+                os.close(parent)
+                parent = child
+            descriptor = os.open(parts[-1], flags, 0o600, dir_fd=parent)
+        else:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            descriptor = os.open(path, flags, 0o600)
         with os.fdopen(descriptor, "wb") as stream:
             descriptor = -1
             stream.write(data)
@@ -868,6 +1053,7 @@ def _write_new_file(path: Path, data: bytes, *, root: Path) -> None:
     finally:
         if descriptor >= 0:
             os.close(descriptor)
+        os.close(parent)
 
 
 def _sync_tree(root: Path) -> None:
@@ -902,7 +1088,7 @@ def _open_directory_no_follow(directory: Path, label: str) -> int:
                 entry = current.lstat()
             except OSError as error:
                 raise ContextSnapshotError(f"unsafe or missing {label} component") from error
-            if stat.S_ISLNK(entry.st_mode) or not stat.S_ISDIR(entry.st_mode):
+            if _unsafe_reparse(entry) or not stat.S_ISDIR(entry.st_mode):
                 raise ContextSnapshotError(f"unsafe {label} component without no-follow support")
             identities.append((current, (entry.st_dev, entry.st_ino)))
         descriptor = os.open(absolute, os.O_RDONLY)
@@ -911,7 +1097,7 @@ def _open_directory_no_follow(directory: Path, label: str) -> int:
                 raise ContextSnapshotError(f"unsafe {label}: not an ordinary directory")
             for path, identity in identities:
                 entry = path.lstat()
-                if stat.S_ISLNK(entry.st_mode) or (entry.st_dev, entry.st_ino) != identity:
+                if _unsafe_reparse(entry) or (entry.st_dev, entry.st_ino) != identity:
                     raise ContextSnapshotError(f"unsafe {label}: ancestor changed during validation")
             return descriptor
         except BaseException:
@@ -922,7 +1108,7 @@ def _open_directory_no_follow(directory: Path, label: str) -> int:
     try:
         for component in absolute.relative_to(anchor).parts:
             entry = os.stat(component, dir_fd=descriptor, follow_symlinks=False)
-            if stat.S_ISLNK(entry.st_mode) or not stat.S_ISDIR(entry.st_mode):
+            if _unsafe_reparse(entry) or not stat.S_ISDIR(entry.st_mode):
                 raise ContextSnapshotError(f"unsafe {label} component")
             child = os.open(component, flags, dir_fd=descriptor)
             opened = os.fstat(child)
@@ -939,7 +1125,18 @@ def _open_directory_no_follow(directory: Path, label: str) -> int:
 
 def _fsync_directory(directory: Path) -> None:
     flags = os.O_RDONLY | getattr(os, "O_DIRECTORY", 0) | getattr(os, "O_NOFOLLOW", 0)
-    descriptor = os.open(directory, flags)
+    try:
+        descriptor = os.open(directory, flags)
+    except OSError as error:
+        unsupported = {
+            errno.EACCES,
+            errno.EINVAL,
+            getattr(errno, "ENOTSUP", errno.EINVAL),
+            getattr(errno, "EOPNOTSUPP", errno.EINVAL),
+        }
+        if error.errno in unsupported:
+            return
+        raise
     try:
         os.fsync(descriptor)
     except OSError as error:
@@ -965,6 +1162,91 @@ def _read_regular_bytes(path: Path) -> bytes:
     finally:
         if descriptor >= 0:
             os.close(descriptor)
+
+
+def _read_relative_from_directory(directory: Path, relative: str) -> bytes:
+    parts = PurePosixPath(relative).parts
+    if not parts or ".." in parts or PurePosixPath(relative).is_absolute():
+        raise ContextSnapshotError("unsafe relative snapshot file path")
+    if os.open not in os.supports_dir_fd:
+        root_info = directory.lstat()
+        if _unsafe_reparse(root_info) or not stat.S_ISDIR(root_info.st_mode):
+            raise ContextSnapshotError("unsafe snapshot directory")
+        current = directory
+        for component in parts:
+            current /= component
+            info = current.lstat()
+            if _unsafe_reparse(info):
+                raise ContextSnapshotError(f"unsafe snapshot component: {component}")
+        data = _read_regular_bytes(current)
+        after = directory.lstat()
+        if (after.st_dev, after.st_ino) != (root_info.st_dev, root_info.st_ino) or _unsafe_reparse(after):
+            raise ContextSnapshotError("snapshot directory changed during fallback read")
+        return data
+    parent = _open_directory_no_follow(directory, "snapshot directory")
+    descriptor = -1
+    try:
+        for component in parts[:-1]:
+            child = os.open(
+                component,
+                os.O_RDONLY | getattr(os, "O_DIRECTORY", 0) | getattr(os, "O_NOFOLLOW", 0),
+                dir_fd=parent,
+            )
+            info = os.fstat(child)
+            if not stat.S_ISDIR(info.st_mode):
+                os.close(child)
+                raise ContextSnapshotError(f"snapshot path component is not a directory: {component}")
+            os.close(parent)
+            parent = child
+        descriptor = os.open(
+            parts[-1],
+            os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0),
+            dir_fd=parent,
+        )
+        if not stat.S_ISREG(os.fstat(descriptor).st_mode):
+            raise ContextSnapshotError(f"snapshot path is not a regular file: {relative}")
+        with os.fdopen(descriptor, "rb") as stream:
+            descriptor = -1
+            return stream.read()
+    finally:
+        if descriptor >= 0:
+            os.close(descriptor)
+        os.close(parent)
+
+
+def _read_project_relative(project: Project, relative: str) -> bytes:
+    normalized = _normalize_relative(relative)
+    path = project.root / PurePosixPath(normalized)
+    parent = path.parent
+    parent_descriptor = _open_directory_no_follow(parent, "snapshot source parent")
+    descriptor = -1
+    try:
+        flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)
+        if os.open in os.supports_dir_fd:
+            descriptor = os.open(path.name, flags, dir_fd=parent_descriptor)
+        else:
+            parent_identity = os.fstat(parent_descriptor)
+            before = path.lstat()
+            if _unsafe_reparse(before) or not stat.S_ISREG(before.st_mode):
+                raise ContextSnapshotError(f"unsafe snapshot source: {relative}")
+            descriptor = os.open(path, os.O_RDONLY)
+            after_parent = parent.lstat()
+            after_file = os.fstat(descriptor)
+            if (
+                (after_parent.st_dev, after_parent.st_ino)
+                != (parent_identity.st_dev, parent_identity.st_ino)
+                or (after_file.st_dev, after_file.st_ino) != (before.st_dev, before.st_ino)
+            ):
+                raise ContextSnapshotError(f"snapshot source changed during open: {relative}")
+        if not stat.S_ISREG(os.fstat(descriptor).st_mode):
+            raise ContextSnapshotError(f"not a regular no-follow file: {relative}")
+        with os.fdopen(descriptor, "rb") as stream:
+            descriptor = -1
+            return stream.read()
+    finally:
+        if descriptor >= 0:
+            os.close(descriptor)
+        os.close(parent_descriptor)
 
 
 def _canonical_json(value: object) -> bytes:
@@ -1027,55 +1309,7 @@ def _metadata_references(document: Document) -> tuple[str, ...]:
 
 
 def _markdown_references(text: str) -> tuple[str, ...]:
-    references: list[str] = []
-    cursor = 0
-    while True:
-        match = _LINK_START.search(text, cursor)
-        if match is None:
-            break
-        start = match.end()
-        depth = 1
-        quote: str | None = None
-        angle_destination = False
-        escaped = False
-        title_space = False
-        for index in range(start, len(text)):
-            character = text[index]
-            if escaped:
-                escaped = False
-                continue
-            if character == "\\":
-                escaped = True
-                continue
-            if angle_destination:
-                if character == ">":
-                    angle_destination = False
-                continue
-            if quote is not None:
-                if character == quote:
-                    quote = None
-                continue
-            if index == start and character == "<":
-                angle_destination = True
-                continue
-            if character.isspace():
-                title_space = True
-                continue
-            if title_space and character in {'"', "'"}:
-                quote = character
-                continue
-            if character == "(":
-                depth += 1
-            elif character == ")":
-                depth -= 1
-                if depth == 0:
-                    references.append(text[start:index].strip())
-                    cursor = index + 1
-                    break
-        else:
-            cursor = match.end()
-            continue
-    return tuple(references)
+    return tuple(link.destination for link in extract_links(text))
 
 
 def _add_reference(
@@ -1248,12 +1482,10 @@ def _document_points_to(
     document: Document,
     anchors: set[str],
     warnings: "_OrderedStrings",
+    *,
+    restricted: bool = False,
 ) -> bool:
-    values: list[str] = []
-    subject = document.metadata.get("subject")
-    if isinstance(subject, str) and subject.strip():
-        values.append(subject.strip())
-    values.extend(_metadata_references(document))
+    values = list(_metadata_references(document))
     for raw in values:
         try:
             resolved = _resolve_reference(raw, relative, project_relative=True, markdown=False)
@@ -1262,7 +1494,8 @@ def _document_points_to(
             continue
         if resolved in anchors:
             return True
-    return _markdown_points_to(project, relative, document.body, anchors)
+    body = _remove_hidden(document.body) if restricted else document.body
+    return _markdown_points_to(project, relative, body, anchors)
 
 
 def _markdown_points_to(project: Project, relative: str, body: str, anchors: set[str]) -> bool:
@@ -1303,10 +1536,11 @@ def _safe_regular(project: Project, relative: str) -> bool:
     for index, part in enumerate(PurePosixPath(normalized).parts):
         current /= part
         try:
-            mode = current.lstat().st_mode
+            info = current.lstat()
+            mode = info.st_mode
         except (FileNotFoundError, NotADirectoryError, OSError):
             return False
-        if stat.S_ISLNK(mode):
+        if _unsafe_reparse(info):
             return False
         if index < len(PurePosixPath(normalized).parts) - 1:
             if not stat.S_ISDIR(mode):

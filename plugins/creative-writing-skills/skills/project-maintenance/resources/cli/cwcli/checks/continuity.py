@@ -146,6 +146,7 @@ def check_continuity(project: Project) -> list[Finding]:
                         relative, line, "Move the character to mentions or correct the explicit death/scene chronology."))
 
     timeline_anchors: dict[str, tuple[set[str], set[int]]] = {}
+    anchor_evidence: dict[str, list[tuple[str, int]]] = {}
     if "timeline.md" in loaded:
         text, tables = loaded["timeline.md"]
         recognized: set[int] = set()
@@ -160,7 +161,8 @@ def check_continuity(project: Project) -> list[Finding]:
                 if section != "story":
                     continue
                 chapter = _parse_chapter(values.get("chapter", ""))
-                _add_anchor(timeline_anchors, values.get("anchor", ""), values.get("when", ""), chapter)
+                _add_anchor(timeline_anchors, values.get("anchor", ""), values.get("when", ""), chapter,
+                            evidence=anchor_evidence, path="kb/continuity/timeline.md", line=row.line)
                 if chapter is not None and last_story_chapter is not None and chapter < last_story_chapter:
                     findings.append(_finding(TIMELINE, "warning",
                         f"story event {values.get('event', '')!r} in chapter {chapter} is out of order after chapter {last_story_chapter}",
@@ -176,18 +178,20 @@ def check_continuity(project: Project) -> list[Finding]:
                 for row in table.rows:
                     values = _row(table, row)
                     _add_anchor(timeline_anchors, values.get("anchor", ""), values.get("when", ""),
-                                _parse_chapter(values.get("chapter", "")))
+                                _parse_chapter(values.get("chapter", "")),
+                                evidence=anchor_evidence, path=relative, line=row.line)
 
         for anchor, (whens, chapters) in sorted(timeline_anchors.items()):
+            evidence_path, evidence_line = sorted(anchor_evidence.get(anchor, [("kb/continuity/timeline.md", 0)]))[0]
             if len(whens) > 1:
                 findings.append(_finding(TIMELINE, "warning",
                     f"anchor {anchor!r} mixes When values {sorted(whens)!r}",
-                    "kb/continuity/timeline.md", None,
+                    evidence_path, evidence_line or None,
                     "Choose one explicit When value for this shared anchor."))
             if len(chapters) > 1:
                 findings.append(_finding(TIMELINE, "error",
                     f"anchor {anchor!r} spans chapters {sorted(chapters)!r}",
-                    "kb/continuity/timeline.md", None,
+                    evidence_path, evidence_line or None,
                     "Correct the explicit chapter references for this shared anchor."))
         for relative, (_chapter, _present, _pov, anchor, line) in scenes:
             if anchor and _identity(anchor) not in timeline_anchors:
@@ -336,14 +340,14 @@ def _character_ids(project: Project, findings: list[Finding]) -> set[str]:
 
 
 def _character_timeline_documents(project: Project, findings: list[Finding]):
-    directory = project.root / "kb" / "characters"
-    if _path_kind(directory) != "directory" or _nested_project_boundary(project.root, directory) is not None:
-        return []
     documents = []
-    for path in sorted(directory.iterdir(), key=lambda item: item.name):
-        if path.name == "_index.md" or path.suffix.casefold() != ".md" or _path_kind(path) != "file":
+    canonical = {f"kb/continuity/{name}" for name in RECORD_NAMES}
+    for path in project.iter_managed_markdown():
+        relative = project.relative_id(path)
+        if relative in canonical or relative.startswith("kb/continuity/scenes/"):
             continue
-        relative = f"kb/characters/{path.name}"
+        if not (relative.startswith("kb/") or "continuity" in relative.casefold()):
+            continue
         result = _read_record(path, relative, findings, required=False)
         if result is not None:
             documents.append((relative, result[0], result[1]))
@@ -391,7 +395,7 @@ def _headers(table: MarkdownTable) -> tuple[str, ...]:
 
 
 def _has_columns(headers: tuple[str, ...], required: tuple[str, ...]) -> bool:
-    return all(column in headers for column in required)
+    return len(headers) == len(set(headers)) and all(column in headers for column in required)
 
 
 def _row(table: MarkdownTable, row: TableRow) -> dict[str, str]:
@@ -403,7 +407,7 @@ def _parse_chapter(value: str) -> int | None:
         return None
     match = _CHAPTER_RE.search(value)
     if match:
-        return int(match.group(1))
+        return _safe_int(match.group(1))
     return None
 
 
@@ -412,7 +416,7 @@ def _parse_scene_chapter(value: str) -> int | None:
     if chapter is not None:
         return chapter
     match = re.search(r"\d+", value)
-    return int(match.group()) if match else None
+    return _safe_int(match.group()) if match else None
 
 
 def _death_chapter(state: str, since: str) -> int | None:
@@ -420,7 +424,16 @@ def _death_chapter(state: str, since: str) -> int | None:
     if not match:
         return None
     explicit = match.group(1)
-    return int(explicit) if explicit else _parse_chapter(since)
+    return _safe_int(explicit) if explicit else _parse_chapter(since)
+
+
+def _safe_int(value: str) -> int | None:
+    if len(value) > 1000:
+        return None
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
 
 
 def _identity(value: str) -> str:
@@ -450,7 +463,16 @@ def _safe_character_stem(value: str) -> bool:
     return value.rstrip(". ").split(".", 1)[0].upper() not in _WINDOWS_RESERVED
 
 
-def _add_anchor(anchors: dict[str, tuple[set[str], set[int]]], anchor: str, when: str, chapter: int | None) -> None:
+def _add_anchor(
+    anchors: dict[str, tuple[set[str], set[int]]],
+    anchor: str,
+    when: str,
+    chapter: int | None,
+    *,
+    evidence: dict[str, list[tuple[str, int]]] | None = None,
+    path: str = "kb/continuity/timeline.md",
+    line: int = 0,
+) -> None:
     identity = _identity(anchor)
     if not identity:
         return
@@ -458,6 +480,8 @@ def _add_anchor(anchors: dict[str, tuple[set[str], set[int]]], anchor: str, when
     whens.add(when.strip())
     if chapter is not None:
         chapters.add(chapter)
+    if evidence is not None:
+        evidence.setdefault(identity, []).append((path, line))
 
 
 def _section_before(text: str, line: int) -> str:
@@ -470,7 +494,7 @@ def _section_before(text: str, line: int) -> str:
 
 def _last_int_field(text: str, name: str) -> int | None:
     matches = re.findall(rf"^{re.escape(name)}:\s*(\d+)\s*$", text, re.MULTILINE | re.IGNORECASE)
-    return int(matches[-1]) if matches else None
+    return _safe_int(matches[-1]) if matches else None
 
 
 def _last_word_field(text: str, name: str) -> str | None:

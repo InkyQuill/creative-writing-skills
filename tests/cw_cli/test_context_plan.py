@@ -101,6 +101,20 @@ class ContextPlanTests(unittest.TestCase):
         plan = self.plan("kb", "kb/world/place.md")
         self.assertEqual(1, plan.suggested.count("kb/characters/mara.md"))
 
+    def test_sources_subject_and_hidden_references_follow_role_boundaries(self):
+        self.write("kb/world/place.md", "---\n---\nPlace.\n")
+        self.write("kb/world/secret.md", "---\n---\nSecret.\n")
+        self.write(
+            "kb/characters/mara.md",
+            "---\nsources:\n  - kb/world/place.md\nsubject: kb/world/place.md\n---\n"
+            "<hidden>[Secret](../world/secret.md)</hidden>\n",
+        )
+        trusted = self.plan("kb", "kb/characters/mara.md", "trusted")
+        reader = self.plan("kb", "kb/characters/mara.md", "reader")
+        self.assertIn("kb/world/place.md", reader.required)
+        self.assertIn("kb/world/secret.md", trusted.required)
+        self.assertNotIn("kb/world/secret.md", reader.required + reader.suggested)
+
     def test_unknown_character_and_missing_reference_are_unresolved_not_failure(self):
         self.write(
             "kb/world/place.md",

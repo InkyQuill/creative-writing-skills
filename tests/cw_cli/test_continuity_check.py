@@ -78,6 +78,26 @@ SCENE = """| Scene | POV | Location | Present | Mentions | Anchor | State change
 
 
 class ContinuityParityTests(unittest.TestCase):
+    def test_managed_kb_subtimelines_keep_stable_conflict_evidence(self):
+        self.write_records()
+        world = self.root / "kb/world"
+        world.mkdir()
+        table = "| When | Event | Threads | Anchor | Chapter |\n|---|---|---|---|---|\n"
+        (world / "a.md").write_text(table + "| Day 1 | A | side | side | Ch 1 |\n", encoding="utf-8")
+        (world / "b.md").write_text(table + "| Day 2 | B | side | side | Ch 2 |\n", encoding="utf-8")
+        conflicts = [item for item in self.findings() if item.code == continuity.TIMELINE and "side" in item.message]
+        self.assertTrue(conflicts)
+        self.assertTrue(all(item.path == "kb/world/a.md" and item.line == 3 for item in conflicts))
+
+    def test_duplicate_semantic_headers_and_huge_integers_warn_without_abort(self):
+        huge = "9" * 10000
+        self.write_records(
+            state=f"current-chapter: {huge}\n\n| Character | Character | State | Since |\n|---|---|---|---|\n| mara | mara | dead | Ch 2 |\n"
+        )
+        findings = self.findings()
+        self.assertIn(continuity.MALFORMED, {item.code for item in findings})
+        self.assertIn(continuity.PROMISE, {item.code for item in findings})
+
     def setUp(self):
         temporary = tempfile.TemporaryDirectory()
         self.addCleanup(temporary.cleanup)

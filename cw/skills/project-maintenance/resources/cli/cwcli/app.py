@@ -440,11 +440,7 @@ def _run_undo(args: argparse.Namespace, *, cwd: Path, stdout: TextIO, stderr: Te
 def _run_recover(args: argparse.Namespace, *, cwd: Path, stdout: TextIO, stderr: TextIO) -> int:
     try:
         engine = TransactionEngine(discover_project(cwd))
-        record = engine.store.load(args.transaction_id)
-        if record.state not in {"prepared", "applying"}:
-            raise TransactionError(
-                f"cannot recover transaction {args.transaction_id} in state {record.state}"
-            )
+        record = engine.preflight_recovery(args.transaction_id)
         if args.apply:
             record = engine.recover(args.transaction_id)
             status = record.state
@@ -462,6 +458,8 @@ def _run_recover(args: argparse.Namespace, *, cwd: Path, stdout: TextIO, stderr:
             stdout=stdout,
         )
         return 0
+    except TransactionConflict as error:
+        return _write_command_error(error, conflict=True, output_format=args.format, stdout=stdout, stderr=stderr)
     except (DocumentError, KeyError, OSError, ProjectDiscoveryError, TransactionError, TypeError, UnicodeError, ValueError) as error:
         return _write_command_error(
             error,

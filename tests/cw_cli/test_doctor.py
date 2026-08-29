@@ -78,16 +78,8 @@ class DoctorTests(unittest.TestCase):
         )
         recoverability = payload["groups"][0]
         self.assertIn("CW-JOURNAL-050", {item["code"] for item in recoverability["findings"]})
-        self.assertEqual(
-            [
-                {"argv": ["cw", "recover", "tx-doctor"], "display": "cw recover tx-doctor"},
-                {
-                    "argv": ["cw", "recover", "tx-doctor", "--apply"],
-                    "display": "cw recover tx-doctor --apply",
-                },
-            ],
-            recoverability["commands"],
-        )
+        expected = (doctor._cw_argv("recover", "tx-doctor"), doctor._cw_argv("recover", "tx-doctor") + ("--apply",))
+        self.assertEqual([list(item) for item in expected], [item["argv"] for item in recoverability["commands"]])
 
     def test_mechanical_commands_preview_before_apply_and_semantic_finding_has_none(self):
         injected = {
@@ -121,12 +113,12 @@ class DoctorTests(unittest.TestCase):
             report = doctor.diagnose_project(self.project)
 
         self.assertEqual(
-            (("cw", "recover", "tx-1"), ("cw", "recover", "tx-1", "--apply")),
+            (doctor._cw_argv("recover", "tx-1"), doctor._cw_argv("recover", "tx-1") + ("--apply",)),
             tuple(command.argv for command in report.groups[0].commands),
         )
         self.assertEqual((), report.groups[1].commands)
         self.assertEqual(
-            (("cw", "reindex"), ("cw", "reindex", "--apply")),
+            (doctor._cw_argv("reindex"), doctor._cw_argv("reindex") + ("--apply",)),
             tuple(command.argv for command in report.groups[2].commands),
         )
         semantic = report.groups[1].findings[0]
@@ -145,7 +137,7 @@ class DoctorTests(unittest.TestCase):
         cleanup = report.groups[4]
         self.assertIn("CW-CONTEXT-STALE", {item.code for item in cleanup.findings})
         self.assertEqual(
-            (("cw", "clean-context"), ("cw", "clean-context", "--apply")),
+            (doctor._cw_argv("clean-context"), doctor._cw_argv("clean-context") + ("--apply",)),
             tuple(command.argv for command in cleanup.commands),
         )
         self.assertEqual(before, snapshot_tree(self.root))
@@ -182,16 +174,16 @@ class DoctorTests(unittest.TestCase):
         report = doctor.diagnose_project(self.project)
         commands = report.groups[0].commands
 
-        self.assertEqual(transaction_id, commands[0].argv[2])
+        self.assertEqual(transaction_id, commands[0].argv[3])
         self.assertEqual(shlex.join(commands[0].argv), commands[0].display(windows=False))
         self.assertEqual(
             subprocess.list2cmdline(list(commands[0].argv)),
             commands[0].display(windows=True),
         )
         payload = report.groups[0].as_dict()["commands"]
-        self.assertEqual(transaction_id, payload[0]["argv"][2])
+        self.assertEqual(transaction_id, payload[0]["argv"][3])
         finding = next(item for item in report.groups[0].findings if item.code == "CW-JOURNAL-050")
-        self.assertEqual(shlex.join(("cw", "recover", transaction_id, "--apply")), finding.next_action)
+        self.assertEqual(shlex.join((*doctor._cw_argv("recover", transaction_id), "--apply")), finding.next_action)
 
     def test_subsystem_blockers_suppress_all_mechanical_commands(self):
         injected = {
@@ -252,7 +244,7 @@ class DoctorTests(unittest.TestCase):
         ]
         self.assertEqual(1, len(missing))
         self.assertEqual(
-            (("cw", "reindex"), ("cw", "reindex", "--apply")),
+            (doctor._cw_argv("reindex"), doctor._cw_argv("reindex") + ("--apply",)),
             tuple(command.argv for command in report.groups[2].commands),
         )
 

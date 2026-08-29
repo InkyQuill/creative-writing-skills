@@ -646,14 +646,80 @@ class TransactionEngine:
                 f"transaction {prepared.id} failed: {_error_text(error)}; rolled back"
             ) from error
 
-    def recover(self, transaction_id: str) -> TransactionRecord:
-        """Restore an interrupted transaction from before-blobs; never roll forward."""
+    def preflight_recovery(self, transaction_id: str) -> TransactionRecord:
+        """Validate a complete rollback without mutating targets or journal state."""
 
         record = self.store.load(transaction_id)
         if record.state not in {"prepared", "applying"}:
             raise TransactionError(
                 f"cannot recover transaction {transaction_id} in state {record.state}"
             )
+        changes = self._persisted_changes(transaction_id)
+        by_path = {change.path: change for change in changes}
+        if len(by_path) != len(changes):
+            raise TransactionError(f"transaction {transaction_id} contains duplicate paths")
+        intents = self._manifest_intents(transaction_id, record.completed)
+        directory_tokens = set(self._persisted_directory_tokens(transaction_id))
+        if len(set(intents)) != len(intents) or any(
+            path not in by_path and path not in directory_tokens for path in intents
+        ):
+            raise TransactionError(f"transaction {transaction_id} has invalid intent paths")
+        self._resolve_changes(changes)
+        conflicts: list[str] = []
+        created_directories = {
+            relative
+            for token in intents
+            if token.startswith(_DIRECTORY_TOKEN_PREFIX)
+            for action, relative in (_parse_directory_token(token),)
+            if action == "create"
+        }
+        created_files = {
+            path for path in intents if path in by_path and by_path[path].before is None
+        }
+        for path in intents:
+            if path.startswith(_DIRECTORY_TOKEN_PREFIX):
+                action, relative = _parse_directory_token(path)
+                target = self._directory_target(relative)
+                if _entry_exists(target):
+                    _require_directory(target, "recovery directory intent")
+                    if action == "create":
+                        for root, directories, files in os.walk(target, followlinks=False):
+                            root_path = Path(root)
+                            for name in directories:
+                                child = root_path / name
+                                child_relative = child.relative_to(self.project.root).as_posix()
+                                if child.is_symlink() or child_relative not in created_directories:
+                                    conflicts.append(
+                                        f"{child_relative}: unexpected entry in created directory"
+                                    )
+                            for name in files:
+                                child = root_path / name
+                                child_relative = child.relative_to(self.project.root).as_posix()
+                                if child.is_symlink() or child_relative not in created_files:
+                                    conflicts.append(
+                                        f"{child_relative}: unexpected entry in created directory"
+                                    )
+                elif action == "remove":
+                    _require_directory(target.parent, "recovery directory parent")
+                continue
+            change = by_path[path]
+            target = self.project.resolve(change.path, for_write=True)
+            current = self._current_bytes(change.path, target)
+            if current not in {change.before, change.after}:
+                conflicts.append(
+                    f"{change.path}: current bytes match neither before nor after"
+                )
+            temporary = self._temporary_path(transaction_id, change.path)
+            if _entry_exists(temporary):
+                _require_regular_file(temporary, "staged transaction sibling")
+        if conflicts:
+            raise TransactionConflict("recovery conflicts: " + "; ".join(conflicts))
+        return record
+
+    def recover(self, transaction_id: str) -> TransactionRecord:
+        """Restore an interrupted transaction from before-blobs; never roll forward."""
+
+        record = self.preflight_recovery(transaction_id)
 
         changes = self._persisted_changes(transaction_id)
         by_path = {change.path: change for change in changes}

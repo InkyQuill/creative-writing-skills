@@ -4,9 +4,10 @@ from __future__ import annotations
 
 from dataclasses import asdict, dataclass, replace
 import os
-from pathlib import PurePosixPath
+from pathlib import Path, PurePosixPath
 import shlex
 import subprocess
+import sys
 
 from .checks import CHECKERS, run_checks
 from .context import snapshot_status
@@ -101,6 +102,11 @@ _GROUPS = (
 )
 
 
+def _cw_argv(*args: str) -> tuple[str, ...]:
+    entrypoint = Path(__file__).resolve().parent.parent / "cw.py"
+    return (sys.executable, str(entrypoint), *args)
+
+
 def diagnose_project(project: Project) -> DoctorReport:
     """Inspect a project without changing its files, journal, or caches."""
 
@@ -116,7 +122,7 @@ def diagnose_project(project: Project) -> DoctorReport:
     else:
         execution_errors = tuple(report.execution_errors)
 
-    findings = [_manualize_blocker(finding) for finding in findings]
+    findings = [_direct_action(_manualize_blocker(finding)) for finding in findings]
     buckets: dict[int, list[Finding]] = {priority: [] for priority, _title in _GROUPS}
     for finding in sorted(findings, key=_finding_key):
         buckets[_priority(finding)].append(finding)
@@ -179,7 +185,7 @@ def _commands(
         if finding.code == "CW-JOURNAL-050" and not journal_blocked:
             transaction_id = _transaction_id(finding)
             if transaction_id is not None:
-                preview = ("cw", "recover", transaction_id)
+                preview = _cw_argv("recover", transaction_id)
                 pair = (preview, (*preview, "--apply"))
         elif (
             finding.code == "CW-LINK-040"
@@ -187,12 +193,14 @@ def _commands(
             and finding.next_action is not None
             and "Preview cw reindex" in finding.next_action
         ):
-            pair = (("cw", "reindex"), ("cw", "reindex", "--apply"))
+            preview = _cw_argv("reindex")
+            pair = (preview, (*preview, "--apply"))
         elif (
             finding.code in {"CW-CONTEXT-STALE", "CW-CONTEXT-MISSING"}
             and not context_blocked
         ):
-            pair = (("cw", "clean-context"), ("cw", "clean-context", "--apply"))
+            preview = _cw_argv("clean-context")
+            pair = (preview, (*preview, "--apply"))
         if pair is not None:
             for argv in pair:
                 command = RepairCommand(argv)
@@ -212,6 +220,17 @@ def _transaction_id(finding: Finding) -> str | None:
     ):
         return parts[2]
     return None
+
+
+def _direct_action(finding: Finding) -> Finding:
+    if finding.code == "CW-JOURNAL-050":
+        transaction_id = _transaction_id(finding)
+        if transaction_id is not None:
+            return replace(
+                finding,
+                next_action=_render_argv((*_cw_argv("recover", transaction_id), "--apply")),
+            )
+    return finding
 
 
 def _manualize_blocker(finding: Finding) -> Finding:

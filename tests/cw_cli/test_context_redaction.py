@@ -117,6 +117,14 @@ class ContextSnapshotTests(unittest.TestCase):
         with self.assertRaisesRegex(context.ContextSnapshotError, "trusted"):
             context.render_snapshot(self.project, self.plan("trusted"))
 
+    def test_reader_preserves_repairable_malformed_visible_table(self):
+        self.write(
+            "story/chapters/ch-004.md",
+            "---\nnumber: 4\n---\n| person | fact |\n|---|---|\n| visible | row | extra |\n",
+        )
+        result = context.render_snapshot(self.project, self.plan("reader"))
+        self.assertIn("| visible | row | extra |", result.files["story/chapters/ch-004.md"].decode())
+
     def test_manifest_id_order_and_hashes_are_stable_and_sources_are_immutable(self):
         source_before = {
             path: (self.root / path).read_bytes()
@@ -152,6 +160,36 @@ class ContextSnapshotTests(unittest.TestCase):
         self.assertEqual("", error)
         self.assertNotIn("context", json.loads(output)["checks"])
 
+    def test_status_replans_and_detects_new_portable_collision(self):
+        self.write(
+            "story/chapters/ch-004.md",
+            "---\nnumber: 4\nrelated:\n  - kb/world/place.md\n---\nVisible.\n",
+        )
+        self.write("kb/world/place.md", "---\n---\nPlace.\n")
+        context.render_snapshot(self.project, self.plan())
+        self.write("kb/world/Place.md", "---\n---\nCollision.\n")
+        findings = context.snapshot_status(self.project)
+        self.assertIn("CW-CONTEXT-STALE", {item.code for item in findings})
+
+    def test_retry_reconciles_only_recognized_owned_partial(self):
+        first = context.render_snapshot(self.project, self.plan())
+        stable = self.root / first.directory
+        partial = stable.with_name(f".partial-{first.snapshot_id}-{'a' * 32}")
+        stable.rename(partial)
+        (partial / "manifest.json").unlink()
+        second = context.render_snapshot(self.project, self.plan())
+        self.assertEqual(first.snapshot_id, second.snapshot_id)
+        self.assertTrue((self.root / second.directory / "manifest.json").is_file())
+        self.assertFalse(partial.exists())
+
+    def test_capability_fallback_keeps_snapshot_status_and_cleanup_working(self):
+        with mock.patch.object(context.os, "supports_dir_fd", set()):
+            result = context.render_snapshot(self.project, self.plan())
+            self.assertEqual([], context.snapshot_status(self.project))
+            cleaned = context.clean_context(self.project, apply=True)
+        self.assertEqual("applied", cleaned.status)
+        self.assertFalse((self.root / result.directory).exists())
+
     @unittest.skipUnless(hasattr(os, "symlink"), "symlink support required")
     def test_status_does_not_follow_symlink_snapshot_or_source(self):
         outside = Path(self.temporary.name) / "outside"
@@ -167,13 +205,13 @@ class ContextSnapshotTests(unittest.TestCase):
         self.assertEqual([], list((self.root / ".creative-writing/context").iterdir()))
 
     def test_publication_never_replaces_foreign_empty_destination(self):
-        original = context._reserve_snapshot_directory
+        original = context._rename_no_replace
 
-        def race(cache_root: Path, destination: Path):
+        def race(source: Path, destination: Path):
             destination.mkdir()
-            return original(cache_root, destination)
+            return original(source, destination)
 
-        with mock.patch("cwcli.context._reserve_snapshot_directory", side_effect=race):
+        with mock.patch("cwcli.context._rename_no_replace", side_effect=race):
             with self.assertRaises(context.ContextSnapshotError):
                 context.render_snapshot(self.project, self.plan())
 
@@ -187,13 +225,13 @@ class ContextSnapshotTests(unittest.TestCase):
         destination = self.root / winner.directory
         held = destination.with_name("held-winner")
         destination.rename(held)
-        original = context._reserve_snapshot_directory
+        original = context._rename_no_replace
 
-        def race(cache_root: Path, requested: Path):
+        def race(source: Path, requested: Path):
             held.rename(requested)
-            return original(cache_root, requested)
+            return original(source, requested)
 
-        with mock.patch("cwcli.context._reserve_snapshot_directory", side_effect=race):
+        with mock.patch("cwcli.context._rename_no_replace", side_effect=race):
             reused = context.render_snapshot(self.project, self.plan())
 
         self.assertEqual(winner.snapshot_id, reused.snapshot_id)
@@ -215,12 +253,22 @@ class ContextSnapshotTests(unittest.TestCase):
         self.assertEqual((0, ""), (status, error))
         preview = json.loads(output)
         self.assertEqual("preview", preview["status"])
+        self.assertEqual([], preview["findings"])
         self.assertTrue(snapshot_dir.exists())
+
+    def test_cleanup_preview_includes_current_staleness(self):
+        result = context.render_snapshot(self.project, self.plan())
+        self.write("story/chapters/ch-004.md", "---\nnumber: 4\n---\nChanged.\n")
+        status, output, error = self.run_cli(["clean-context", "--format", "json"])
+        self.assertEqual((0, ""), (status, error))
+        payload = json.loads(output)
+        self.assertIn(result.directory, payload["directories"])
+        self.assertIn("CW-CONTEXT-STALE", {item["code"] for item in payload["findings"]})
 
         status, output, error = self.run_cli(["clean-context", "--apply", "--format", "json"])
         self.assertEqual((0, ""), (status, error))
         self.assertEqual("applied", json.loads(output)["status"])
-        self.assertFalse(snapshot_dir.exists())
+        self.assertFalse((self.root / result.directory).exists())
 
     @unittest.skipUnless(hasattr(os, "symlink"), "symlink support required")
     def test_cleanup_refuses_symlink_and_unknown_entries_without_removing_anything(self):

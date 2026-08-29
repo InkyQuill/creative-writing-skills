@@ -19,6 +19,24 @@ def make_project(root: Path) -> project.Project:
 
 
 class KnowledgeCheckTests(unittest.TestCase):
+    def test_vocabulary_collisions_and_live_links_to_archived_records(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory) / "project"
+            model = make_project(root)
+            (root / "kb/vocab.md").write_text(
+                "---\n---\n| term | meaning |\n|---|---|\n| Élan | one |\n| élan | two |\n",
+                encoding="utf-8",
+            )
+            (root / "kb/world/old.md").write_text("---\nstatus: archived\n---\nOld.\n", encoding="utf-8")
+            (root / "kb/world/live.md").write_text(
+                "---\nsources:\n  - https://example.com\n---\n[Old](old.md)\n`[ignored](old.md)`\n",
+                encoding="utf-8",
+            )
+            findings = kb.check_kb(model)
+            self.assertIn(kb.VOCABULARY_COLLISION, {item.code for item in findings})
+            archived = [item for item in findings if item.code == kb.ARCHIVED_REFERENCE]
+            self.assertEqual(["kb/world/live.md"], [item.path for item in archived])
+            self.assertEqual([5], [item.line for item in archived])
     def test_all_durable_source_kinds_are_accepted_and_work_only_warns(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory) / "project"

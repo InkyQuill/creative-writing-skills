@@ -5,6 +5,10 @@ from cwcli.markdown_tables import malformed_table_lines, parse_tables, table_hea
 
 
 class MarkdownTableTests(unittest.TestCase):
+    def test_tables_inside_fenced_and_indented_code_are_ignored(self):
+        text = "```\n| a | b |\n|---|---|\n```\n~~~\n| c | d |\n|---|---|\n~~~\n    | e | f |\n    |---|---|\n"
+        self.assertEqual((), parse_tables(text))
+        self.assertEqual((), malformed_table_lines(text))
     def test_parses_trimmed_cells_and_preserves_source_lines(self):
         tables = parse_tables("intro\n\n | Name | Value |\n | :--- | ---: |\n | Mara |  7  |\n")
         self.assertEqual(tables[0].headers, ("Name", "Value"))

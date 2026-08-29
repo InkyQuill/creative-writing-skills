@@ -5,6 +5,7 @@ from __future__ import annotations
 import os
 import re
 import stat
+import statistics
 import unicodedata
 from collections import Counter
 from dataclasses import dataclass
@@ -21,6 +22,7 @@ MARKDOWN_FENCE = "CW-PROSE-020"
 EMPTY_DOCUMENT = "CW-PROSE-030"
 REPEATED_OPENING = "CW-PROSE-040"
 METRICS = "CW-PROSE-090"
+WINDOWED_REPETITION = "CW-PROSE-041"
 
 _QUOTE_RE = re.compile(r'".+?"|«.+?»|„.+?“|“.+?”')
 _FENCE_RE = re.compile(r"^[ \t]{0,3}(`{3,}|~{3,})(.*)$")
@@ -28,6 +30,18 @@ _TAG_RE = re.compile(r"</?(?:AI|hidden)>")
 _INLINE_CODE_RE = re.compile(r"(`+)(.*?)\1")
 _SENTENCE_SPLIT_RE = re.compile(r"(?<=[.!?…])\s+")
 _WORD_JOINERS = frozenset(("'", "’", "-", "‐", "‑"))
+_PRONOUN_STARTS = frozenset("i me my we our you your he his him she her they their them it its я мы ты вы он она они оно мой моя моё мое наш наша наше твой твоя твоё твое ваш ваша ваше его её ее их".split())
+_ARTICLE_STARTS = frozenset("the a an this that these those".split())
+_CONJUNCTION_STARTS = frozenset("and but or so yet for nor because although though while when if after before since until as once и но а или да зато однако чтобы когда если хотя пока как что потому".split())
+_PRONOUN_GROUPS = {
+    "first-singular": frozenset("i me my mine myself я меня мне мной мой моя моё мое моего моей моём моем мою моим моими моих".split()),
+    "first-plural": frozenset("we us our ours ourselves мы нас нам нами наш наша наше нашего нашей нашем наши нашим нашими наших".split()),
+    "second": frozenset("you your yours yourself yourselves ты тебя тебе тобой твой твоя твоё твое твоего твоей твоём твоем твою твоим твоими твоих вы вас вам вами ваш ваша ваше вашего вашей вашем ваши вашим вашими ваших".split()),
+    "third-masculine": frozenset("he him his himself он его него ему нему им ним".split()),
+    "third-feminine": frozenset("she her hers herself она её ее нее ей ней ею нею".split()),
+    "third-plural": frozenset("they them their theirs themselves они их них им ним ими ними".split()),
+    "third-neuter": frozenset("it its itself оно".split()),
+}
 
 
 @dataclass(frozen=True)
@@ -40,6 +54,13 @@ class ProseMetrics:
     dialogue_ratio: float
     repeated_openings: tuple[tuple[str, int], ...]
     language: str
+    sentence_lengths: tuple[int, ...]
+    sentence_length_mean: float
+    sentence_length_median: float
+    sentence_length_stdev: float
+    opener_categories: tuple[tuple[str, int], ...]
+    windowed_repetitions: tuple[tuple[str, int, int, int], ...]
+    pronoun_distribution: tuple[tuple[str, int], ...]
 
 
 @dataclass(frozen=True)
@@ -63,6 +84,10 @@ def analyze_prose(text: str, *, language: str) -> ProseMetrics:
         for paragraph in paragraph_list
         if (opener := _first_word(paragraph)) is not None
     )
+    sentence_lengths = tuple(len(_words(sentence)) for sentence in sentence_list if _words(sentence))
+    openers = [_first_word(sentence) for sentence in sentence_list]
+    categories = Counter(_opener_category(opener) for opener in openers if opener is not None)
+    word_counts = Counter(word_list)
 
     return ProseMetrics(
         word_count=len(word_list),
@@ -76,6 +101,13 @@ def analyze_prose(text: str, *, language: str) -> ProseMetrics:
             )
         ),
         language=_normalize_language(language, prose_text),
+        sentence_lengths=sentence_lengths,
+        sentence_length_mean=statistics.fmean(sentence_lengths) if sentence_lengths else 0.0,
+        sentence_length_median=float(statistics.median(sentence_lengths)) if sentence_lengths else 0.0,
+        sentence_length_stdev=statistics.pstdev(sentence_lengths) if len(sentence_lengths) > 1 else 0.0,
+        opener_categories=tuple((name, categories[name]) for name in ("pronouns", "articles", "conjunctions", "other")),
+        windowed_repetitions=_windowed_repetitions(paragraph_list),
+        pronoun_distribution=tuple((name, sum(word_counts[word] for word in variants)) for name, variants in _PRONOUN_GROUPS.items()),
     )
 
 
@@ -86,8 +118,13 @@ def check_prose(project: Project) -> list[Finding]:
     language = configured_language if isinstance(configured_language, str) else ""
     findings: list[Finding] = []
 
-    for path in project.iter_managed_markdown():
+    paths = [project.root / "project.md", *project.iter_managed_markdown()]
+    seen: set[str] = set()
+    for path in paths:
         relative_id = project.relative_id(path)
+        if relative_id in seen:
+            continue
+        seen.add(relative_id)
         try:
             source = _read_regular(path)
             text = source.decode("utf-8-sig")
@@ -115,8 +152,9 @@ def check_prose(project: Project) -> list[Finding]:
                     next_action="Close or repair the Markdown fence without changing its content.",
                 )
             )
-        findings.extend(_tag_findings(relative_id, visible.lines))
-        findings.extend(_tag_policy_findings(relative_id, visible.lines))
+        integrity = _integrity_lines(text)
+        findings.extend(_tag_findings(relative_id, integrity))
+        findings.extend(_tag_policy_findings(relative_id, integrity))
 
         if not _is_prose_path(relative_id):
             continue
@@ -143,6 +181,16 @@ def check_prose(project: Project) -> list[Finding]:
                     next_action="Review the repeated structural signal only if it matters for this passage.",
                 )
             )
+        for word, start, end, count in metrics.windowed_repetitions:
+            findings.append(
+                Finding(
+                    code=WINDOWED_REPETITION,
+                    severity="info",
+                    message=f"word '{word}' occurs {count} times in paragraphs {start}-{end}",
+                    path=relative_id,
+                    next_action="Use this windowed repetition count as a mechanical signal only.",
+                )
+            )
         findings.append(
             Finding(
                 code=METRICS,
@@ -150,7 +198,12 @@ def check_prose(project: Project) -> list[Finding]:
                 message=(
                     f"words={metrics.word_count}; paragraphs={metrics.paragraph_count}; "
                     f"sentences={metrics.sentence_count}; dialogue-ratio={metrics.dialogue_ratio:.3f}; "
-                    f"language={metrics.language}"
+                    f"sentence-mean={metrics.sentence_length_mean:.3f}; "
+                    f"sentence-median={metrics.sentence_length_median:.3f}; "
+                    f"sentence-min={min(metrics.sentence_lengths, default=0)}; "
+                    f"sentence-max={max(metrics.sentence_lengths, default=0)}; "
+                    f"sentence-stdev={metrics.sentence_length_stdev:.3f}; language={metrics.language}; "
+                    f"openers={dict(metrics.opener_categories)}; pronouns={dict(metrics.pronoun_distribution)}"
                 ),
                 path=relative_id,
                 next_action="Use these counts as mechanical context, not as a literary conclusion.",
@@ -207,6 +260,29 @@ def _frontmatter_end(lines: list[tuple[int, str]]) -> int:
         if line == "---":
             return index + 1
     return 0
+
+
+def _integrity_lines(text: str) -> tuple[tuple[int, str], ...]:
+    """Return all raw document lines except fenced code, preserving frontmatter lines."""
+
+    lines: list[tuple[int, str]] = []
+    fence: tuple[str, int] | None = None
+    for line_number, line in enumerate(text.splitlines(), 1):
+        match = _FENCE_RE.match(line)
+        if fence is None:
+            if match is not None:
+                marker = match.group(1)
+                fence = (marker[0], len(marker))
+                lines.append((line_number, ""))
+            else:
+                lines.append((line_number, _strip_inline_code(line)))
+        else:
+            if match is not None:
+                marker = match.group(1)
+                if marker[0] == fence[0] and len(marker) >= fence[1] and not match.group(2).strip():
+                    fence = None
+            lines.append((line_number, ""))
+    return tuple(lines)
 
 
 def _tag_findings(relative_id: str, lines: tuple[tuple[int, str], ...]) -> list[Finding]:
@@ -304,12 +380,19 @@ def _strip_frontmatter_and_fences(text: str) -> str:
                 break
 
     cleaned: list[str] = []
-    in_fence = False
+    fence: tuple[str, int] | None = None
     for line in lines[start:]:
-        if line.strip().startswith("```"):
-            in_fence = not in_fence
+        match = _FENCE_RE.match(line)
+        if fence is None and match is not None:
+            marker = match.group(1)
+            fence = (marker[0], len(marker))
             continue
-        if not in_fence:
+        if fence is not None and match is not None:
+            marker = match.group(1)
+            if marker[0] == fence[0] and len(marker) >= fence[1] and not match.group(2).strip():
+                fence = None
+            continue
+        if fence is None:
             cleaned.append(line)
     return "\n".join(cleaned)
 
@@ -366,6 +449,29 @@ def _sentences(text: str) -> list[str]:
 def _first_word(text: str) -> str | None:
     word_list = _words(text)
     return word_list[0] if word_list else None
+
+
+def _opener_category(opener: str) -> str:
+    if opener in _PRONOUN_STARTS:
+        return "pronouns"
+    if opener in _ARTICLE_STARTS:
+        return "articles"
+    if opener in _CONJUNCTION_STARTS:
+        return "conjunctions"
+    return "other"
+
+
+def _windowed_repetitions(paragraphs: list[str], window_size: int = 5) -> tuple[tuple[str, int, int, int], ...]:
+    found: dict[tuple[str, int, int], int] = {}
+    if len(paragraphs) < 2:
+        return ()
+    for start in range(0, max(len(paragraphs) - window_size + 1, 1)):
+        window = paragraphs[start : start + window_size]
+        counts = Counter(word for paragraph in window for word in _words(paragraph) if len(word) >= 5)
+        for word, count in counts.items():
+            if count >= 3:
+                found[(word, start + 1, start + len(window))] = count
+    return tuple((word, start, end, count) for (word, start, end), count in sorted(found.items(), key=lambda item: (-item[1], item[0])))
 
 
 def _is_dialogue(line: str) -> bool:
@@ -438,6 +544,7 @@ __all__ = [
     "SOURCE_TAG",
     "SOURCE_TAG_POLICY",
     "UNREADABLE_DOCUMENT",
+    "WINDOWED_REPETITION",
     "analyze_prose",
     "check_prose",
 ]

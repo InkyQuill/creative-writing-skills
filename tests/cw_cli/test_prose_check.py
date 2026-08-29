@@ -72,6 +72,18 @@ class ProseMetricTests(unittest.TestCase):
         self.assertEqual(metrics.word_count, 2)
         self.assertEqual(metrics.paragraph_count, 1)
 
+    def test_tilde_fences_and_full_legacy_metric_families(self):
+        metrics = prose.analyze_prose(
+            "She enters. And she waits.\n\nAlpha alpha alpha.\n\n~~~\nignored she alpha.\n~~~\n",
+            language="en",
+        )
+        self.assertEqual((2, 3, 3), metrics.sentence_lengths)
+        self.assertEqual(3.0, metrics.sentence_length_median)
+        self.assertEqual(dict(metrics.opener_categories)["pronouns"], 1)
+        self.assertEqual(dict(metrics.opener_categories)["conjunctions"], 1)
+        self.assertGreater(dict(metrics.pronoun_distribution)["third-feminine"], 0)
+        self.assertTrue(any(item[0] == "alpha" for item in metrics.windowed_repetitions))
+
     def test_unknown_language_falls_back_from_unicode_content(self):
         self.assertEqual(prose.analyze_prose("Тихий вечер.", language="unknown").language, "ru")
         self.assertEqual(prose.analyze_prose("Quiet evening.", language="").language, "en")
@@ -200,6 +212,21 @@ class ProseCheckTests(unittest.TestCase):
             "story/chapters/ch-001.md",
             "story/chapters/ch-002.md",
         ])
+
+    def test_integrity_includes_project_and_raw_frontmatter(self):
+        self.write(
+            "project.md",
+            "---\nschema-version: 1\ntitle: <AI>Broken\nlanguage: ru\nstatus: drafting\n---\n",
+        )
+        self.write(
+            "kb/world/frontmatter.md",
+            "---\ntitle: <hidden>Broken\nsources:\n  - https://example.com\n---\nBody.\n",
+        )
+        tags = [item for item in self.findings() if item.code == prose.SOURCE_TAG]
+        self.assertEqual(
+            [("kb/world/frontmatter.md", 2), ("project.md", 3)],
+            [(item.path, item.line) for item in tags],
+        )
 
     def test_unclosed_markdown_fence_is_a_mechanical_warning(self):
         self.write("story/chapters/ch-001.md", "---\nnumber: 1\n---\nText.\n```python\ncode\n")
