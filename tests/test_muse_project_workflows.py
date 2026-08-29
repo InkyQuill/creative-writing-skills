@@ -82,6 +82,7 @@ class MuseProjectWorkflowTests(unittest.TestCase):
                 )
         self.assertRegex(flat, r"acceptance[^.]*manuscript only")
         self.assertRegex(flat, r"kb promotion[^.]*separate[^.]*transaction")
+        self.assertNotRegex(flat, r"durable memory[^.]*after (?:the )?author accepts")
 
     def test_prose_workers_require_prepared_context_and_explicit_draft_target(self):
         for name in PROSE_WORKERS:
