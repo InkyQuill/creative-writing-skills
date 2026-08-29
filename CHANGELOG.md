@@ -2,6 +2,32 @@
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-08-29
+
+### Added
+- Added the agent-operated `cw` story project CLI and canonical schema v1, including transactional project initialization and editing, recoverable drafts and migrations, focused context snapshots, deterministic continuity and prose checks, project/runtime diagnostics, and end-to-end workflow coverage.
+- Added `$project-feedback` for reporting verified problems scoped to creative-writing-skills, with duplicate detection, privacy safeguards, GitHub capability checks, and a non-blocking issue-draft fallback.
+- Added `$project-bootstrap` to reconcile portable project instructions around canonical `AGENTS.md` guidance and Claude-compatible `CLAUDE.md` entrypoints.
+- Added composable prose guidance with universal rules, separate Russian and English language references, light-novel, classical-literary, and literary-fiction profiles, and organized author-voice samples and derived style evidence.
+- Added the Scroll Quill plugin icon, with attribution, to the Codex and ZCode distribution metadata.
+
+### Changed
+- Story-memory updates now persist direct, settled author facts without redundant confirmation; agents re-read accepted prose and ask only when extraction is ambiguous, conflicting, sensitive, or crosses a knowledge boundary.
+- Renamed `$grill-with-docs` to `$decision-grill` to avoid naming conflicts and clarify its role in challenging decisions against project knowledge.
+- Expanded the canonical distribution to 31 skills (21 authored and 10 vendored), with generated Claude, Cowork, Claude.ai, and ZCode artifacts kept in sync.
+- Made prose checks capability-aware: Russian and English receive their language-specific diagnostics, while unsupported languages retain universal metrics and explicit skipped-capability metadata instead of silently falling back to English.
+- Consolidated deterministic story checkers behind the `cw` CLI while preserving their supported command-line behavior.
+
+### Fixed
+- Excluded Markdown inline code from prose metrics so technical fragments do not distort manuscript diagnostics.
+- Prevented Python bytecode and cache directories from leaking into generated plugin distributions and skill archives.
+- Hardened transaction recovery, path containment, project discovery, draft acceptance and rebasing, migration planning, context publication, checker input handling, and doctor repair guidance across the managed story workflow.
+
+### Breaking
+- `$grill-with-docs` has been replaced by `$decision-grill` without an alias; projects or prompts that reference the old skill name must update it.
+
+## [0.6.0] - 2026-08-26
+
 ### Added
 - Added multilingual prose support: `analyze.py` now tokenizes Cyrillic text, detects `«ёлочки»`/`„лапки“` quotation and dash-opened dialogue lines, and groups Russian pronouns; `writing-principles` gained a Language Register section (structural тире, longer subordinated sentences as the norm, synonymic variety as healthy register, deeper interiority/subtext traditions); tell catalogues, vocabulary tiers, cadence checks, proofreading, and project setup are now explicitly language-calibrated with Russian as the working example.
 - Added machine-checkable continuity records to `story-memory`: timeline, promises, questions, a rolling state snapshot, and per-chapter scene records (`resources/continuity-records.md`), plus a deterministic checker (`resources/continuity_check.py`) that reports ordering violations, lifecycle mismatches, stale state, anchor conflicts, and Chekhov gaps. The `continuity-checker` worker and `story-review` continuity critique now run it as the fixed floor before reader judgment, and `project-setup` proposes the record paths as author-confirmed items in both layouts. Continuity-ledger model adapted from `danjdewhurst/story-skills` (MIT).
