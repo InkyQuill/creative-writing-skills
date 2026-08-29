@@ -10,8 +10,9 @@ from typing import TextIO
 
 from . import __version__
 from .checks import CHECKERS, run_checks
-from .checks.structure import check_structure
 from .checks.drafts import check_drafts
+from .checks.structure import check_structure
+from .cli_doctor import diagnose_cli
 from .context import (
     ContextPlanError,
     ContextSnapshotError,
@@ -19,6 +20,7 @@ from .context import (
     plan_context,
     render_snapshot,
 )
+from .doctor import diagnose_project
 from .documents import DocumentError, logical_hash
 from .drafts import (
     DraftConflict,
@@ -111,6 +113,12 @@ def _parser(*, error_stream: TextIO) -> argparse.ArgumentParser:
 
     clean_context_command = commands.add_parser("clean-context", error_stream=error_stream)
     _mutation_options(clean_context_command)
+
+    doctor = commands.add_parser("doctor", error_stream=error_stream)
+    _format_option(doctor)
+
+    cli_doctor = commands.add_parser("cli-doctor", error_stream=error_stream)
+    _format_option(cli_doctor)
 
     init = commands.add_parser("init", error_stream=error_stream)
     init.add_argument("path", nargs="?", default=".")
@@ -218,6 +226,28 @@ def run(argv: list[str], *, cwd: Path, stdout: TextIO, stderr: TextIO) -> int:
 
     if args.command == "init":
         return _run_init(args, cwd=cwd, stdout=stdout, stderr=stderr)
+
+    if args.command == "cli-doctor":
+        entrypoint = Path(__file__).absolute().parent.parent / "cw.py"
+        result = diagnose_cli(entrypoint, Path(sys.executable))
+        if args.format == "json":
+            _write_command_data(result.as_dict(), output_format="json", stdout=stdout)
+        else:
+            stdout.write(result.as_text() + "\n")
+        return result.exit_status()
+
+    if args.command == "doctor":
+        try:
+            result = diagnose_project(discover_project(cwd))
+        except (DocumentError, OSError, ProjectDiscoveryError, ProjectPathError, UnicodeError, ValueError) as error:
+            return _write_command_error(
+                error, conflict=False, output_format=args.format, stdout=stdout, stderr=stderr
+            )
+        if args.format == "json":
+            _write_command_data(result.as_dict(), output_format="json", stdout=stdout)
+        else:
+            stdout.write(result.as_text() + "\n")
+        return result.exit_status()
 
     if args.command == "draft":
         return _run_draft(args, cwd=cwd, stdout=stdout, stderr=stderr)
