@@ -12,6 +12,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Pattern
 
+from .prose_typography import scan_lines
 from ..documents import parse_document
 from ..findings import Finding
 from ..markdown_links import closes_markdown_fence, markdown_fence_marker
@@ -29,6 +30,7 @@ WINDOWED_REPETITION = "CW-PROSE-041"
 
 _TAG_RE = re.compile(r"</?(?:AI|hidden)>")
 _INLINE_CODE_RE = re.compile(r"(`+)(.*?)\1")
+_LINK_TARGET_RE = re.compile(r"\]\([^)]*\)")
 _SENTENCE_SPLIT_RE = re.compile(r"(?<=[.!?…])\s+")
 _WORD_JOINERS = frozenset(("'", "’", "-", "‐", "‑"))
 _LANGUAGE_TAG_RE = re.compile(r"^[a-z]{2,8}(?:-[a-z0-9]{1,8})*$", re.ASCII)
@@ -259,6 +261,18 @@ def check_prose(project: Project) -> list[Finding]:
             continue
 
         document_language = _prose_language(relative_id, source, language)
+        if _normalize_language(document_language) == "ru":
+            for hit in scan_lines(_typography_lines(visible.lines)):
+                findings.append(
+                    Finding(
+                        code=hit.code,
+                        severity=hit.severity,
+                        message=hit.message,
+                        path=relative_id,
+                        line=hit.line,
+                        next_action=hit.next_action,
+                    )
+                )
         metrics = analyze_prose(text, language=document_language)
         if metrics.word_count == 0:
             findings.append(
@@ -527,6 +541,15 @@ def _strip_markdown(text: str) -> str:
 
 def _strip_inline_code(line: str) -> str:
     return _INLINE_CODE_RE.sub("", line)
+
+
+def _typography_lines(lines: tuple[tuple[int, str], ...]) -> list[tuple[int, str]]:
+    """Prepare visible lines for the typography scanner: no code, no link targets."""
+
+    return [
+        (line_number, _LINK_TARGET_RE.sub("", _strip_inline_code(line)))
+        for line_number, line in lines
+    ]
 
 
 def _words(text: str) -> list[str]:
