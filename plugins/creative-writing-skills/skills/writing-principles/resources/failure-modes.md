@@ -8,6 +8,11 @@ pattern is serving the reader and when it's the helpfulness instinct
 expressing itself. Over-explaining breaks inference; under-explaining breaks
 transportation. Both are calibration failures.
 
+Apply every surface diagnosis through the manuscript language, prose profile,
+and evidenced project voice resolved by `$creative-writing-craft`. The patterns
+below describe reader costs; their sentence-level realization is not a
+language-neutral rule.
+
 ---
 
 ## Over-elaborating scope
@@ -176,8 +181,8 @@ formal narration.
 
 **What to do instead.** Read the style files. Read recent chapters. Match
 what's there. Consistency across a project matters more than any individual
-sentence being optimal. If the project uses em dashes constantly, use em
-dashes. If it's casual first-person, stay casual.
+sentence being optimal. Follow documented punctuation and register choices
+that are valid in the manuscript language.
 
 **Why the instinct fires.** The default register is the average of training
 data, and producing it is easier than overriding it to match an arbitrary

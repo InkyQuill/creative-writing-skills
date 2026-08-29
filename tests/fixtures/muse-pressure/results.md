@@ -1,6 +1,6 @@
 # Muse Pressure Verification
 
-Revised skill SHA-256: `43ea71f9c4369b7d7a187f5912e5c501448834158a2201819c97aa1b8a1f05ff`
+Revised skill SHA-256: `e878ba518ca78f6cd43f8474a769115b47da81e2ddda3134c797982cd3b8acb9`
 
 `<repo-root>` denotes the root of the checkout used to replay these samples.
 
@@ -57,6 +57,24 @@ Ask the author only when a missing answer would materially change the work. Othe
 
 Setting and worldbuilding work routes through `$world-creation`, including its own research or specialist needs.
 
+## Resolve Prose Context
+
+Before every writer, editor, critic, or style-creator pass, use
+`$creative-writing-craft` to resolve exact plugin resource paths for the
+universal base, primary manuscript-language tag and resource, and selected
+prose-profile base plus matching language adapter. `general` means no profile
+overlay and needs no confirmation question. Then select applicable flat
+`kb/styles/` references and their approved `kb/samples/` evidence: project-wide
+first, narrower narrator/POV/character/scene scope next, current author brief
+last. State why each narrow style applies.
+
+Pass this complete resolved stack in targeted context for both delegated and
+direct writing/review. Missing or unsupported language is never English by
+default. Use explicit project evidence when it settles the surface choice; ask
+one focused question only when the unresolved language norm would materially
+change the work. Preserve grammar, canon, source tags, and character/reader
+knowledge boundaries over every voice layer.
+
 ## Route Through the Worker Registry
 
 For other specialist work, choose the smallest specialist composition that can complete the working contract. Read `resources/workers/registry.json`. Select only roles present in that registry and match access to the task: production prose and in-place prose edits route to the workspace-write `writer`; a read-only role never alters files. Before every dispatch, read the selected entry and its referenced prompt file.
@@ -69,7 +87,7 @@ payload containing:
 2. the registry entry's declared skills and access level;
 3. all seven fields of the working contract above;
 4. the role-specific scope and decision boundary;
-5. targeted project context: the applicable instruction paths and only the story-artifact paths or excerpts this role needs.
+5. targeted project context: the applicable instruction paths and only the story-artifact paths or excerpts this role needs, including the resolved prose stack for prose roles.
 
 For prose writing or review, targeted project context includes the prepared
 context plan and an explicit draft target path. Prepare that context before

@@ -1,6 +1,9 @@
 # Voice Review
 
 Evaluate dialogue quality, POV consistency, subtext, and voice drift.
+Resolve the manuscript-language, prose-profile, and applicable project
+style/sample resources first. Judge dialogue surface form through that selected
+prose stack; the principles below concern character pressure and knowledge.
 
 ## Dialogue
 
@@ -26,9 +29,12 @@ Can you identify the speaker without tags? Each character should have distinct:
 
 Common failure: all characters sound like the same competent, slightly formal narrator. A street kid and a professor should be immediately distinguishable in dialogue.
 
-### Dialogue Tags and Beats
+### Dialogue Attribution and Beats
 
-"Said" is invisible: use it freely. Creative tags ("he exclaimed," "she retorted," "he murmured breathlessly") draw attention to the tag instead of the dialogue. Action beats ("She set the cup down. 'That's not what I meant.'") show how something is said through behavior.
+Use the language resource and project voice to judge attribution. Check whether
+the reader can identify the speaker, whether an attribution calls unhelpful
+attention to itself, and whether an action beat reveals pressure rather than
+merely replacing a tag. No one tag strategy is universal.
 
 ## POV Consistency
 

@@ -21,6 +21,11 @@ the author's voice. If the manuscript uses them consistently, they are
 choices. If they appear sporadically, they are likely errors. When you are
 not sure, query rather than silently correct.
 
+Load the resolved manuscript-language, prose-profile, and applicable project
+style/sample resources before editing. The selected prose stack defines
+correct surface forms and valid variants; generic copyediting has no default
+language or house style.
+
 Fix silently when: the correction is unambiguous, preserves meaning and
 voice, and falls within established style-sheet conventions. Query when: the
 change could alter meaning, voice, tone, canon, or intentional dialect or
@@ -44,8 +49,8 @@ Track decisions rather than re-deciding them each time:
 - character/place/organization names (spelling, capitalization, titles)
 - invented terms and aliases (including how they are introduced)
 - capitalization and hyphenation conventions
-- punctuation conventions (serial comma, em dash usage, ellipsis style)
-- spelling variants (honor/honour, gray/grey — pick one, be consistent)
+- documented punctuation conventions and valid language-specific variants
+- documented spelling, morphology, and orthography choices
 - recurring grammar/usage choices that are part of voice (fragments,
   run-ons, non-standard constructions the author uses intentionally)
 

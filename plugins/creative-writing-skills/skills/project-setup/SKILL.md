@@ -55,10 +55,23 @@ instructions. Cover:
 - any sample, style, research, or work-support material that would help; and
 - how existing legacy paths map to the canonical roles when migrating.
 
+For proposed author-voice evidence, use flat
+`kb/samples/<descriptive-name>.md` and derived
+`kb/styles/<descriptive-name>.md` paths. Record each sample's manuscript
+language/tag, applicability scope, role (`authoritative`, `aspirational`, or
+`negative`), source/citation and source-tag boundary, excerpt or chapter
+pointer, and why it is evidence. A derived style records language and
+prose-profile scope, evidence links, observed versus author-specified guidance,
+actionable tendencies, allowed variation, and anti-patterns.
+
 Keep writing samples and voice analysis provisional until their exact role and
-destination are approved. Preserve unrelated instructions and unknown files.
+destination are approved. A direct author statement that supplies those fields
+settles them without a second confirmation; ask only about material ambiguity
+or conflicting evidence. Preserve unrelated instructions and unknown files.
 Approval of the core project does not imply approval for optional samples,
-style files, vocabulary pages, or other auxiliary artifacts.
+style files, vocabulary pages, or other auxiliary artifacts. Style analysis is
+first proposed as a direct file under `work/reviews/`, then promoted through a
+separate previewed, recoverable transaction after it is approved.
 
 ## Apply Safely
 

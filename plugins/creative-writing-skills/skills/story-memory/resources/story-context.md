@@ -36,7 +36,10 @@ history is fine.
 Writers need enough to stay in voice and on-canon, not everything ever written. The essential context:
 
 - **Scene brief or outline**: what happens in this scene, the beats to hit
-- **Relevant style files**: look at what exists in the styles directory and pick the files that match the scene. Character files for whoever appears, scene-type files for the kind of scene being written. Each style file is self-describing: read the top to know when it applies.
+- **Resolved prose stack**: universal base, exact manuscript language,
+  prose-profile base and matching language adapter, then only applicable
+  `kb/styles/` guidance and supporting `kb/samples/` evidence. Name why every
+  narrower narrator, POV, character, or scene style applies.
 - **Continuity anchors**: the immediately preceding chapter or scene (for flow), plus any chapters that establish facts this scene references. Two to four files, not the entire manuscript. For revisions and insertions, also the scene's timeline position — where its events fall relative to neighboring events and which character sub-timelines intersect — so the edit lands without breaking order, duration, or simultaneity.
 - **Character state**: character files for characters who appear in the scene, especially if their emotional state or knowledge has changed recently
 - **Vocab**: relevant `vocab.md` files when the scene uses invented terms, magic/faction names, titles, relationship labels, or genre terms with project-specific meanings
@@ -49,7 +52,9 @@ Critics need the draft plus enough context to judge it against:
 
 - **The draft being reviewed**: always as attached files
 - **The scene brief or outline**: so the critic can check whether the draft achieved what it was supposed to
-- **Relevant style files**: so voice critics can compare against the target voice
+- **Resolved prose stack**: the exact manuscript-language and prose-profile
+  resources plus only the `kb/styles/` and `kb/samples/` evidence applicable to
+  the review's narrator, character, scene, and language scope
 - **Prior chapters for continuity**: so continuity critics can cross-reference facts
 - **Author intent**: via conversation history if the orchestrator discussed direction with the author, or via materialized decision notes
 - **Known issues**: tracked issues if the critic should watch for specific recurring problems
@@ -81,6 +86,17 @@ seeing prior critique rounds.
 
 Combine mechanisms when phases produce artifacts: conversation history for
 reasoning context, attached files for the artifacts the prior phase created.
+
+## Voice and Knowledge Scope
+
+Select style and sample evidence by manuscript language, prose profile, and
+declared applicability. Project-wide guidance comes before narrower narrator,
+POV, character, or scene guidance; the current brief is last. Pass only
+relevant evidence, and state why a narrow style applies. Never merge
+cross-language samples into a single baseline. Preserve source tags and
+author-only, character, and reader knowledge boundaries when quoting evidence.
+Missing optional evidence leaves the resolved defaults in force and does not
+itself require a question.
 
 ## Vocab Handoffs
 

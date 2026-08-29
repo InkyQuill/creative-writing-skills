@@ -37,7 +37,7 @@ Load `$creative-writing-modes` and `$creative-writing-craft`. Add
 Name the production mode from `$creative-writing-modes` →
 `resources/prose-modes.md` (fresh draft, revision, bridge, alternate take,
 line polish). Point to `$creative-writing-craft` →
-`resources/prose-writing.md` or `resources/scene-construction.md` when relevant.
+the resolved `resources/prose/` stack or `resources/scene-construction.md` when relevant.
 Provide style files, character state, and continuity anchors.
 
 One writer per scene — voice consistency degrades when multiple writers

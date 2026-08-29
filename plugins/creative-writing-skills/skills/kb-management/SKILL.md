@@ -39,6 +39,9 @@ develops.
 **Styles**: voice reference files derived from prose samples. Drafting and
 critique passes depend on these for voice consistency.
 
+**Samples**: approved, scoped evidence for author voice. A sample is not an
+instruction to imitate every surface feature.
+
 **Vocab**: canonical story terms, aliases, and exclusions live in
 `kb/vocab.md`.
 
@@ -77,6 +80,23 @@ Schema v1 accepts authored KB pages only as direct children of the listed
 managed content directories, plus the exact continuity paths above. Local
 instructions cannot customize or change managed roots. Use links and page
 content to express subdomains instead of nesting another directory.
+
+### Voice Evidence and Guidance
+
+Use descriptive flat paths: `kb/samples/<descriptive-name>.md` for evidence and
+`kb/styles/<descriptive-name>.md` for derived guidance.
+
+Every sample records manuscript **language/tag**, **scope/applicability**,
+evidence role (`authoritative`, `aspirational`, or `negative`), exact
+**source/citation and source-tag boundary**, the excerpt or chapter pointer,
+and **why this sample is evidence**. Every style reference records language and
+prose-profile applicability, scope, linked sample and accepted-chapter
+evidence, observed versus author-specified guidance, actionable tendencies,
+allowed variation, and anti-patterns.
+
+Examples are evidence, not a mechanical imitation corpus. Missing or sparse
+samples leave the resolved language and prose-profile defaults in force.
+Label inference instead of inventing a rule or repeatedly asking the author.
 
 ### Linking
 
@@ -146,6 +166,12 @@ by the text through a separate previewed, recoverable `$project-maintenance`
 transaction without asking for re-approval. Separate transaction does not mean
 separate confirmation. Include exact destination pages and provenance back to
 the accepted passage or prior direct author answer.
+
+This promotion boundary also applies to voice artifacts. The style-creator
+writes only a proposal under `work/reviews/`; muse or the orchestrator promotes
+an approved sample or style through a separate previewed, recoverable
+transaction. A direct author designation of a sample's role or an explicit
+approval of a style proposal is already confirmation.
 
 Ask only when ambiguity, inference or implication, a canon conflict, a retcon,
 an uncertain source tag, or an uncertain character or reader knowledge boundary

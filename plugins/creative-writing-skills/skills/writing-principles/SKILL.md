@@ -91,40 +91,17 @@ and keep it consistent.
 
 ## Language Register
 
-All craft advice in this plugin applies *through the manuscript language's own
-norms*, never through English defaults. Punctuation heuristics, vocabulary
-tells, and rhythm baselines are calibrated on English prose; on a manuscript
-in another language they misfire silently. Russian is the working example —
-extend the same care to any language:
+Apply every surface judgment through the resolved prose stack from
+`$creative-writing-craft`: manuscript-language grammar and orthography first,
+then prose profile, then evidenced project and narrow voice. Punctuation,
+sentence movement, dialogue formatting, lexical variation, and mechanical
+metrics do not have language-neutral defaults.
 
-- **Punctuation is structural, not stylistic.** The Russian тире (—) is
-  mandatory grammar: dialogue lines open with it, it stands where the copula
-  is omitted, it frames insertions. The em-dash-as-tell heuristic is
-  English-only and must never touch Russian punctuation. Quotes are
-  «ёлочки» with „лапки“ for nesting; there is no serial comma before «и»;
-  деепричастные обороты are always comma-bound. Fix punctuation against the
-  language's rules, not against AI-tell lists.
-- **Sentence length norms differ.** Russian literary prose breathes in longer
-  sentences; причастные and деепричастные обороты are texture, not bloat.
-  Machine-gun short sentences read as translation or AI filler. Split a
-  sentence only when the reader genuinely backtracks — never to hit an
-  English cadence ideal.
-- **Synonymy is the healthy norm.** Russian is rich in synonyms and
-  morphological variation; higher lexical variety is expected, and
-  lexical-variability metrics must be judged against a same-language
-  baseline. Variation that would flag as thesaurus-padding in English is
-  often simply good Russian.
-- **Interiority and subtext run deeper.** The tradition the author writes in
-  may carry long associative interior monologue and heavy subtext as native
-  register, not as "shallow interiority" or over-writing. Judge depth against
-  the tradition and the author's own accepted prose, not against an
-  Anglo-American directness ideal. Word order (инверсия), ты/вы distance, and
-  aspect choices carry emphasis English gets through other means — treat them
-  as voice, not error.
-
-When the guide and the language disagree, the language wins. When unsure of a
-norm, derive it from the author's accepted prose in that language rather than
-from this skill.
+When generic advice and the selected language resource disagree, the language
+resource wins. When the resource does not support a language, never substitute
+another language's habits. Use accepted same-language project evidence when it
+settles the choice; ask only when a missing norm would materially change the
+work.
 
 ## Applying the Principles
 
@@ -133,10 +110,9 @@ training damages it. When a passage feels off and you can't name why, check
 the reward channels — which one broke? — then see `resources/failure-modes.md`
 for common patterns and fix heuristics.
 
-The craft skills carry the execution. `$creative-writing-craft` has the
-how-to-write guidance: prose immersion (`resources/prose-writing.md`), scene
-mechanics (`resources/scene-construction.md`), and style analysis
-(`resources/style-analysis.md`). `$creative-writing-modes` has the production
+The craft skills carry the execution. `$creative-writing-craft` resolves the
+universal, language, profile, and author-voice prose stack, then routes scene
+mechanics and style analysis. `$creative-writing-modes` has the production
 modes for putting prose on the page.
 
 ## Resources

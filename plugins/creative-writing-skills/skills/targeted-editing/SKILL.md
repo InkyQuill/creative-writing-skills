@@ -14,6 +14,11 @@ establish what is being edited, where it sits, and what the change touches.
 Then edit at the level the problem actually lives at, and verify the joins
 afterward.
 
+For direct prose revision, resolve the same universal base,
+manuscript-language, prose-profile, and applicable project style/sample stack
+defined by `$creative-writing-craft`. Never let an assumed English surface
+default override the selected language or evidenced voice.
+
 Use `$project-maintenance` for mechanical checks, exact edit operations,
 preview/apply, and transaction recovery. Interpret repairable warnings
 internally and continue the literary edit when its required text is readable.
