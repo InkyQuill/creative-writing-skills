@@ -137,12 +137,19 @@ the complete recoverable transaction, and apply it only after the preview and
 semantic confirmation still match. If the result was mistaken, inspect history
 and preview `cw undo <transaction-id>` rather than overwriting current bytes.
 
-## Promotion Is a Separate Decision
+## Promotion Uses a Separate Transaction
 
-Draft or manuscript acceptance does not promote anything into the KB. After an
-author accepts prose, propose a separate KB promotion transaction containing
-only durable facts, the exact destination pages, and provenance back to the
-accepted passage or confirmed decision. Preview the recoverable transaction and
-apply it only after separate author confirmation. Preserve source tags and
-knowledge boundaries; acceptance never turns an AI suggestion into
-author-stated canon.
+Draft or manuscript acceptance does not itself write anything into the KB.
+After acceptance, re-read the prose and split extraction into settled evidence
+and material questions. Synchronize facts directly and unambiguously established
+by the text through a separate previewed, recoverable `$project-maintenance`
+transaction without asking for re-approval. Separate transaction does not mean
+separate confirmation. Include exact destination pages and provenance back to
+the accepted passage or prior direct author answer.
+
+Ask only when ambiguity, inference or implication, a canon conflict, a retcon,
+an uncertain source tag, or an uncertain character or reader knowledge boundary
+means different answers would materially change canon or knowledge boundaries.
+Keep those items as promotion proposals until resolved. Preserve source tags
+and knowledge boundaries; acceptance never turns an AI suggestion into
+author-stated canon. Do not ask redundant confirmation for every promotion.

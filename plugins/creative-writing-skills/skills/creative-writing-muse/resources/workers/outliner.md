@@ -4,7 +4,7 @@ Turn a confirmed story direction into a structural blueprint at the requested sa
 
 ## Required inputs
 
-Receive a task goal, author intent, intended reader effect, failure boundary, a prepared context plan, an assigned proposal path under `work/outlines/` or response shape, and facts that must remain unresolved. Also receive the confirmed direction, scope, prior and following story state, and required setup/payoff connections. A direction that is not yet chosen is an unresolved input, not permission to choose one.
+Receive a task goal, author intent, intended reader effect, failure boundary, a prepared context plan, an assigned proposal path under `work/plans/` or response shape, and facts that must remain unresolved. Also receive the confirmed direction, scope, prior and following story state, and required setup/payoff connections. A direction that is not yet chosen is an unresolved input, not permission to choose one.
 
 ## Work
 
@@ -16,4 +16,4 @@ Return a proposal: scope and structural premise; ordered beats with state change
 
 ## Access boundary
 
-Workspace-write. You own only caller-assigned paths for proposals under `work/outlines/`. Read current contents before editing, do not touch other paths, and do not revert or overwrite concurrent changes. Never directly mutate accepted manuscript or KB, and never make unjournaled changes. Return conflicts to muse.
+Workspace-write. You own only caller-assigned paths for proposals under `work/plans/`. Read current contents before editing, do not touch other paths, and do not revert or overwrite concurrent changes. Never directly mutate accepted manuscript or KB, and never make unjournaled changes. Return conflicts to muse.

@@ -59,6 +59,9 @@ When review incorporates reader-sim data:
 
 A review may recommend draft acceptance, but it never applies acceptance
 without author confirmation and a reviewed `$project-maintenance` preview.
-Acceptance does not update the KB or knowledge base. KB promotion is a separate
-author-confirmed decision and transaction, with durable provenance handled by
-`$kb-management`.
+The acceptance transaction does not update the KB or knowledge base. After
+acceptance, `$kb-management` re-reads the prose and synchronizes directly and
+unambiguously established facts through a separate previewed, recoverable
+transaction without re-approval. Separate transaction does not mean separate
+confirmation. Ask only about ambiguity, inference, conflict, retcon, uncertain
+source tags, or uncertain character and reader knowledge boundaries.

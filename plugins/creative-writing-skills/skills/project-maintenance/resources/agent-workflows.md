@@ -29,9 +29,13 @@ does not enter transaction history.
 Create the working copy with `draft create`, change lifecycle state through
 `draft set-status`, and run checks before requesting author acceptance. If the
 target changed, preview `draft rebase`; do not overwrite it. Preview
-`draft accept` only after the author confirms acceptance. KB promotion is a
-different confirmation and transaction. Use `draft abandon` for a rejected
-draft so it moves to archive without becoming canon.
+`draft accept` only after the author confirms acceptance. KB synchronization is
+a separate transaction, not automatically a separate confirmation: re-read the
+accepted prose and preview a recoverable KB transaction for facts it directly
+and unambiguously establishes. Ask only about ambiguity, inference, conflict,
+retcon, uncertain source tags, or uncertain character and reader knowledge
+boundaries. Use `draft abandon` for a rejected draft so it moves to archive
+without becoming canon.
 
 ## Migrate an older layout
 

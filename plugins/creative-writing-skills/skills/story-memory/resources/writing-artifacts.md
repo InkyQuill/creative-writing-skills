@@ -40,19 +40,26 @@ always authoritative.
 
 ## Promotion
 
-Completing or accepting a work item only makes durable facts eligible for a
-promotion proposal; it never performs a KB write. Propose the knowledge rather
-than raw artifacts, with exact destinations and source evidence. Brainstorm
-captures and draft iterations stay in work storage.
+Completing or accepting a work item does not itself perform a KB write. Re-read
+accepted prose, then synchronize directly and unambiguously established facts
+in a separate previewed, recoverable transaction without asking for re-approval.
+Use exact destinations and source evidence. Brainstorm captures and draft
+iterations stay in work storage; direct author answers that settle durable facts
+are persisted incrementally rather than left only in the capture.
 
 Preserve provenance during promotion. Untagged author-stated text remains untagged.
 Preserve `<AI>...</AI>` markers around AI suggestions; promotion does
 not turn a suggestion into author-stated canon. Exclude `<hidden>...</hidden>`
-content unless the author explicitly confirms both the fact and its destination
-in durable knowledge. Even after that confirmation, preserve any knowledge
-boundary the author assigns.
+content from reader-visible promotion unless the author has directly established
+both the fact and its destination in durable author-only knowledge; an explicit
+“save now” instruction can establish both without redundant confirmation.
+Preserve every author-only, character, or reader boundary. Ask only when the
+durable destination or knowledge boundary is uncertain.
 
-KB promotion requires separate author confirmation. After confirmation, perform
-it as a previewed, recoverable `$project-maintenance` transaction, then apply
-only that reviewed transaction. If it was mistaken, inspect history and preview
+Promotion always uses a separate previewed, recoverable `$project-maintenance`
+transaction, but that does not always require separate confirmation. Use
+accepted prose and prior direct author answers as evidence. Ask only when
+ambiguity, inference, conflict, retcon, an uncertain source tag, or an uncertain
+knowledge boundary means different answers would materially change canon or
+knowledge boundaries. If a promotion was mistaken, inspect history and preview
 `cw undo <transaction-id>`; never reconstruct earlier bytes from memory.

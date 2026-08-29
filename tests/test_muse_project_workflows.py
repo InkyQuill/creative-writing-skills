@@ -65,13 +65,12 @@ class MuseProjectWorkflowTests(unittest.TestCase):
         self.assertRegex(flat, r"content language")
         self.assertRegex(flat, r"not cli (?:commands|ceremony|terminology)")
 
-    def test_muse_requires_four_separate_author_confirmations(self):
+    def test_muse_preserves_distinct_durable_change_boundaries(self):
         lower = self.muse.lower()
         flat = re.sub(r"\s+", " ", lower)
         for decision in (
             "migration apply",
             "draft acceptance",
-            "kb promotion",
             "retcon",
         ):
             with self.subTest(decision=decision):
@@ -81,8 +80,41 @@ class MuseProjectWorkflowTests(unittest.TestCase):
                     rf"{decision}[^.]*(?:separate|explicit)[^.]*confirmation",
                 )
         self.assertRegex(flat, r"acceptance[^.]*manuscript only")
-        self.assertRegex(flat, r"kb promotion[^.]*separate[^.]*transaction")
+        self.assertRegex(
+            flat,
+            r"directly and unambiguously established[^.]*accepted prose[^.]*"
+            r"separate[^.]*previewed[^.]*recoverable[^.]*transaction",
+        )
+        self.assertRegex(flat, r"separate transaction[^.]*does not[^.]*separate confirmation")
+        self.assertRegex(
+            flat,
+            r"ask[^.]*only[^.]*(?:ambiguity|ambiguous)[^.]*inference[^.]*"
+            r"conflict[^.]*retcon[^.]*source tag[^.]*knowledge boundary",
+        )
         self.assertNotRegex(flat, r"durable memory[^.]*after (?:the )?author accepts")
+
+    def test_confirmed_brainstorm_answers_persist_before_the_next_question(self):
+        flat = re.sub(r"\s+", " ", self.muse.lower())
+        self.assertIn("interactive brainstorming", flat)
+        self.assertRegex(
+            flat,
+            r"direct author answer.{0,180}durable fact or decision.{0,180}"
+            r"persist it immediately.{0,180}before asking the next question",
+        )
+        self.assertRegex(flat, r"do not ask[^.]*redundant[^.]*confirmation")
+        self.assertRegex(flat, r"unless[^.]*provisional[^.]*not to save")
+
+    def test_explicit_save_instruction_confirms_promotion(self):
+        flat = re.sub(r"\s+", " ", self.muse.lower())
+        self.assertIn("save this secret now", flat)
+        self.assertRegex(flat, r"save this secret now[^.]*confirms[^.]*promotion")
+        self.assertRegex(flat, r"author-only[^.]*character[^.]*reader")
+
+    def test_muse_uses_existing_evidence_instead_of_blanket_reconfirmation(self):
+        flat = re.sub(r"\s+", " ", self.muse.lower())
+        self.assertRegex(flat, r"accepted prose[^.]*prior direct author answers[^.]*evidence")
+        self.assertRegex(flat, r"different answers[^.]*materially change[^.]*canon[^.]*knowledge boundaries")
+        self.assertNotRegex(flat, r"(?:always|every)[^.]{0,80}(?:ask|confirm)[^.]{0,80}promotion")
 
     def test_prose_workers_require_prepared_context_and_explicit_draft_target(self):
         for name in PROSE_WORKERS:
@@ -106,7 +138,8 @@ class MuseProjectWorkflowTests(unittest.TestCase):
         self.assertNotIn("analyze.py", prompt)
 
     def test_write_workers_use_canonical_work_paths(self):
-        self.assertIn("`work/outlines/`", self.prompts["outliner"])
+        self.assertIn("`work/plans/`", self.prompts["outliner"])
+        self.assertNotIn("`work/outlines/`", self.prompts["outliner"])
         self.assertIn("`work/drafts/`", self.prompts["writer"])
         self.assertIn("`story/chapters/`", self.prompts["writer"])
         for prompt in self.prompts.values():

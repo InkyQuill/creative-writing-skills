@@ -149,15 +149,19 @@ appear in `Mentions` after their death, never in `Present`.
 
 ## Updating the Records
 
-Records change only after a separate promotion decision, not merely because the
-author accepts prose, confirms an edit, or exploration ends. Fact extraction
-proposes scene records and timeline rows, promise and question status changes,
-and a refreshed `state.md`; acceptance does not promote or write them. Show the
-facts, evidence, and exact destinations for separate author confirmation, then
-use `$project-maintenance` to preview and apply the recoverable transaction. If
-the applied update was mistaken, preview `cw undo <transaction-id>`. When a
-record and prose disagree, flag it to the author — the author decides canon;
-agents never quietly re-time, re-cast, resolve, or write around the conflict.
+Acceptance does not itself write continuity records. After acceptance, fact
+extraction re-reads the prose and synchronizes scene records, timeline rows,
+promise and question status changes, and `state.md` facts that the text directly
+and unambiguously establishes. Use `$project-maintenance` to preview and apply
+that separate recoverable transaction without asking for reconfirmation.
+
+Keep ambiguity, inference or implication, canon conflict, retcon, uncertain
+source tag, and uncertain character or reader knowledge boundary as a proposal.
+Ask only when different answers would materially change canon or knowledge
+boundaries. If an applied update was mistaken, preview
+`cw undo <transaction-id>`. When a record and prose disagree, flag it to the
+author — the author decides canon; agents never quietly re-time, re-cast,
+resolve, or write around the conflict.
 
 ## Deterministic Check First
 

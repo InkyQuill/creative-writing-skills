@@ -40,11 +40,15 @@ the refreshed state snapshot. Run `cw check continuity` through
 `$project-maintenance` before finalizing the proposal; report its findings
 alongside the extraction report rather than silently repairing records.
 
-KB promotion is a separate author-confirmed decision. Once the author confirms
-the exact facts and destinations, perform a previewed, recoverable
-`$project-maintenance` transaction and apply only that reviewed transaction. If
-the applied promotion was mistaken, inspect history and preview
-`cw undo <transaction-id>` instead of making a direct restorative write.
+After acceptance, distinguish facts the prose establishes directly and
+unambiguously from inference or implication. Synchronize the direct facts and
+their exact destinations through a separate previewed, recoverable
+`$project-maintenance` transaction without asking for reconfirmation. A separate
+transaction is not automatically a separate confirmation. Ask only about
+ambiguity, inference, canon conflict, retcon, uncertain source tags, or uncertain
+character and reader knowledge boundaries. If the applied promotion was
+mistaken, inspect history and preview `cw undo <transaction-id>` instead of
+making a direct restorative write.
 
 Check for conflicts between what the chapter establishes and what's already in the kb. If the chapter contradicts existing canon or uses a term differently from the relevant vocab file, flag it in your report; preserve the existing record until the author or orchestrator resolves the conflict. The contradiction may be an error in the chapter, an intentional retcon, or a vocabulary decision that needs recording.
 

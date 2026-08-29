@@ -81,7 +81,8 @@ class StoryProjectIntegrationTests(unittest.TestCase):
         self.assertNotRegex(text, r"(?is)when a work item completes, promote")
         self.assertRegex(text, r"(?is)fact extraction.{0,220}proposal")
         self.assertRegex(text, r"(?is)acceptance.{0,180}(does not|never).{0,160}(promot|KB write)")
-        self.assertRegex(text, r"(?is)promotion.{0,240}separate author confirmation")
+        self.assertRegex(text, r"(?is)(direct|explicit).{0,180}(unambiguous|establish).{0,260}without.{0,100}(re-?confirm|ask)")
+        self.assertRegex(text, r"(?is)(ambigu|infer|conflict|retcon).{0,320}(ask|question|confirm)")
         self.assertRegex(text, r"(?is)promotion.{0,320}previewed,?\s+recoverable.{0,160}\$project-maintenance.{0,120}transaction")
         self.assertIn("cw undo", text)
 
@@ -130,11 +131,14 @@ class StoryProjectIntegrationTests(unittest.TestCase):
         self.assertRegex(text, r"(?is)preview.{0,300}(apply|--apply)")
         self.assertIn("cw undo", text)
 
-    def test_acceptance_and_kb_promotion_remain_separate_confirmations(self):
+    def test_acceptance_and_kb_sync_use_separate_transactions_not_blanket_confirmation(self):
         text = all_runtime_markdown("kb-management") + all_runtime_markdown("story-review")
         self.assertRegex(text, r"(?is)accept.{0,180}does not.{0,100}(KB|knowledge base)")
-        self.assertRegex(text, r"(?is)KB promotion.{0,180}separate.{0,120}(author confirmation|confirmed decision)")
+        self.assertRegex(text, r"(?is)separate.{0,100}transaction.{0,180}(not|does not).{0,100}separate confirmation")
+        self.assertRegex(text, r"(?is)(direct|explicit).{0,180}(unambiguous|establish).{0,260}(without|no).{0,100}(re-?approval|re-?confirm|ask)")
+        self.assertRegex(text, r"(?is)ask.{0,100}only.{0,300}(ambigu|infer|conflict|retcon|source tag|knowledge boundar)")
         self.assertRegex(text, r"(?is)(promotion transaction|promot).{0,220}(provenance|source|evidence)")
+        self.assertNotRegex(text, r"(?is)(always|every).{0,80}(ask|confirm).{0,80}promotion")
 
     def test_author_is_never_asked_to_maintain_cli_metadata(self):
         text = "\n".join(all_runtime_markdown(name) for name in DOMAIN_SKILLS)

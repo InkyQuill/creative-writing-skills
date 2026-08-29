@@ -96,13 +96,15 @@ where it lands. Identify the corresponding continuity-record changes
 or state changed; timeline rows when events, order, or duration moved; promise
 and question statuses when the edit plants, pays off, raises, or answers
 anything; the state snapshot when knowledge, location, injuries, or
-relationships moved. Propose those record changes with their evidence, but do
-not write them until the author or orchestrator confirms the edited prose and
-its durable facts. After confirmation, apply the record changes and run the
-deterministic checker; report its findings rather than silently repairing
-them.
+relationships moved. After the edited prose is accepted, re-read it and apply
+record changes it directly and unambiguously establishes through a separate
+previewed, recoverable transaction without asking for re-approval. Then run the
+deterministic checker and report its findings rather than silently repairing
+them. Keep ambiguity, inference or implication, canon conflict, retcon, uncertain
+source tag, and uncertain character or reader knowledge boundary as a proposal;
+ask only when different answers would materially change canon or knowledge.
 
 Report the placement decision — what level, where, why — along with any
-ripple that could not be fully verified and any contradiction found. When the
-edit changes durable facts, keep the `$story-memory` update provisional until
-the author or orchestrator confirms it.
+ripple that could not be fully verified and any contradiction found. Keep only
+unresolved or inferred `$story-memory` updates provisional; accepted prose is
+evidence for facts it establishes explicitly.

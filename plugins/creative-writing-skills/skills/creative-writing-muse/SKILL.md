@@ -77,14 +77,32 @@ Read every worker result. Compare it with the working contract and source artifa
 
 When independent reports disagree, explain the creative tradeoff in terms of author intent and reader effect. Keep strengths worth protecting alongside the highest-impact concern.
 
-## Confirm Durable Changes Separately
+## Confirm Material Decisions, Separate Transactions
 
 Obtain explicit author confirmation separately for each migration apply, draft
-acceptance, KB promotion, and retcon. Do not treat approval of one as approval
-of another. Draft acceptance changes the manuscript only, through a reviewed
-journaled transaction. KB promotion is a separate confirmed transaction after
-acceptance. A retcon remains a content decision even when its mechanical edits
-look routine.
+acceptance, and retcon. Do not treat approval of one as approval of another. A
+retcon remains a content decision even when its mechanical edits look routine.
+
+During interactive brainstorming, every direct author answer that settles a
+durable fact or decision is itself explicit confirmation. Persist it
+immediately through a recoverable memory or KB transaction before asking the
+next question, unless the author marks it provisional or says not to save it.
+Do not ask for redundant second confirmation. An explicit instruction such as
+“save this secret now” confirms its promotion. Preserve author-only, character,
+and reader knowledge boundaries in the saved record.
+
+Draft acceptance changes the manuscript only, through a reviewed journaled
+transaction. After acceptance, re-read the prose. Synchronize facts directly
+and unambiguously established by accepted prose in a separate, previewed,
+recoverable KB transaction without asking for re-approval. A separate
+transaction does not mean a separate confirmation.
+
+Use accepted prose and prior direct author answers as evidence. Ask only when
+ambiguity, inference or implication, a canon conflict, a retcon, an uncertain
+source tag, or an uncertain character or reader knowledge boundary means that
+different answers would materially change canon or knowledge boundaries. Those
+items remain proposals until resolved; do not ask redundant or “just in case”
+confirmation questions for every promotion.
 
 ## Current-Context Fallback
 
@@ -94,6 +112,6 @@ Disclose the fallback when lost independence or parallelism materially changes c
 
 ## Update Memory After Decisions Settle
 
-Do not write brainstorm options, draft implications, review hypotheses, or unresolved contradictions into durable story memory. Update `$story-memory` only when the relevant decision has settled and the separate KB promotion has been confirmed. Materialize an already confirmed and promoted decision before a handoff when a worker could otherwise contradict it; when draft or review results may change the decision, read and synthesize them first. Preserve source, author-only secrets, character and reader knowledge boundaries, and remaining uncertainty. Keep provisional material in work artifacts until the author settles it.
+Do not write brainstorm options, agent inferences, review hypotheses, or unresolved choices into durable story memory. A direct author answer becomes durable as soon as it settles the fact or decision; persist it incrementally rather than waiting for the brainstorming session to end. After prose acceptance, synchronize facts the text establishes directly and unambiguously. For ambiguous implications or worker inferences, update `$story-memory` only after the author resolves the material question. Materialize confirmed durable state before a handoff when a worker could otherwise contradict it. Preserve source, author-only secrets, character and reader knowledge boundaries, and remaining uncertainty. Keep provisional material in work artifacts until the author settles it.
 
-A clue or implication that merely makes a draft feel convincing is still provisional. After prose acceptance, propose its KB promotion separately; it enters durable memory only when the author confirms that promotion or independently confirms both the fact and its promotion. Until then, retain it in the draft or a caller-owned work artifact.
+A clue or implication inferred by the agent merely because it makes accepted prose feel convincing is still provisional. Ask only if adopting it would materially change canon or a knowledge boundary. A direct author statement, an unambiguous fact established by accepted prose, or an explicit “save now” instruction needs no redundant confirmation. Until resolution, retain inferred material in the draft or a caller-owned work artifact.
