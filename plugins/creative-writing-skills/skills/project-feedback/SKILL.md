@@ -1,6 +1,6 @@
 ---
 name: project-feedback
-description: Report a suspected bug, regression, confusing behavior, broken script, invalid generated Claude or ZCode output, or incorrect or contradictory instruction owned by this repository's Creative Writing Skills plugin, bundled cw CLI, or project docs and contracts.
+description: Report a suspected bug, regression, confusing behavior, broken script, invalid generated Claude or ZCode output, or incorrect or contradictory instruction owned by this repository's Creative Writing Skills plugin, bundled cw CLI, canonical skills, or docs and contracts that define or ship them.
 ---
 
 # Project Feedback
@@ -9,7 +9,8 @@ Continue safe diagnosis and the user's primary task while handling feedback.
 Feedback must never replace or unnecessarily block the actual work. A report is
 useful only for a problem owned by this repository: its canonical Creative
 Writing Skills plugin skills, bundled `cw` CLI, generated Claude or ZCode
-distribution, or project docs and contracts.
+distribution, or repository docs and contracts that define or ship those
+Creative Writing Skills components.
 
 Every canonical skill shipped by this repository is in scope. That includes
 authored and internal skills such as `story-memory`, plus defects in this
@@ -25,8 +26,11 @@ Do not activate or file here for Superpowers, Codex, Claude, or ZCode harness
 bugs, GitHub CLI (`gh`), or any skill or plugin not shipped by this repository.
 An upstream defect in the original project from which a skill was vendored is
 also out of scope when this repository's pinned copy, adaptation, packaging,
-and distribution are working as intended. If ownership is unclear, diagnose it
-first and do not file in this repository until local ownership is established.
+and distribution are working as intended. Unrelated repository process,
+planning, and Superpowers plan documents are out of scope when they do not
+define or ship the Creative Writing Skills plugin, bundled `cw` CLI, canonical
+skills, or generated distributions. If ownership is unclear, diagnose it first
+and do not file in this repository until local ownership is established.
 
 Use the fixed [Creative Writing Skills issue tracker](https://github.com/InkyQuill/creative-writing-skills/issues).
 Search both open and closed issues before proposing or creating a report. Use

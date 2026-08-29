@@ -43,7 +43,7 @@ class ProjectFeedbackSkillTests(unittest.TestCase):
             "canonical creative writing skills plugin skills",
             "bundled cw cli",
             "generated claude or zcode distribution",
-            "project docs and contracts",
+            "repository docs and contracts that define or ship those creative writing skills components",
             "authored and internal skills such as story-memory",
             "pinned or adapted vendored copy of a skill such as llm-writing",
             "packaging or distribution of that local copy",
@@ -62,6 +62,10 @@ class ProjectFeedbackSkillTests(unittest.TestCase):
         self.assertRegex(
             text,
             r"(?is)upstream defect.{0,240}out of scope.{0,220}(pinned copy|adaptation|packaging|distribution)",
+        )
+        self.assertRegex(
+            text,
+            r"(?is)unrelated repository process.{0,120}planning.{0,120}superpowers plan documents.{0,120}out of scope.{0,220}do not.{0,80}define or ship",
         )
         self.assertRegex(
             text,
