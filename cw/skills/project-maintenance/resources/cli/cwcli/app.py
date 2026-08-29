@@ -12,7 +12,13 @@ from . import __version__
 from .checks import CHECKERS, run_checks
 from .checks.structure import check_structure
 from .checks.drafts import check_drafts
-from .context import ContextPlanError, plan_context
+from .context import (
+    ContextPlanError,
+    ContextSnapshotError,
+    clean_context,
+    plan_context,
+    render_snapshot,
+)
 from .documents import DocumentError, logical_hash
 from .drafts import (
     DraftConflict,
@@ -100,7 +106,11 @@ def _parser(*, error_stream: TextIO) -> argparse.ArgumentParser:
     context.add_argument("context_kind", choices=("draft", "chapter", "kb"))
     context.add_argument("path")
     context.add_argument("--as", dest="context_role", default="trusted")
+    context.add_argument("--snapshot", action="store_true")
     _format_option(context)
+
+    clean_context_command = commands.add_parser("clean-context", error_stream=error_stream)
+    _mutation_options(clean_context_command)
 
     init = commands.add_parser("init", error_stream=error_stream)
     init.add_argument("path", nargs="?", default=".")
@@ -218,6 +228,9 @@ def run(argv: list[str], *, cwd: Path, stdout: TextIO, stderr: TextIO) -> int:
     if args.command == "context":
         return _run_context(args, cwd=cwd, stdout=stdout, stderr=stderr)
 
+    if args.command == "clean-context":
+        return _run_clean_context(args, cwd=cwd, stdout=stdout, stderr=stderr)
+
     if args.command == "check":
         names = sorted(CHECKERS) if args.check_command == "all" else [args.check_command]
         try:
@@ -270,10 +283,44 @@ def _run_context(args: argparse.Namespace, *, cwd: Path, stdout: TextIO, stderr:
     try:
         project = discover_project(cwd)
         planned = plan_context(project, args.context_kind, args.path, args.context_role)
-        _write_command_data(planned.as_dict(), output_format=args.format, stdout=stdout)
+        result = planned.as_dict()
+        if args.snapshot:
+            snapshot = render_snapshot(project, planned)
+            result["snapshot"] = snapshot.as_dict()
+            if snapshot.boundary_warning:
+                result["warnings"] = [
+                    *planned.warnings,
+                    "restricted context contains ordinary prose; the knowledge boundary cannot be guaranteed",
+                ]
+        _write_command_data(result, output_format=args.format, stdout=stdout)
         return 0
     except (
         ContextPlanError,
+        ContextSnapshotError,
+        DocumentError,
+        OSError,
+        ProjectDiscoveryError,
+        ProjectPathError,
+        UnicodeError,
+        ValueError,
+    ) as error:
+        return _write_command_error(
+            error,
+            conflict=False,
+            output_format=args.format,
+            stdout=stdout,
+            stderr=stderr,
+        )
+
+
+def _run_clean_context(args: argparse.Namespace, *, cwd: Path, stdout: TextIO, stderr: TextIO) -> int:
+    try:
+        project = discover_project(cwd)
+        result = clean_context(project, apply=args.apply)
+        _write_command_data(result.as_dict(), output_format=args.format, stdout=stdout)
+        return 0
+    except (
+        ContextSnapshotError,
         DocumentError,
         OSError,
         ProjectDiscoveryError,
