@@ -422,6 +422,11 @@ class ProseCheckTests(unittest.TestCase):
                 "language_capability": None,
                 "measured_metrics": list(prose.UNIVERSAL_METRICS),
                 "skipped_metrics": list(prose.LANGUAGE_SENSITIVE_METRICS),
+                "sentence_length_p90": 2,
+                "sentence_length_step": 0.0,
+                "em_dash_count": 0,
+                "subordination_mean": None,
+                "intensifier_count": None,
             },
             item["details"],
         )
