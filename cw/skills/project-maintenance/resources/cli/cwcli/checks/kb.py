@@ -55,17 +55,20 @@ def check_kb(project: Project) -> list[Finding]:
 
 def _source_kind(project: Project, source: str) -> str:
     try:
-        if "\x00" in source:
-            return "invalid"
         parsed = urlsplit(source)
-        decoded_path = _strict_unquote(parsed.path)
-        if "\x00" in decoded_path:
-            return "invalid"
         if parsed.scheme.casefold() in {"http", "https"} and parsed.netloc:
             return "durable"
         if source.startswith("decision:"):
             return "durable" if is_committed_decision(project, source.removeprefix("decision:")) else "invalid"
-        if parsed.scheme or parsed.netloc or "\\" in decoded_path or decoded_path.startswith("/") or ".." in Path(decoded_path).parts:
+        if parsed.scheme or parsed.netloc:
+            return "invalid"
+
+        if "\x00" in source:
+            return "invalid"
+        decoded_path = _strict_unquote(parsed.path)
+        if "\x00" in decoded_path:
+            return "invalid"
+        if "\\" in decoded_path or decoded_path.startswith("/") or ".." in Path(decoded_path).parts:
             return "invalid"
         target = project.root / decoded_path
         if _path_kind(target) != "file" or _contains_symlink(project.root, target) or _crosses_nested_project(project, target):

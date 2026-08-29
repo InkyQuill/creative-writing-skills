@@ -49,6 +49,24 @@ class KnowledgeCheckTests(unittest.TestCase):
             self.assertIn("confirm", work[0].next_action.casefold())
             self.assertFalse([item for item in findings if item.code == kb.INVALID_SOURCE])
 
+    def test_external_opaque_paths_are_durable_without_percent_decoding(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory) / "project"
+            model = make_project(root)
+            (root / "kb/world/ref.md").write_text(
+                "---\nsources:\n"
+                "  - https://example.com/%FF\n"
+                "  - http://example.com/%00\n"
+                "  - '%FF.md'\n"
+                "---\n",
+                encoding="utf-8",
+            )
+
+            invalid = [item for item in kb.check_kb(model) if item.code == kb.INVALID_SOURCE]
+
+            self.assertEqual(1, len(invalid))
+            self.assertIn("%FF.md", invalid[0].message)
+
     def test_missing_invalid_and_malformed_sources_do_not_abort_peers(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory) / "project"

@@ -33,6 +33,24 @@ class LinkCheckTests(unittest.TestCase):
             self.assertEqual(2, sum(item.code == links.MALFORMED_LINK for item in findings))
             self.assertEqual(1, sum(item.code == links.MISSING_TARGET for item in findings))
 
+    def test_external_opaque_paths_are_classified_without_percent_decoding(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory) / "project"
+            model = make_project(root)
+            chapter = root / "story/chapters/one.md"
+            chapter.write_text(
+                "---\nnumber: 1\n---\n"
+                "[https](https://example.com/%FF) [http](http://example.com/%00) "
+                "[network](//example.com/%FF) [mail](mailto:test%FF@example.com) "
+                "[other](gemini://example.com/%FF)\n",
+                encoding="utf-8",
+            )
+
+            findings = links.check_links(model)
+
+            self.assertFalse([item for item in findings if item.code == links.MALFORMED_LINK])
+            self.assertEqual(1, sum(item.code == links.EXTERNAL_REFERENCE for item in findings))
+
     def test_missing_external_parent_and_nested_links_are_classified_without_following(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory) / "project"

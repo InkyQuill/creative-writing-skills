@@ -82,16 +82,17 @@ def _inspect_link(
         if rendered is None:
             return []
         destination, _fragment = rendered
-        if "\x00" in destination:
-            raise ValueError("link destination contains NUL")
         parsed = urlsplit(destination)
-        decoded_path = _strict_unquote(parsed.path)
-        if "\x00" in decoded_path:
-            raise ValueError("decoded link path contains NUL")
         if parsed.scheme.casefold() in _EXTERNAL_SCHEMES or destination.startswith("//"):
             return []
         if parsed.scheme or parsed.netloc:
             return [_finding(EXTERNAL_REFERENCE, "info", "link uses an external or unsupported URI scheme and is not followed", relative_source, line_number, "Review this external reference manually if it is required as context.")]
+
+        if "\x00" in destination:
+            raise ValueError("link destination contains NUL")
+        decoded_path = _strict_unquote(parsed.path)
+        if "\x00" in decoded_path:
+            raise ValueError("decoded link path contains NUL")
 
         reference = decoded_path
         if not reference:
