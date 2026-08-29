@@ -5,6 +5,8 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 
+from .markdown_links import closes_markdown_fence, markdown_fence_marker
+
 
 _DELIMITER = re.compile(r"^:?-{3,}:?$")
 
@@ -185,21 +187,14 @@ def _visible_table_lines(text: str) -> list[str]:
     visible: list[str] = []
     fence: tuple[str, int] | None = None
     for line in lines:
-        stripped = line.lstrip(" \t")
-        indent = len(line) - len(stripped)
-        marker: tuple[str, int] | None = None
-        if stripped and stripped[0] in "`~":
-            character = stripped[0]
-            length = len(stripped) - len(stripped.lstrip(character))
-            if length >= 3:
-                marker = (character, length)
+        marker = markdown_fence_marker(line)
         if fence is not None:
             visible.append("")
-            if marker is not None and marker[0] == fence[0] and marker[1] >= fence[1]:
+            if marker is not None and closes_markdown_fence(marker, fence):
                 fence = None
             continue
-        if marker is not None and indent <= 3:
-            fence = marker
+        if marker is not None:
+            fence = marker[:2]
             visible.append("")
         elif line.startswith("    ") or line.startswith("\t"):
             visible.append("")

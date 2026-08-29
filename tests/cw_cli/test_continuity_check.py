@@ -89,6 +89,29 @@ class ContinuityParityTests(unittest.TestCase):
         self.assertTrue(conflicts)
         self.assertTrue(all(item.path == "kb/world/a.md" and item.line == 3 for item in conflicts))
 
+    def test_managed_kb_subtimeline_duplicate_semantic_header_warns_stably(self):
+        self.write_records()
+        world = self.root / "kb/world"
+        world.mkdir()
+        (world / "mara.md").write_text(
+            "| When | Event | Threads | Anchor | Anchor | Chapter |\n"
+            "|---|---|---|---|---|---|\n"
+            "| Day 1 | Arrival | main | quay | quay | Ch 1 |\n",
+            encoding="utf-8",
+        )
+
+        malformed = [
+            item
+            for item in self.findings()
+            if item.code == continuity.MALFORMED
+            and item.path == "kb/world/mara.md"
+        ]
+
+        self.assertEqual(
+            [(item.line, item.message) for item in malformed],
+            [(1, "mara.md contains a table with unrecognized columns")],
+        )
+
     def test_duplicate_semantic_headers_and_huge_integers_warn_without_abort(self):
         huge = "9" * 10000
         self.write_records(

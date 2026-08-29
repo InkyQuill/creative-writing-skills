@@ -12,6 +12,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from ..findings import Finding
+from ..markdown_links import closes_markdown_fence, markdown_fence_marker
 from ..project import Project
 
 
@@ -25,7 +26,6 @@ METRICS = "CW-PROSE-090"
 WINDOWED_REPETITION = "CW-PROSE-041"
 
 _QUOTE_RE = re.compile(r'".+?"|«.+?»|„.+?“|“.+?”')
-_FENCE_RE = re.compile(r"^[ \t]{0,3}(`{3,}|~{3,})(.*)$")
 _TAG_RE = re.compile(r"</?(?:AI|hidden)>")
 _INLINE_CODE_RE = re.compile(r"(`+)(.*?)\1")
 _SENTENCE_SPLIT_RE = re.compile(r"(?<=[.!?…])\s+")
@@ -223,22 +223,19 @@ def _visible_document(text: str) -> _VisibleDocument:
     fence_line = 0
 
     for line_number, line in numbered_lines[body_start:]:
-        match = _FENCE_RE.match(line)
+        marker = markdown_fence_marker(line)
         if fence_character is None:
-            if match is not None:
-                marker = match.group(1)
+            if marker is not None:
                 fence_character = marker[0]
-                fence_length = len(marker)
+                fence_length = marker[1]
                 fence_line = line_number
                 visible.append((line_number, ""))
             else:
                 visible.append((line_number, _strip_inline_code(line)))
             continue
 
-        if match is not None:
-            marker = match.group(1)
-            suffix = match.group(2).strip()
-            if marker[0] == fence_character and len(marker) >= fence_length and not suffix:
+        if marker is not None:
+            if closes_markdown_fence(marker, (fence_character, fence_length)):
                 fence_character = None
                 fence_length = 0
                 fence_line = 0
@@ -268,18 +265,16 @@ def _integrity_lines(text: str) -> tuple[tuple[int, str], ...]:
     lines: list[tuple[int, str]] = []
     fence: tuple[str, int] | None = None
     for line_number, line in enumerate(text.splitlines(), 1):
-        match = _FENCE_RE.match(line)
+        marker = markdown_fence_marker(line)
         if fence is None:
-            if match is not None:
-                marker = match.group(1)
-                fence = (marker[0], len(marker))
+            if marker is not None:
+                fence = marker[:2]
                 lines.append((line_number, ""))
             else:
                 lines.append((line_number, _strip_inline_code(line)))
         else:
-            if match is not None:
-                marker = match.group(1)
-                if marker[0] == fence[0] and len(marker) >= fence[1] and not match.group(2).strip():
+            if marker is not None:
+                if closes_markdown_fence(marker, fence):
                     fence = None
             lines.append((line_number, ""))
     return tuple(lines)
@@ -382,14 +377,12 @@ def _strip_frontmatter_and_fences(text: str) -> str:
     cleaned: list[str] = []
     fence: tuple[str, int] | None = None
     for line in lines[start:]:
-        match = _FENCE_RE.match(line)
-        if fence is None and match is not None:
-            marker = match.group(1)
-            fence = (marker[0], len(marker))
+        marker = markdown_fence_marker(line)
+        if fence is None and marker is not None:
+            fence = marker[:2]
             continue
-        if fence is not None and match is not None:
-            marker = match.group(1)
-            if marker[0] == fence[0] and len(marker) >= fence[1] and not match.group(2).strip():
+        if fence is not None and marker is not None:
+            if closes_markdown_fence(marker, fence):
                 fence = None
             continue
         if fence is None:
@@ -439,7 +432,7 @@ def _words(text: str) -> list[str]:
 
 
 def _paragraphs(text: str) -> list[str]:
-    return [chunk.strip() for chunk in re.split(r"\n\s*\n", text) if _words(chunk)]
+    return [chunk.strip() for chunk in re.split(r"\n\s*\n", text) if chunk.strip()]
 
 
 def _sentences(text: str) -> list[str]:

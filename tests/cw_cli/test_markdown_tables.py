@@ -9,6 +9,29 @@ class MarkdownTableTests(unittest.TestCase):
         text = "```\n| a | b |\n|---|---|\n```\n~~~\n| c | d |\n|---|---|\n~~~\n    | e | f |\n    |---|---|\n"
         self.assertEqual((), parse_tables(text))
         self.assertEqual((), malformed_table_lines(text))
+
+    def test_fence_closure_matches_link_parser_rules(self):
+        text = (
+            "~~~~md\n"
+            "| hidden | table |\n"
+            "|---|---|\n"
+            "```\n"
+            "| still | hidden |\n"
+            "|---|---|\n"
+            "~~~~ trailing\n"
+            "| also | hidden |\n"
+            "|---|---|\n"
+            "~~~~  \n"
+            "| visible | table |\n"
+            "|---|---|\n"
+            "| yes | value |\n"
+        )
+
+        tables = parse_tables(text)
+        self.assertEqual(1, len(tables))
+        self.assertEqual(("visible", "table"), tables[0].headers)
+        self.assertEqual(11, tables[0].header_line)
+
     def test_parses_trimmed_cells_and_preserves_source_lines(self):
         tables = parse_tables("intro\n\n | Name | Value |\n | :--- | ---: |\n | Mara |  7  |\n")
         self.assertEqual(tables[0].headers, ("Name", "Value"))

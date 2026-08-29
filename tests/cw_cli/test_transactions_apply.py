@@ -738,6 +738,41 @@ class TransactionEngineTests(unittest.TestCase):
         self.assertEqual(b"manual-update\n", (root / "story/updated.md").read_bytes())
         self.assertEqual("applying", engine.store.load("tx-manual-conflicts").state)
 
+    def test_recover_rejects_unintended_persisted_change_before_mutating_intended_peer(self):
+        root, engine = self.make_engine(
+            {"story/first.md": b"first-before\n", "story/second.md": b"second-before\n"}
+        )
+        plan = transactions.TransactionPlan(
+            ("edit", "apply"),
+            (
+                transactions.Change(
+                    "story/first.md", b"first-before\n", b"first-after\n"
+                ),
+                transactions.Change(
+                    "story/second.md", b"second-before\n", b"second-after\n"
+                ),
+            ),
+            {},
+        )
+        engine.store.prepare(plan, transaction_id="tx-unintended-second")
+        engine.store.write_state(
+            "tx-unintended-second",
+            "applying",
+            completed=("story/first.md",),
+            intents=("story/first.md",),
+        )
+        (root / "story/first.md").write_bytes(b"first-after\n")
+        (root / "story/second.md").write_bytes(b"second-after\n")
+
+        with self.assertRaisesRegex(
+            transactions.TransactionConflict, "story/second.md.*without durable intent"
+        ):
+            engine.recover("tx-unintended-second")
+
+        self.assertEqual(b"first-after\n", (root / "story/first.md").read_bytes())
+        self.assertEqual(b"second-after\n", (root / "story/second.md").read_bytes())
+        self.assertEqual("applying", engine.store.load("tx-unintended-second").state)
+
     def test_recover_final_state_failure_has_transaction_context_and_remains_retryable(self):
         root, engine = self.make_engine({"story/a.md": b"A\n"})
         plan = transactions.TransactionPlan(

@@ -61,6 +61,8 @@ _MANIFEST_KEYS = frozenset(
         "role",
         "required",
         "suggested",
+        "unresolved",
+        "warnings",
         "boundary_warning",
         "sources",
     }
@@ -68,6 +70,8 @@ _MANIFEST_KEYS = frozenset(
 _SOURCE_KEYS = frozenset(
     {"path", "logical_hash", "exact_hash", "snapshot_path", "snapshot_exact_hash"}
 )
+_PARTIAL_OWNER = ".cw-context-partial-owner"
+_PARTIAL_OWNER_KIND = "cw-context-snapshot-v1"
 
 
 class ContextPlanError(ValueError):
@@ -76,6 +80,36 @@ class ContextPlanError(ValueError):
 
 class ContextSnapshotError(ValueError):
     """Raised when a restricted snapshot cannot be derived or handled safely."""
+
+
+@dataclass
+class _HeldDirectory:
+    """An opened directory plus fallback identities retained for one operation."""
+
+    path: Path
+    descriptor: int
+    identity: tuple[int, int]
+    ancestors: tuple[tuple[Path, tuple[int, int]], ...]
+    descriptor_relative: bool
+
+    def close(self) -> None:
+        if self.descriptor >= 0:
+            os.close(self.descriptor)
+            self.descriptor = -1
+
+    def revalidate(self, label: str) -> None:
+        if self.descriptor >= 0:
+            opened = os.fstat(self.descriptor)
+            if (opened.st_dev, opened.st_ino) != self.identity or not stat.S_ISDIR(opened.st_mode):
+                raise ContextSnapshotError(f"unsafe {label}: opened directory changed")
+        if self.descriptor_relative:
+            return
+        for path, identity in self.ancestors:
+            entry = path.lstat()
+            if _unsafe_reparse(entry) or not stat.S_ISDIR(entry.st_mode):
+                raise ContextSnapshotError(f"unsafe {label}: fallback ancestor became unsafe")
+            if (entry.st_dev, entry.st_ino) != identity:
+                raise ContextSnapshotError(f"unsafe {label}: fallback ancestor changed")
 
 
 @dataclass(frozen=True)
@@ -299,100 +333,134 @@ def render_snapshot(project: Project, plan: ContextPlan) -> SnapshotResult:
     if plan.role != "reader" and character is None:
         raise ContextSnapshotError(f"unsupported restricted snapshot role: {plan.role}")
 
-    cache_root = _cache_root(project, create=True)
-    assert cache_root is not None
     selected = _stable_sources(plan)
     if not selected:
         raise ContextSnapshotError("context plan contains no safe selected sources")
-
-    files: dict[str, bytes] = {}
-    source_records: list[dict[str, str]] = []
-    boundary_warning = False
-    for relative in selected:
-        if not _safe_regular(project, relative):
-            raise ContextSnapshotError(f"snapshot source is missing, linked, nested, or unsafe: {relative}")
-        raw = _read_project_relative(project, relative)
-        try:
-            rendered, warns = _redact_source(raw, character=character)
-            source_logical_hash = logical_hash(raw)
-        except (UnicodeError, ValueError) as error:
-            raise ContextSnapshotError(f"cannot safely redact {relative}: {error}") from error
-        snapshot_path = f"files/{relative}"
-        files[relative] = rendered
-        boundary_warning = boundary_warning or warns
-        source_records.append(
-            {
-                "path": relative,
-                "logical_hash": source_logical_hash,
-                "exact_hash": _exact_hash(raw),
-                "snapshot_path": snapshot_path,
-                "snapshot_exact_hash": _exact_hash(rendered),
-            }
-        )
-
-    identity = {
-        "snapshot_version": _SNAPSHOT_VERSION,
-        "cli_version": __version__,
-        "kind": plan.kind,
-        "subject": plan.subject,
-        "role": plan.role,
-        "required": list(plan.required),
-        "suggested": list(plan.suggested),
-        "boundary_warning": boundary_warning,
-        "sources": source_records,
-    }
-    snapshot_id = hashlib.sha256(_canonical_json(identity)).hexdigest()
-    manifest: dict[str, object] = {
-        **identity,
-        "snapshot_id": snapshot_id,
-        "created_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
-    }
-    destination = cache_root / snapshot_id
-    relative_directory = f".creative-writing/context/{snapshot_id}"
-    _cleanup_recognized_partials(cache_root, snapshot_id)
-    temporary = cache_root / f".partial-{snapshot_id}-{uuid.uuid4().hex}"
+    cache = _cache_root(project, create=True)
+    assert cache is not None
+    project_root = _hold_directory_no_follow(project.root, "project root")
+    temporary: _HeldDirectory | None = None
+    temporary_name = ""
+    owner_token = ""
     try:
-        reservation_identity = _reserve_snapshot_directory(cache_root, temporary)
-    except FileExistsError:
-        raise ContextSnapshotError("could not reserve a unique owned snapshot partial")
-    try:
-        for relative, data in files.items():
-            _write_new_file(temporary / "files" / PurePosixPath(relative), data, root=temporary)
-        _sync_tree(temporary)
-        _write_new_file(
-            temporary / "manifest.json",
-            _canonical_json(manifest) + b"\n",
-            root=temporary,
-        )
-        _fsync_directory(temporary)
-        _validate_snapshot_files(temporary, manifest)
-        try:
-            _rename_no_replace(temporary, destination)
-        except FileExistsError:
-            _cleanup_owned_reservation(cache_root, temporary, reservation_identity)
-            return _reuse_snapshot_winner(
-                cache_root,
-                destination,
-                snapshot_id=snapshot_id,
-                relative_directory=relative_directory,
-                role=plan.role,
-                files=files,
-                manifest=manifest,
-                boundary_warning=boundary_warning,
+        files: dict[str, bytes] = {}
+        source_records: list[dict[str, str]] = []
+        boundary_warning = False
+        for relative in selected:
+            raw = _read_from_handle(
+                project_root,
+                relative,
+                "snapshot source",
+                reject_nested_projects=True,
             )
-        _fsync_directory(cache_root)
-    except BaseException:
-        _cleanup_owned_reservation(cache_root, temporary, reservation_identity)
-        raise
+            try:
+                rendered, warns = _redact_source(raw, character=character)
+                source_logical_hash = logical_hash(raw)
+            except (UnicodeError, ValueError) as error:
+                raise ContextSnapshotError(f"cannot safely redact {relative}: {error}") from error
+            snapshot_path = f"files/{relative}"
+            files[relative] = rendered
+            boundary_warning = boundary_warning or warns
+            source_records.append(
+                {
+                    "path": relative,
+                    "logical_hash": source_logical_hash,
+                    "exact_hash": _exact_hash(raw),
+                    "snapshot_path": snapshot_path,
+                    "snapshot_exact_hash": _exact_hash(rendered),
+                }
+            )
 
-    return SnapshotResult(
-        snapshot_id=snapshot_id,
-        directory=relative_directory,
-        role=plan.role,
-        files=files,
-        manifest=manifest,
-        boundary_warning=boundary_warning,
-    )
+        identity = {
+            "snapshot_version": _SNAPSHOT_VERSION,
+            "cli_version": __version__,
+            "kind": plan.kind,
+            "subject": plan.subject,
+            "role": plan.role,
+            "required": list(plan.required),
+            "suggested": list(plan.suggested),
+            "unresolved": list(plan.unresolved),
+            "warnings": list(plan.warnings),
+            "boundary_warning": boundary_warning,
+            "sources": source_records,
+        }
+        snapshot_id = hashlib.sha256(_canonical_json(identity)).hexdigest()
+        manifest: dict[str, object] = {
+            **identity,
+            "snapshot_id": snapshot_id,
+            "created_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+        }
+        relative_directory = f".creative-writing/context/{snapshot_id}"
+        _cleanup_recognized_partials(cache, snapshot_id)
+        owner_token = uuid.uuid4().hex
+        temporary_name = f".partial-{snapshot_id}-{owner_token}"
+        try:
+            temporary = _reserve_snapshot_directory(
+                cache,
+                temporary_name,
+                snapshot_id=snapshot_id,
+                owner_token=owner_token,
+            )
+        except FileExistsError:
+            raise ContextSnapshotError("could not reserve a unique owned snapshot partial")
+        try:
+            for relative, data in files.items():
+                _write_to_handle(temporary, f"files/{relative}", data)
+            _write_to_handle(temporary, "manifest.json", _canonical_json(manifest) + b"\n")
+            _sync_handle_tree(temporary)
+            _validate_snapshot_files(temporary, manifest, allow_owner=True)
+            owner_info = _stat_child(temporary, _PARTIAL_OWNER, "snapshot partial owner")
+            _unlink_child(
+                temporary,
+                _PARTIAL_OWNER,
+                (owner_info.st_dev, owner_info.st_ino),
+                "snapshot partial owner",
+            )
+            _fsync_handle(temporary)
+            temporary.close()
+            try:
+                _rename_no_replace(cache, temporary_name, snapshot_id)
+            except FileExistsError:
+                _cleanup_owned_reservation(
+                    cache,
+                    temporary_name,
+                    temporary.identity,
+                    snapshot_id=snapshot_id,
+                    owner_token=owner_token,
+                )
+                return _reuse_snapshot_winner(
+                    cache,
+                    snapshot_id=snapshot_id,
+                    relative_directory=relative_directory,
+                    role=plan.role,
+                    files=files,
+                    manifest=manifest,
+                    boundary_warning=boundary_warning,
+                )
+            _fsync_handle(cache)
+        except BaseException:
+            _cleanup_owned_reservation(
+                cache,
+                temporary_name,
+                temporary.identity,
+                snapshot_id=snapshot_id,
+                owner_token=owner_token,
+            )
+            raise
+
+        return SnapshotResult(
+            snapshot_id=snapshot_id,
+            directory=relative_directory,
+            role=plan.role,
+            files=files,
+            manifest=manifest,
+            boundary_warning=boundary_warning,
+        )
+    finally:
+        if temporary is not None:
+            temporary.close()
+        project_root.close()
+        cache.close()
 
 
 def snapshot_status(project: Project) -> list[Finding]:
@@ -400,96 +468,131 @@ def snapshot_status(project: Project) -> list[Finding]:
 
     findings: list[Finding] = []
     try:
-        cache_root = _cache_root(project, create=False)
+        cache = _cache_root(project, create=False)
     except (ContextSnapshotError, OSError, ValueError) as error:
         return [_context_finding("CW-CONTEXT-UNSAFE", str(error))]
-    if cache_root is None:
+    if cache is None:
         return findings
-
-    for entry in sorted(cache_root.iterdir(), key=lambda item: item.name):
-        relative = f".creative-writing/context/{entry.name}"
-        if entry.is_symlink() or not entry.is_dir() or _SNAPSHOT_ID.fullmatch(entry.name) is None:
-            findings.append(_context_finding("CW-CONTEXT-UNSAFE", "unsafe or unknown context cache entry", relative))
-            continue
-        try:
-            manifest = _load_snapshot_manifest(cache_root, entry)
-            _validate_snapshot_files(entry, manifest)
-        except (ContextSnapshotError, OSError, UnicodeError, ValueError) as error:
-            findings.append(_context_finding("CW-CONTEXT-CORRUPT", str(error), relative))
-            continue
-        for source in manifest["sources"]:
-            assert isinstance(source, dict)
-            source_path = source["path"]
-            assert isinstance(source_path, str)
-            if not _safe_regular(project, source_path):
-                findings.append(
-                    _context_finding(
-                        "CW-CONTEXT-MISSING",
-                        f"snapshot source is missing or unsafe: {source_path}",
-                        relative,
-                    )
-                )
-                continue
+    project_root: _HeldDirectory | None = None
+    try:
+        project_root = _hold_directory_no_follow(project.root, "project root")
+        for name in _directory_names(cache, "context cache root"):
+            relative = f".creative-writing/context/{name}"
             try:
-                data = _read_project_relative(project, source_path)
-                current_exact = _exact_hash(data)
-                current_logical = logical_hash(data)
-            except (OSError, UnicodeError, ValueError) as error:
-                findings.append(_context_finding("CW-CONTEXT-CORRUPT", f"cannot inspect {source_path}: {error}", relative))
+                info = _stat_child(cache, name, "context cache entry")
+            except OSError as error:
+                findings.append(_context_finding("CW-CONTEXT-UNSAFE", str(error), relative))
                 continue
-            if current_exact != source["exact_hash"] or current_logical != source["logical_hash"]:
-                findings.append(
-                    _context_finding(
-                        "CW-CONTEXT-STALE",
-                        f"snapshot source changed: {source_path}",
-                        relative,
+            if _unsafe_reparse(info) or not stat.S_ISDIR(info.st_mode) or _SNAPSHOT_ID.fullmatch(name) is None:
+                findings.append(_context_finding("CW-CONTEXT-UNSAFE", "unsafe or unknown context cache entry", relative))
+                continue
+            snapshot: _HeldDirectory | None = None
+            try:
+                snapshot = _open_child_directory(cache, name, "snapshot directory")
+                manifest = _load_snapshot_manifest(snapshot, name)
+                _validate_snapshot_files(snapshot, manifest)
+            except (ContextSnapshotError, OSError, UnicodeError, ValueError) as error:
+                findings.append(_context_finding("CW-CONTEXT-CORRUPT", str(error), relative))
+                continue
+            finally:
+                if snapshot is not None:
+                    snapshot.close()
+            for source in manifest["sources"]:
+                assert isinstance(source, dict)
+                source_path = source["path"]
+                assert isinstance(source_path, str)
+                try:
+                    data = _read_from_handle(
+                        project_root,
+                        source_path,
+                        "snapshot source",
+                        reject_nested_projects=True,
                     )
+                    current_exact = _exact_hash(data)
+                    current_logical = logical_hash(data)
+                except (FileNotFoundError, NotADirectoryError, ContextSnapshotError) as error:
+                    findings.append(
+                        _context_finding(
+                            "CW-CONTEXT-MISSING",
+                            f"snapshot source is missing or unsafe: {source_path}: {error}",
+                            relative,
+                        )
+                    )
+                    continue
+                except (OSError, UnicodeError, ValueError) as error:
+                    findings.append(_context_finding("CW-CONTEXT-CORRUPT", f"cannot inspect {source_path}: {error}", relative))
+                    continue
+                if current_exact != source["exact_hash"] or current_logical != source["logical_hash"]:
+                    findings.append(
+                        _context_finding(
+                            "CW-CONTEXT-STALE",
+                            f"snapshot source changed: {source_path}",
+                            relative,
+                        )
+                    )
+            try:
+                current_plan = plan_context(
+                    project,
+                    str(manifest["kind"]),
+                    str(manifest["subject"]),
+                    str(manifest["role"]),
                 )
-        try:
-            current_plan = plan_context(
-                project,
-                str(manifest["kind"]),
-                str(manifest["subject"]),
-                str(manifest["role"]),
-            )
-        except (ContextPlanError, ContextSnapshotError, OSError, UnicodeError, ValueError) as error:
-            findings.append(_context_finding("CW-CONTEXT-STALE", f"snapshot plan can no longer be reproduced: {error}", relative))
-        else:
-            if list(current_plan.required) != manifest["required"] or list(current_plan.suggested) != manifest["suggested"] or current_plan.unresolved:
-                findings.append(_context_finding("CW-CONTEXT-STALE", "snapshot context plan changed or is now ambiguous", relative))
+            except (ContextPlanError, ContextSnapshotError, OSError, UnicodeError, ValueError) as error:
+                findings.append(_context_finding("CW-CONTEXT-STALE", f"snapshot plan can no longer be reproduced: {error}", relative))
+            else:
+                if any(
+                    list(getattr(current_plan, key)) != manifest[key]
+                    for key in ("required", "suggested", "unresolved", "warnings")
+                ):
+                    findings.append(_context_finding("CW-CONTEXT-STALE", "snapshot context plan changed", relative))
+    finally:
+        if project_root is not None:
+            project_root.close()
+        cache.close()
     return sorted(findings, key=lambda item: (item.path or "", item.code, item.message))
 
 
 def clean_context(project: Project, *, apply: bool = False) -> ContextCleanupResult:
     """Preview or remove only structurally validated snapshot directories."""
 
-    cache_root = _cache_root(project, create=False)
-    if cache_root is None:
+    cache = _cache_root(project, create=False)
+    if cache is None:
         return ContextCleanupResult("applied" if apply else "preview", (), ())
+    validated: list[tuple[str, _HeldDirectory]] = []
+    try:
+        status_findings = tuple(snapshot_status(project))
+        blocked = any(item.code in {"CW-CONTEXT-CORRUPT", "CW-CONTEXT-UNSAFE"} for item in status_findings)
+        for name in _directory_names(cache, "context cache root"):
+            info = _stat_child(cache, name, "context cache entry")
+            if _unsafe_reparse(info) or not stat.S_ISDIR(info.st_mode) or _SNAPSHOT_ID.fullmatch(name) is None:
+                raise ContextSnapshotError(f"unsafe or unknown context cache entry: {name}")
+            snapshot: _HeldDirectory | None = None
+            try:
+                snapshot = _open_child_directory(cache, name, "snapshot cleanup target")
+                manifest = _load_snapshot_manifest(snapshot, name)
+                _validate_snapshot_files(snapshot, manifest)
+                _validate_cleanup_tree(snapshot, manifest)
+            except (ContextSnapshotError, OSError, UnicodeError, ValueError):
+                if snapshot is not None:
+                    snapshot.close()
+                continue
+            validated.append((name, snapshot))
 
-    status_findings = tuple(snapshot_status(project))
-    blocked = any(item.code in {"CW-CONTEXT-CORRUPT", "CW-CONTEXT-UNSAFE"} for item in status_findings)
-    validated: list[Path] = []
-    for entry in sorted(cache_root.iterdir(), key=lambda item: item.name):
-        info = entry.lstat()
-        if _unsafe_reparse(info) or not stat.S_ISDIR(info.st_mode) or _SNAPSHOT_ID.fullmatch(entry.name) is None:
-            raise ContextSnapshotError(f"unsafe or unknown context cache entry: {entry.name}")
-        try:
-            manifest = _load_snapshot_manifest(cache_root, entry)
-            _validate_snapshot_files(entry, manifest)
-            _validate_cleanup_tree(entry, manifest)
-        except (ContextSnapshotError, OSError, UnicodeError, ValueError):
-            continue
-        validated.append(entry)
-
-    directories = tuple(f".creative-writing/context/{entry.name}" for entry in validated)
-    if apply and blocked:
-        raise ContextSnapshotError("context cleanup is blocked by corrupt, unsafe, or unknown cache entries")
-    if apply:
-        for entry in validated:
-            _remove_tree_no_follow(cache_root, entry)
-        _fsync_directory(cache_root)
-    return ContextCleanupResult("applied" if apply else "preview", directories, status_findings)
+        directories = tuple(f".creative-writing/context/{name}" for name, _snapshot in validated)
+        if apply and blocked:
+            raise ContextSnapshotError("context cleanup is blocked by corrupt, unsafe, or unknown cache entries")
+        if apply:
+            for name, snapshot in validated:
+                _remove_directory_contents(snapshot)
+                snapshot.revalidate("snapshot cleanup target")
+                snapshot.close()
+                _rmdir_child(cache, name, snapshot.identity, "snapshot cleanup target")
+            _fsync_handle(cache)
+        return ContextCleanupResult("applied" if apply else "preview", directories, status_findings)
+    finally:
+        for _name, snapshot in validated:
+            snapshot.close()
+        cache.close()
 
 
 def _stable_sources(plan: ContextPlan) -> tuple[str, ...]:
@@ -600,88 +703,79 @@ def _has_unmarked_prose(text: str) -> bool:
     return False
 
 
-def _cache_root(project: Project, *, create: bool) -> Path | None:
+def _cache_root(project: Project, *, create: bool) -> _HeldDirectory | None:
     root = Path(os.path.abspath(project.root))
-    root_descriptor = _open_directory_no_follow(root, "project root")
-    os.close(root_descriptor)
-    current = root
+    current = _hold_directory_no_follow(root, "project root")
     for component, label in (
         (".creative-writing", ".creative-writing root"),
         ("context", "context cache root"),
     ):
-        target = current / component
         try:
-            entry = target.lstat()
+            child = _open_child_directory(current, component, label)
         except FileNotFoundError:
             if not create:
+                current.close()
                 return None
-            _mkdir_exclusive_no_follow(current, component, label)
-            entry = target.lstat()
-            _fsync_directory(current)
-        if _unsafe_reparse(entry) or not stat.S_ISDIR(entry.st_mode):
-            raise ContextSnapshotError(f"unsafe {label}: expected an ordinary directory without links")
-        descriptor = _open_directory_no_follow(target, label)
-        os.close(descriptor)
-        try:
-            target.resolve(strict=True).relative_to(root.resolve(strict=True))
-        except (FileNotFoundError, ValueError) as error:
-            raise ContextSnapshotError(f"unsafe {label}: directory escapes the project") from error
-        current = target
+            try:
+                current.revalidate(f"{label} parent")
+                if current.descriptor_relative:
+                    os.mkdir(component, mode=0o700, dir_fd=current.descriptor)
+                else:
+                    (current.path / component).mkdir(mode=0o700)
+                    current.revalidate(f"{label} parent")
+                child = _open_child_directory(current, component, label)
+            except BaseException:
+                current.close()
+                raise
+        except BaseException:
+            current.close()
+            raise
+        current.close()
+        current = child
     return current
 
 
-def _mkdir_exclusive_no_follow(parent: Path, name: str, label: str) -> None:
-    parent_descriptor = _open_directory_no_follow(parent, f"{label} parent")
-    try:
-        if os.mkdir in os.supports_dir_fd:
-            os.mkdir(name, mode=0o700, dir_fd=parent_descriptor)
-        else:
-            (parent / name).mkdir(mode=0o700)
-    except FileExistsError:
-        pass
-    finally:
-        os.close(parent_descriptor)
+def _reserve_snapshot_directory(
+    cache: _HeldDirectory,
+    name: str,
+    *,
+    snapshot_id: str,
+    owner_token: str,
+) -> _HeldDirectory:
+    """Exclusively reserve and mark an owned sibling partial directory."""
 
-
-def _reserve_snapshot_directory(cache_root: Path, destination: Path) -> tuple[int, int]:
-    """Exclusively reserve a stable ID without replacing any existing inode."""
-
-    valid_name = _SNAPSHOT_ID.fullmatch(destination.name) is not None or bool(
-        re.fullmatch(r"\.partial-[0-9a-f]{64}-[0-9a-f]{32}", destination.name)
-    )
-    if destination.parent != cache_root or not valid_name:
+    if name != f".partial-{snapshot_id}-{owner_token}" or not re.fullmatch(
+        r"\.partial-[0-9a-f]{64}-[0-9a-f]{32}", name
+    ):
         raise ContextSnapshotError("invalid snapshot reservation target")
-    parent_descriptor = _open_directory_no_follow(cache_root, "context cache root")
+    cache.revalidate("context cache root")
+    if cache.descriptor_relative:
+        os.mkdir(name, mode=0o700, dir_fd=cache.descriptor)
+    else:
+        (cache.path / name).mkdir(mode=0o700)
+        cache.revalidate("context cache root")
+    partial = _open_child_directory(cache, name, "snapshot partial")
     try:
-        secure_dirfd = (
-            os.mkdir in os.supports_dir_fd
-            and os.stat in os.supports_dir_fd
-            and os.stat in os.supports_follow_symlinks
+        marker = _canonical_json(
+            {"kind": _PARTIAL_OWNER_KIND, "snapshot_id": snapshot_id, "token": owner_token}
         )
-        if secure_dirfd:
-            os.mkdir(destination.name, mode=0o700, dir_fd=parent_descriptor)
-            entry = os.stat(destination.name, dir_fd=parent_descriptor, follow_symlinks=False)
-        else:
-            parent_before = os.fstat(parent_descriptor)
-            destination.mkdir(mode=0o700)
-            parent_after = cache_root.lstat()
-            if (
-                _unsafe_reparse(parent_after)
-                or (parent_after.st_dev, parent_after.st_ino)
-                != (parent_before.st_dev, parent_before.st_ino)
-            ):
-                raise ContextSnapshotError("context cache root changed during snapshot reservation")
-            entry = destination.lstat()
-        if not stat.S_ISDIR(entry.st_mode):
-            raise ContextSnapshotError("snapshot reservation is not an ordinary directory")
-        return entry.st_dev, entry.st_ino
-    finally:
-        os.close(parent_descriptor)
+        _write_to_handle(partial, _PARTIAL_OWNER, marker + b"\n")
+        _fsync_handle(partial)
+        return partial
+    except BaseException:
+        try:
+            _remove_directory_contents(partial)
+            partial.close()
+            _rmdir_child(cache, name, partial.identity, "snapshot partial reservation")
+        except (ContextSnapshotError, OSError):
+            pass
+        finally:
+            partial.close()
+        raise
 
 
 def _reuse_snapshot_winner(
-    cache_root: Path,
-    destination: Path,
+    cache: _HeldDirectory,
     *,
     snapshot_id: str,
     relative_directory: str,
@@ -690,13 +784,18 @@ def _reuse_snapshot_winner(
     manifest: dict[str, object],
     boundary_warning: bool,
 ) -> SnapshotResult:
+    winner: _HeldDirectory | None = None
     try:
-        existing = _load_snapshot_manifest(cache_root, destination)
-        _validate_snapshot_files(destination, existing)
+        winner = _open_child_directory(cache, snapshot_id, "snapshot winner")
+        existing = _load_snapshot_manifest(winner, snapshot_id)
+        _validate_snapshot_files(winner, existing)
     except (ContextSnapshotError, OSError, UnicodeError, ValueError) as error:
         raise ContextSnapshotError(
             f"snapshot destination already exists but is not a complete valid winner: {snapshot_id}"
         ) from error
+    finally:
+        if winner is not None:
+            winner.close()
     if _manifest_without_created(existing) != _manifest_without_created(manifest):
         raise ContextSnapshotError(f"snapshot identity collision at existing destination: {snapshot_id}")
     return SnapshotResult(
@@ -710,64 +809,137 @@ def _reuse_snapshot_winner(
 
 
 def _cleanup_owned_reservation(
-    cache_root: Path,
-    destination: Path,
+    cache: _HeldDirectory,
+    name: str,
     identity: tuple[int, int],
+    *,
+    snapshot_id: str,
+    owner_token: str,
 ) -> None:
+    partial: _HeldDirectory | None = None
     try:
-        entry = destination.lstat()
-    except FileNotFoundError:
-        return
-    if (
-        _unsafe_reparse(entry)
-        or not stat.S_ISDIR(entry.st_mode)
-        or (entry.st_dev, entry.st_ino) != identity
-    ):
-        return
-    try:
-        _remove_tree_no_follow(cache_root, destination)
-        _fsync_directory(cache_root)
-    except (ContextSnapshotError, OSError):
+        entry = _stat_child(cache, name, "snapshot partial cleanup")
+        if _unsafe_reparse(entry) or not stat.S_ISDIR(entry.st_mode):
+            return
+        if (entry.st_dev, entry.st_ino) != identity:
+            return
+        partial = _open_child_directory(cache, name, "snapshot partial cleanup")
+        if not _partial_owner_matches(partial, snapshot_id, owner_token, allow_missing=True):
+            return
+        _remove_directory_contents(partial)
+        partial.close()
+        _rmdir_child(cache, name, identity, "snapshot partial cleanup")
+        _fsync_handle(cache)
+    except (ContextSnapshotError, FileNotFoundError, OSError):
         # Never broaden failure cleanup into deletion of a changed or unsafe tree.
         return
+    finally:
+        if partial is not None:
+            partial.close()
 
 
-def _cleanup_recognized_partials(cache_root: Path, snapshot_id: str) -> None:
-    pattern = re.compile(rf"^\.partial-{re.escape(snapshot_id)}-[0-9a-f]{{32}}$")
-    for entry in tuple(cache_root.iterdir()):
-        if not pattern.fullmatch(entry.name):
+def _cleanup_recognized_partials(cache: _HeldDirectory, snapshot_id: str) -> None:
+    pattern = re.compile(rf"^\.partial-{re.escape(snapshot_id)}-([0-9a-f]{{32}})$")
+    for name in _directory_names(cache, "context cache root"):
+        match = pattern.fullmatch(name)
+        if match is None:
             continue
+        partial: _HeldDirectory | None = None
         try:
-            info = entry.lstat()
-            if stat.S_ISDIR(info.st_mode) and not _unsafe_reparse(info):
-                _remove_tree_no_follow(cache_root, entry)
+            info = _stat_child(cache, name, "snapshot partial")
+            if _unsafe_reparse(info) or not stat.S_ISDIR(info.st_mode):
+                continue
+            partial = _open_child_directory(cache, name, "snapshot partial")
+            token = match.group(1)
+            if not _partial_owner_matches(partial, snapshot_id, token) and not _complete_partial_matches(
+                partial, snapshot_id
+            ):
+                continue
+            _remove_directory_contents(partial)
+            partial.close()
+            _rmdir_child(cache, name, partial.identity, "snapshot partial cleanup")
+            _fsync_handle(cache)
         except (ContextSnapshotError, OSError):
             continue
+        finally:
+            if partial is not None:
+                partial.close()
 
 
-def _rename_no_replace(source: Path, destination: Path) -> None:
-    if os.name == "nt":
-        os.rename(source, destination)
+def _partial_owner_matches(
+    partial: _HeldDirectory,
+    snapshot_id: str,
+    owner_token: str,
+    *,
+    allow_missing: bool = False,
+) -> bool:
+    try:
+        raw = _read_from_handle(partial, _PARTIAL_OWNER, "snapshot partial owner")
+    except FileNotFoundError:
+        return allow_missing
+    try:
+        payload = json.loads(raw.decode("utf-8"))
+    except (UnicodeError, json.JSONDecodeError):
+        return False
+    return payload == {
+        "kind": _PARTIAL_OWNER_KIND,
+        "snapshot_id": snapshot_id,
+        "token": owner_token,
+    }
+
+
+def _complete_partial_matches(partial: _HeldDirectory, snapshot_id: str) -> bool:
+    """Recognize a crash-ready partial after its transient owner marker was removed."""
+
+    try:
+        manifest = _load_snapshot_manifest(partial, snapshot_id)
+        _validate_snapshot_files(partial, manifest)
+    except (ContextSnapshotError, OSError, UnicodeError, ValueError):
+        return False
+    return True
+
+
+def _rename_no_replace(cache: _HeldDirectory, source: str, destination: str) -> None:
+    cache.revalidate("context cache publication root")
+    if _is_windows():
+        os.rename(cache.path / source, cache.path / destination)
+        cache.revalidate("context cache publication root")
         return
     libc = ctypes.CDLL(None, use_errno=True)
     renameat2 = getattr(libc, "renameat2", None)
-    if renameat2 is None:
-        raise ContextSnapshotError("atomic no-replace snapshot publication is unavailable")
-    result = renameat2(-100, os.fsencode(source), -100, os.fsencode(destination), 1)
+    if renameat2 is not None:
+        result = renameat2(
+            cache.descriptor,
+            os.fsencode(source),
+            cache.descriptor,
+            os.fsencode(destination),
+            1,
+        )
+    else:
+        renameatx_np = getattr(libc, "renameatx_np", None)
+        if renameatx_np is None:
+            raise ContextSnapshotError("atomic no-replace snapshot publication is unavailable")
+        result = renameatx_np(
+            cache.descriptor,
+            os.fsencode(source),
+            cache.descriptor,
+            os.fsencode(destination),
+            0x00000004,
+        )
     if result == 0:
+        cache.revalidate("context cache publication root")
         return
     error = ctypes.get_errno()
     if error in {errno.EEXIST, errno.ENOTEMPTY}:
-        raise FileExistsError(destination)
-    raise OSError(error, os.strerror(error), destination)
+        raise FileExistsError(cache.path / destination)
+    raise OSError(error, os.strerror(error), cache.path / destination)
 
 
-def _load_snapshot_manifest(cache_root: Path, directory: Path) -> dict[str, object]:
-    if directory.parent != cache_root or directory.is_symlink() or not directory.is_dir():
-        raise ContextSnapshotError("snapshot directory is outside the exact cache root or unsafe")
-    if _SNAPSHOT_ID.fullmatch(directory.name) is None:
+def _load_snapshot_manifest(directory: _HeldDirectory, directory_name: str) -> dict[str, object]:
+    directory.revalidate("snapshot directory")
+    if _SNAPSHOT_ID.fullmatch(directory_name) is None:
         raise ContextSnapshotError("snapshot directory has an invalid identifier")
-    data = _read_relative_from_directory(directory, "manifest.json")
+    data = _read_from_handle(directory, "manifest.json", "snapshot manifest")
     try:
         payload = json.loads(data.decode("utf-8"))
     except (UnicodeError, json.JSONDecodeError) as error:
@@ -779,7 +951,7 @@ def _load_snapshot_manifest(cache_root: Path, directory: Path) -> dict[str, obje
     for key in ("snapshot_id", "cli_version", "created_at", "kind", "subject", "role"):
         if not isinstance(payload.get(key), str) or not payload[key]:
             raise ContextSnapshotError(f"snapshot manifest field {key} must be a non-empty string")
-    if payload["snapshot_id"] != directory.name:
+    if payload["snapshot_id"] != directory_name:
         raise ContextSnapshotError("snapshot manifest identity does not match its directory")
     if payload["kind"] not in _KINDS:
         raise ContextSnapshotError("snapshot manifest has an invalid context kind")
@@ -802,7 +974,7 @@ def _load_snapshot_manifest(cache_root: Path, directory: Path) -> dict[str, obje
         raise ContextSnapshotError("snapshot manifest subject is outside selectable roots")
     if not isinstance(payload.get("boundary_warning"), bool):
         raise ContextSnapshotError("snapshot boundary_warning must be boolean")
-    for key in ("required", "suggested"):
+    for key in ("required", "suggested", "unresolved", "warnings"):
         value = payload.get(key)
         if not isinstance(value, list) or not all(isinstance(item, str) for item in value):
             raise ContextSnapshotError(f"snapshot manifest field {key} must be a string list")
@@ -841,26 +1013,38 @@ def _load_snapshot_manifest(cache_root: Path, directory: Path) -> dict[str, obje
         if key not in {"snapshot_id", "created_at"}
     }
     expected_id = hashlib.sha256(_canonical_json(identity_payload)).hexdigest()
-    if expected_id != directory.name:
+    if expected_id != directory_name:
         raise ContextSnapshotError("snapshot manifest content does not match its stable identifier")
     return payload
 
 
-def _validate_snapshot_files(directory: Path, manifest: dict[str, object]) -> None:
-    _validate_cleanup_tree(directory, manifest)
+def _validate_snapshot_files(
+    directory: _HeldDirectory,
+    manifest: dict[str, object],
+    *,
+    allow_owner: bool = False,
+) -> None:
+    _validate_cleanup_tree(directory, manifest, allow_owner=allow_owner)
     sources = manifest["sources"]
     assert isinstance(sources, list)
     for source in sources:
         assert isinstance(source, dict)
         snapshot_path = source["snapshot_path"]
         assert isinstance(snapshot_path, str)
-        data = _read_relative_from_directory(directory, snapshot_path)
+        data = _read_from_handle(directory, snapshot_path, "derived snapshot file")
         if _exact_hash(data) != source["snapshot_exact_hash"]:
             raise ContextSnapshotError(f"derived snapshot file hash mismatch: {snapshot_path}")
 
 
-def _validate_cleanup_tree(directory: Path, manifest: dict[str, object]) -> None:
+def _validate_cleanup_tree(
+    directory: _HeldDirectory,
+    manifest: dict[str, object],
+    *,
+    allow_owner: bool = False,
+) -> None:
     expected_files = {"manifest.json"}
+    if allow_owner:
+        expected_files.add(_PARTIAL_OWNER)
     sources = manifest["sources"]
     assert isinstance(sources, list)
     expected_files.update(str(source["snapshot_path"]) for source in sources if isinstance(source, dict))
@@ -875,111 +1059,53 @@ def _validate_cleanup_tree(directory: Path, manifest: dict[str, object]) -> None
         raise ContextSnapshotError("snapshot tree contains missing or unknown files or directories")
 
 
-def _remove_tree_no_follow(cache_root: Path, directory: Path) -> None:
-    try:
-        directory.resolve(strict=True).relative_to(cache_root.resolve(strict=True))
-    except (FileNotFoundError, ValueError) as error:
-        raise ContextSnapshotError("snapshot cleanup target is outside the cache root") from error
-    if directory.parent != cache_root or directory.is_symlink() or not directory.is_dir():
-        raise ContextSnapshotError("snapshot cleanup target is unsafe")
-    if not all(function in os.supports_dir_fd for function in (os.open, os.stat, os.unlink, os.rmdir)):
-        _remove_directory_contents_no_follow(cache_root, directory)
-        directory.rmdir()
-        return
-    parent_descriptor = _open_directory_no_follow(cache_root, "context cache root")
-    descriptor = _open_directory_no_follow(directory, "snapshot cleanup target")
-    try:
-        _remove_directory_descriptor(descriptor)
-        if os.rmdir in os.supports_dir_fd:
-            os.rmdir(directory.name, dir_fd=parent_descriptor)
-        else:
-            directory.rmdir()
-    finally:
-        os.close(descriptor)
-        os.close(parent_descriptor)
+def _remove_directory_contents(directory: _HeldDirectory) -> None:
+    """Remove a validated tree, checking every child identity before mutation."""
 
-
-def _remove_directory_contents_no_follow(cache_root: Path, directory: Path) -> None:
-    try:
-        directory.resolve(strict=True).relative_to(cache_root.resolve(strict=True))
-    except (FileNotFoundError, ValueError) as error:
-        raise ContextSnapshotError("snapshot cleanup descendant escaped the cache root") from error
-    for entry in sorted(directory.iterdir(), key=lambda item: item.name):
-        info = entry.lstat()
+    for name in reversed(_directory_names(directory, "snapshot cleanup directory")):
+        info = _stat_child(directory, name, "snapshot cleanup directory")
+        identity = (info.st_dev, info.st_ino)
         if _unsafe_reparse(info):
-            raise ContextSnapshotError(f"snapshot cleanup refuses symlink: {entry.name}")
+            raise ContextSnapshotError(f"snapshot cleanup refuses link or reparse point: {name}")
         if stat.S_ISDIR(info.st_mode):
-            _remove_directory_contents_no_follow(cache_root, entry)
-            entry.rmdir()
+            child = _open_child_directory(directory, name, "snapshot cleanup child")
+            try:
+                _remove_directory_contents(child)
+                child.revalidate("snapshot cleanup child")
+            finally:
+                child.close()
+            _rmdir_child(directory, name, identity, "snapshot cleanup child")
         elif stat.S_ISREG(info.st_mode):
-            entry.unlink()
+            _unlink_child(directory, name, identity, "snapshot cleanup file")
         else:
-            raise ContextSnapshotError(f"snapshot cleanup refuses unknown entry: {entry.name}")
+            raise ContextSnapshotError(f"snapshot cleanup refuses unknown entry: {name}")
+        directory.revalidate("snapshot cleanup directory")
 
 
-def _directory_inventory(directory: Path) -> tuple[set[str], set[str]]:
+def _directory_inventory(directory: _HeldDirectory) -> tuple[set[str], set[str]]:
     files: set[str] = set()
     directories: set[str] = set()
-    if os.open not in os.supports_dir_fd or os.stat not in os.supports_dir_fd:
-        return _directory_inventory_fallback(directory)
-    root = _open_directory_no_follow(directory, "snapshot tree")
 
-    def visit(descriptor: int, prefix: PurePosixPath) -> None:
-        try:
-            names = sorted(os.listdir(descriptor))
-        except (TypeError, NotImplementedError):
-            raise ContextSnapshotError("descriptor-relative snapshot enumeration is unavailable")
-        for name in names:
-            info = os.stat(name, dir_fd=descriptor, follow_symlinks=False)
+    def visit(handle: _HeldDirectory, prefix: PurePosixPath) -> None:
+        for name in _directory_names(handle, "snapshot tree"):
+            info = _stat_child(handle, name, "snapshot tree")
             relative = (prefix / name).as_posix()
             if _unsafe_reparse(info):
-                raise ContextSnapshotError(f"unsafe symlink in snapshot tree: {relative}")
+                raise ContextSnapshotError(f"unsafe link in snapshot tree: {relative}")
             if stat.S_ISDIR(info.st_mode):
                 directories.add(relative)
-                child = os.open(
-                    name,
-                    os.O_RDONLY | getattr(os, "O_DIRECTORY", 0) | getattr(os, "O_NOFOLLOW", 0),
-                    dir_fd=descriptor,
-                )
+                child = _open_child_directory(handle, name, "snapshot tree child")
                 try:
                     visit(child, prefix / name)
                 finally:
-                    os.close(child)
+                    child.close()
             elif stat.S_ISREG(info.st_mode):
                 files.add(relative)
             else:
                 raise ContextSnapshotError(f"unsafe entry in snapshot tree: {relative}")
+        handle.revalidate("snapshot tree")
 
-    try:
-        visit(root, PurePosixPath())
-    finally:
-        os.close(root)
-    return files, directories
-
-
-def _directory_inventory_fallback(directory: Path) -> tuple[set[str], set[str]]:
-    root_info = directory.lstat()
-    if _unsafe_reparse(root_info) or not stat.S_ISDIR(root_info.st_mode):
-        raise ContextSnapshotError("unsafe snapshot tree root")
-    files: set[str] = set()
-    directories: set[str] = set()
-    for root, child_directories, child_files in os.walk(directory, topdown=True, followlinks=False):
-        root_path = Path(root)
-        for name in child_directories:
-            child = root_path / name
-            info = child.lstat()
-            if _unsafe_reparse(info) or not stat.S_ISDIR(info.st_mode):
-                raise ContextSnapshotError(f"unsafe directory entry in snapshot tree: {child.relative_to(directory)}")
-            directories.add(child.relative_to(directory).as_posix())
-        for name in child_files:
-            child = root_path / name
-            info = child.lstat()
-            if _unsafe_reparse(info) or not stat.S_ISREG(info.st_mode):
-                raise ContextSnapshotError(f"unsafe entry in snapshot tree: {child.relative_to(directory)}")
-            files.add(child.relative_to(directory).as_posix())
-    after = directory.lstat()
-    if (after.st_dev, after.st_ino) != (root_info.st_dev, root_info.st_ino) or _unsafe_reparse(after):
-        raise ContextSnapshotError("snapshot tree changed during fallback enumeration")
+    visit(directory, PurePosixPath())
     return files, directories
 
 
@@ -989,85 +1115,12 @@ def _unsafe_reparse(info: os.stat_result) -> bool:
     return stat.S_ISLNK(info.st_mode) or bool(attributes & reparse)
 
 
-def _remove_directory_descriptor(descriptor: int) -> None:
-    try:
-        names = sorted(os.listdir(descriptor), reverse=True)
-    except (TypeError, NotImplementedError) as error:
-        raise ContextSnapshotError("descriptor-relative snapshot removal is unavailable") from error
-    for name in names:
-        info = os.stat(name, dir_fd=descriptor, follow_symlinks=False)
-        if _unsafe_reparse(info):
-            raise ContextSnapshotError(f"snapshot cleanup refuses symlink: {name}")
-        if stat.S_ISDIR(info.st_mode):
-            child = os.open(
-                name,
-                os.O_RDONLY | getattr(os, "O_DIRECTORY", 0) | getattr(os, "O_NOFOLLOW", 0),
-                dir_fd=descriptor,
-            )
-            try:
-                _remove_directory_descriptor(child)
-            finally:
-                os.close(child)
-            os.rmdir(name, dir_fd=descriptor)
-        elif stat.S_ISREG(info.st_mode):
-            os.unlink(name, dir_fd=descriptor)
-        else:
-            raise ContextSnapshotError(f"snapshot cleanup refuses unknown entry: {name}")
+def _is_windows() -> bool:
+    return os.name == "nt"
 
 
-def _write_new_file(path: Path, data: bytes, *, root: Path) -> None:
-    try:
-        path.relative_to(root)
-    except ValueError as error:
-        raise ContextSnapshotError("derived snapshot path escaped its temporary root") from error
-    flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0)
-    parts = path.relative_to(root).parts
-    parent = _open_directory_no_follow(root, "temporary snapshot root")
-    descriptor = -1
-    try:
-        if os.open in os.supports_dir_fd and os.mkdir in os.supports_dir_fd:
-            for component in parts[:-1]:
-                try:
-                    info = os.stat(component, dir_fd=parent, follow_symlinks=False)
-                except FileNotFoundError:
-                    os.mkdir(component, mode=0o700, dir_fd=parent)
-                    info = os.stat(component, dir_fd=parent, follow_symlinks=False)
-                if _unsafe_reparse(info) or not stat.S_ISDIR(info.st_mode):
-                    raise ContextSnapshotError("unsafe temporary snapshot directory")
-                child = os.open(
-                    component,
-                    os.O_RDONLY | getattr(os, "O_DIRECTORY", 0) | getattr(os, "O_NOFOLLOW", 0),
-                    dir_fd=parent,
-                )
-                os.close(parent)
-                parent = child
-            descriptor = os.open(parts[-1], flags, 0o600, dir_fd=parent)
-        else:
-            path.parent.mkdir(parents=True, exist_ok=True)
-            descriptor = os.open(path, flags, 0o600)
-        with os.fdopen(descriptor, "wb") as stream:
-            descriptor = -1
-            stream.write(data)
-            stream.flush()
-            os.fsync(stream.fileno())
-    finally:
-        if descriptor >= 0:
-            os.close(descriptor)
-        os.close(parent)
-
-
-def _sync_tree(root: Path) -> None:
-    for directory, child_directories, _files in os.walk(root, topdown=False, followlinks=False):
-        for name in child_directories:
-            child = Path(directory) / name
-            if child.is_symlink():
-                raise ContextSnapshotError("temporary snapshot contains a symlink")
-            _fsync_directory(child)
-        _fsync_directory(Path(directory))
-
-
-def _open_directory_no_follow(directory: Path, label: str) -> int:
-    """Open every absolute path component without following directory links."""
+def _hold_directory_no_follow(directory: Path, label: str) -> _HeldDirectory:
+    """Open every path component and retain its identity for the operation."""
 
     absolute = Path(os.path.abspath(directory))
     anchor = Path(absolute.anchor)
@@ -1082,6 +1135,10 @@ def _open_directory_no_follow(directory: Path, label: str) -> int:
     if not secure_dirfd:
         identities: list[tuple[Path, tuple[int, int]]] = []
         current = anchor
+        anchor_entry = anchor.lstat()
+        if _unsafe_reparse(anchor_entry) or not stat.S_ISDIR(anchor_entry.st_mode):
+            raise ContextSnapshotError(f"unsafe {label} anchor")
+        identities.append((anchor, (anchor_entry.st_dev, anchor_entry.st_ino)))
         for component in absolute.relative_to(anchor).parts:
             current /= component
             try:
@@ -1091,17 +1148,31 @@ def _open_directory_no_follow(directory: Path, label: str) -> int:
             if _unsafe_reparse(entry) or not stat.S_ISDIR(entry.st_mode):
                 raise ContextSnapshotError(f"unsafe {label} component without no-follow support")
             identities.append((current, (entry.st_dev, entry.st_ino)))
-        descriptor = os.open(absolute, os.O_RDONLY)
+        descriptor = -1 if _is_windows() else os.open(absolute, os.O_RDONLY)
         try:
-            if not stat.S_ISDIR(os.fstat(descriptor).st_mode):
-                raise ContextSnapshotError(f"unsafe {label}: not an ordinary directory")
-            for path, identity in identities:
+            if descriptor >= 0:
+                opened = os.fstat(descriptor)
+                if not stat.S_ISDIR(opened.st_mode):
+                    raise ContextSnapshotError(f"unsafe {label}: not an ordinary directory")
+                opened_identity = (opened.st_dev, opened.st_ino)
+            else:
+                opened_identity = identities[-1][1]
+            if opened_identity != identities[-1][1]:
+                raise ContextSnapshotError(f"unsafe {label}: directory changed during fallback open")
+            for path, expected_identity in identities:
                 entry = path.lstat()
-                if _unsafe_reparse(entry) or (entry.st_dev, entry.st_ino) != identity:
+                if _unsafe_reparse(entry) or (entry.st_dev, entry.st_ino) != expected_identity:
                     raise ContextSnapshotError(f"unsafe {label}: ancestor changed during validation")
-            return descriptor
+            return _HeldDirectory(
+                absolute,
+                descriptor,
+                opened_identity,
+                tuple(identities),
+                False,
+            )
         except BaseException:
-            os.close(descriptor)
+            if descriptor >= 0:
+                os.close(descriptor)
             raise
 
     descriptor = os.open(anchor, flags)
@@ -1117,16 +1188,219 @@ def _open_directory_no_follow(directory: Path, label: str) -> int:
                 raise ContextSnapshotError(f"unsafe {label}: ancestor changed during validation")
             os.close(descriptor)
             descriptor = child
-        return descriptor
+        opened = os.fstat(descriptor)
+        return _HeldDirectory(
+            absolute,
+            descriptor,
+            (opened.st_dev, opened.st_ino),
+            (),
+            True,
+        )
     except BaseException:
         os.close(descriptor)
         raise
 
 
-def _fsync_directory(directory: Path) -> None:
-    flags = os.O_RDONLY | getattr(os, "O_DIRECTORY", 0) | getattr(os, "O_NOFOLLOW", 0)
+def _open_child_directory(parent: _HeldDirectory, name: str, label: str) -> _HeldDirectory:
+    if not name or name in {".", ".."} or "/" in name or "\\" in name:
+        raise ContextSnapshotError(f"unsafe {label} name")
+    parent.revalidate(f"{label} parent")
+    child_path = parent.path / name
+    if parent.descriptor_relative:
+        before = os.stat(name, dir_fd=parent.descriptor, follow_symlinks=False)
+        if _unsafe_reparse(before) or not stat.S_ISDIR(before.st_mode):
+            raise ContextSnapshotError(f"unsafe {label}")
+        descriptor = os.open(
+            name,
+            os.O_RDONLY | getattr(os, "O_DIRECTORY", 0) | getattr(os, "O_NOFOLLOW", 0),
+            dir_fd=parent.descriptor,
+        )
+        opened = os.fstat(descriptor)
+        if (opened.st_dev, opened.st_ino) != (before.st_dev, before.st_ino):
+            os.close(descriptor)
+            raise ContextSnapshotError(f"unsafe {label}: child changed during open")
+        return _HeldDirectory(
+            child_path,
+            descriptor,
+            (opened.st_dev, opened.st_ino),
+            (),
+            True,
+        )
+    before = child_path.lstat()
+    if _unsafe_reparse(before) or not stat.S_ISDIR(before.st_mode):
+        raise ContextSnapshotError(f"unsafe {label}")
+    child = _hold_directory_no_follow(child_path, label)
     try:
-        descriptor = os.open(directory, flags)
+        if child.identity != (before.st_dev, before.st_ino):
+            raise ContextSnapshotError(f"unsafe {label}: child changed during open")
+        parent.revalidate(f"{label} parent")
+        return child
+    except BaseException:
+        child.close()
+        raise
+
+
+def _directory_names(handle: _HeldDirectory, label: str) -> list[str]:
+    handle.revalidate(label)
+    if handle.descriptor_relative:
+        try:
+            names = sorted(os.listdir(handle.descriptor))
+        except (TypeError, NotImplementedError) as error:
+            raise ContextSnapshotError(f"descriptor-relative {label} enumeration is unavailable") from error
+    else:
+        names = sorted(os.listdir(handle.path))
+        handle.revalidate(label)
+    return names
+
+
+def _read_from_handle(
+    handle: _HeldDirectory,
+    relative: str,
+    label: str,
+    *,
+    reject_nested_projects: bool = False,
+) -> bytes:
+    parts = PurePosixPath(relative).parts
+    if not parts or ".." in parts or PurePosixPath(relative).is_absolute():
+        raise ContextSnapshotError(f"unsafe relative {label} path")
+    current = handle
+    owned: list[_HeldDirectory] = []
+    descriptor = -1
+    try:
+        for component in parts[:-1]:
+            child = _open_child_directory(current, component, label)
+            owned.append(child)
+            current = child
+            if reject_nested_projects:
+                try:
+                    if current.descriptor_relative:
+                        nested = os.stat(
+                            "project.md",
+                            dir_fd=current.descriptor,
+                            follow_symlinks=False,
+                        )
+                    else:
+                        nested = (current.path / "project.md").lstat()
+                        current.revalidate(label)
+                except FileNotFoundError:
+                    pass
+                else:
+                    if not _unsafe_reparse(nested) and stat.S_ISREG(nested.st_mode):
+                        raise ContextSnapshotError(
+                            f"snapshot source crosses nested project boundary: {relative}"
+                        )
+        current.revalidate(label)
+        if current.descriptor_relative:
+            before = os.stat(parts[-1], dir_fd=current.descriptor, follow_symlinks=False)
+            if _unsafe_reparse(before) or not stat.S_ISREG(before.st_mode):
+                raise ContextSnapshotError(f"unsafe {label} file: {relative}")
+            descriptor = os.open(
+                parts[-1],
+                os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0),
+                dir_fd=current.descriptor,
+            )
+        else:
+            path = current.path / parts[-1]
+            before = path.lstat()
+            if _unsafe_reparse(before) or not stat.S_ISREG(before.st_mode):
+                raise ContextSnapshotError(f"unsafe {label} file: {relative}")
+            descriptor = os.open(path, os.O_RDONLY)
+        opened = os.fstat(descriptor)
+        if not stat.S_ISREG(opened.st_mode) or (opened.st_dev, opened.st_ino) != (before.st_dev, before.st_ino):
+            raise ContextSnapshotError(f"unsafe {label}: file changed during open: {relative}")
+        with os.fdopen(descriptor, "rb") as stream:
+            descriptor = -1
+            data = stream.read()
+        current.revalidate(label)
+        handle.revalidate(label)
+        return data
+    finally:
+        if descriptor >= 0:
+            os.close(descriptor)
+        for child in reversed(owned):
+            child.close()
+
+
+def _write_to_handle(handle: _HeldDirectory, relative: str, data: bytes) -> None:
+    parts = PurePosixPath(relative).parts
+    if not parts or ".." in parts or PurePosixPath(relative).is_absolute():
+        raise ContextSnapshotError("derived snapshot path escaped its temporary root")
+    current = handle
+    owned: list[_HeldDirectory] = []
+    descriptor = -1
+    try:
+        for component in parts[:-1]:
+            try:
+                child = _open_child_directory(current, component, "temporary snapshot directory")
+            except FileNotFoundError:
+                current.revalidate("temporary snapshot directory parent")
+                if current.descriptor_relative:
+                    os.mkdir(component, mode=0o700, dir_fd=current.descriptor)
+                else:
+                    (current.path / component).mkdir(mode=0o700)
+                    current.revalidate("temporary snapshot directory parent")
+                child = _open_child_directory(current, component, "temporary snapshot directory")
+            owned.append(child)
+            current = child
+        flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0)
+        current.revalidate("temporary snapshot file parent")
+        if current.descriptor_relative:
+            descriptor = os.open(parts[-1], flags, 0o600, dir_fd=current.descriptor)
+        else:
+            target = current.path / parts[-1]
+            descriptor = os.open(target, flags, 0o600)
+        with os.fdopen(descriptor, "wb") as stream:
+            descriptor = -1
+            stream.write(data)
+            stream.flush()
+            os.fsync(stream.fileno())
+        current.revalidate("temporary snapshot file parent")
+        handle.revalidate("temporary snapshot root")
+    finally:
+        if descriptor >= 0:
+            os.close(descriptor)
+        for child in reversed(owned):
+            child.close()
+
+
+def _stat_child(handle: _HeldDirectory, name: str, label: str) -> os.stat_result:
+    handle.revalidate(label)
+    if handle.descriptor_relative:
+        return os.stat(name, dir_fd=handle.descriptor, follow_symlinks=False)
+    result = (handle.path / name).lstat()
+    handle.revalidate(label)
+    return result
+
+
+def _unlink_child(handle: _HeldDirectory, name: str, expected: tuple[int, int], label: str) -> None:
+    before = _stat_child(handle, name, label)
+    if _unsafe_reparse(before) or (before.st_dev, before.st_ino) != expected:
+        raise ContextSnapshotError(f"unsafe {label}: entry changed before delete")
+    if handle.descriptor_relative:
+        os.unlink(name, dir_fd=handle.descriptor)
+    else:
+        (handle.path / name).unlink()
+        handle.revalidate(label)
+
+
+def _rmdir_child(handle: _HeldDirectory, name: str, expected: tuple[int, int], label: str) -> None:
+    before = _stat_child(handle, name, label)
+    if _unsafe_reparse(before) or not stat.S_ISDIR(before.st_mode):
+        raise ContextSnapshotError(f"unsafe {label}: directory became unsafe")
+    if (before.st_dev, before.st_ino) != expected:
+        raise ContextSnapshotError(f"unsafe {label}: directory changed before delete")
+    if handle.descriptor_relative:
+        os.rmdir(name, dir_fd=handle.descriptor)
+    else:
+        (handle.path / name).rmdir()
+        handle.revalidate(label)
+
+
+def _fsync_handle(handle: _HeldDirectory) -> None:
+    if handle.descriptor < 0:
+        return
+    try:
+        os.fsync(handle.descriptor)
     except OSError as error:
         unsupported = {
             errno.EACCES,
@@ -1134,119 +1408,24 @@ def _fsync_directory(directory: Path) -> None:
             getattr(errno, "ENOTSUP", errno.EINVAL),
             getattr(errno, "EOPNOTSUPP", errno.EINVAL),
         }
-        if error.errno in unsupported:
-            return
-        raise
-    try:
-        os.fsync(descriptor)
-    except OSError as error:
-        unsupported = {
-            errno.EINVAL,
-            getattr(errno, "ENOTSUP", errno.EINVAL),
-            getattr(errno, "EOPNOTSUPP", errno.EINVAL),
-        }
         if error.errno not in unsupported:
             raise
-    finally:
-        os.close(descriptor)
 
 
-def _read_regular_bytes(path: Path) -> bytes:
-    descriptor = os.open(path, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0))
-    try:
-        if not stat.S_ISREG(os.fstat(descriptor).st_mode):
-            raise ContextSnapshotError(f"not a regular no-follow file: {path}")
-        with os.fdopen(descriptor, "rb") as stream:
-            descriptor = -1
-            return stream.read()
-    finally:
-        if descriptor >= 0:
-            os.close(descriptor)
-
-
-def _read_relative_from_directory(directory: Path, relative: str) -> bytes:
-    parts = PurePosixPath(relative).parts
-    if not parts or ".." in parts or PurePosixPath(relative).is_absolute():
-        raise ContextSnapshotError("unsafe relative snapshot file path")
-    if os.open not in os.supports_dir_fd:
-        root_info = directory.lstat()
-        if _unsafe_reparse(root_info) or not stat.S_ISDIR(root_info.st_mode):
-            raise ContextSnapshotError("unsafe snapshot directory")
-        current = directory
-        for component in parts:
-            current /= component
-            info = current.lstat()
-            if _unsafe_reparse(info):
-                raise ContextSnapshotError(f"unsafe snapshot component: {component}")
-        data = _read_regular_bytes(current)
-        after = directory.lstat()
-        if (after.st_dev, after.st_ino) != (root_info.st_dev, root_info.st_ino) or _unsafe_reparse(after):
-            raise ContextSnapshotError("snapshot directory changed during fallback read")
-        return data
-    parent = _open_directory_no_follow(directory, "snapshot directory")
-    descriptor = -1
-    try:
-        for component in parts[:-1]:
-            child = os.open(
-                component,
-                os.O_RDONLY | getattr(os, "O_DIRECTORY", 0) | getattr(os, "O_NOFOLLOW", 0),
-                dir_fd=parent,
-            )
-            info = os.fstat(child)
-            if not stat.S_ISDIR(info.st_mode):
-                os.close(child)
-                raise ContextSnapshotError(f"snapshot path component is not a directory: {component}")
-            os.close(parent)
-            parent = child
-        descriptor = os.open(
-            parts[-1],
-            os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0),
-            dir_fd=parent,
-        )
-        if not stat.S_ISREG(os.fstat(descriptor).st_mode):
-            raise ContextSnapshotError(f"snapshot path is not a regular file: {relative}")
-        with os.fdopen(descriptor, "rb") as stream:
-            descriptor = -1
-            return stream.read()
-    finally:
-        if descriptor >= 0:
-            os.close(descriptor)
-        os.close(parent)
-
-
-def _read_project_relative(project: Project, relative: str) -> bytes:
-    normalized = _normalize_relative(relative)
-    path = project.root / PurePosixPath(normalized)
-    parent = path.parent
-    parent_descriptor = _open_directory_no_follow(parent, "snapshot source parent")
-    descriptor = -1
-    try:
-        flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)
-        if os.open in os.supports_dir_fd:
-            descriptor = os.open(path.name, flags, dir_fd=parent_descriptor)
-        else:
-            parent_identity = os.fstat(parent_descriptor)
-            before = path.lstat()
-            if _unsafe_reparse(before) or not stat.S_ISREG(before.st_mode):
-                raise ContextSnapshotError(f"unsafe snapshot source: {relative}")
-            descriptor = os.open(path, os.O_RDONLY)
-            after_parent = parent.lstat()
-            after_file = os.fstat(descriptor)
-            if (
-                (after_parent.st_dev, after_parent.st_ino)
-                != (parent_identity.st_dev, parent_identity.st_ino)
-                or (after_file.st_dev, after_file.st_ino) != (before.st_dev, before.st_ino)
-            ):
-                raise ContextSnapshotError(f"snapshot source changed during open: {relative}")
-        if not stat.S_ISREG(os.fstat(descriptor).st_mode):
-            raise ContextSnapshotError(f"not a regular no-follow file: {relative}")
-        with os.fdopen(descriptor, "rb") as stream:
-            descriptor = -1
-            return stream.read()
-    finally:
-        if descriptor >= 0:
-            os.close(descriptor)
-        os.close(parent_descriptor)
+def _sync_handle_tree(handle: _HeldDirectory) -> None:
+    for name in _directory_names(handle, "temporary snapshot tree"):
+        info = _stat_child(handle, name, "temporary snapshot tree")
+        if _unsafe_reparse(info):
+            raise ContextSnapshotError("temporary snapshot contains a link or reparse point")
+        if stat.S_ISDIR(info.st_mode):
+            child = _open_child_directory(handle, name, "temporary snapshot directory")
+            try:
+                _sync_handle_tree(child)
+            finally:
+                child.close()
+        elif not stat.S_ISREG(info.st_mode):
+            raise ContextSnapshotError("temporary snapshot contains an unsafe entry")
+    _fsync_handle(handle)
 
 
 def _canonical_json(value: object) -> bytes:

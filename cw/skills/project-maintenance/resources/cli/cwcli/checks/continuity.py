@@ -172,14 +172,25 @@ def check_continuity(project: Project) -> list[Finding]:
                     last_story_chapter = max(last_story_chapter or 0, chapter)
         _warn_partial("timeline.md", text, tables, recognized, findings)
         for relative, text, tables in _character_timeline_documents(project, findings):
-            for table in tables:
-                if not _has_columns(_headers(table), ("when", "event", "threads", "anchor")):
+            recognized = set()
+            has_timeline_shape = False
+            required = ("when", "event", "threads", "anchor")
+            for table_index, table in enumerate(tables):
+                headers = _headers(table)
+                if not set(required).issubset(headers):
+                    recognized.add(table_index)
                     continue
+                has_timeline_shape = True
+                if not _has_columns(headers, required):
+                    continue
+                recognized.add(table_index)
                 for row in table.rows:
                     values = _row(table, row)
                     _add_anchor(timeline_anchors, values.get("anchor", ""), values.get("when", ""),
                                 _parse_chapter(values.get("chapter", "")),
                                 evidence=anchor_evidence, path=relative, line=row.line)
+            if has_timeline_shape:
+                _warn_partial(Path(relative).name, text, tables, recognized, findings, path=relative)
 
         for anchor, (whens, chapters) in sorted(timeline_anchors.items()):
             evidence_path, evidence_line = sorted(anchor_evidence.get(anchor, [("kb/continuity/timeline.md", 0)]))[0]

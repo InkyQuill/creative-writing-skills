@@ -676,36 +676,50 @@ class TransactionEngine:
         created_files = {
             path for path in intents if path in by_path and by_path[path].before is None
         }
-        for path in intents:
-            if path.startswith(_DIRECTORY_TOKEN_PREFIX):
-                action, relative = _parse_directory_token(path)
-                target = self._directory_target(relative)
-                if _entry_exists(target):
-                    _require_directory(target, "recovery directory intent")
-                    if action == "create":
-                        for root, directories, files in os.walk(target, followlinks=False):
-                            root_path = Path(root)
-                            for name in directories:
-                                child = root_path / name
-                                child_relative = child.relative_to(self.project.root).as_posix()
-                                if child.is_symlink() or child_relative not in created_directories:
-                                    conflicts.append(
-                                        f"{child_relative}: unexpected entry in created directory"
-                                    )
-                            for name in files:
-                                child = root_path / name
-                                child_relative = child.relative_to(self.project.root).as_posix()
-                                if child.is_symlink() or child_relative not in created_files:
-                                    conflicts.append(
-                                        f"{child_relative}: unexpected entry in created directory"
-                                    )
-                elif action == "remove":
-                    _require_directory(target.parent, "recovery directory parent")
+        directory_intents = {
+            path for path in intents if path.startswith(_DIRECTORY_TOKEN_PREFIX)
+        }
+        for path in sorted(directory_tokens):
+            action, relative = _parse_directory_token(path)
+            target = self._directory_target(relative)
+            if path not in directory_intents:
+                expected_present = action == "remove"
+                if _entry_exists(target) != expected_present:
+                    conflicts.append(f"{relative}: changed without durable intent")
+                elif expected_present:
+                    _require_directory(target, "recovery directory")
                 continue
-            change = by_path[path]
+            if _entry_exists(target):
+                _require_directory(target, "recovery directory intent")
+                if action == "create":
+                    for root, directories, files in os.walk(target, followlinks=False):
+                        root_path = Path(root)
+                        for name in directories:
+                            child = root_path / name
+                            child_relative = child.relative_to(self.project.root).as_posix()
+                            if child.is_symlink() or child_relative not in created_directories:
+                                conflicts.append(
+                                    f"{child_relative}: unexpected entry in created directory"
+                                )
+                        for name in files:
+                            child = root_path / name
+                            child_relative = child.relative_to(self.project.root).as_posix()
+                            if child.is_symlink() or child_relative not in created_files:
+                                conflicts.append(
+                                    f"{child_relative}: unexpected entry in created directory"
+                                )
+            elif action == "remove":
+                _require_directory(target.parent, "recovery directory parent")
+
+        file_intents = {path for path in intents if path in by_path}
+        for change in changes:
             target = self.project.resolve(change.path, for_write=True)
             current = self._current_bytes(change.path, target)
-            if current not in {change.before, change.after}:
+            if change.path not in file_intents and current != change.before:
+                conflicts.append(
+                    f"{change.path}: changed without durable intent"
+                )
+            elif current not in {change.before, change.after}:
                 conflicts.append(
                     f"{change.path}: current bytes match neither before nor after"
                 )

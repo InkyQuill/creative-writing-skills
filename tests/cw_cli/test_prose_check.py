@@ -123,6 +123,23 @@ class ProseMetricTests(unittest.TestCase):
         self.assertEqual(metrics.dialogue_ratio, 0.5)
         self.assertEqual(len(dense_lines), 2)
 
+    def test_punctuation_only_sentences_and_paragraphs_match_legacy_behavior(self):
+        text = "!!! Text.\n\n...\n\nAlpha alpha alpha.\n"
+        metrics = prose.analyze_prose(text, language="en")
+        legacy = load_legacy_analyzer()
+        cleaned = legacy.strip_markdown(legacy.strip_frontmatter_and_fences(text))
+        legacy_sentences = legacy.get_sentences(cleaned)
+        legacy_paragraphs = legacy.paragraphs(cleaned)
+
+        self.assertEqual(len(legacy_sentences), metrics.sentence_count)
+        self.assertEqual(len(legacy_paragraphs), metrics.paragraph_count)
+        self.assertEqual(
+            tuple(len(legacy.words(sentence)) for sentence in legacy_sentences if legacy.words(sentence)),
+            metrics.sentence_lengths,
+        )
+        self.assertEqual((4, 3), (metrics.sentence_count, metrics.paragraph_count))
+        self.assertIn(("alpha", 1, 3, 3), metrics.windowed_repetitions)
+
 
 class ProseCheckTests(unittest.TestCase):
     def setUp(self):
