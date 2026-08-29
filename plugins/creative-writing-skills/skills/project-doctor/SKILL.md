@@ -8,8 +8,7 @@ description: Diagnose a canonical creative-writing project and plan safe repairs
 Diagnose before changing anything. Run `cw doctor --format json` as a read-only
 first step and retain its structured findings. Diagnosis performs no hidden or
 implicit repair. If the CLI itself cannot run, route to the `cli-doctor`
-workflow; do not
-guess at project changes.
+workflow; do not guess at project changes.
 
 Treat incomplete transactions and recovery blockers as the highest priority.
 Until they have an exact recovery action, do not start another journaled
@@ -23,9 +22,10 @@ the raw JSON when a short consequence-and-action summary is sufficient.
 
 The agent handles safe mechanical repairs through `$project-maintenance`.
 Always run and inspect the command's preview before the corresponding
-`--apply`; keep project mechanics with the agent rather than the author. Cosmetic or
-repairable drift does not block unrelated creative work: continue that work
-while keeping the repair action explicit.
+`--apply`. Execute only the structured argument vectors supplied by the doctor,
+without shell interpolation; keep project mechanics with the agent rather than
+the author. Cosmetic or repairable drift does not block unrelated creative
+work: continue that work while keeping the repair action explicit.
 
 Semantic contradictions or retcons are never autofixed. Route them to the
 owning domain skill. Ask a content or canon question only when different

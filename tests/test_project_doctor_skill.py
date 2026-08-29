@@ -64,11 +64,44 @@ class ProjectDoctorSkillTests(unittest.TestCase):
         self.assertRegex(text, r"(?is)preview.{0,160}--apply")
         self.assertNotRegex(text, r"(?i)ask the author to fix (the )?project")
 
+    def test_repairs_execute_structured_argv_without_shell_interpolation(self):
+        text = all_runtime_markdown()
+        for field in ('"groups"', '"commands"', '"argv"'):
+            self.assertIn(field, text)
+        self.assertRegex(
+            text,
+            r"(?is)groups.{0,120}ordered.{0,80}commands.{0,180}commands\[\*\]\.argv",
+        )
+        self.assertRegex(text, r"(?is)execute.{0,100}argv.{0,120}(directly|argument vector)")
+        self.assertRegex(text, r"(?is)(without|never use).{0,80}shell interpolation")
+
+    def test_display_and_next_action_are_reporting_text_only(self):
+        text = all_runtime_markdown()
+        self.assertRegex(
+            text,
+            r"(?is)display.{0,120}next_action.{0,160}reporting\s+text only",
+        )
+        self.assertRegex(
+            text,
+            r"(?is)(never|do not).{0,120}(execute|shell).{0,120}(display|next_action)",
+        )
+
+    def test_each_group_runs_preview_before_matching_apply_argv(self):
+        text = all_runtime_markdown()
+        self.assertRegex(
+            text,
+            r"(?is)(for each|each repair) group.{0,220}preview.{0,160}(matching|corresponding).{0,80}apply",
+        )
+        self.assertRegex(
+            text,
+            r"(?is)recovery.{0,240}commands\[\*\]\.argv.{0,180}preview.{0,160}apply",
+        )
+
     def test_cosmetic_drift_does_not_block_unrelated_creative_work(self):
         text = all_runtime_markdown()
         self.assertRegex(
             text,
-            r"(?is)(cosmetic|repairable) drift.{0,160}(does not|never).{0,40}block.{0,100}(unrelated )?creative work",
+            r"(?is)(cosmetic|repairable) drift.{0,160}(does not|never).{0,40}block.{0,100}(unrelated )?creative\s+work",
         )
         self.assertIn("continue", text.lower())
 
