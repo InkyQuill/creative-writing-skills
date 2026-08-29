@@ -110,6 +110,70 @@ class ContextPlanTests(unittest.TestCase):
         self.assertIn("character:missing", plan.unresolved)
         self.assertIn("kb/characters/missing.md", plan.unresolved)
 
+    def test_structured_paths_preserve_spaces_and_markdown_titles_are_separate(self):
+        self.write("kb/world/ice castle.md", "---\ntitle: Ice Castle\n---\n")
+        self.write("kb/world/other place.md", "---\ntitle: Other Place\n---\n")
+        self.write(
+            "kb/characters/mara.md",
+            "---\nrelated:\n  - kb/world/ice castle.md\n---\n"
+            '[Other](../world/other%20place.md "optional title words")\n',
+        )
+
+        plan = self.plan("kb", "kb/characters/mara.md")
+
+        self.assertIn("kb/world/ice castle.md", plan.required)
+        self.assertIn("kb/world/other place.md", plan.required)
+
+    def test_explicit_context_never_selects_unmanaged_or_protected_paths(self):
+        self.write("README.md", "Root notes.\n")
+        self.write(".creative-writing/context/private.md", "Derived.\n")
+        self.write(
+            "kb/world/place.md",
+            "---\nrelated:\n  - README.md\n  - .creative-writing/context/private.md\n---\n",
+        )
+
+        plan = self.plan("kb", "kb/world/place.md")
+
+        self.assertNotIn("README.md", plan.required)
+        self.assertNotIn(".creative-writing/context/private.md", plan.required)
+        self.assertIn("README.md", plan.unresolved)
+        self.assertIn(".creative-writing/context/private.md", plan.unresolved)
+
+    def test_portable_identity_collision_selects_neither_explicit_path(self):
+        self.write("kb/world/Place.md", "---\ntitle: Upper\n---\n")
+        self.write("kb/world/place.md", "---\ntitle: Lower\n---\n")
+        self.write(
+            "kb/characters/mara.md",
+            "---\nrelated:\n  - kb/world/Place.md\n  - kb/world/place.md\n---\n",
+        )
+
+        plan = self.plan("kb", "kb/characters/mara.md")
+
+        self.assertNotIn("kb/world/Place.md", plan.required)
+        self.assertNotIn("kb/world/place.md", plan.required)
+        self.assertTrue(any("portable-path-collision" in item for item in plan.unresolved))
+
+    def test_character_role_uses_unicode_portable_file_stems(self):
+        self.write("kb/characters/мара.md", "---\ntitle: Мара\n---\n")
+        self.write("kb/world/place.md", "---\ntitle: Place\n---\n")
+
+        known = self.plan("kb", "kb/world/place.md", "character:мара")
+        self.assertNotIn("character:мара", known.unresolved)
+        for role in ("character:CON", "character:bad/name", "character:bad\x7f"):
+            with self.subTest(role=role), self.assertRaises(context.ContextPlanError):
+                self.plan("kb", "kb/world/place.md", role)
+
+    def test_missing_canonical_context_dependencies_are_unresolved(self):
+        self.write("story/chapters/one.md", "---\nnumber: 1\n---\n")
+        (self.root / "kb/vocab.md").unlink()
+        (self.root / "kb/continuity/state.md").unlink()
+
+        plan = self.plan("chapter", "story/chapters/one.md")
+
+        self.assertIn("kb/vocab.md", plan.unresolved)
+        self.assertIn("kb/continuity/state.md", plan.unresolved)
+        self.assertTrue(any("kb/vocab.md" in item for item in plan.warnings))
+
     def test_malformed_unrelated_files_warn_but_do_not_abort(self):
         self.write("story/chapters/one.md", "---\nnumber: 1\n---\nOne.\n")
         self.write("kb/world/broken.md", "---\nsources: [bad]\n---\n")

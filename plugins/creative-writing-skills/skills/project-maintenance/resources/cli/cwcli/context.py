@@ -17,11 +17,12 @@ from .schema import allowed_document_kind
 
 
 _KINDS = frozenset({"draft", "chapter", "kb"})
-_ROLE_ID = re.compile(r"^[A-Za-z0-9](?:[A-Za-z0-9._-]*[A-Za-z0-9])?$")
 _LINK = re.compile(r"(?<!!)\[[^\]]*\]\(([^)]+)\)")
-_INACTIVE = frozenset({"accepted", "abandoned", "archived", "closed", "complete", "done", "resolved"})
 _ACTIVE_PLAN = frozenset({"active", "planned", "ready", "review", "working"})
 _ACTIVE_ISSUE = frozenset({"active", "blocked", "open", "review", "working"})
+_SELECTABLE_KINDS = frozenset(
+    {"chapter", "work-artifact", "kb-content", "continuity-record", "continuity-scene", "vocabulary"}
+)
 _DIRECT_KEYS = ("related", "context", "links")
 _CONTINUITY = (
     "kb/continuity/state.md",
@@ -74,6 +75,7 @@ def plan_context(project: Project, kind: str, path: str, role: str) -> ContextPl
     suggested = _OrderedPaths()
     unresolved = _OrderedStrings()
     warnings = _OrderedStrings()
+    catalog = _PathCatalog.from_project(project)
     required.add(subject)
     anchors = {subject}
 
@@ -88,6 +90,7 @@ def plan_context(project: Project, kind: str, path: str, role: str) -> ContextPl
                 required=required,
                 unresolved=unresolved,
                 warnings=warnings,
+                catalog=catalog,
                 project_relative=True,
                 expected_kind="chapter",
             )
@@ -104,6 +107,7 @@ def plan_context(project: Project, kind: str, path: str, role: str) -> ContextPl
             required=required,
             unresolved=unresolved,
             warnings=warnings,
+            catalog=catalog,
             project_relative=True,
         )
         if resolved is not None:
@@ -116,27 +120,39 @@ def plan_context(project: Project, kind: str, path: str, role: str) -> ContextPl
             required=required,
             unresolved=unresolved,
             warnings=warnings,
+            catalog=catalog,
             project_relative=False,
         )
         if resolved is not None:
             anchors.add(resolved)
 
     for relative in _CONTINUITY:
-        if _safe_regular(project, relative):
-            required.add(relative)
-        elif (project.root / relative).exists() or (project.root / relative).is_symlink():
-            warnings.add(f"unsafe structured context source: {relative}")
+        _add_selected_path(
+            project,
+            relative,
+            required,
+            catalog=catalog,
+            unresolved=unresolved,
+            warnings=warnings,
+            dependency=True,
+        )
 
     chapter = target if kind == "draft" else subject if kind == "chapter" else None
     if chapter is not None:
-        for neighbor in _chapter_neighbors(project, chapter, unresolved, warnings):
-            suggested.add(neighbor)
+        for neighbor in _chapter_neighbors(project, chapter, catalog, unresolved, warnings):
+            _add_selected_path(
+                project, neighbor, suggested, catalog=catalog,
+                unresolved=unresolved, warnings=warnings,
+            )
 
     documents = _scan_documents(project, warnings)
     for relative, document in documents:
         if relative.startswith("work/plans/") and _explicitly_active(document, _ACTIVE_PLAN):
             if _document_points_to(project, relative, document, anchors, warnings):
-                suggested.add(relative)
+                _add_selected_path(
+                    project, relative, suggested, catalog=catalog,
+                    unresolved=unresolved, warnings=warnings,
+                )
 
     for relative, document in documents:
         if relative in anchors:
@@ -144,12 +160,18 @@ def plan_context(project: Project, kind: str, path: str, role: str) -> ContextPl
         if relative.startswith("work/plans/") or relative.startswith("kb/issues/"):
             continue
         if _document_points_to(project, relative, document, anchors, warnings):
-            suggested.add(relative)
+            _add_selected_path(
+                project, relative, suggested, catalog=catalog,
+                unresolved=unresolved, warnings=warnings,
+            )
 
     for relative, document in documents:
         if relative.startswith("kb/issues/") and _explicitly_active(document, _ACTIVE_ISSUE):
             if _document_points_to(project, relative, document, anchors, warnings):
-                suggested.add(relative)
+                _add_selected_path(
+                    project, relative, suggested, catalog=catalog,
+                    unresolved=unresolved, warnings=warnings,
+                )
 
     try:
         continuity_findings = check_continuity(project)
@@ -158,14 +180,23 @@ def plan_context(project: Project, kind: str, path: str, role: str) -> ContextPl
     else:
         for finding in continuity_findings:
             if finding.path and _safe_regular(project, finding.path):
-                suggested.add(finding.path)
+                _add_selected_path(
+                    project, finding.path, suggested, catalog=catalog,
+                    unresolved=unresolved, warnings=warnings,
+                )
             if finding.severity in {"warning", "error"}:
                 location = finding.path or "project"
                 warnings.add(f"{finding.code}: structured continuity issue at {location}")
 
-    if character is not None and not _known_character(project, character):
-        unresolved.add(f"character:{character}")
-        warnings.add(f"unknown character role: {character}")
+    if character is not None:
+        character_path = f"kb/characters/{character}.md"
+        if catalog.collision(character_path) is not None:
+            _record_collision(character_path, catalog, unresolved, warnings)
+            unresolved.add(f"character:{character}")
+            warnings.add(f"ambiguous character role: {character}")
+        elif not _known_character(project, character):
+            unresolved.add(f"character:{character}")
+            warnings.add(f"unknown character role: {character}")
 
     suggested.discard_identities(required.identities)
     return ContextPlan(
@@ -185,7 +216,7 @@ def _validate_role(project: Project, role: str) -> str | None:
     if not role.startswith("character:"):
         raise ContextPlanError(f"invalid context role: {role}")
     character = role.removeprefix("character:")
-    if not _ROLE_ID.fullmatch(character) or not _portable_component(character):
+    if not _safe_character_stem(character):
         raise ContextPlanError(f"invalid character role identifier: {character!r}")
     return character
 
@@ -228,34 +259,51 @@ def _add_reference(
     required: "_OrderedPaths",
     unresolved: "_OrderedStrings",
     warnings: "_OrderedStrings",
+    catalog: "_PathCatalog",
     project_relative: bool,
     expected_kind: str | None = None,
 ) -> str | None:
     try:
-        relative = _resolve_reference(raw, source, project_relative=project_relative)
+        relative = _resolve_reference(
+            raw,
+            source,
+            project_relative=project_relative,
+            markdown=not project_relative,
+        )
     except (UnicodeError, ValueError) as error:
         unresolved.add(raw)
         warnings.add(f"invalid explicit reference {raw!r} in {source}: {error}")
         return None
     if relative is None:
         return None
+    if not _selectable_context_path(relative):
+        unresolved.add(relative)
+        warnings.add(f"explicit reference is outside managed context roots: {relative}")
+        return None
     if expected_kind is not None and allowed_document_kind(relative) != expected_kind:
         unresolved.add(relative)
         warnings.add(f"explicit reference has the wrong document kind: {relative}")
         return None
-    if not _safe_regular(project, relative):
-        unresolved.add(relative)
-        warnings.add(f"explicit reference is missing or unsafe: {relative}")
+    if not _add_selected_path(
+        project,
+        relative,
+        required,
+        catalog=catalog,
+        unresolved=unresolved,
+        warnings=warnings,
+    ):
         return None
-    required.add(relative)
     return relative
 
 
-def _resolve_reference(raw: str, source: str, *, project_relative: bool) -> str | None:
-    destination = raw.strip()
-    if destination.startswith("<") and destination.endswith(">"):
-        destination = destination[1:-1]
-    destination = destination.split(maxsplit=1)[0]
+def _resolve_reference(
+    raw: str,
+    source: str,
+    *,
+    project_relative: bool,
+    markdown: bool,
+) -> str | None:
+    destination = _markdown_destination(raw) if markdown else raw.strip()
     parsed = urlsplit(destination)
     if parsed.scheme.casefold() in {"http", "https", "mailto"} or destination.startswith("//"):
         return None
@@ -280,9 +328,33 @@ def _resolve_reference(raw: str, source: str, *, project_relative: bool) -> str 
     return _normalize_relative(PurePosixPath(*parts).as_posix())
 
 
+def _markdown_destination(raw: str) -> str:
+    value = raw.strip()
+    if value.startswith("<"):
+        closing = value.find(">", 1)
+        if closing < 0:
+            raise ValueError("unterminated angle-bracket link destination")
+        destination = value[1:closing]
+        title = value[closing + 1 :].strip()
+    else:
+        match = re.match(r"^(\S+)(?:\s+(.+))?$", value)
+        if match is None:
+            raise ValueError("empty Markdown link destination")
+        destination, title = match.groups()
+        title = title or ""
+    if title and not (
+        (title.startswith('"') and title.endswith('"'))
+        or (title.startswith("'") and title.endswith("'"))
+        or (title.startswith("(") and title.endswith(")"))
+    ):
+        raise ValueError("invalid Markdown link title")
+    return destination
+
+
 def _chapter_neighbors(
     project: Project,
     chapter: str,
+    catalog: "_PathCatalog",
     unresolved: "_OrderedStrings",
     warnings: "_OrderedStrings",
 ) -> tuple[str, ...]:
@@ -293,6 +365,9 @@ def _chapter_neighbors(
     for path in sorted(directory.iterdir(), key=lambda item: _identity(item.name)):
         relative = f"story/chapters/{path.name}"
         if path.name == "_index.md" or path.suffix.casefold() != ".md" or not _safe_regular(project, relative):
+            continue
+        if catalog.collision(relative) is not None:
+            _record_collision(relative, catalog, unresolved, warnings)
             continue
         try:
             number = _read_document(path).metadata.get("number")
@@ -354,7 +429,7 @@ def _document_points_to(
     values.extend(_metadata_references(document))
     for raw in values:
         try:
-            resolved = _resolve_reference(raw, relative, project_relative=True)
+            resolved = _resolve_reference(raw, relative, project_relative=True, markdown=False)
         except (UnicodeError, ValueError) as error:
             warnings.add(f"invalid structured reference {raw!r} in {relative}: {error}")
             continue
@@ -366,7 +441,7 @@ def _document_points_to(
 def _markdown_points_to(project: Project, relative: str, body: str, anchors: set[str]) -> bool:
     for raw in _markdown_references(body):
         try:
-            resolved = _resolve_reference(raw, relative, project_relative=False)
+            resolved = _resolve_reference(raw, relative, project_relative=False, markdown=True)
         except (UnicodeError, ValueError):
             continue
         if resolved in anchors and resolved is not None and _safe_regular(project, resolved):
@@ -381,7 +456,12 @@ def _known_character(project: Project, character: str) -> bool:
     expected = _identity(character)
     for path in directory.iterdir():
         relative = f"kb/characters/{path.name}"
-        if path.name != "_index.md" and path.suffix.casefold() == ".md" and _safe_regular(project, relative):
+        if (
+            path.name != "_index.md"
+            and path.suffix.casefold() == ".md"
+            and _safe_character_stem(path.stem)
+            and _safe_regular(project, relative)
+        ):
             if _identity(path.stem) == expected:
                 return True
     return False
@@ -430,8 +510,64 @@ def _portable_component(value: str) -> bool:
         return False
     if value.endswith((".", " ")) or any(character in _WINDOWS_FORBIDDEN for character in value):
         return False
+    if any(ord(character) < 32 or ord(character) == 127 for character in value):
+        return False
     stem = value.rstrip(". ").split(".", 1)[0].upper()
     return stem not in _WINDOWS_RESERVED
+
+
+def _safe_character_stem(value: str) -> bool:
+    return (
+        bool(value)
+        and value == value.strip()
+        and value not in {".", ".."}
+        and "/" not in value
+        and _portable_component(value)
+    )
+
+
+def _selectable_context_path(relative: str) -> bool:
+    return allowed_document_kind(relative) in _SELECTABLE_KINDS
+
+
+def _add_selected_path(
+    project: Project,
+    relative: str,
+    selected: "_OrderedPaths",
+    *,
+    catalog: "_PathCatalog",
+    unresolved: "_OrderedStrings",
+    warnings: "_OrderedStrings",
+    dependency: bool = False,
+) -> bool:
+    if not _selectable_context_path(relative):
+        unresolved.add(relative)
+        warnings.add(f"context source is outside managed story/work/kb roots: {relative}")
+        return False
+    if catalog.collision(relative) is not None:
+        _record_collision(relative, catalog, unresolved, warnings)
+        selected.discard_identity(_identity(relative))
+        return False
+    if not _safe_regular(project, relative):
+        unresolved.add(relative)
+        qualifier = "canonical dependency" if dependency else "context source"
+        warnings.add(f"missing or unsafe {qualifier}: {relative}")
+        return False
+    selected.add(relative)
+    return True
+
+
+def _record_collision(
+    relative: str,
+    catalog: "_PathCatalog",
+    unresolved: "_OrderedStrings",
+    warnings: "_OrderedStrings",
+) -> None:
+    paths = catalog.collision(relative)
+    assert paths is not None
+    rendered = ", ".join(paths)
+    unresolved.add(f"portable-path-collision:{rendered}")
+    warnings.add(f"ambiguous portable path identity selects neither source: {rendered}")
 
 
 def _read_document(path: Path) -> Document:
@@ -449,6 +585,29 @@ def _read_document(path: Path) -> Document:
 
 def _identity(value: str) -> str:
     return unicodedata.normalize("NFC", value).casefold()
+
+
+@dataclass(frozen=True)
+class _PathCatalog:
+    collisions: dict[str, tuple[str, ...]]
+
+    @classmethod
+    def from_project(cls, project: Project) -> "_PathCatalog":
+        identities: dict[str, list[str]] = {}
+        for path in project.iter_managed_markdown():
+            relative = project.relative_id(path)
+            if _selectable_context_path(relative):
+                identities.setdefault(_identity(relative), []).append(relative)
+        return cls(
+            collisions={
+                identity: tuple(sorted(paths, key=lambda item: (item.casefold(), item)))
+                for identity, paths in identities.items()
+                if len(paths) > 1
+            }
+        )
+
+    def collision(self, relative: str) -> tuple[str, ...] | None:
+        return self.collisions.get(_identity(relative))
 
 
 class _OrderedStrings:
@@ -475,6 +634,10 @@ class _OrderedPaths(_OrderedStrings):
     def discard_identities(self, identities: frozenset[str]) -> None:
         self._items = [item for item in self._items if _identity(item) not in identities]
         self._identities = {_identity(item) for item in self._items}
+
+    def discard_identity(self, identity: str) -> None:
+        self._items = [item for item in self._items if _identity(item) != identity]
+        self._identities.discard(identity)
 
 
 __all__ = ["ContextPlan", "ContextPlanError", "plan_context"]
