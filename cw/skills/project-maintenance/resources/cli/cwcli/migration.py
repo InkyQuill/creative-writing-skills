@@ -348,6 +348,7 @@ def load_migration_plan(path: Path, root: Path | None = None) -> MigrationPlan:
                 content,
             )
         )
+    _validate_operation_identity_overlaps(operations)
 
     raw_unresolved = payload["unresolved"]
     if not isinstance(raw_unresolved, list):
@@ -360,7 +361,10 @@ def load_migration_plan(path: Path, root: Path | None = None) -> MigrationPlan:
         sources = item["sources"]
         if not isinstance(sources, list) or not sources:
             raise MigrationPlanError(f"unresolved[{index}].sources must be a non-empty array")
-        validated_sources = [_source_path(value, f"unresolved[{index}].sources") for value in sources]
+        validated_sources = [
+            _opaque_unresolved_source(value, f"unresolved[{index}].sources")
+            for value in sources
+        ]
         if len(set(validated_sources)) != len(validated_sources):
             raise MigrationPlanError(f"unresolved[{index}].sources contains duplicates")
         destination = item["destination"]
@@ -672,7 +676,10 @@ def _validate_apply_plan(plan: MigrationPlan, expected_hash: str) -> None:
 def _require_source_entry(root: Path, relative: str) -> None:
     path = root / PurePosixPath(relative)
     if not _secure_dirfd_supported():
-        _fallback_regular_identity(path, f"migration source {relative}", root=root)
+        descriptor = _fallback_regular_identity(
+            path, f"migration source {relative}", root=root
+        )
+        os.close(descriptor)
         return
     parent_descriptor = _open_directory_no_follow(path.parent, f"migration source parent {relative}")
     try:
@@ -1004,6 +1011,24 @@ def _source_path(value: object, label: str) -> str:
     return value
 
 
+def _opaque_unresolved_source(value: object, label: str) -> str:
+    """Validate an opaque identity that can be inspected but never applied."""
+
+    if not isinstance(value, str) or not value:
+        raise MigrationPlanError(f"{label} must be a non-empty string")
+    if "\x00" in value:
+        raise MigrationPlanError(f"{label} contains NUL")
+    try:
+        value.encode("utf-8")
+    except UnicodeEncodeError as error:
+        raise MigrationPlanError(f"{label} must contain valid Unicode") from error
+    if value.startswith("/") or any(
+        part in {"", ".", ".."} for part in value.split("/")
+    ):
+        raise MigrationPlanError(f"{label} is not a contained opaque identity")
+    return value
+
+
 def _portable_destination(value: str) -> str:
     return PurePosixPath(
         *(unicodedata.normalize("NFC", part) for part in PurePosixPath(value).parts)
@@ -1017,8 +1042,12 @@ def _reject_nested_boundary(root: Path, relative: str) -> None:
             current /= part
             if not os.path.lexists(current):
                 return
-            mode = current.lstat().st_mode
-            if stat.S_ISLNK(mode) or not stat.S_ISDIR(mode):
+            info = current.lstat()
+            if (
+                _is_reparse_point(info)
+                or stat.S_ISLNK(info.st_mode)
+                or not stat.S_ISDIR(info.st_mode)
+            ):
                 raise MigrationPlanError(f"operation crosses unsafe boundary: {relative}")
             manifest = current / "project.md"
             if os.path.lexists(manifest) and stat.S_ISREG(manifest.lstat().st_mode):
@@ -1100,7 +1129,10 @@ def _validate_generated_plan(
         sources = item["sources"]
         if not isinstance(sources, list) or not sources:
             raise MigrationPlanError(f"unresolved[{index}].sources must be a non-empty array")
-        validated_sources = [_source_path(value, f"unresolved[{index}].sources") for value in sources]
+        validated_sources = [
+            _opaque_unresolved_source(value, f"unresolved[{index}].sources")
+            for value in sources
+        ]
         if len(set(validated_sources)) != len(validated_sources):
             raise MigrationPlanError(f"unresolved[{index}].sources contains duplicates")
         destination = item["destination"]
@@ -1109,6 +1141,31 @@ def _validate_generated_plan(
         reason = item["reason"]
         if not isinstance(reason, str) or not reason:
             raise MigrationPlanError(f"unresolved[{index}].reason must be a non-empty string")
+    _validate_operation_identity_overlaps(operations)
+
+
+def _validate_operation_identity_overlaps(
+    operations: list[MigrationOperation],
+) -> None:
+    source_owners: dict[tuple[str, ...], set[int]] = {}
+    for index, operation in enumerate(operations):
+        for source in _operation_sources(operation):
+            source_owners.setdefault(_portable_path_identity(source), set()).add(index)
+    for index, operation in enumerate(operations):
+        owners = source_owners.get(
+            _portable_path_identity(operation.destination), set()
+        )
+        if not owners:
+            continue
+        same_operation_allowed = owners == {index} and operation.action in {
+            "merge",
+            "preserve",
+        }
+        if not same_operation_allowed:
+            raise MigrationPlanError(
+                "migration source and destination identities overlap across operations: "
+                f"{operation.destination}"
+            )
 
 
 def _strict_integer(value: object, label: str, *, minimum: int = 1) -> int:
@@ -1268,7 +1325,7 @@ def _fallback_regular_identity(
     if root is not None:
         _require_contained(Path(root).absolute(), absolute, label)
     anchor = Path(absolute.anchor)
-    ancestors: list[tuple[Path, tuple[int, int, int]]] = []
+    ancestors: list[tuple[Path, tuple[int, int, int, bool]]] = []
     current = anchor
     for component in absolute.relative_to(anchor).parts[:-1]:
         current /= component
@@ -1276,14 +1333,22 @@ def _fallback_regular_identity(
             info = current.lstat()
         except OSError as error:
             raise MigrationPlanError(f"{label} has a missing ancestor") from error
-        if stat.S_ISLNK(info.st_mode) or not stat.S_ISDIR(info.st_mode):
+        if (
+            _is_reparse_point(info)
+            or stat.S_ISLNK(info.st_mode)
+            or not stat.S_ISDIR(info.st_mode)
+        ):
             raise MigrationPlanError(f"{label} has an unsafe ancestor")
         ancestors.append((current, _stat_identity(info)))
     try:
         before = absolute.lstat()
     except OSError as error:
         raise MigrationPlanError(f"{label} must be a real file without links: {path}") from error
-    if stat.S_ISLNK(before.st_mode) or not stat.S_ISREG(before.st_mode):
+    if (
+        _is_reparse_point(before)
+        or stat.S_ISLNK(before.st_mode)
+        or not stat.S_ISREG(before.st_mode)
+    ):
         raise MigrationPlanError(f"{label} must be a real file without links: {path}")
     try:
         descriptor = os.open(absolute, os.O_RDONLY | getattr(os, "O_CLOEXEC", 0))
@@ -1293,7 +1358,9 @@ def _fallback_regular_identity(
         opened = os.fstat(descriptor)
         after = absolute.lstat()
         if (
-            _stat_identity(before) != _stat_identity(opened)
+            _is_reparse_point(opened)
+            or _is_reparse_point(after)
+            or _stat_identity(before) != _stat_identity(opened)
             or _stat_identity(after) != _stat_identity(opened)
         ):
             raise MigrationPlanError(f"{label} changed while it was opened")
@@ -1306,8 +1373,14 @@ def _fallback_regular_identity(
         raise
 
 
-def _stat_identity(info: os.stat_result) -> tuple[int, int, int]:
-    return (info.st_dev, info.st_ino, stat.S_IFMT(info.st_mode))
+def _is_reparse_point(info: os.stat_result) -> bool:
+    attributes = getattr(info, "st_file_attributes", 0)
+    mask = getattr(stat, "FILE_ATTRIBUTE_REPARSE_POINT", 0x400)
+    return bool(attributes & mask)
+
+
+def _stat_identity(info: os.stat_result) -> tuple[int, int, int, bool]:
+    return (info.st_dev, info.st_ino, stat.S_IFMT(info.st_mode), _is_reparse_point(info))
 
 
 def _require_contained(root: Path, path: Path, label: str) -> None:

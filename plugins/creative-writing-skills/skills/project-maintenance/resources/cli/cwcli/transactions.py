@@ -351,10 +351,14 @@ class TransactionStore:
             return {"blob": None, "byte_hash": None, "logical_hash": None}
 
         identifier = self.blob(data)
+        try:
+            logical_identifier = logical_hash(data)
+        except UnicodeError:
+            logical_identifier = None
         return {
             "blob": identifier,
             "byte_hash": identifier,
-            "logical_hash": logical_hash(data),
+            "logical_hash": logical_identifier,
         }
 
     def _read_manifest(self, transaction_id: str) -> dict[str, object]:
@@ -1477,8 +1481,15 @@ def _ordered_union(*groups: tuple[str, ...]) -> tuple[str, ...]:
 def _unified_diff(path: str, before: bytes | None, after: bytes | None) -> str:
     """Render an exact textual review diff for a planned byte replacement."""
 
-    before_text = "" if before is None else before.decode("utf-8")
-    after_text = "" if after is None else after.decode("utf-8")
+    try:
+        before_text = "" if before is None else before.decode("utf-8")
+        after_text = "" if after is None else after.decode("utf-8")
+    except UnicodeDecodeError:
+        return (
+            f"Binary change: {path}\n"
+            f"before: {_binary_summary(before)}\n"
+            f"after: {_binary_summary(after)}\n"
+        )
     return "".join(
         difflib.unified_diff(
             before_text.splitlines(keepends=True),
@@ -1486,6 +1497,17 @@ def _unified_diff(path: str, before: bytes | None, after: bytes | None) -> str:
             fromfile=path,
             tofile=path,
         )
+    )
+
+
+def _binary_summary(data: bytes | None) -> str:
+    if data is None:
+        return "absent"
+    preview = data[:32].hex()
+    suffix = "" if len(data) <= 32 else "..."
+    return (
+        f"size={len(data)} sha256={hashlib.sha256(data).hexdigest()} "
+        f"hex={preview}{suffix}"
     )
 
 

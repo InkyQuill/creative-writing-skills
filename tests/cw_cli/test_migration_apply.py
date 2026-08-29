@@ -1,6 +1,8 @@
+import hashlib
 import io
 import json
 import os
+import stat
 import tempfile
 import unittest
 from pathlib import Path
@@ -146,6 +148,51 @@ class MigrationApplyTests(unittest.TestCase):
         self.assertEqual(b"Second\n", second.read_bytes())
         self.assertFalse((self.root / "kb/continuity/timeline.md").exists())
 
+    def test_cross_operation_merge_destination_source_is_rejected_without_overwrite(self):
+        first = self.root / "kb/timeline/a.md"
+        second = self.root / "kb/timeline/b.md"
+        reviewed_destination = self.root / "kb/continuity/timeline.md"
+        first.parent.mkdir(parents=True)
+        reviewed_destination.parent.mkdir(parents=True)
+        first.write_bytes(b"First\n")
+        second.write_bytes(b"Second\n")
+        reviewed_destination.write_bytes(b"Existing timeline\n")
+        self.legacy.unlink()
+        payload = {
+            "plan-version": 1,
+            "source-schema": 0,
+            "target-schema": 1,
+            "operations": [
+                {
+                    "sources": ["kb/timeline/a.md", "kb/timeline/b.md"],
+                    "destination": "kb/continuity/timeline.md",
+                    "action": "merge",
+                    "content": "# MERGED reviewed content\n",
+                },
+                {
+                    "source": "kb/continuity/timeline.md",
+                    "destination": "work/plans/stolen.md",
+                    "action": "move",
+                },
+            ],
+            "unresolved": [],
+        }
+        payload["plan-hash"] = migration.canonical_plan_hash(payload)
+
+        status, result, _ = self.run_cli(
+            [
+                "migrate", "--apply", str(self.write_plan(payload)),
+                "--expect-plan-hash", payload["plan-hash"], "--format", "json",
+            ]
+        )
+
+        self.assertEqual(1, status)
+        self.assertEqual("conflict", result["status"])
+        self.assertEqual(b"First\n", first.read_bytes())
+        self.assertEqual(b"Second\n", second.read_bytes())
+        self.assertEqual(b"Existing timeline\n", reviewed_destination.read_bytes())
+        self.assertFalse((self.root / "work/plans/stolen.md").exists())
+
     def test_plain_manifest_body_is_upgraded_and_exactly_restored_by_undo(self):
         legacy_manifest = b"Legacy instructions\r\nKeep every word.\r\n"
         (self.root / "project.md").write_bytes(legacy_manifest)
@@ -172,12 +219,102 @@ class MigrationApplyTests(unittest.TestCase):
         self.assertEqual(["structure", "drafts"], applied["checks"])
         self.assertTrue(applied["findings"])
 
+    def test_invalid_utf8_migration_previews_applies_and_undoes_exact_bytes(self):
+        legacy = b"---\nnumber: 1\n---\nInvalid: \xff\xfe\x80\r\n"
+        self.legacy.write_bytes(legacy)
+        plan_path, expected = self.preview()
+
+        status, preview, error = self.run_cli(
+            [
+                "migrate", "--preview", str(plan_path),
+                "--expect-plan-hash", expected, "--format", "json",
+            ]
+        )
+        self.assertEqual((0, ""), (status, error))
+        binary_diffs = [
+            item["diff"] for item in preview["changes"] if item["path"] in {
+                "chapters/ch-001.md", "story/chapters/ch-001.md"
+            }
+        ]
+        self.assertEqual(2, len(binary_diffs))
+        digest = hashlib.sha256(legacy).hexdigest()
+        self.assertTrue(all("Binary change:" in diff for diff in binary_diffs))
+        self.assertTrue(all(f"size={len(legacy)} sha256={digest}" in diff for diff in binary_diffs))
+        self.assertEqual(legacy, self.legacy.read_bytes())
+
+        status, applied, error = self.run_cli(
+            [
+                "migrate", "--apply", str(plan_path),
+                "--expect-plan-hash", expected, "--format", "json",
+            ]
+        )
+        self.assertEqual((0, ""), (status, error))
+        destination = self.root / "story/chapters/ch-001.md"
+        self.assertEqual(legacy, destination.read_bytes())
+        self.assertFalse(self.legacy.exists())
+
+        status, _, error = self.run_cli(
+            ["undo", applied["transaction_id"], "--apply", "--format", "json"]
+        )
+        self.assertEqual((0, ""), (status, error))
+        self.assertEqual(legacy, self.legacy.read_bytes())
+        self.assertFalse(destination.exists())
+
     def test_fallback_no_follow_path_supports_plan_and_source_reads(self):
         plan_path, expected = self.preview()
         with mock.patch.object(migration, "_secure_dirfd_supported", return_value=False):
             loaded = migration.load_migration_plan(plan_path, root=self.root)
             plan = migration.plan_apply_migration(self.root, loaded, expected)
         self.assertTrue(plan.changes)
+
+    def test_fallback_rejects_reparse_attributes_and_simulated_reparse_leaf(self):
+        reparse_info = mock.Mock(st_file_attributes=0x400)
+        self.assertTrue(migration._is_reparse_point(reparse_info))
+        leaf = self.legacy.lstat()
+        with mock.patch.object(
+            migration,
+            "_is_reparse_point",
+            side_effect=lambda info: (
+                stat.S_ISREG(info.st_mode)
+                and info.st_dev == leaf.st_dev
+                and info.st_ino == leaf.st_ino
+            ),
+        ):
+            with self.assertRaisesRegex(migration.MigrationPlanError, "real file without links"):
+                migration._fallback_regular_identity(
+                    self.legacy, "migration source", root=self.root
+                )
+
+    def test_fallback_read_detects_replacement_and_closes_both_descriptors(self):
+        replacement = self.root / "replacement.md"
+        replacement.write_bytes(b"Replacement\n")
+        first_descriptor = os.open(self.legacy, os.O_RDONLY)
+        second_descriptor = os.open(replacement, os.O_RDONLY)
+        with mock.patch.object(migration, "_secure_dirfd_supported", return_value=False), mock.patch.object(
+            migration,
+            "_fallback_regular_identity",
+            side_effect=[first_descriptor, second_descriptor],
+        ) as fallback:
+            with self.assertRaisesRegex(migration.MigrationPlanError, "changed while it was read"):
+                migration._read_regular_file_no_follow(
+                    self.legacy, "migration source", root=self.root
+                )
+        self.assertEqual(2, fallback.call_count)
+        for descriptor in (first_descriptor, second_descriptor):
+            with self.assertRaises(OSError):
+                os.fstat(descriptor)
+
+    def test_fallback_source_probe_closes_its_descriptor_once(self):
+        descriptor = os.open(self.legacy, os.O_RDONLY)
+        real_close = os.close
+        with mock.patch.object(migration, "_secure_dirfd_supported", return_value=False), mock.patch.object(
+            migration, "_fallback_regular_identity", return_value=descriptor
+        ) as fallback, mock.patch.object(migration.os, "close", wraps=real_close) as closer:
+            migration._require_source_entry(self.root, "chapters/ch-001.md")
+        fallback.assert_called_once()
+        closer.assert_called_once_with(descriptor)
+        with self.assertRaises(OSError):
+            os.fstat(descriptor)
 
     def test_tamper_hash_unresolved_and_destination_collision_are_conflicts_without_mutation(self):
         plan_path, shown_hash = self.preview()

@@ -213,6 +213,23 @@ class MigrationPlanningTests(unittest.TestCase):
             self.assertTrue(plan.unresolved[0]["reason"].startswith("nonportable-source"))
             self.assertEqual(plan, migration.load_migration_plan(write_plan(root, plan.to_payload())))
 
+    @unittest.skipIf(os.name == "nt", "backslash is not a literal POSIX filename on Windows")
+    def test_literal_backslash_source_round_trips_as_blocking_opaque_unresolved(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = "legacy\\notes.md"
+            materialize(root, {source: "Legacy notes\n"})
+
+            plan = migration.plan_migration(root)
+
+            self.assertEqual((), plan.operations)
+            self.assertEqual((source,), plan.unresolved[0]["sources"])
+            self.assertEqual("unknown-role", plan.unresolved[0]["reason"])
+            loaded = migration.load_migration_plan(write_plan(root, plan.to_payload()))
+            self.assertEqual(plan, loaded)
+            with self.assertRaisesRegex(migration.MigrationPlanError, "unresolved"):
+                migration.plan_apply_migration(root, loaded, loaded.plan_hash)
+
     def test_planning_is_stable_unicode_safe_and_read_only(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -323,6 +340,24 @@ class MigrationPlanLoadingTests(unittest.TestCase):
                     with self.assertRaises(migration.MigrationPlanError):
                         migration.load_migration_plan(write_plan(root, candidate))
 
+    def test_loader_allows_merge_destination_only_as_a_source_of_that_merge(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            payload = self.base_payload()
+            payload["operations"] = [
+                {
+                    "sources": [
+                        "kb/continuity/timeline.md",
+                        "kb/timeline/additions.md",
+                    ],
+                    "destination": "kb/continuity/timeline.md",
+                    "action": "merge",
+                    "content": "# Reviewed merge\n",
+                }
+            ]
+            loaded = migration.load_migration_plan(write_plan(root, payload))
+            self.assertEqual(payload, loaded.to_payload())
+
     def test_loader_rejects_unknown_missing_and_type_invalid_keys(self):
         mutations = (
             lambda value: value.__setitem__("unknown", 1),
@@ -378,6 +413,26 @@ class MigrationPlanLoadingTests(unittest.TestCase):
             )
             with self.assertRaisesRegex(migration.MigrationPlanError, "case-colliding destination"):
                 migration.load_migration_plan(write_plan(Path(directory), payload))
+
+    def test_loader_rejects_merge_destination_used_as_another_operation_source(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            payload = self.base_payload()
+            payload["operations"] = [
+                {
+                    "sources": ["kb/timeline/a.md", "kb/timeline/b.md"],
+                    "destination": "kb/continuity/timeline.md",
+                    "action": "merge",
+                    "content": "# Reviewed merge\n",
+                },
+                {
+                    "source": "kb/continuity/timeline.md",
+                    "destination": "work/plans/stolen.md",
+                    "action": "move",
+                },
+            ]
+            with self.assertRaisesRegex(migration.MigrationPlanError, "overlap across operations"):
+                migration.load_migration_plan(write_plan(root, payload))
 
     def test_loader_rejects_source_destination_action_mismatch(self):
         cases = (("same.md", "same.md", "move"), ("one.md", "two.md", "preserve"))
