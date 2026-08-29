@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import TextIO
 
 from . import __version__
+from .checks import CHECKERS, run_checks
 from .checks.structure import check_structure
 from .checks.drafts import check_drafts
 from .documents import DocumentError, logical_hash
@@ -89,12 +90,10 @@ def _parser(*, error_stream: TextIO) -> argparse.ArgumentParser:
 
     check = commands.add_parser("check", error_stream=error_stream)
     check_commands = check.add_subparsers(dest="check_command", required=True, parser_class=_Parser)
-    structure = check_commands.add_parser("structure", error_stream=error_stream)
-    structure.add_argument("path", nargs="?", default=".")
-    _report_options(structure)
-    drafts_check = check_commands.add_parser("drafts", error_stream=error_stream)
-    drafts_check.add_argument("path", nargs="?", default=".")
-    _report_options(drafts_check)
+    for name in (*sorted(CHECKERS), "all"):
+        check_command = check_commands.add_parser(name, error_stream=error_stream)
+        check_command.add_argument("path", nargs="?", default=".")
+        _report_options(check_command)
 
     init = commands.add_parser("init", error_stream=error_stream)
     init.add_argument("path", nargs="?", default=".")
@@ -205,40 +204,21 @@ def run(argv: list[str], *, cwd: Path, stdout: TextIO, stderr: TextIO) -> int:
     if args.command == "migrate":
         return _run_migrate(args, cwd=cwd, stdout=stdout, stderr=stderr)
 
-    if args.command == "check" and args.check_command == "structure":
+    if args.command == "check":
+        names = sorted(CHECKERS) if args.check_command == "all" else [args.check_command]
         try:
-            target = _from_cwd(cwd, args.path)
-            report = Report(check_structure(discover_project(target)), checks=["structure"])
+            project = discover_project(_from_cwd(cwd, args.path))
         except (DocumentError, OSError, ProjectDiscoveryError) as error:
-            if args.format == "json":
-                report = Report(
-                    [],
-                    checks=["structure"],
-                    execution_errors=[ExecutionError(check="structure", message=str(error))],
-                )
-                return _write_report(report, output_format=args.format, strict=args.strict, stdout=stdout)
-            stderr.write(f"cw: error: {error}\n")
-            return 2
-        return _write_report(report, output_format=args.format, strict=args.strict, stdout=stdout)
-
-    if args.command == "check" and args.check_command == "drafts":
-        try:
-            target = _from_cwd(cwd, args.path)
-            project = discover_project(target)
+            if args.format != "json":
+                stderr.write(f"cw: error: {error}\n")
+                return 2
             report = Report(
-                check_drafts(project, TransactionEngine(project).store),
-                checks=["drafts"],
+                [],
+                checks=names,
+                execution_errors=[ExecutionError(check=name, message=str(error)) for name in names],
             )
-        except (DocumentError, OSError, ProjectDiscoveryError, TransactionError) as error:
-            if args.format == "json":
-                report = Report(
-                    [],
-                    checks=["drafts"],
-                    execution_errors=[ExecutionError(check="drafts", message=str(error))],
-                )
-                return _write_report(report, output_format=args.format, strict=args.strict, stdout=stdout)
-            stderr.write(f"cw: error: {error}\n")
-            return 2
+        else:
+            report = run_checks(project, names)
         return _write_report(report, output_format=args.format, strict=args.strict, stdout=stdout)
 
     if args.command == "edit":
@@ -264,6 +244,8 @@ def _write_report(report: Report, *, output_format: str, strict: bool, stdout: T
         stdout.write(report.as_text())
         if report.findings:
             stdout.write("\n")
+        for error in report.execution_errors:
+            stdout.write(f"CW-CHECK-EXEC [error] {error.check}: {error.message}\n")
     return report.exit_status(strict=strict)
 
 
