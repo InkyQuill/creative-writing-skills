@@ -2,12 +2,29 @@
 
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, replace
+import os
+from pathlib import PurePosixPath
+import shlex
+import subprocess
 
 from .checks import CHECKERS, run_checks
 from .context import snapshot_status
 from .findings import ExecutionError, Finding
 from .project import Project
+
+
+@dataclass(frozen=True)
+class RepairCommand:
+    """One executable command represented as data, never raw shell source."""
+
+    argv: tuple[str, ...]
+
+    def display(self, *, windows: bool | None = None) -> str:
+        return _render_argv(self.argv, windows=windows)
+
+    def as_dict(self) -> dict[str, object]:
+        return {"argv": list(self.argv), "display": self.display()}
 
 
 @dataclass(frozen=True)
@@ -17,14 +34,14 @@ class RepairGroup:
     priority: int
     title: str
     findings: tuple[Finding, ...]
-    commands: tuple[str, ...]
+    commands: tuple[RepairCommand, ...]
 
     def as_dict(self) -> dict[str, object]:
         return {
             "priority": self.priority,
             "title": self.title,
             "findings": [asdict(finding) for finding in self.findings],
-            "commands": list(self.commands),
+            "commands": [command.as_dict() for command in self.commands],
         }
 
 
@@ -68,7 +85,7 @@ class DoctorReport:
                 if finding.next_action:
                     lines.append(f"    Next: {finding.next_action}")
             for command in group.commands:
-                lines.append(f"  $ {command}")
+                lines.append(f"  $ {command.display()}")
         for error in self.execution_errors:
             lines.append(f"CW-DOCTOR-EXEC [error] {error.check}: {error.message}")
         return "\n".join(lines)
@@ -98,6 +115,7 @@ def diagnose_project(project: Project) -> DoctorReport:
     else:
         execution_errors = tuple(report.execution_errors)
 
+    findings = [_manualize_blocker(finding) for finding in findings]
     buckets: dict[int, list[Finding]] = {priority: [] for priority, _title in _GROUPS}
     for finding in sorted(findings, key=_finding_key):
         buckets[_priority(finding)].append(finding)
@@ -107,7 +125,7 @@ def diagnose_project(project: Project) -> DoctorReport:
             priority=priority,
             title=title,
             findings=tuple(buckets[priority]),
-            commands=_commands(buckets[priority]),
+            commands=_commands(buckets[priority], findings),
         )
         for priority, title in _GROUPS
     )
@@ -126,27 +144,89 @@ def _priority(finding: Finding) -> int:
     return 2
 
 
-def _commands(findings: list[Finding]) -> tuple[str, ...]:
-    commands: list[str] = []
+def _commands(
+    findings: list[Finding], all_findings: list[Finding]
+) -> tuple[RepairCommand, ...]:
+    commands: list[RepairCommand] = []
+    journal_blocked = any(
+        finding.code.startswith("CW-JOURNAL-") and finding.code != "CW-JOURNAL-050"
+        for finding in all_findings
+    )
+    context_blocked = any(
+        finding.code in {"CW-CONTEXT-CORRUPT", "CW-CONTEXT-UNSAFE"}
+        for finding in all_findings
+    )
+    reindex_blocked = any(
+        finding.code
+        in {
+            "CW-LINK-090",
+            "CW-STRUCT-001",
+            "CW-STRUCT-011",
+            "CW-STRUCT-020",
+            "CW-STRUCT-050",
+        }
+        for finding in all_findings
+    )
     for finding in findings:
-        pair: tuple[str, str] | None = None
-        if finding.code == "CW-JOURNAL-050" and finding.next_action:
-            apply = finding.next_action.strip()
-            if apply.startswith("cw recover ") and apply.endswith(" --apply"):
-                pair = (apply.removesuffix(" --apply"), apply)
-        elif finding.code == "CW-LINK-040":
-            pair = ("cw reindex", "cw reindex --apply")
-        elif finding.code in {"CW-CONTEXT-STALE", "CW-CONTEXT-MISSING"}:
-            pair = ("cw clean-context", "cw clean-context --apply")
+        pair: tuple[tuple[str, ...], tuple[str, ...]] | None = None
+        if finding.code == "CW-JOURNAL-050" and not journal_blocked:
+            transaction_id = _transaction_id(finding)
+            if transaction_id is not None:
+                preview = ("cw", "recover", transaction_id)
+                pair = (preview, (*preview, "--apply"))
+        elif (
+            finding.code == "CW-LINK-040"
+            and not reindex_blocked
+            and finding.next_action is not None
+            and "Preview cw reindex" in finding.next_action
+        ):
+            pair = (("cw", "reindex"), ("cw", "reindex", "--apply"))
+        elif (
+            finding.code in {"CW-CONTEXT-STALE", "CW-CONTEXT-MISSING"}
+            and not context_blocked
+        ):
+            pair = (("cw", "clean-context"), ("cw", "clean-context", "--apply"))
         if pair is not None:
-            for command in pair:
+            for argv in pair:
+                command = RepairCommand(argv)
                 if command not in commands:
                     commands.append(command)
     return tuple(commands)
+
+
+def _transaction_id(finding: Finding) -> str | None:
+    if finding.path is None:
+        return None
+    parts = PurePosixPath(finding.path).parts
+    if (
+        len(parts) == 4
+        and parts[:2] == (".creative-writing", "transactions")
+        and parts[3] == "manifest.json"
+    ):
+        return parts[2]
+    return None
+
+
+def _manualize_blocker(finding: Finding) -> Finding:
+    if finding.code in {"CW-CONTEXT-CORRUPT", "CW-CONTEXT-UNSAFE"}:
+        return replace(
+            finding,
+            next_action=(
+                "Inspect and preserve the unsafe cache entry manually; do not run "
+                "cw clean-context until every cache entry validates."
+            ),
+        )
+    return finding
+
+
+def _render_argv(argv: tuple[str, ...], *, windows: bool | None = None) -> str:
+    if windows is None:
+        windows = os.name == "nt"
+    return subprocess.list2cmdline(list(argv)) if windows else shlex.join(argv)
 
 
 def _finding_key(finding: Finding) -> tuple[str, str, int, str]:
     return (finding.path or "", finding.code, finding.line or 0, finding.message)
 
 
-__all__ = ["DoctorReport", "RepairGroup", "diagnose_project"]
+__all__ = ["DoctorReport", "RepairCommand", "RepairGroup", "diagnose_project"]

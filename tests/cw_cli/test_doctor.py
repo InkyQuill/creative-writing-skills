@@ -2,6 +2,8 @@ import hashlib
 import io
 import json
 import os
+import shlex
+import subprocess
 import tempfile
 import unittest
 from pathlib import Path
@@ -76,7 +78,13 @@ class DoctorTests(unittest.TestCase):
         recoverability = payload["groups"][0]
         self.assertIn("CW-JOURNAL-050", {item["code"] for item in recoverability["findings"]})
         self.assertEqual(
-            ["cw recover tx-doctor", "cw recover tx-doctor --apply"],
+            [
+                {"argv": ["cw", "recover", "tx-doctor"], "display": "cw recover tx-doctor"},
+                {
+                    "argv": ["cw", "recover", "tx-doctor", "--apply"],
+                    "display": "cw recover tx-doctor --apply",
+                },
+            ],
             recoverability["commands"],
         )
 
@@ -84,10 +92,21 @@ class DoctorTests(unittest.TestCase):
         injected = {
             "journal": lambda _project: [
                 Finding(
-                    "CW-JOURNAL-050", "warning", "incomplete", next_action="cw recover tx-1 --apply"
+                    "CW-JOURNAL-050",
+                    "warning",
+                    "incomplete",
+                    path=".creative-writing/transactions/tx-1/manifest.json",
+                    next_action="cw recover tx-1 --apply",
                 )
             ],
-            "links": lambda _project: [Finding("CW-LINK-040", "warning", "index drift")],
+            "links": lambda _project: [
+                Finding(
+                    "CW-LINK-040",
+                    "warning",
+                    "index drift",
+                    next_action="Preview cw reindex, review the diff, then apply it explicitly.",
+                )
+            ],
             "continuity": lambda _project: [
                 Finding(
                     "CW-CONT-020",
@@ -101,10 +120,14 @@ class DoctorTests(unittest.TestCase):
             report = doctor.diagnose_project(self.project)
 
         self.assertEqual(
-            ("cw recover tx-1", "cw recover tx-1 --apply"), report.groups[0].commands
+            (("cw", "recover", "tx-1"), ("cw", "recover", "tx-1", "--apply")),
+            tuple(command.argv for command in report.groups[0].commands),
         )
         self.assertEqual((), report.groups[1].commands)
-        self.assertEqual(("cw reindex", "cw reindex --apply"), report.groups[2].commands)
+        self.assertEqual(
+            (("cw", "reindex"), ("cw", "reindex", "--apply")),
+            tuple(command.argv for command in report.groups[2].commands),
+        )
         semantic = report.groups[1].findings[0]
         self.assertTrue(semantic.next_action.startswith("Ask the author"))
 
@@ -120,7 +143,10 @@ class DoctorTests(unittest.TestCase):
 
         cleanup = report.groups[4]
         self.assertIn("CW-CONTEXT-STALE", {item.code for item in cleanup.findings})
-        self.assertEqual(("cw clean-context", "cw clean-context --apply"), cleanup.commands)
+        self.assertEqual(
+            (("cw", "clean-context"), ("cw", "clean-context", "--apply")),
+            tuple(command.argv for command in cleanup.commands),
+        )
         self.assertEqual(before, snapshot_tree(self.root))
 
     def test_doctor_requires_project_and_runtime_failure_is_status_two(self):
@@ -140,10 +166,64 @@ class DoctorTests(unittest.TestCase):
         _, text_output, _ = self.run_cli(["doctor", "--format", "text"])
         payload = json.loads(json_output)
         codes = [item["code"] for group in payload["groups"] for item in group["findings"]]
-        commands = [command for group in payload["groups"] for command in group["commands"]]
+        commands = [command["display"] for group in payload["groups"] for command in group["commands"]]
         self.assertIn("audience: agent", text_output)
         for value in (*codes, *commands):
             self.assertIn(value, text_output)
+
+    def test_recovery_id_is_argv_first_and_shell_safe(self):
+        transaction_id = "tx ;$(touch pwn) `id`"
+        TransactionStore(self.project).prepare(
+            TransactionPlan(("edit",), (Change("story/new.md", None, b"x"),), {}),
+            transaction_id=transaction_id,
+        )
+
+        report = doctor.diagnose_project(self.project)
+        commands = report.groups[0].commands
+
+        self.assertEqual(transaction_id, commands[0].argv[2])
+        self.assertEqual(shlex.join(commands[0].argv), commands[0].display(windows=False))
+        self.assertEqual(
+            subprocess.list2cmdline(list(commands[0].argv)),
+            commands[0].display(windows=True),
+        )
+        payload = report.groups[0].as_dict()["commands"]
+        self.assertEqual(transaction_id, payload[0]["argv"][2])
+        finding = next(item for item in report.groups[0].findings if item.code == "CW-JOURNAL-050")
+        self.assertEqual(shlex.join(("cw", "recover", transaction_id, "--apply")), finding.next_action)
+
+    def test_subsystem_blockers_suppress_all_mechanical_commands(self):
+        injected = {
+            "journal": lambda _project: [
+                Finding(
+                    "CW-JOURNAL-050",
+                    "warning",
+                    "incomplete",
+                    path=".creative-writing/transactions/tx/manifest.json",
+                ),
+                Finding("CW-JOURNAL-020", "error", "corrupt blob"),
+            ],
+            "links": lambda _project: [
+                Finding(
+                    "CW-LINK-040",
+                    "warning",
+                    "drift",
+                    next_action="Preview cw reindex, review the diff, then apply it explicitly.",
+                ),
+                Finding("CW-STRUCT-050", "warning", "collision"),
+            ],
+        }
+        context_findings = [
+            Finding("CW-CONTEXT-STALE", "warning", "stale"),
+            Finding("CW-CONTEXT-CORRUPT", "warning", "corrupt"),
+        ]
+        with mock.patch.dict(CHECKERS, injected, clear=True):
+            with mock.patch("cwcli.doctor.snapshot_status", return_value=context_findings):
+                report = doctor.diagnose_project(self.project)
+
+        self.assertTrue(all(not group.commands for group in report.groups))
+        corrupt = next(item for item in report.groups[4].findings if item.code == "CW-CONTEXT-CORRUPT")
+        self.assertIn("manually", corrupt.next_action)
 
 
 if __name__ == "__main__":

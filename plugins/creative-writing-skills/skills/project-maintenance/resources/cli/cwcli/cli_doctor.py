@@ -4,10 +4,11 @@ from __future__ import annotations
 
 import json
 import os
+import shlex
 import shutil
 import stat
 import subprocess
-from dataclasses import asdict, dataclass
+from dataclasses import dataclass
 from pathlib import Path
 
 from . import __version__
@@ -24,6 +25,16 @@ class CliDiagnostic:
     command: tuple[str, ...] = ()
     required: bool = True
     version: str | None = None
+
+    def as_dict(self) -> dict[str, object]:
+        return {
+            "name": self.name,
+            "ok": self.ok,
+            "message": self.message,
+            "command": list(self.command),
+            "required": self.required,
+            "version": self.version,
+        }
 
 
 @dataclass(frozen=True)
@@ -53,11 +64,11 @@ class CliDoctorReport:
         return {
             "ok": self.ok,
             "direct_invocation_is_default": True,
-            "python": asdict(self.python),
-            "entrypoint": asdict(self.entrypoint),
-            "direct_invocation": asdict(self.direct_invocation),
-            "version_agreement": asdict(self.version_agreement),
-            "launcher": asdict(self.launcher),
+            "python": self.python.as_dict(),
+            "entrypoint": self.entrypoint.as_dict(),
+            "direct_invocation": self.direct_invocation.as_dict(),
+            "version_agreement": self.version_agreement.as_dict(),
+            "launcher": self.launcher.as_dict(),
         }
 
     def as_text(self) -> str:
@@ -72,18 +83,34 @@ class CliDoctorReport:
             state = "ok" if diagnostic.ok else "warning" if not diagnostic.required else "error"
             lines.append(f"{diagnostic.name} [{state}] {diagnostic.message}")
             if diagnostic.command:
-                lines.append(f"  command: {subprocess.list2cmdline(list(diagnostic.command))}")
+                lines.append(f"  command: {_render_command(diagnostic.command)}")
         return "\n".join(lines)
 
 
 def diagnose_cli(entrypoint: Path, python: Path) -> CliDoctorReport:
     """Probe the supplied runtime without creating files or configuring a launcher."""
 
-    python = Path(python)
-    entrypoint = Path(entrypoint)
-    python_result = _diagnose_python(python)
-    entrypoint_result = _diagnose_entrypoint(entrypoint)
-    direct_command = (str(python), str(entrypoint), "--version", "--format", "json")
+    try:
+        python = Path(python)
+        python_text = str(python)
+    except (OSError, TypeError, UnicodeError, ValueError) as error:
+        python_text = "<invalid-python-path>"
+        python_result = CliDiagnostic(
+            "python", False, f"Python path cannot be represented safely: {error}"
+        )
+    else:
+        python_result = _diagnose_python(python)
+    try:
+        entrypoint = Path(entrypoint)
+        entrypoint_text = str(entrypoint)
+    except (OSError, TypeError, UnicodeError, ValueError) as error:
+        entrypoint_text = "<invalid-entrypoint-path>"
+        entrypoint_result = CliDiagnostic(
+            "entrypoint", False, f"entrypoint path cannot be represented safely: {error}"
+        )
+    else:
+        entrypoint_result = _diagnose_entrypoint(entrypoint)
+    direct_command = (python_text, entrypoint_text, "--version", "--format", "json")
 
     if python_result.ok and entrypoint_result.ok:
         direct_result, detected_version = _probe_version(
@@ -110,15 +137,27 @@ def diagnose_cli(entrypoint: Path, python: Path) -> CliDoctorReport:
         version=detected_version,
     )
 
-    launcher_path = shutil.which("cw")
-    if launcher_path is None:
+    try:
+        launcher_path = shutil.which("cw")
+    except (OSError, TypeError, UnicodeError, ValueError) as error:
+        launcher_result = CliDiagnostic(
+            name="launcher",
+            ok=False,
+            required=False,
+            message=f"optional launcher discovery failed safely: {error}",
+        )
+        launcher_path = None
+        launcher_failed = True
+    else:
+        launcher_failed = False
+    if launcher_path is None and not launcher_failed:
         launcher_result = CliDiagnostic(
             name="launcher",
             ok=False,
             required=False,
             message="optional cw launcher was not found; keep using direct invocation",
         )
-    else:
+    elif launcher_path is not None:
         launcher_result, launcher_version = _probe_version(
             "launcher", (launcher_path, "--version", "--format", "json"), required=False
         )
@@ -190,7 +229,7 @@ def _diagnose_entrypoint(entrypoint: Path) -> CliDiagnostic:
                 raise OSError("entrypoint changed while it was being inspected")
         finally:
             os.close(descriptor)
-    except OSError as error:
+    except (OSError, TypeError, UnicodeError, ValueError) as error:
         return CliDiagnostic("entrypoint", False, f"entrypoint is unavailable or unsafe: {error}")
     executable = bool(mode & 0o111)
     detail = "executable bit is present" if executable else "executable bit is unnecessary for direct Python invocation"
@@ -234,6 +273,14 @@ def _json_stdout(completed: subprocess.CompletedProcess[bytes]) -> dict[str, obj
     if not isinstance(payload, dict):
         raise ValueError("probe output must be a JSON object")
     return payload
+
+
+def _render_command(command: tuple[str, ...], *, windows: bool | None = None) -> str:
+    """Render argv for the current shell family without changing the executable data."""
+
+    if windows is None:
+        windows = os.name == "nt"
+    return subprocess.list2cmdline(list(command)) if windows else shlex.join(command)
 
 
 __all__ = ["CliDiagnostic", "CliDoctorReport", "diagnose_cli"]

@@ -5,7 +5,9 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import shlex
 import stat
+import subprocess
 import unicodedata
 from pathlib import Path, PurePosixPath, PureWindowsPath
 
@@ -69,7 +71,15 @@ def check_journal(project: Project) -> list[Finding]:
             continue
         state = manifest.get("state")
         if state in _ACTIVE_STATES:
-            findings.append(_finding(INCOMPLETE_TRANSACTION, "warning", f"transaction is incomplete in state {state}", _journal_path(relative, "manifest.json"), f"cw recover {entry.name} --apply"))
+            findings.append(
+                _finding(
+                    INCOMPLETE_TRANSACTION,
+                    "warning",
+                    f"transaction is incomplete in state {state}",
+                    _journal_path(relative, "manifest.json"),
+                    _render_argv(("cw", "recover", entry.name, "--apply")),
+                )
+            )
         findings.extend(_intent_findings(project, manifest, _journal_path(relative, "manifest.json")))
 
     findings.extend(_check_blobs(project, root / "blobs", referenced_blobs))
@@ -374,6 +384,12 @@ def _is_digest(value: object) -> bool:
 
 def _journal_path(parent: str, name: str) -> str:
     return PurePosixPath(parent, name).as_posix()
+
+
+def _render_argv(argv: tuple[str, ...], *, windows: bool | None = None) -> str:
+    if windows is None:
+        windows = os.name == "nt"
+    return subprocess.list2cmdline(list(argv)) if windows else shlex.join(argv)
 
 
 def _finding(code: str, severity: Severity, message: str, path: str, next_action: str) -> Finding:

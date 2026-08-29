@@ -1,6 +1,7 @@
 import io
 import json
 import os
+import shlex
 import stat
 import subprocess
 import sys
@@ -128,6 +129,43 @@ class CliDoctorTests(unittest.TestCase):
         self.assertEqual("1", kwargs["env"]["PYTHONDONTWRITEBYTECODE"])
         self.assertEqual(subprocess.DEVNULL, kwargs["stdin"])
         self.assertEqual(5.0, kwargs["timeout"])
+
+    def test_direct_display_quotes_posix_metacharacters_and_windows_branch(self):
+        argv = (
+            "/tmp/Python $(touch nope)",
+            "/tmp/cw `id`; nope.py",
+            "--version",
+            "--format",
+            "json",
+        )
+        self.assertEqual(shlex.join(argv), cli_doctor._render_command(argv, windows=False))
+        self.assertEqual(
+            subprocess.list2cmdline(list(argv)),
+            cli_doctor._render_command(argv, windows=True),
+        )
+        diagnostic = cli_doctor.CliDiagnostic("direct", True, "ok", argv)
+        report = cli_doctor.CliDoctorReport(
+            diagnostic,
+            diagnostic,
+            diagnostic,
+            diagnostic,
+            cli_doctor.CliDiagnostic("launcher", False, "optional", required=False),
+        )
+        self.assertEqual(list(argv), report.as_dict()["direct_invocation"]["command"])
+        with mock.patch("cwcli.cli_doctor.os.name", "posix"):
+            self.assertIn(shlex.join(argv), report.as_text())
+
+    def test_malformed_entrypoint_paths_never_escape_diagnosis(self):
+        report = cli_doctor.diagnose_cli(Path("bad\x00entrypoint.py"), Path(sys.executable))
+        self.assertFalse(report.entrypoint.ok)
+        self.assertEqual(2, report.exit_status())
+        self.assertIn("unsafe", report.entrypoint.message)
+
+        malformed = mock.Mock()
+        malformed.__fspath__ = mock.Mock(side_effect=UnicodeError("encoding injected"))
+        report = cli_doctor.diagnose_cli(malformed, Path(sys.executable))
+        self.assertFalse(report.entrypoint.ok)
+        self.assertEqual(2, report.exit_status())
 
     def test_cli_doctor_is_projectless_and_text_json_agree(self):
         with tempfile.TemporaryDirectory() as directory:
