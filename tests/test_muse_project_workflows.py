@@ -13,6 +13,7 @@ MUSE_ROOT = (
     / "creative-writing-muse"
 )
 WORKERS_ROOT = MUSE_ROOT / "resources" / "workers"
+PRESSURE_RESULTS = REPO_ROOT / "tests" / "fixtures" / "muse-pressure" / "results.md"
 AFFECTED_WORKERS = {
     "continuity-checker",
     "critic",
@@ -33,6 +34,7 @@ class MuseProjectWorkflowTests(unittest.TestCase):
             name: (WORKERS_ROOT / cls.entries[name]["prompt"]).read_text()
             for name in AFFECTED_WORKERS
         }
+        cls.pressure = PRESSURE_RESULTS.read_text()
 
     def test_preflight_matches_exactly_the_five_owned_prompts(self):
         pattern = re.compile(
@@ -144,6 +146,32 @@ class MuseProjectWorkflowTests(unittest.TestCase):
         self.assertIn("`story/chapters/`", self.prompts["writer"])
         for prompt in self.prompts.values():
             self.assertNotRegex(prompt, r"(?<!story/)chapters/")
+
+    def test_final_memory_pressure_reuses_exact_prompt_and_strongest_output(self):
+        revised_prompt = re.search(
+            r"<!-- prompt:memory-intent/revised -->.*?```text\n(.*?)```\n",
+            self.pressure,
+            re.DOTALL,
+        )
+        sample_five = re.search(
+            r"<!-- sample:memory-intent/revised/5 compliant=true -->.*?"
+            r"### Output\n\n```text\n(.*?)```\n",
+            self.pressure,
+            re.DOTALL,
+        )
+        final = re.search(
+            r"<!-- final:memory-intent compliant=true -->.*?"
+            r"#### Full prompt\n\n```text\n(.*?)```\n.*?"
+            r"#### Raw output\n\n```text\n(.*?)```\n",
+            self.pressure,
+            re.DOTALL,
+        )
+        self.assertIsNotNone(revised_prompt)
+        self.assertIsNotNone(sample_five)
+        self.assertIsNotNone(final)
+        self.assertEqual(final.group(1), revised_prompt.group(1))
+        self.assertEqual(final.group(2), sample_five.group(1))
+        self.assertIn("explicit instruction confirms promotion", final.group(2))
 
 
 if __name__ == "__main__":
