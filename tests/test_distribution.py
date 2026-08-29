@@ -49,6 +49,8 @@ EXPECTED_AUTHORED_SKILLS = {
     "targeted-editing", "world-creation", "writing-principles", "writing-staffing",
 }
 
+EXPECTED_VENDORED_SKILLS = EXPECTED_SKILLS - EXPECTED_AUTHORED_SKILLS
+
 EXPECTED_WORKERS = {
     "brainstormer", "character-sim", "continuity-checker", "critic", "editor",
     "outliner", "reader-sim", "style-creator", "web-researcher", "writer",
@@ -543,11 +545,20 @@ class DistributionScaffoldTests(unittest.TestCase):
 
     def test_distribution_config_lists_exact_skill_set(self):
         config = load_json(REPO_ROOT / "config" / "distribution.json")
-        self.assertEqual(set(config["canonical_skills"]), EXPECTED_SKILLS)
-        self.assertEqual(set(config["authored_skills"]), EXPECTED_AUTHORED_SKILLS)
-        self.assertEqual(len(config["canonical_skills"]), 30)
-        self.assertEqual(len(config["authored_skills"]), 20)
-        self.assertEqual(len(config["vendored_skills"]), 10)
+        self.assertEqual(config["canonical_skills"], sorted(EXPECTED_SKILLS))
+        self.assertEqual(config["authored_skills"], sorted(EXPECTED_AUTHORED_SKILLS))
+        self.assertEqual(config["vendored_skills"], sorted(EXPECTED_VENDORED_SKILLS))
+        self.assertEqual(
+            (30, 20, 10),
+            tuple(
+                len(config[field])
+                for field in (
+                    "canonical_skills",
+                    "authored_skills",
+                    "vendored_skills",
+                )
+            ),
+        )
         self.assertEqual(
             ["reflect", "structured-artifact"],
             config["claude"]["disable_model_invocation"],
@@ -1222,6 +1233,24 @@ class ValidatorTests(unittest.TestCase):
             "distribution config ZCode icon must be an absolute HTTPS URL",
             validate(self.root, canonical_only=True),
         )
+
+    def test_validator_rejects_unsorted_skill_inventories(self):
+        path = self.root / "config" / "distribution.json"
+        original = path.read_text()
+        for field, label in (
+            ("canonical_skills", "canonical skill registry"),
+            ("authored_skills", "authored skill registry"),
+            ("vendored_skills", "vendored skill registry"),
+        ):
+            with self.subTest(field=field):
+                config = json.loads(original)
+                config[field] = list(reversed(config[field]))
+                self._write_json(path, config)
+                self.assertIn(
+                    f"{label} must be the exact sorted inventory",
+                    validate(self.root, canonical_only=True),
+                )
+        path.write_text(original)
 
     def test_validator_rejects_zcode_manifest_version_drift(self):
         path = self.root / "cw" / ".zcode-plugin" / "plugin.json"

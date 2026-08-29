@@ -731,6 +731,8 @@ def _validate_config(repo_root: Path, problems: list[str]) -> dict[str, object] 
         _check_exact_inventory(label, actual, expected, problems)
         if isinstance(value, list) and len(value) != len(set(map(str, value))):
             problems.append(f"{label} contains duplicates")
+        if isinstance(value, list) and value != sorted(expected):
+            problems.append(f"{label} must be the exact sorted inventory")
     if config.get("workers") != "skills/creative-writing-muse/resources/workers/registry.json":
         problems.append("distribution config workers path is not canonical")
     claude = config.get("claude")
