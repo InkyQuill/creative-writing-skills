@@ -6,8 +6,9 @@ The plugin icon is Delapouite's
 [`Scroll quill`](https://game-icons.net/1x1/delapouite/scroll-quill.html) from
 [game-icons.net](https://game-icons.net/), licensed under
 [CC BY 3.0](https://creativecommons.org/licenses/by/3.0/). The original artist
-is [Delapouite](https://delapouite.com/). The committed SVG and PNG retain the
-colors supplied for this plugin.
+is [Delapouite](https://delapouite.com/). This plugin uses a recolored version
+of the original artwork. The supplied recolored SVG and PNG were committed
+without further modification.
 
 The following skill snapshots are imported from the Apache-2.0 distribution at
 [`haowjy/creative-writing-skills@fd7a3ad9cd7697a0645ff6ff4bd5e809cf7673a3`](https://github.com/haowjy/creative-writing-skills/tree/fd7a3ad9cd7697a0645ff6ff4bd5e809cf7673a3):
