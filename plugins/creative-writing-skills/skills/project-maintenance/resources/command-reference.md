@@ -27,6 +27,13 @@ can use the selected source paths directly. `clean-context` previews and
 applies derived-cache deletion with `--apply`, but it stays outside transaction
 history. `reindex` is transactional: preview it, then apply the reviewed diff.
 
+`check prose` always reports universal Unicode counts and integrity signals.
+Russian and English capabilities additionally measure their own pronoun,
+opener, quote, punctuation, and dialogue conventions. For an unsupported
+language, the check explicitly omits those language-sensitive metrics, reports their
+structured `skipped_metrics`, and continues without a failing status or an
+English fallback.
+
 ## Project and draft lifecycle
 
 ```text
@@ -40,6 +47,10 @@ migrate --plan
 migrate --preview <plan.json> --expect-plan-hash <hash>
 migrate --apply <plan.json> --expect-plan-hash <hash>
 ```
+
+New projects receive `prose-profile: general`. Existing schema-v1 projects
+without the optional field behave the same way, and valid custom profile slugs
+are preserved by migration, rebase, and exact document edits.
 
 Preview every lifecycle mutation. Draft acceptance changes the story target;
 it does not itself write material into the KB. After acceptance, re-read the

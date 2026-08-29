@@ -17,19 +17,10 @@ One tell is never a verdict. A passage is machine-flavored when several tells
 cluster, or when the prose stays at one pleasant altitude regardless of what
 is happening in the scene. The most durable signal is uniformity: human prose
 shifts register, takes sides, and varies rhythm with pressure. Flag clusters,
-apply the author's genre and voice exemptions, and never rewrite a single
-sentence on a single feature.
-
-The list is calibrated on English prose. The cluster principle and the
-uniform-altitude signal transfer across languages; the surface details do
-not. Russian is the standing example: тире is structural punctuation and a
-dash-opened line is dialogue, not a tell; long subordinated sentences are
-the healthy norm, so "split the sentence" applies only on genuine reader
-backtrack; rich synonymic variation is good Russian, not thesaurus padding;
-and interiority that reads over-written by Anglo defaults may be native
-register. Judge surface tells against the manuscript's language and the
-author's own baseline — see the Language Register section of
-`/writing-principles`.
+apply the selected manuscript-language, prose-profile, and evidenced voice
+stack, and never rewrite a sentence on one feature. Surface forms that the
+selected language resource does not define are out of scope for this generic
+list.
 
 ## Sentence-Level Tells
 
@@ -70,8 +61,9 @@ silence where birds should be.
 to a lofty noun. Make the plain claim; if the second term is sharper, cut the
 first.
 
-**Adverb propping a weak verb.** "walked quickly," "said angrily." The adverb
-means the verb is wrong: "strode," "snapped" — or the measured action.
+**Modifier propping an empty action.** A manner label repeats information the
+action or context should carry. Replace the cluster only when a more exact
+action fits the selected language and character voice.
 
 ## Paragraph- and Scene-Level Tells
 
@@ -125,10 +117,10 @@ Useful when a passage clusters several tells:
 - Delete the first sentence if it only introduces what the second sentence
   does.
 - Replace a three-item list with the strongest item.
-- Replace "she began to walk" with "she walked"; replace "seemed to be angry"
-  with what showed.
-- Split any sentence the reader must backtrack to parse. One movement per
-  sentence.
+- Remove an aspect or manner wrapper when it adds no meaning in the selected
+  language.
+- Repair any sentence the intended reader must backtrack to parse; splitting
+  is one possible language-specific move.
 - End the scene one beat earlier than comfortable.
 - Where a sentence only says "this matters," replace it with the concrete
   detail that made it matter — or cut it.

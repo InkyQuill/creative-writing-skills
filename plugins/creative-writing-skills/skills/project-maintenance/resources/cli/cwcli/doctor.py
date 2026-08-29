@@ -11,7 +11,7 @@ import sys
 
 from .checks import CHECKERS, run_checks
 from .context import snapshot_status
-from .findings import ExecutionError, Finding
+from .findings import ExecutionError, Finding, finding_json
 from .project import Project
 from .schema import SCAFFOLD_DIRECTORIES
 
@@ -42,7 +42,7 @@ class RepairGroup:
         return {
             "priority": self.priority,
             "title": self.title,
-            "findings": [asdict(finding) for finding in self.findings],
+            "findings": [finding_json(finding) for finding in self.findings],
             "commands": [command.as_dict() for command in self.commands],
         }
 

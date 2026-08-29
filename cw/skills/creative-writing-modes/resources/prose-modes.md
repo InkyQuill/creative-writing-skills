@@ -12,14 +12,14 @@ what the reader should wonder, and what should remain unsaid.
 
 Read before drafting:
 - Scene brief or outline
-- Style files for voice, POV, and register
+- Resolved base, manuscript-language, prose-profile, and applicable project
+  style/sample resources from `/creative-writing-craft`
 - Character state and relevant prior scene/chapter context
 - Vocab/canon anchors that constrain terminology or facts
 
 Write the full beat before judging line polish. Let `/creative-writing-craft`
-govern immersion, rhythm, psychic distance, dialogue, and pacing
-(`resources/prose-writing.md` for sentence-level craft,
-`resources/scene-construction.md` for scene mechanics). Use `/llm-writing` only
+govern immersion, rhythm, psychic distance, dialogue, and pacing through the
+resolved prose stack and `resources/scene-construction.md`. Use `/llm-writing` only
 to catch unchosen defaults: generic phrases, explanatory smoothing, fake
 clarity, or vague language that avoids a sharper choice.
 
@@ -33,7 +33,7 @@ Read before revising:
 - Current draft
 - Critique synthesis, prioritized by impact
 - Original brief or author intent
-- Style/canon files relevant to the findings
+- Resolved prose-stack and canon files relevant to the findings
 
 Revision is not always line editing. A pacing problem might need a cut, a
 scene-order change, or a stronger beat. A voice problem might need different

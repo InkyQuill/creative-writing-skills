@@ -68,13 +68,11 @@ class ProseMetricTests(unittest.TestCase):
 
         self.assertEqual(metrics.repeated_openings, (("она", 2),))
 
-    def test_dialogue_ratio_recognizes_russian_dash_and_bilingual_quotes(self):
-        metrics = prose.analyze_prose(
-            "— Я здесь!\nThe room was still.\n\"Come in,\" she said.\n«Входи», — ответил он.\n",
-            language="ru",
-        )
+    def test_dialogue_ratio_uses_only_the_selected_language_capability(self):
+        text = "— Я здесь!\nPlain line.\n\"Come in,\" she said.\n«Входи», — ответил он.\n"
 
-        self.assertEqual(metrics.dialogue_ratio, 0.75)
+        self.assertEqual(prose.analyze_prose(text, language="ru-RU").dialogue_ratio, 0.5)
+        self.assertEqual(prose.analyze_prose(text, language="en-GB").dialogue_ratio, 0.25)
 
     def test_frontmatter_and_fenced_code_are_excluded_from_metrics(self):
         metrics = prose.analyze_prose(
@@ -98,9 +96,19 @@ class ProseMetricTests(unittest.TestCase):
         self.assertGreater(dict(metrics.pronoun_distribution)["third-feminine"], 0)
         self.assertTrue(any(item[0] == "alpha" for item in metrics.windowed_repetitions))
 
-    def test_unknown_language_falls_back_from_unicode_content(self):
-        self.assertEqual(prose.analyze_prose("Тихий вечер.", language="unknown").language, "ru")
-        self.assertEqual(prose.analyze_prose("Quiet evening.", language="").language, "en")
+    def test_language_normalization_never_infers_english_or_russian_from_text(self):
+        cases = {
+            "ru-RU": ("ru", "ru"),
+            "en_GB": ("en", "en"),
+            "fr": ("fr", None),
+            "": ("und", None),
+            "  --bad  ": ("und", None),
+            "und": ("und", None),
+        }
+        for language, expected in cases.items():
+            with self.subTest(language=language):
+                metrics = prose.analyze_prose("Тихий evening.", language=language)
+                self.assertEqual(expected, (metrics.language, metrics.language_capability))
 
     def test_unicode_tokenizer_accepts_letters_and_internal_joiners_only(self):
         metrics = prose.analyze_prose(
@@ -109,7 +117,8 @@ class ProseMetricTests(unittest.TestCase):
         )
 
         self.assertEqual(metrics.word_count, 5)
-        self.assertEqual(metrics.language, "en")
+        self.assertEqual(metrics.language, "unknown")
+        self.assertIsNone(metrics.language_capability)
 
     def test_sentence_splitting_matches_legacy_whitespace_boundary(self):
         for text, expected in (
@@ -209,7 +218,7 @@ class ProseMetricTests(unittest.TestCase):
         self.assertEqual(0, status)
         self.assertIn("words=6; paragraphs=1; sentences=1", metrics["story/chapters/ch-001.md"])
         self.assertIn("sentences=4", metrics["story/chapters/ch-002.md"])
-        self.assertIn("dialogue-ratio=0.750", metrics["story/chapters/ch-003.md"])
+        self.assertIn("dialogue-ratio=0.500", metrics["story/chapters/ch-003.md"])
         self.assertIn("'first-singular': 1", metrics["story/chapters/ch-004.md"])
         self.assertIn("'first-plural': 1", metrics["story/chapters/ch-004.md"])
         self.assertIn("'third-feminine': 1", metrics["story/chapters/ch-004.md"])
@@ -376,12 +385,58 @@ class ProseCheckTests(unittest.TestCase):
         ])
         self.assertTrue(all("language=ru" in item.message for item in counts))
 
-    def test_missing_manifest_language_falls_back_per_file(self):
+    def test_missing_manifest_language_reports_unsupported_capability_without_fabricated_metrics(self):
         self.write("project.md", "---\nschema-version: 1\ntitle: Test\nstatus: drafting\n---\n")
         self.write("story/chapters/ch-001.md", "---\nnumber: 1\n---\nТихий вечер.\n")
 
-        metrics = next(item for item in self.findings() if item.code == prose.METRICS)
-        self.assertIn("language=ru", metrics.message)
+        status, payload = self.run_cli()
+        self.assertEqual(0, status)
+        item = next(item for item in payload["findings"] if item["code"] == prose.METRICS)
+        self.assertIn("language=und", item["message"])
+        self.assertNotIn("dialogue-ratio=", item["message"])
+        self.assertNotIn("pronouns=", item["message"])
+        self.assertEqual(
+            {
+                "language": "und",
+                "language_capability": None,
+                "measured_metrics": list(prose.UNIVERSAL_METRICS),
+                "skipped_metrics": list(prose.LANGUAGE_SENSITIVE_METRICS),
+            },
+            item["details"],
+        )
+
+    def test_unsupported_language_keeps_universal_metrics_and_is_nonblocking(self):
+        self.write(
+            "project.md",
+            "---\nschema-version: 1\ntitle: Test\nlanguage: fr\nstatus: drafting\n---\n",
+        )
+        self.write("story/chapters/ch-001.md", "Un soir calme.\n\nUn autre soir calme.\n")
+
+        status, payload = self.run_cli(strict=True)
+        self.assertEqual(0, status)
+        self.assertFalse(payload["strict_failure"])
+        item = next(item for item in payload["findings"] if item["code"] == prose.METRICS)
+        self.assertIn("words=7", item["message"])
+        self.assertIn("language=fr", item["message"])
+        self.assertIn("skipped=dialogue-ratio,opener-categories,pronoun-distribution", item["message"])
+        self.assertNotIn("openers=", item["message"])
+
+    def test_sample_language_scope_uses_its_own_capability(self):
+        self.write(
+            "kb/samples/english-voice.md",
+            "---\nlanguage: en-US\nscope: narrator\nrole: authoritative\n---\n"
+            "— Not English dialogue.\n\"This is English dialogue,\" she said.\n",
+        )
+        self.write("story/chapters/ch-001.md", "— Русская реплика.\n")
+
+        findings = self.findings()
+        messages = {
+            item.path: item.message for item in findings if item.code == prose.METRICS
+        }
+        self.assertIn("language=en", messages["kb/samples/english-voice.md"])
+        self.assertIn("dialogue-ratio=0.500", messages["kb/samples/english-voice.md"])
+        self.assertIn("language=ru", messages["story/chapters/ch-001.md"])
+        self.assertIn("dialogue-ratio=1.000", messages["story/chapters/ch-001.md"])
 
     def test_malformed_file_does_not_abort_other_files_and_check_does_not_mutate(self):
         malformed = self.root / "kb/world/bad.md"

@@ -1,4 +1,4 @@
-"""Bilingual prose metrics and mechanical Markdown integrity checks."""
+"""Capability-based prose metrics and mechanical Markdown integrity checks."""
 
 from __future__ import annotations
 
@@ -10,7 +10,9 @@ import unicodedata
 from collections import Counter
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Pattern
 
+from ..documents import parse_document
 from ..findings import Finding
 from ..markdown_links import closes_markdown_fence, markdown_fence_marker
 from ..project import Project
@@ -25,22 +27,87 @@ REPEATED_OPENING = "CW-PROSE-040"
 METRICS = "CW-PROSE-090"
 WINDOWED_REPETITION = "CW-PROSE-041"
 
-_QUOTE_RE = re.compile(r'".+?"|«.+?»|„.+?“|“.+?”')
 _TAG_RE = re.compile(r"</?(?:AI|hidden)>")
 _INLINE_CODE_RE = re.compile(r"(`+)(.*?)\1")
 _SENTENCE_SPLIT_RE = re.compile(r"(?<=[.!?…])\s+")
 _WORD_JOINERS = frozenset(("'", "’", "-", "‐", "‑"))
-_PRONOUN_STARTS = frozenset("i me my we our you your he his him she her they their them it its я мы ты вы он она они оно мой моя моё мое наш наша наше твой твоя твоё твое ваш ваша ваше его её ее их".split())
-_ARTICLE_STARTS = frozenset("the a an this that these those".split())
-_CONJUNCTION_STARTS = frozenset("and but or so yet for nor because although though while when if after before since until as once и но а или да зато однако чтобы когда если хотя пока как что потому".split())
-_PRONOUN_GROUPS = {
-    "first-singular": frozenset("i me my mine myself я меня мне мной мой моя моё мое моего моей моём моем мою моим моими моих".split()),
-    "first-plural": frozenset("we us our ours ourselves мы нас нам нами наш наша наше нашего нашей нашем наши нашим нашими наших".split()),
-    "second": frozenset("you your yours yourself yourselves ты тебя тебе тобой твой твоя твоё твое твоего твоей твоём твоем твою твоим твоими твоих вы вас вам вами ваш ваша ваше вашего вашей вашем ваши вашим вашими ваших".split()),
-    "third-masculine": frozenset("he him his himself он его него ему нему им ним".split()),
-    "third-feminine": frozenset("she her hers herself она её ее нее ей ней ею нею".split()),
-    "third-plural": frozenset("they them their theirs themselves они их них им ним ими ними".split()),
-    "third-neuter": frozenset("it its itself оно".split()),
+_LANGUAGE_TAG_RE = re.compile(r"^[a-z]{2,8}(?:-[a-z0-9]{1,8})*$", re.ASCII)
+
+UNIVERSAL_METRICS = (
+    "word-count",
+    "paragraph-count",
+    "sentence-count",
+    "sentence-length-distribution",
+    "repeated-openings",
+    "windowed-repetition",
+    "markdown-source-integrity",
+)
+LANGUAGE_SENSITIVE_METRICS = (
+    "dialogue-ratio",
+    "opener-categories",
+    "pronoun-distribution",
+)
+
+
+@dataclass(frozen=True)
+class LanguageCapability:
+    """Language-specific dictionaries and punctuation conventions."""
+
+    language: str
+    pronoun_starts: frozenset[str]
+    article_starts: frozenset[str]
+    conjunction_starts: frozenset[str]
+    pronoun_groups: tuple[tuple[str, frozenset[str]], ...]
+    dialogue_quotes: Pattern[str]
+    dash_dialogue: bool = False
+
+
+_ENGLISH_CAPABILITY = LanguageCapability(
+    language="en",
+    pronoun_starts=frozenset(
+        "i me my we our you your he his him she her they their them it its".split()
+    ),
+    article_starts=frozenset("the a an this that these those".split()),
+    conjunction_starts=frozenset(
+        "and but or so yet for nor because although though while when if after before since until as once".split()
+    ),
+    pronoun_groups=(
+        ("first-singular", frozenset("i me my mine myself".split())),
+        ("first-plural", frozenset("we us our ours ourselves".split())),
+        ("second", frozenset("you your yours yourself yourselves".split())),
+        ("third-masculine", frozenset("he him his himself".split())),
+        ("third-feminine", frozenset("she her hers herself".split())),
+        ("third-plural", frozenset("they them their theirs themselves".split())),
+        ("third-neuter", frozenset("it its itself".split())),
+    ),
+    dialogue_quotes=re.compile(r'".+?"|“.+?”'),
+)
+
+_RUSSIAN_CAPABILITY = LanguageCapability(
+    language="ru",
+    pronoun_starts=frozenset(
+        "я мы ты вы он она они оно мой моя моё мое наш наша наше твой твоя твоё твое ваш ваша ваше его её ее их".split()
+    ),
+    article_starts=frozenset(),
+    conjunction_starts=frozenset(
+        "и но а или да зато однако чтобы когда если хотя пока как что потому".split()
+    ),
+    pronoun_groups=(
+        ("first-singular", frozenset("я меня мне мной мой моя моё мое моего моей моём моем мою моим моими моих".split())),
+        ("first-plural", frozenset("мы нас нам нами наш наша наше нашего нашей нашем наши нашим нашими наших".split())),
+        ("second", frozenset("ты тебя тебе тобой твой твоя твоё твое твоего твоей твоём твоем твою твоим твоими твоих вы вас вам вами ваш ваша ваше вашего вашей вашем ваши вашим вашими ваших".split())),
+        ("third-masculine", frozenset("он его него ему нему им ним".split())),
+        ("third-feminine", frozenset("она её ее нее ей ней ею нею".split())),
+        ("third-plural", frozenset("они их них им ним ими ними".split())),
+        ("third-neuter", frozenset("оно".split())),
+    ),
+    dialogue_quotes=re.compile(r"«.+?»|„.+?“"),
+    dash_dialogue=True,
+)
+
+_LANGUAGE_CAPABILITIES = {
+    "en": _ENGLISH_CAPABILITY,
+    "ru": _RUSSIAN_CAPABILITY,
 }
 
 
@@ -51,16 +118,18 @@ class ProseMetrics:
     word_count: int
     paragraph_count: int
     sentence_count: int
-    dialogue_ratio: float
+    dialogue_ratio: float | None
     repeated_openings: tuple[tuple[str, int], ...]
     language: str
+    language_capability: str | None
     sentence_lengths: tuple[int, ...]
     sentence_length_mean: float
     sentence_length_median: float
     sentence_length_stdev: float
-    opener_categories: tuple[tuple[str, int], ...]
+    opener_categories: tuple[tuple[str, int], ...] | None
     windowed_repetitions: tuple[tuple[str, int, int, int], ...]
-    pronoun_distribution: tuple[tuple[str, int], ...]
+    pronoun_distribution: tuple[tuple[str, int], ...] | None
+    skipped_metrics: tuple[str, ...]
 
 
 @dataclass(frozen=True)
@@ -77,8 +146,12 @@ def analyze_prose(text: str, *, language: str) -> ProseMetrics:
     paragraph_list = _paragraphs(prose_text)
     dense_lines = [line.strip() for line in prose_text.splitlines() if line.strip()]
     sentence_list = _sentences(" ".join(dense_lines))
-    dialogue_lines = sum(1 for line in dense_lines if _is_dialogue(line))
-    dialogue_ratio = dialogue_lines / len(dense_lines) if dense_lines else 0.0
+    normalized_language = _normalize_language(language)
+    capability = _LANGUAGE_CAPABILITIES.get(normalized_language)
+    dialogue_ratio: float | None = None
+    if capability is not None:
+        dialogue_lines = sum(1 for line in dense_lines if _is_dialogue(line, capability))
+        dialogue_ratio = dialogue_lines / len(dense_lines) if dense_lines else 0.0
     repeated = Counter(
         opener
         for paragraph in paragraph_list
@@ -86,8 +159,16 @@ def analyze_prose(text: str, *, language: str) -> ProseMetrics:
     )
     sentence_lengths = tuple(len(_words(sentence)) for sentence in sentence_list if _words(sentence))
     openers = [_first_word(sentence) for sentence in sentence_list]
-    categories = Counter(_opener_category(opener) for opener in openers if opener is not None)
     word_counts = Counter(word_list)
+    categories = (
+        Counter(
+            _opener_category(opener, capability)
+            for opener in openers
+            if opener is not None
+        )
+        if capability is not None
+        else None
+    )
 
     return ProseMetrics(
         word_count=len(word_list),
@@ -100,14 +181,30 @@ def analyze_prose(text: str, *, language: str) -> ProseMetrics:
                 key=lambda item: (-item[1], item[0]),
             )
         ),
-        language=_normalize_language(language, prose_text),
+        language=normalized_language,
+        language_capability=capability.language if capability is not None else None,
         sentence_lengths=sentence_lengths,
         sentence_length_mean=statistics.fmean(sentence_lengths) if sentence_lengths else 0.0,
         sentence_length_median=float(statistics.median(sentence_lengths)) if sentence_lengths else 0.0,
         sentence_length_stdev=statistics.pstdev(sentence_lengths) if len(sentence_lengths) > 1 else 0.0,
-        opener_categories=tuple((name, categories[name]) for name in ("pronouns", "articles", "conjunctions", "other")),
+        opener_categories=(
+            tuple(
+                (name, categories[name])
+                for name in ("pronouns", "articles", "conjunctions", "other")
+            )
+            if categories is not None
+            else None
+        ),
         windowed_repetitions=_windowed_repetitions(paragraph_list),
-        pronoun_distribution=tuple((name, sum(word_counts[word] for word in variants)) for name, variants in _PRONOUN_GROUPS.items()),
+        pronoun_distribution=(
+            tuple(
+                (name, sum(word_counts[word] for word in variants))
+                for name, variants in capability.pronoun_groups
+            )
+            if capability is not None
+            else None
+        ),
+        skipped_metrics=() if capability is not None else LANGUAGE_SENSITIVE_METRICS,
     )
 
 
@@ -159,7 +256,8 @@ def check_prose(project: Project) -> list[Finding]:
         if not _is_prose_path(relative_id):
             continue
 
-        metrics = analyze_prose(text, language=language)
+        document_language = _prose_language(relative_id, source, language)
+        metrics = analyze_prose(text, language=document_language)
         if metrics.word_count == 0:
             findings.append(
                 Finding(
@@ -191,22 +289,46 @@ def check_prose(project: Project) -> list[Finding]:
                     next_action="Use this windowed repetition count as a mechanical signal only.",
                 )
             )
+        message_parts = [
+            f"words={metrics.word_count}",
+            f"paragraphs={metrics.paragraph_count}",
+            f"sentences={metrics.sentence_count}",
+        ]
+        if metrics.dialogue_ratio is not None:
+            message_parts.append(f"dialogue-ratio={metrics.dialogue_ratio:.3f}")
+        message_parts.extend(
+            [
+                f"sentence-mean={metrics.sentence_length_mean:.3f}",
+                f"sentence-median={metrics.sentence_length_median:.3f}",
+                f"sentence-min={min(metrics.sentence_lengths, default=0)}",
+                f"sentence-max={max(metrics.sentence_lengths, default=0)}",
+                f"sentence-stdev={metrics.sentence_length_stdev:.3f}",
+                f"language={metrics.language}",
+            ]
+        )
+        if metrics.opener_categories is not None:
+            message_parts.append(f"openers={dict(metrics.opener_categories)}")
+        if metrics.pronoun_distribution is not None:
+            message_parts.append(f"pronouns={dict(metrics.pronoun_distribution)}")
+        if metrics.skipped_metrics:
+            message_parts.append(f"skipped={','.join(metrics.skipped_metrics)}")
+        measured_metrics = list(UNIVERSAL_METRICS)
+        if metrics.language_capability is not None:
+            measured_metrics.extend(LANGUAGE_SENSITIVE_METRICS)
+
         findings.append(
             Finding(
                 code=METRICS,
                 severity="info",
-                message=(
-                    f"words={metrics.word_count}; paragraphs={metrics.paragraph_count}; "
-                    f"sentences={metrics.sentence_count}; dialogue-ratio={metrics.dialogue_ratio:.3f}; "
-                    f"sentence-mean={metrics.sentence_length_mean:.3f}; "
-                    f"sentence-median={metrics.sentence_length_median:.3f}; "
-                    f"sentence-min={min(metrics.sentence_lengths, default=0)}; "
-                    f"sentence-max={max(metrics.sentence_lengths, default=0)}; "
-                    f"sentence-stdev={metrics.sentence_length_stdev:.3f}; language={metrics.language}; "
-                    f"openers={dict(metrics.opener_categories)}; pronouns={dict(metrics.pronoun_distribution)}"
-                ),
+                message="; ".join(message_parts),
                 path=relative_id,
                 next_action="Use these counts as mechanical context, not as a literary conclusion.",
+                details={
+                    "language": metrics.language,
+                    "language_capability": metrics.language_capability,
+                    "measured_metrics": measured_metrics,
+                    "skipped_metrics": list(metrics.skipped_metrics),
+                },
             )
         )
 
@@ -444,12 +566,12 @@ def _first_word(text: str) -> str | None:
     return word_list[0] if word_list else None
 
 
-def _opener_category(opener: str) -> str:
-    if opener in _PRONOUN_STARTS:
+def _opener_category(opener: str, capability: LanguageCapability) -> str:
+    if opener in capability.pronoun_starts:
         return "pronouns"
-    if opener in _ARTICLE_STARTS:
+    if opener in capability.article_starts:
         return "articles"
-    if opener in _CONJUNCTION_STARTS:
+    if opener in capability.conjunction_starts:
         return "conjunctions"
     return "other"
 
@@ -467,17 +589,29 @@ def _windowed_repetitions(paragraphs: list[str], window_size: int = 5) -> tuple[
     return tuple((word, start, end, count) for (word, start, end), count in sorted(found.items(), key=lambda item: (-item[1], item[0])))
 
 
-def _is_dialogue(line: str) -> bool:
-    return bool(_QUOTE_RE.search(line)) or line.lstrip().startswith("—")
+def _is_dialogue(line: str, capability: LanguageCapability) -> bool:
+    return bool(capability.dialogue_quotes.search(line)) or (
+        capability.dash_dialogue and line.lstrip().startswith("—")
+    )
 
 
-def _normalize_language(language: str, text: str) -> str:
-    normalized = language.strip().replace("_", "-").casefold()
-    if normalized == "ru" or normalized.startswith("ru-"):
-        return "ru"
-    if normalized == "en" or normalized.startswith("en-"):
-        return "en"
-    return "ru" if any(_is_cyrillic_letter(character) for character in text) else "en"
+def _normalize_language(language: str) -> str:
+    if not isinstance(language, str):
+        return "und"
+    normalized = unicodedata.normalize("NFKC", language).strip().replace("_", "-").casefold()
+    if _LANGUAGE_TAG_RE.fullmatch(normalized) is None:
+        return "und"
+    return normalized.split("-", 1)[0]
+
+
+def _prose_language(relative_id: str, source: bytes, project_language: str) -> str:
+    if Path(relative_id).parent.as_posix() != "kb/samples":
+        return project_language
+    try:
+        value = parse_document(source).metadata.get("language")
+    except (UnicodeError, ValueError):
+        return project_language
+    return value if isinstance(value, str) and value.strip() else project_language
 
 
 def _opening_line(lines: tuple[tuple[int, str], ...], opening: str) -> int | None:
@@ -520,10 +654,6 @@ def _is_mark(character: str) -> bool:
     return unicodedata.category(character).startswith("M")
 
 
-def _is_cyrillic_letter(character: str) -> bool:
-    return _is_letter(character) and "CYRILLIC" in unicodedata.name(character, "")
-
-
 def _finding_key(item: Finding) -> tuple[str, str, int, str]:
     return (item.path or "", item.code, item.line or 0, item.message)
 
@@ -531,12 +661,14 @@ def _finding_key(item: Finding) -> tuple[str, str, int, str]:
 __all__ = [
     "EMPTY_DOCUMENT",
     "MARKDOWN_FENCE",
+    "LANGUAGE_SENSITIVE_METRICS",
     "METRICS",
     "ProseMetrics",
     "REPEATED_OPENING",
     "SOURCE_TAG",
     "SOURCE_TAG_POLICY",
     "UNREADABLE_DOCUMENT",
+    "UNIVERSAL_METRICS",
     "WINDOWED_REPETITION",
     "analyze_prose",
     "check_prose",

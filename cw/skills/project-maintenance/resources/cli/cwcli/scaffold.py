@@ -264,6 +264,7 @@ def _render_manifest(title: str, language: str) -> bytes:
             "schema-version": SCHEMA_VERSION,
             "title": title,
             "language": language,
+            "prose-profile": "general",
             "status": "planning",
         },
         body,

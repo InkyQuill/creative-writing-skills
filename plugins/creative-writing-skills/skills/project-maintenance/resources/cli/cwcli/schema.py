@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from pathlib import PurePosixPath
 
 from .documents import Document
@@ -77,6 +78,7 @@ INVALID_SCHEMA_VERSION = "CW-SCHEMA-001"
 INVALID_TITLE = "CW-SCHEMA-010"
 INVALID_LANGUAGE = "CW-SCHEMA-011"
 INVALID_PROJECT_STATUS = "CW-SCHEMA-012"
+INVALID_PROSE_PROFILE = "CW-SCHEMA-013"
 REPEATED_DOCUMENT_ID = "CW-SCHEMA-020"
 REPEATED_DOCUMENT_TYPE = "CW-SCHEMA-021"
 INVALID_CHAPTER_NUMBER = "CW-SCHEMA-030"
@@ -171,6 +173,19 @@ def _validate_manifest(metadata: dict[str, object], relative_id: str) -> list[Fi
             "Set title to the author's non-empty project title without changing manuscript content.",
         )
     )
+    if "prose-profile" in metadata:
+        value = metadata["prose-profile"]
+        if not isinstance(value, str) or re.fullmatch(
+            r"[a-z0-9]+(?:-[a-z0-9]+)*", value
+        ) is None:
+            findings.append(
+                _warning(
+                    INVALID_PROSE_PROFILE,
+                    "prose-profile must be a non-empty lower-case slug using letters, numbers, and internal hyphens",
+                    relative_id,
+                    "Preserve the intended profile and rewrite its selector as a lower-case slug.",
+                )
+            )
     findings.extend(
         _validate_non_empty_string(
             metadata,
@@ -191,6 +206,13 @@ def _validate_manifest(metadata: dict[str, object], relative_id: str) -> list[Fi
             )
         )
     return findings
+
+
+def prose_profile(metadata: dict[str, object]) -> str:
+    """Return the schema-v1 prose profile, applying its additive default."""
+
+    value = metadata.get("prose-profile")
+    return value if isinstance(value, str) and value else "general"
 
 
 def _validate_document_identity(metadata: dict[str, object], relative_id: str) -> list[Finding]:
@@ -244,10 +266,12 @@ __all__ = [
     "GENERATED_INDEX_FILES",
     "KB_CONTENT_DIRECTORIES",
     "PROJECT_STATUSES",
+    "INVALID_PROSE_PROFILE",
     "SCAFFOLD_DIRECTORIES",
     "SCAFFOLD_FILES",
     "SCHEMA_VERSION",
     "WORK_ARTIFACT_DIRECTORIES",
     "allowed_document_kind",
+    "prose_profile",
     "validate_metadata",
 ]

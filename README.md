@@ -116,9 +116,10 @@ The plugin adapts to existing projects. A typical project can use:
 my-story/
 ├── AGENTS.md
 ├── CLAUDE.md              # regular portable shim: @AGENTS.md
+├── project.md             # language, optional prose profile, writing contract
 ├── story/                  # Chapters and manuscript
 ├── work/                   # Plans, drafts, and review artifacts
-└── kb/                     # Characters, world, timeline, canon, styles, issues
+└── kb/                     # Canon plus scoped styles and evidence samples
 ```
 
 `AGENTS.md` is the single shared project-instruction source for Codex, Pi,
@@ -131,6 +132,16 @@ knowledge. Authors may keep editing the Markdown files directly; the bundled
 `cw` command is agent infrastructure, not a separate dependency authors must
 install, operate, or administer. Git integration is available when useful but
 Git is optional.
+
+Prose guidance composes universal defaults, the manuscript language, an
+optional prose profile, and evidence-backed author voice. `general` is the
+default profile; bundled overlays include `light-novel`,
+`classical-literary`, and `literary-fiction`, while projects may define custom
+slugs. Russian and English have separate language packs. For an unsupported
+language, mechanical prose checks retain universal counts and explicitly skip rather than
+fabricate language-sensitive metrics. Approved voice evidence stays in flat
+`kb/samples/` files and derived guidance in flat `kb/styles/` files; authors
+still do not need to operate the CLI.
 
 Project setup does not reorganize an existing manuscript or canonize
 provisional ideas. Direct settled author answers can be persisted immediately;

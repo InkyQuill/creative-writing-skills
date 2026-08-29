@@ -13,6 +13,24 @@ def read(relative: str) -> str:
 
 
 class LanguageProseRulesTests(unittest.TestCase):
+    def test_project_contract_documents_optional_profile_and_checker_capabilities(self):
+        setup = read("project-setup/SKILL.md")
+        contract = read("project-maintenance/resources/project-contract.md")
+        command_reference = read("project-maintenance/resources/command-reference.md")
+        readme = (ROOT / "README.md").read_text(encoding="utf-8")
+        combined = "\n".join((setup, contract, command_reference, readme))
+
+        for profile in (
+            "general",
+            "light-novel",
+            "classical-literary",
+            "literary-fiction",
+        ):
+            self.assertIn(profile, combined)
+        self.assertRegex(combined, r"(?s)prose-profile.{0,220}(optional|default|general)")
+        self.assertRegex(combined, r"(?s)unsupported\s+language.{0,300}(skip|omit)")
+        self.assertRegex(combined, r"(?s)universal.{0,180}(metric|count)")
+
     def test_prose_resource_tree_separates_languages_and_profiles(self):
         expected = {
             "resources/prose/base.md",

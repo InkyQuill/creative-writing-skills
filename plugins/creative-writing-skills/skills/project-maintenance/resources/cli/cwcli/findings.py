@@ -14,6 +14,7 @@ class Finding:
     path: str | None = None
     line: int | None = None
     next_action: str | None = None
+    details: dict[str, object] | None = None
 
 
 @dataclass(frozen=True)
@@ -40,7 +41,7 @@ class Report:
         has_error = any(item.severity == "error" for item in self.findings)
         return {
             "checks": self.checks,
-            "findings": [asdict(item) for item in self.findings],
+            "findings": [finding_json(item) for item in self.findings],
             "execution_errors": [asdict(item) for item in self.execution_errors],
             "strict_failure": strict and self.exit_status(strict=True) == 1 and not has_error,
         }
@@ -58,3 +59,12 @@ class Report:
             action = f" Next: {item.next_action}" if item.next_action else ""
             lines.append(f"{item.code} [{item.severity}] {item.message}{location}{action}")
         return "\n".join(lines)
+
+
+def finding_json(item: Finding) -> dict[str, object]:
+    """Serialize a finding without adding absent optional extensions."""
+
+    rendered = asdict(item)
+    if item.details is None:
+        rendered.pop("details")
+    return rendered

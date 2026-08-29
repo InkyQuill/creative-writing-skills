@@ -76,6 +76,32 @@ EXPECTED_WORKERS = {
 
 
 class ArchiveContractTests(unittest.TestCase):
+    def test_prose_and_maintenance_archives_include_language_contract_resources(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            output = Path(temporary)
+            create_skill_zip(Path("cw/skills/creative-writing-craft"), output)
+            create_skill_zip(Path("cw/skills/project-maintenance"), output)
+
+            with zipfile.ZipFile(output / "creative-writing-craft.skill") as archive:
+                craft_names = set(archive.namelist())
+            with zipfile.ZipFile(output / "project-maintenance.skill") as archive:
+                maintenance_names = set(archive.namelist())
+
+            self.assertIn(
+                "creative-writing-craft/resources/prose/languages/ru.md", craft_names
+            )
+            self.assertIn(
+                "creative-writing-craft/resources/prose/languages/en.md", craft_names
+            )
+            self.assertIn(
+                "creative-writing-craft/resources/prose/profiles/light-novel/base.md",
+                craft_names,
+            )
+            self.assertIn(
+                "project-maintenance/resources/cli/cwcli/checks/prose.py",
+                maintenance_names,
+            )
+
     def test_project_maintenance_archive_bundles_public_cli_and_checkers(self):
         with tempfile.TemporaryDirectory() as temporary:
             output = Path(temporary)

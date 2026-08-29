@@ -20,6 +20,10 @@ patterns the sample actually shows instead of replacing them with generic
 "good prose." A line edit that normalizes the author's voice into generic
 good prose has failed.
 
+Resolve the manuscript-language, prose-profile, and applicable style/sample
+resources before judging any surface pattern. The selected prose stack defines
+valid grammar, cadence, and register; this generic method defines reader tests.
+
 Name patterns, not every instance. A line edit that catalogs fifty individual
 sentences teaches the author nothing about what's going wrong. Find the
 three or four recurring patterns, name them, give representative examples,
@@ -49,12 +53,10 @@ and let the author apply the insight across the manuscript.
 Run these before reporting; they catch flattening that item-by-item editing
 misses:
 
-- **Uniform cadence**: do short and long sentences both appear, or does
-  everything sit at the same length regardless of scene pressure? Vary the
-  length; do not invent content to do it. Judge cadence against the norms of
-  the manuscript's language and the author's baseline — prose that runs long
-  subordinated sentences (Russian literary prose, for example) is healthy
-  there and flattens badly if chopped to an English ideal.
+- **Uniform cadence**: does sentence movement change with scene pressure, or
+  does everything sit at the same speed? Diagnose uniformity against the
+  selected language resource and author's same-scope baseline. Do not invent
+  content or force a length distribution merely to create variation.
 - **Paragraph reshuffle**: could the paragraphs of a scene reorder without
   breaking anything? Then the scene lacks connective tissue — add the links
   between movements rather than relabeling them.
@@ -62,9 +64,9 @@ misses:
   narrator's temperament — doubt, bluntness, irritation, humor — or does
   everything sit at one pleasant altitude? Surface what the material already
   contains; never invent opinions or asides the writer didn't have.
-- **Backtrack test**: any sentence the reader must re-read to parse gets
-  split — but only on genuine backtrack: in languages whose prose normally
-  carries long subordination, length alone is not a parsing failure.
+- **Backtrack test**: investigate any sentence the intended reader must
+  re-read to parse. Repair the real relation through the selected language's
+  syntax; splitting is one option, not a universal fix.
 - **Read-aloud test**: where would a listener stumble, and where does a
   sentence exist only to make the scene feel complete?
 

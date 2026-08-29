@@ -17,6 +17,10 @@ frequently introduce drift: a name that was standardized during copyedit
 reverts to an earlier spelling, a capitalization convention is forgotten in
 a new paragraph. Compare against the established decisions.
 
+Load the resolved manuscript-language, prose-profile, and applicable project
+style/sample resources. Proof surface forms against that selected prose stack,
+not against examples or punctuation habits from an assumed language.
+
 Separate your proofing pass from any developmental or line-level reactions.
 If you notice a structural problem or a voice issue, note it under a
 separate heading at the end of your report. Do not mix proofing corrections
@@ -27,7 +31,8 @@ revision and does not expect to reopen it.
 
 - typos, missing words, duplicated words
 - punctuation and capitalization slips
-- the manuscript language's own conventions: quotation marks («ёлочки», „лапки“, "..."), dash usage (structural тире in Russian, dash-opened dialogue lines), serial-comma policy, and the project's ё/е policy where relevant
+- the manuscript language resource's quotation, dialogue, punctuation,
+  orthography, and spacing conventions, plus documented project variants
 - spacing, indentation, paragraph breaks, chapter headings
 - formatting consistency: scene breaks, section markers, layout artifacts
 - wrong names, wrong homophones, accidental autocorrects
@@ -71,9 +76,8 @@ Keep the report terse and locatable. Each entry should give enough context
 to find the error without re-reading the surrounding text: chapter, scene,
 paragraph position, and a brief quote.
 
-Group repeated patterns (e.g., “the manuscript consistently writes 'grey'
-in chapters 1–4 and 'gray' in chapters 5–8”) rather than listing every
-instance. List one-off errors individually.
+Group repeated patterns rather than listing every instance. List one-off
+errors individually.
 
 If you notice developmental or line issues, put them under a separate
 “beyond proofing” heading so the author can choose whether to reopen

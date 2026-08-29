@@ -9,6 +9,19 @@ migration, repair, and reindexing must preserve them. Markdown outside managed
 roots may produce an informational finding, but Git is optional and the CLI
 does not require a repository to provide transaction history or undo.
 
+## Manifest language and prose profile
+
+Schema v1 requires a non-empty `language` tag and accepts any project language.
+Bundled resources and checks resolve the normalized primary tag, so `ru-RU`
+uses `ru` support and `en-GB` uses `en` support without constraining future
+languages.
+
+`prose-profile` is optional and defaults to `general`, which adds no profile
+overlay. When present it is a lower-case slug with letters, numbers, and
+internal hyphens. Bundled selectors are `general`, `light-novel`,
+`classical-literary`, and `literary-fiction`; preserve valid custom selectors.
+Existing schema-v1 projects need no migration only to add the default.
+
 ## Protected paths and metadata
 
 Generic edits must not modify:

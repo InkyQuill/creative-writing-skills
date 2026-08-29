@@ -19,7 +19,7 @@ from urllib.parse import unquote, urlsplit
 from . import __version__
 from .checks.continuity import check_continuity
 from .documents import Document, canonical_text, logical_hash, parse_document
-from .findings import Finding
+from .findings import Finding, finding_json
 from .markdown_tables import malformed_table_headers, malformed_table_lines, parse_tables, table_header_lines
 from .markdown_links import extract_links
 from .project import Project
@@ -165,7 +165,7 @@ class ContextCleanupResult:
         return {
             "status": self.status,
             "directories": list(self.directories),
-            "findings": [asdict(finding) for finding in self.findings],
+            "findings": [finding_json(finding) for finding in self.findings],
         }
 
 

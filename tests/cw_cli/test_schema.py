@@ -27,6 +27,7 @@ class ScaffoldTests(unittest.TestCase):
         self.assertEqual(manifest.metadata["schema-version"], 1)
         self.assertEqual(manifest.metadata["title"], "Second Light")
         self.assertEqual(manifest.metadata["language"], "ru")
+        self.assertEqual(manifest.metadata["prose-profile"], "general")
         self.assertEqual(manifest.metadata["status"], "planning")
         self.assertIn("kb/samples/_index.md", rendered)
         self.assertNotIn("AGENTS.md", rendered)
@@ -102,6 +103,7 @@ class MetadataValidationTests(unittest.TestCase):
                     "schema-version": 1,
                     "title": "Second Light",
                     "language": "ru",
+                    "prose-profile": "light-novel",
                     "status": "drafting",
                 }
             ),
@@ -123,6 +125,37 @@ class MetadataValidationTests(unittest.TestCase):
             ),
         )
 
+    def test_prose_profile_is_optional_general_and_preserves_custom_slugs(self):
+        base = {
+            "schema-version": 1,
+            "title": "Second Light",
+            "language": "en-GB",
+            "status": "drafting",
+        }
+
+        self.assertEqual([], schema.validate_metadata("project.md", document(base)))
+        self.assertEqual("general", schema.prose_profile(base))
+        custom = {**base, "prose-profile": "my-house-style-2"}
+        self.assertEqual([], schema.validate_metadata("project.md", document(custom)))
+        self.assertEqual("my-house-style-2", schema.prose_profile(custom))
+
+    def test_present_invalid_prose_profile_is_diagnosed_without_schema_bump(self):
+        base = {
+            "schema-version": 1,
+            "title": "Second Light",
+            "language": "ru",
+            "status": "drafting",
+        }
+        for value in ("", " Light Novel ", "light_novel", "-novel", 1, True):
+            with self.subTest(value=value):
+                findings = schema.validate_metadata(
+                    "project.md", document({**base, "prose-profile": value})
+                )
+                self.assertEqual(
+                    [(schema.INVALID_PROSE_PROFILE, "warning")],
+                    [(finding.code, finding.severity) for finding in findings],
+                )
+                self.assertIn("lower-case slug", findings[0].message)
     def test_invalid_manifest_reports_each_required_schema_v1_field(self):
         findings = schema.validate_metadata(
             "project.md",

@@ -20,8 +20,8 @@ proposing anything. Resolved project instructions may constrain the current
 agent, but they remain unmanaged, optional migration inputs rather
 than the durable story-project contract. Ask only for creative information the
 managed files do not answer: project kind and stage, language, POV and timeline
-shape, voice goals, naming and spoiler conventions, and the intended role of
-genuinely ambiguous legacy material.
+shape, an explicitly desired prose profile, voice goals, naming and spoiler
+conventions, and the intended role of genuinely ambiguous legacy material.
 
 Classify the folder without moving anything:
 
@@ -42,6 +42,13 @@ and machine-checkable story state in `kb/continuity/`. The scaffold also owns
 its generated indexes and `.creative-writing/` maintenance state. There is no
 alternative layout choice.
 
+The optional `prose-profile` frontmatter selector is independent of manuscript
+language. A missing selector means `general`; do not ask the author merely to
+confirm that default. Bundled profiles are `light-novel`,
+`classical-literary`, and `literary-fiction`, while a project may preserve a
+custom lower-case slug for its own profile. Language tags remain open-ended;
+bundled language resources use primary-tag fallback such as `ru-RU` to `ru`.
+
 ## Propose the Writing Contract
 
 Draft the project-specific writing contract in the body of `project.md` for the
@@ -49,7 +56,8 @@ author to review. That authored body is the durable writing contract; preserve
 the CLI-owned frontmatter and do not move the contract into project
 instructions. Cover:
 
-- project overview, current stage, language, and punctuation conventions;
+- project overview, current stage, language, prose profile, and punctuation
+  conventions;
 - voice, POV, timeline, naming, chapter, spoiler, and source-tagging rules;
 - established vocabulary and terms to distinguish or avoid;
 - any sample, style, research, or work-support material that would help; and

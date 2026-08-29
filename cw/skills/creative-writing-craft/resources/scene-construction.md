@@ -37,9 +37,10 @@ The gap between what's said and what's meant is where characterization lives.
 could identify the speaker without dialogue tags. Vocabulary, sentence
 structure, speech patterns, what they choose to talk about.
 
-**Action beats over dialogue tags.** "Said" is invisible; use it freely. Use
-action beats to show how something is said: "She set the cup down carefully.
-'That's not what I meant.'"
+**Tags and action beats.** Choose both through the manuscript-language resource
+and the character's evidenced voice. A tag can identify the speaker; an action
+beat can reveal pressure or redirect attention. Do not replace one with the
+other mechanically or import another language's dialogue habits.
 
 ## Pacing
 

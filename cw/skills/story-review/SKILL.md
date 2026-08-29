@@ -16,6 +16,10 @@ requested review and prepare focused context with `cw context draft` for an
 active draft (or the matching chapter context for accepted prose). Inspect the
 draft, intent or outline, relevant style and vocab, neighboring prose, and
 continuity state selected by that context plan before beginning the review.
+For every prose or surface judgment, resolve the same base,
+manuscript-language, prose-profile, and applicable project style/sample stack
+defined by `/creative-writing-craft`. Never substitute English when the
+language is missing or unsupported.
 
 Interpret repairable warnings internally and continue the review with the
 readable evidence, naming any limitation in the report. A required target that

@@ -19,8 +19,8 @@ proposing anything. Resolved project instructions may constrain the current
 agent, but they remain unmanaged, optional migration inputs rather
 than the durable story-project contract. Ask only for creative information the
 managed files do not answer: project kind and stage, language, POV and timeline
-shape, voice goals, naming and spoiler conventions, and the intended role of
-genuinely ambiguous legacy material.
+shape, an explicitly desired prose profile, voice goals, naming and spoiler
+conventions, and the intended role of genuinely ambiguous legacy material.
 
 Classify the folder without moving anything:
 
@@ -41,6 +41,13 @@ and machine-checkable story state in `kb/continuity/`. The scaffold also owns
 its generated indexes and `.creative-writing/` maintenance state. There is no
 alternative layout choice.
 
+The optional `prose-profile` frontmatter selector is independent of manuscript
+language. A missing selector means `general`; do not ask the author merely to
+confirm that default. Bundled profiles are `light-novel`,
+`classical-literary`, and `literary-fiction`, while a project may preserve a
+custom lower-case slug for its own profile. Language tags remain open-ended;
+bundled language resources use primary-tag fallback such as `ru-RU` to `ru`.
+
 ## Propose the Writing Contract
 
 Draft the project-specific writing contract in the body of `project.md` for the
@@ -48,16 +55,30 @@ author to review. That authored body is the durable writing contract; preserve
 the CLI-owned frontmatter and do not move the contract into project
 instructions. Cover:
 
-- project overview, current stage, language, and punctuation conventions;
+- project overview, current stage, language, prose profile, and punctuation
+  conventions;
 - voice, POV, timeline, naming, chapter, spoiler, and source-tagging rules;
 - established vocabulary and terms to distinguish or avoid;
 - any sample, style, research, or work-support material that would help; and
 - how existing legacy paths map to the canonical roles when migrating.
 
+For proposed author-voice evidence, use flat
+`kb/samples/<descriptive-name>.md` and derived
+`kb/styles/<descriptive-name>.md` paths. Record each sample's manuscript
+language/tag, applicability scope, role (`authoritative`, `aspirational`, or
+`negative`), source/citation and source-tag boundary, excerpt or chapter
+pointer, and why it is evidence. A derived style records language and
+prose-profile scope, evidence links, observed versus author-specified guidance,
+actionable tendencies, allowed variation, and anti-patterns.
+
 Keep writing samples and voice analysis provisional until their exact role and
-destination are approved. Preserve unrelated instructions and unknown files.
+destination are approved. A direct author statement that supplies those fields
+settles them without a second confirmation; ask only about material ambiguity
+or conflicting evidence. Preserve unrelated instructions and unknown files.
 Approval of the core project does not imply approval for optional samples,
-style files, vocabulary pages, or other auxiliary artifacts.
+style files, vocabulary pages, or other auxiliary artifacts. Style analysis is
+first proposed as a direct file under `work/reviews/`, then promoted through a
+separate previewed, recoverable transaction after it is approved.
 
 ## Apply Safely
 

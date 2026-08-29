@@ -1,8 +1,10 @@
 # Establishing a Project Baseline
 
-Prose metrics are meaningless in isolation. "Average sentence length: 14.2 words" tells you nothing without knowing what's normal for this project, this author, this genre. The baseline is the project's own published chapters: the prose the author has already approved as representative of their voice.
-
-Baselines are also language-specific. Sentence length, lexical variety, and dialogue formatting norms differ per language — Russian literary prose runs longer sentences with heavier subordination and richer synonymic variation than English — so only ever compare a draft against chapters in the same language, never against cross-language expectations.
+Prose metrics are meaningless in isolation. A numeric sentence-length result
+tells you nothing without knowing what is normal for this project, author,
+language, prose profile, viewpoint, and scene type. Build a baseline from
+accepted evidence selected through the resolved prose stack. Never compare
+surface metrics across languages or incompatible voice scopes.
 
 ## Building the Baseline
 
@@ -16,7 +18,8 @@ cw check prose . > baseline_report.txt
 From the collected results, note:
 
 - **Sentence length range**: what's the typical mean and standard deviation across chapters? A chapter with mean sentence length 2 standard deviations from the project average is worth investigating.
-- **Opener distribution**: what's the normal pronoun-start percentage? First-person chapters will naturally be higher than third-person chapters, so compare within POV type.
+- **Opener distribution**: which repeated structures are normal in this
+  language, viewpoint, and voice scope, and which create audible uniformity?
 - **Dialogue ratio**: what range do conversation-heavy chapters fall in vs action chapters? This gives you genre-appropriate expectations for new scenes.
 - **Repetition baseline**: every author has words they lean on. The baseline tells you which repetitions are voice and which are unintentional echoes.
 
@@ -27,7 +30,8 @@ path, then compare section by section against the baseline. Look for:
 
 - **Metrics that fall outside the project's established range**: these are investigation triggers, not automatic problems. A chapter that breaks pattern might be doing so intentionally (a tense scene with shorter sentences, a reflective passage with longer ones).
 - **Sudden shifts within a single document**: if the first half of a chapter has dramatically different metrics than the second half, that's worth examining. It may indicate a voice drift, especially in AI-assisted drafts where the model's tendencies gradually override the project style.
-- **POV consistency**: pronoun distribution should match the declared POV. A first-person chapter where third-person pronouns spike in certain sections may have slipped POV.
+- **POV consistency**: use only language-supported signals, then inspect the
+  text to determine whether a metric shift reflects viewpoint drift.
 
 ## What the Baseline Can't Tell You
 
