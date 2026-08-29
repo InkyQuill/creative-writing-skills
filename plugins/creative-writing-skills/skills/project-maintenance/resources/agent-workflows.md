@@ -40,8 +40,9 @@ as an agent working file. Inspect every object in `unresolved`. Ask the author
 only for a semantic decision when a source's role or merged meaning is
 ambiguous; the agent edits the plan and manages its hash.
 
-For each resolved item, remove it from `unresolved` and add one or more strict
-operations. Use only these JSON shapes and canonical schema-v1 destinations:
+For each resolved item that belongs in the canonical project, remove it from
+`unresolved` and add one or more strict operations. Use only these JSON shapes
+and canonical schema-v1 destinations:
 
 ```json
 {"source": "chapters/one.md", "destination": "story/chapters/one.md", "action": "move"}
@@ -52,7 +53,15 @@ operations. Use only these JSON shapes and canonical schema-v1 destinations:
 A `move` has one source and a different destination. A `preserve` has identical
 source and destination. A `merge` has a non-empty unique `sources` list and
 the exact reviewed UTF-8 output in `content`; it does not ask the CLI to invent
-the merge. Assign each source once, keep destinations unique, preserve unknown
+the merge.
+
+An `unknown-role` item with no canonical destination may intentionally remain
+unmanaged. In that branch, remove the item from `unresolved` and add no
+operation; leave its source file untouched. For an unmanaged path, do not
+invent a `preserve` operation: migration validation accepts `preserve` only at
+a canonical schema-v1 destination.
+
+Assign every managed source once, keep destinations unique, preserve unknown
 files, and never reinterpret ambiguous material as canon automatically. Do not
 continue until every item is resolved and the plan contains `"unresolved": []`.
 

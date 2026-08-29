@@ -65,6 +65,14 @@ class ProjectMaintenanceSkillTests(unittest.TestCase):
         self.assertRegex(text, r"(?is)recomput.{0,100}plan-hash")
         self.assertNotRegex(text, r"(?i)ask the author to (edit|update).*(plan|hash)")
 
+    def test_unknown_migration_role_can_remain_unmanaged_without_operation(self):
+        text = AGENT_WORKFLOWS.read_text(encoding="utf-8")
+        self.assertRegex(
+            text,
+            r"(?is)unknown-role.{0,220}remove.{0,100}unresolved.{0,160}no\s+operation",
+        )
+        self.assertRegex(text, r"(?is)unmanaged.{0,160}(do not|must not).{0,80}preserve")
+
     def test_contract_covers_complete_workflow_and_exit_handling(self):
         text = all_runtime_markdown()
         for phrase in (
