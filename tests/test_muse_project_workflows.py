@@ -71,6 +71,14 @@ class MuseProjectWorkflowTests(unittest.TestCase):
         self.assertRegex(flat, r"content language")
         self.assertRegex(flat, r"not cli (?:commands|ceremony|terminology)")
 
+    def test_muse_conditionally_routes_pocket_editor_bookkeeping(self):
+        lower = self.muse.lower()
+        self.assertIn("$pocket-editor-review", self.muse)
+        self.assertIn(".pocket-editor.json", lower)
+        self.assertIn("*.review.json", lower)
+        self.assertIn("deferred signal-cleanup requirement", lower)
+        self.assertIn("do not invoke or create pocket\neditor artifacts", lower)
+
     def test_muse_preserves_distinct_durable_change_boundaries(self):
         lower = self.muse.lower()
         flat = re.sub(r"\s+", " ", lower)

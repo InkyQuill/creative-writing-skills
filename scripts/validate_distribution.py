@@ -35,7 +35,7 @@ EXPECTED_SKILLS = {
     "character-sim", "cli-doctor", "creative-research", "creative-writing-craft",
     "creative-writing-modes", "creative-writing-muse", "decision-grill",
     "information-hierarchy", "intent-modeling", "kb-management",
-    "knowledge-layers", "llm-writing", "md-validation", "project-bootstrap", "project-doctor",
+    "knowledge-layers", "llm-writing", "md-validation", "pocket-editor-review", "project-bootstrap", "project-doctor",
     "project-feedback", "project-maintenance", "project-setup", "qi-layer",
     "reader-sim", "reflect", "shared-dao", "story-memory",
     "story-planning", "story-review", "structured-artifact",
@@ -45,7 +45,7 @@ EXPECTED_SKILLS = {
 AUTHORED_SKILLS = {
     "character-sim", "cli-doctor", "creative-research", "creative-writing-craft",
     "creative-writing-modes", "creative-writing-muse", "kb-management",
-    "project-bootstrap", "project-doctor", "project-feedback", "project-maintenance", "project-setup",
+    "pocket-editor-review", "project-bootstrap", "project-doctor", "project-feedback", "project-maintenance", "project-setup",
     "reader-sim", "shared-dao", "story-memory",
     "story-planning", "story-review", "targeted-editing", "world-creation",
     "writing-principles", "writing-staffing",

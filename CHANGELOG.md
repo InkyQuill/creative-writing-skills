@@ -2,6 +2,23 @@
 
 ## [Unreleased]
 
+## [0.8.1] - 2026-08-29
+
+### Added
+- Added the optional application-specific `$pocket-editor-review` skill for
+  authors using Pocket Editor. It validates and consumes decided review
+  signals and edit proposals, clears handled chapter comments, deletes empty
+  sidecars, and registers new chapters in the Pocket Editor binder while
+  preserving existing identities and unresolved feedback.
+
+### Changed
+- Wired the muse to load Pocket Editor bookkeeping only when a writing folder
+  contains `.pocket-editor.json` or sibling `*.review.json` files, including an
+  explicit deferred-cleanup step for planned but unapplied prose changes.
+- Expanded the canonical distribution to 32 skills (22 authored and 10
+  vendored), with generated Claude, Cowork, Claude.ai, and ZCode artifacts kept
+  in sync.
+
 ## [0.8.0] - 2026-08-29
 
 ### Added

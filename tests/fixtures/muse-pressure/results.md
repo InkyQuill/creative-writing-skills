@@ -1,6 +1,6 @@
 # Muse Pressure Verification
 
-Revised skill SHA-256: `5bd88181d4549d1c003df390952f775567dcecdde18ea030233c8d64444241a2`
+Revised skill SHA-256: `4bdc98391d9fb95e1117e7d9971f765eb6cad54cac5b40f03da8434f464392cb`
 
 `<repo-root>` denotes the root of the checkout used to replay these samples.
 
@@ -35,6 +35,13 @@ commands back to the author. When the folder or its transaction state needs
 repair, route diagnosis through `$project-doctor`. Call `$cli-doctor` only after
 an actual CLI execution failure, never merely because an optional launcher is
 absent.
+
+When the relevant writing folder contains `.pocket-editor.json` or sibling
+`*.review.json` files, also load `$pocket-editor-review` as a conditional
+bookkeeping layer. Include its deferred signal-cleanup requirement in action
+plans, consume decided records only after their prose work is verified, and
+keep the binder current when chapters are added. Do not invoke or create Pocket
+Editor artifacts when neither file form exists.
 
 Continue unrelated creative work through repairable warnings whenever the
 required sources remain readable. Summarize material conflicts in content

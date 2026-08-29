@@ -26,6 +26,13 @@ repair, route diagnosis through `$project-doctor`. Call `$cli-doctor` only after
 an actual CLI execution failure, never merely because an optional launcher is
 absent.
 
+When the relevant writing folder contains `.pocket-editor.json` or sibling
+`*.review.json` files, also load `$pocket-editor-review` as a conditional
+bookkeeping layer. Include its deferred signal-cleanup requirement in action
+plans, consume decided records only after their prose work is verified, and
+keep the binder current when chapters are added. Do not invoke or create Pocket
+Editor artifacts when neither file form exists.
+
 Continue unrelated creative work through repairable warnings whenever the
 required sources remain readable. Summarize material conflicts in content
 language—what story fact, draft, or project artifact is affected—not CLI

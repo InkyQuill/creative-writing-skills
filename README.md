@@ -76,7 +76,7 @@ Upload them under **Customize → Skills**, enable `creative-writing-muse`, and
 describe the writing task. Skills-only chat uses the muse's single-agent
 fallback.
 
-To build the same 31 archives locally:
+To build the same 32 archives locally:
 
 ```bash
 python3 scripts/sync_claude_distribution.py --check
@@ -100,13 +100,25 @@ The archives are written to `zips/` from the generated `cw/skills/` tree.
 | `creative-writing-craft` | Prose, scene, style, voice, and genre technique |
 | `story-review` | Critique, editorial review, line work, and reader-signal synthesis |
 | `targeted-editing` | Locating, scoping, and ripple-checking edits to existing prose |
+| `pocket-editor-review` | Consumes decided Pocket Editor review signals and keeps sidecars and binders current |
 | `reader-sim` | Persona-bound first-time reader simulation |
 | `character-sim` | In-character voice and relationship exploration |
 | `world-creation` | Context-first worldbuilding that persists direct settled author answers without redundant confirmation |
 | `story-memory` | Durable facts, continuity records with a deterministic checker, canon, terminology, and issue tracking |
 | `writing-staffing` | Small, purpose-built specialist compositions |
 
-All 31 installed skills are listed in `config/distribution.json`.
+All 32 installed skills are listed in `config/distribution.json`.
+
+### Pocket Editor integration
+
+`pocket-editor-review` is an optional application-specific skill for authors
+who review manuscripts with
+[Pocket Editor](https://github.com/InkyQuill/pocket-editor). It consumes the
+application's sibling `*.review.json` sidecars after feedback is accepted,
+rejected, or superseded, removes empty sidecars, and keeps the
+`.pocket-editor.json` binder current when chapters are added. The skill remains
+inactive and creates no Pocket Editor files when a project does not use that
+software.
 
 ## Story Project Layout
 
