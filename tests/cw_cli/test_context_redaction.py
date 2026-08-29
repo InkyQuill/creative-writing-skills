@@ -93,6 +93,20 @@ class ContextSnapshotTests(unittest.TestCase):
                     context.render_snapshot(self.project, self.plan())
                 self.assertEqual(before, tuple((self.root / ".creative-writing/context").iterdir()))
 
+    def test_hidden_like_malformed_or_case_variant_markup_fails_closed(self):
+        for body in (
+            "<Hidden>case variant</Hidden>\n",
+            "<hidden visibility=author>attribute</hidden>\n",
+            "<hidden broken\n",
+            "closing </hidden > variant\n",
+            "<hiddenly>prefix collision\n",
+        ):
+            with self.subTest(body=body):
+                self.write("story/chapters/ch-004.md", f"---\nnumber: 4\n---\n{body}")
+                with self.assertRaises(context.ContextSnapshotError):
+                    context.render_snapshot(self.project, self.plan())
+                self.assertEqual([], list((self.root / ".creative-writing/context").iterdir()))
+
     def test_malformed_table_and_trusted_role_are_refused(self):
         self.write(
             "story/chapters/ch-004.md",
@@ -147,10 +161,44 @@ class ContextSnapshotTests(unittest.TestCase):
         self.assertIn("CW-CONTEXT-UNSAFE", {item.code for item in context.snapshot_status(self.project)})
 
     def test_atomic_install_failure_leaves_no_partial_or_temporary_snapshot(self):
-        with mock.patch("cwcli.context.os.rename", side_effect=OSError("injected")):
+        with mock.patch("cwcli.context._write_new_file", side_effect=OSError("injected")):
             with self.assertRaisesRegex(OSError, "injected"):
                 context.render_snapshot(self.project, self.plan())
         self.assertEqual([], list((self.root / ".creative-writing/context").iterdir()))
+
+    def test_publication_never_replaces_foreign_empty_destination(self):
+        original = context._reserve_snapshot_directory
+
+        def race(cache_root: Path, destination: Path):
+            destination.mkdir()
+            return original(cache_root, destination)
+
+        with mock.patch("cwcli.context._reserve_snapshot_directory", side_effect=race):
+            with self.assertRaises(context.ContextSnapshotError):
+                context.render_snapshot(self.project, self.plan())
+
+        entries = list((self.root / ".creative-writing/context").iterdir())
+        self.assertEqual(1, len(entries))
+        self.assertTrue(entries[0].is_dir())
+        self.assertEqual([], list(entries[0].iterdir()))
+
+    def test_publication_revalidates_and_reuses_concurrent_valid_winner(self):
+        winner = context.render_snapshot(self.project, self.plan())
+        destination = self.root / winner.directory
+        held = destination.with_name("held-winner")
+        destination.rename(held)
+        original = context._reserve_snapshot_directory
+
+        def race(cache_root: Path, requested: Path):
+            held.rename(requested)
+            return original(cache_root, requested)
+
+        with mock.patch("cwcli.context._reserve_snapshot_directory", side_effect=race):
+            reused = context.render_snapshot(self.project, self.plan())
+
+        self.assertEqual(winner.snapshot_id, reused.snapshot_id)
+        self.assertEqual(winner.manifest, reused.manifest)
+        self.assertTrue(destination.is_dir())
 
     def test_cli_snapshot_and_cleanup_preview_apply_are_derived_only(self):
         status, output, error = self.run_cli(
@@ -187,6 +235,41 @@ class ContextSnapshotTests(unittest.TestCase):
         self.assertIn("unsafe", error)
         self.assertTrue((self.root / result.directory).exists())
         self.assertEqual("keep", (outside / "keep").read_text(encoding="utf-8"))
+
+    def test_cleanup_refuses_unknown_empty_directory_and_preserves_snapshot(self):
+        result = context.render_snapshot(self.project, self.plan())
+        snapshot = self.root / result.directory
+        unknown = snapshot / "unknown-empty"
+        unknown.mkdir()
+
+        status, _output, error = self.run_cli(["clean-context", "--apply"])
+
+        self.assertEqual(2, status)
+        self.assertIn("unknown", error)
+        self.assertTrue(unknown.is_dir())
+        self.assertTrue((snapshot / "manifest.json").is_file())
+
+    @unittest.skipUnless(hasattr(os, "symlink"), "symlink support required")
+    def test_all_cache_operations_refuse_symlinked_protected_ancestor_without_touching_outside(self):
+        protected = self.root / ".creative-writing"
+        real = self.root / ".creative-writing-real"
+        protected.rename(real)
+        outside = Path(self.temporary.name) / "outside-cache"
+        (outside / "context").mkdir(parents=True)
+        marker = outside / "keep"
+        marker.write_text("outside", encoding="utf-8")
+        protected.symlink_to(outside, target_is_directory=True)
+
+        with self.assertRaises(context.ContextSnapshotError):
+            context.render_snapshot(self.project, self.plan())
+        findings = context.snapshot_status(self.project)
+        self.assertIn("CW-CONTEXT-UNSAFE", {item.code for item in findings})
+        status, _output, error = self.run_cli(["clean-context", "--apply"])
+
+        self.assertEqual(2, status)
+        self.assertIn("unsafe", error)
+        self.assertEqual("outside", marker.read_text(encoding="utf-8"))
+        self.assertEqual([], list((outside / "context").iterdir()))
 
 
 if __name__ == "__main__":
