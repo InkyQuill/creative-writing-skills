@@ -23,10 +23,10 @@ project, paths inside another nested project, and linked mutation targets are
 also protected from automatic writes.
 
 Direct author prose edits remain valid input. The agent owns mechanical
-maintenance: calculate and carry hashes, preserve source tags, update generated
-indexes, choose domain commands for lifecycle fields, and execute previewed
-repair commands. Never ask a nontechnical author to edit an index, calculate a
-hash, copy a tag, or maintain a base revision.
+maintenance: hashes, tags, indexes, base revisions, repair-command selection
+and execution, and runtime setup. The CLI performs only the deterministic
+mechanics requested by the agent. Never ask a nontechnical author to edit an
+index, calculate a hash, copy a tag, or maintain a base revision.
 
 Contract drift that can be repaired without guessing is an agent task. An
 unknown schema, unsafe path, changed precondition, ambiguous anchor, or

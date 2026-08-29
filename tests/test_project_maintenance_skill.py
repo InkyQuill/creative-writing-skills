@@ -76,6 +76,20 @@ class ProjectMaintenanceSkillTests(unittest.TestCase):
         )
         self.assertRegex(text, r"(?i)agent.*(hash|tag|index|base-revision|repair command)")
 
+    def test_agent_owns_metadata_and_repair_command_selection(self):
+        text = all_runtime_markdown()
+        self.assertNotRegex(text, r"(?is)CLI owns.{0,120}(tags|repair commands)")
+        for responsibility in ("hashes", "tags", "indexes", "base revisions"):
+            self.assertRegex(text, rf"(?is)agent owns.{{0,160}}{responsibility}")
+        self.assertRegex(text, r"(?is)agent owns.{0,200}repair-command (selection|choice)")
+
+    def test_context_cache_writes_are_derived_not_journaled(self):
+        text = all_runtime_markdown()
+        self.assertRegex(text, r"(?is)context planning.{0,80}read-only")
+        self.assertRegex(text, r"(?is)context --snapshot.{0,120}without `?--apply`?")
+        self.assertRegex(text, r"(?is)clean-context.{0,180}(does not enter|outside).{0,80}transaction history")
+        self.assertNotRegex(text, r"(?is)clean-context.{0,80}(previewed|journaled) transaction")
+
     def test_mechanical_warnings_do_not_block_unrelated_creative_work(self):
         text = all_runtime_markdown()
         self.assertRegex(

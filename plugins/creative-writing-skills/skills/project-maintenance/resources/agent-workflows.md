@@ -18,9 +18,11 @@ agent-owned runtime setup.
 ## Prepare review context
 
 Use `context draft`, `context chapter`, or `context kb` with the appropriate
-trusted, reader, or character role. Treat unresolved references as warnings to
-inspect, not permission to invent context. Restricted snapshots are derived
-cache; clean stale snapshots through a previewed `clean-context` transaction.
+trusted, reader, or character role. Context planning is read-only. Treat
+unresolved references as warnings to inspect, not permission to invent
+context. Restricted `context --snapshot` writes derived cache without
+`--apply`. Preview and apply `clean-context` only to remove derived cache; it
+does not enter transaction history.
 
 ## Manage a draft
 
@@ -48,6 +50,6 @@ interrupted prepared/applying transaction, inspect `doctor`, preview
 recoverable. Preserve conflicted bytes and journal evidence for manual agent
 diagnosis.
 
-All hashes, tags, indexes, base revisions, repair commands, and optional
-launcher setup are agent responsibilities. Ask the author for semantic choices
-and approval boundaries, not mechanical maintenance.
+The agent owns hashes, tags, indexes, base revisions, repair-command selection
+and execution, runtime setup, and optional launcher setup. Ask the author for
+semantic choices and approval boundaries, not mechanical maintenance.

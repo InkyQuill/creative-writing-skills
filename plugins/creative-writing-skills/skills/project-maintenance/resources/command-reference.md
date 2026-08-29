@@ -5,9 +5,10 @@ Resolve the installed `project-maintenance` skill and invoke
 or pass the project path where the command accepts one. A user-scoped `cw`
 launcher is optional convenience, never a prerequisite.
 
-Use `--format json` when structured output helps. Read-only commands and
-previews do not modify the project. Mutating commands preview by default and
-write only when repeated with `--apply`.
+Use `--format json` when structured output helps. Transactional previews do
+not modify the project. Transactional mutations preview by default and write
+only when repeated with `--apply`; the derived context cache has the narrower
+exceptions described below.
 
 ## Inspect and prepare context
 
@@ -20,9 +21,11 @@ reindex
 ```
 
 Use `check all` for the mechanical floor, or a focused checker while working
-in one domain. A restricted context snapshot is agent preparation; trusted
-context can use the selected source paths directly. Preview `clean-context`
-and `reindex`, then add `--apply` only for the reviewed change.
+in one domain. Context planning without `--snapshot` is read-only. A restricted
+`context --snapshot` writes derived cache without `--apply`; trusted context
+can use the selected source paths directly. `clean-context` previews and
+applies derived-cache deletion with `--apply`, but it stays outside transaction
+history. `reindex` is transactional: preview it, then apply the reviewed diff.
 
 ## Project and draft lifecycle
 
