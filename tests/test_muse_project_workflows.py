@@ -198,7 +198,28 @@ class MuseProjectWorkflowTests(unittest.TestCase):
         self.assertIsNotNone(final)
         self.assertEqual(final.group(1), revised_prompt.group(1))
         self.assertEqual(final.group(2), sample_five.group(1))
-        self.assertIn("explicit instruction confirms promotion", final.group(2))
+        self.assertIn(
+            "This is a settled decision, not a provisional option",
+            revised_prompt.group(1),
+        )
+        self.assertNotRegex(revised_prompt.group(1).lower(), r"\bsave\b.{0,40}\bnow\b")
+
+        revised_outputs = re.findall(
+            r"<!-- sample:memory-intent/revised/[1-5] compliant=true -->.*?"
+            r"### Output\n\n```text\n(.*?)```\n",
+            self.pressure,
+            re.DOTALL,
+        )
+        self.assertEqual(len(revised_outputs), 5)
+        for output in revised_outputs:
+            self.assertRegex(
+                output,
+                r"(?is)durable story memory:.{0,180}immediately record",
+            )
+        self.assertRegex(
+            final.group(2),
+            r"(?is)do not wait for drafting or ask for redundant confirmation",
+        )
 
 
 if __name__ == "__main__":
