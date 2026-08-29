@@ -124,6 +124,19 @@ class ContextPlanTests(unittest.TestCase):
         self.assertIn("kb/world/ice castle.md", plan.required)
         self.assertIn("kb/world/other place.md", plan.required)
 
+    def test_markdown_parenthesized_title_keeps_its_closing_parenthesis(self):
+        self.write("kb/world/linked place.md", "---\ntitle: Linked Place\n---\n")
+        self.write(
+            "kb/characters/mara.md",
+            "---\ntitle: Mara\n---\n"
+            "[Place](../world/linked%20place.md (Useful context title))\n",
+        )
+
+        plan = self.plan("kb", "kb/characters/mara.md")
+
+        self.assertIn("kb/world/linked place.md", plan.required)
+        self.assertFalse(any("Useful context title" in item for item in plan.unresolved))
+
     def test_explicit_context_never_selects_unmanaged_or_protected_paths(self):
         self.write("README.md", "Root notes.\n")
         self.write(".creative-writing/context/private.md", "Derived.\n")
@@ -152,6 +165,25 @@ class ContextPlanTests(unittest.TestCase):
         self.assertNotIn("kb/world/Place.md", plan.required)
         self.assertNotIn("kb/world/place.md", plan.required)
         self.assertTrue(any("portable-path-collision" in item for item in plan.unresolved))
+
+    def test_portable_identity_collision_on_subject_is_nonfatal_and_selects_neither(self):
+        self.write("kb/world/Place.md", "---\ntitle: Upper\n---\n")
+        self.write("kb/world/place.md", "---\ntitle: Lower\n---\n")
+
+        plan = self.plan("kb", "kb/world/Place.md")
+        stdout, stderr = io.StringIO(), io.StringIO()
+        status = app.run(
+            ["context", "kb", "kb/world/Place.md", "--format", "json"],
+            cwd=self.root,
+            stdout=stdout,
+            stderr=stderr,
+        )
+
+        self.assertNotIn("kb/world/Place.md", plan.required)
+        self.assertNotIn("kb/world/place.md", plan.required)
+        self.assertTrue(any("portable-path-collision" in item for item in plan.unresolved))
+        self.assertEqual((0, ""), (status, stderr.getvalue()))
+        self.assertTrue(json.loads(stdout.getvalue())["unresolved"])
 
     def test_character_role_uses_unicode_portable_file_stems(self):
         self.write("kb/characters/мара.md", "---\ntitle: Мара\n---\n")

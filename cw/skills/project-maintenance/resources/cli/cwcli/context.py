@@ -17,7 +17,7 @@ from .schema import allowed_document_kind
 
 
 _KINDS = frozenset({"draft", "chapter", "kb"})
-_LINK = re.compile(r"(?<!!)\[[^\]]*\]\(([^)]+)\)")
+_LINK_START = re.compile(r"(?<!!)\[[^\]]*\]\(")
 _ACTIVE_PLAN = frozenset({"active", "planned", "ready", "review", "working"})
 _ACTIVE_ISSUE = frozenset({"active", "blocked", "open", "review", "working"})
 _SELECTABLE_KINDS = frozenset(
@@ -76,7 +76,10 @@ def plan_context(project: Project, kind: str, path: str, role: str) -> ContextPl
     unresolved = _OrderedStrings()
     warnings = _OrderedStrings()
     catalog = _PathCatalog.from_project(project)
-    required.add(subject)
+    if catalog.collision(subject) is None:
+        required.add(subject)
+    else:
+        _record_collision(subject, catalog, unresolved, warnings)
     anchors = {subject}
 
     target: str | None = None
@@ -248,7 +251,55 @@ def _metadata_references(document: Document) -> tuple[str, ...]:
 
 
 def _markdown_references(text: str) -> tuple[str, ...]:
-    return tuple(match.group(1).strip() for match in _LINK.finditer(text))
+    references: list[str] = []
+    cursor = 0
+    while True:
+        match = _LINK_START.search(text, cursor)
+        if match is None:
+            break
+        start = match.end()
+        depth = 1
+        quote: str | None = None
+        angle_destination = False
+        escaped = False
+        title_space = False
+        for index in range(start, len(text)):
+            character = text[index]
+            if escaped:
+                escaped = False
+                continue
+            if character == "\\":
+                escaped = True
+                continue
+            if angle_destination:
+                if character == ">":
+                    angle_destination = False
+                continue
+            if quote is not None:
+                if character == quote:
+                    quote = None
+                continue
+            if index == start and character == "<":
+                angle_destination = True
+                continue
+            if character.isspace():
+                title_space = True
+                continue
+            if title_space and character in {'"', "'"}:
+                quote = character
+                continue
+            if character == "(":
+                depth += 1
+            elif character == ")":
+                depth -= 1
+                if depth == 0:
+                    references.append(text[start:index].strip())
+                    cursor = index + 1
+                    break
+        else:
+            cursor = match.end()
+            continue
+    return tuple(references)
 
 
 def _add_reference(
