@@ -88,8 +88,6 @@ def check_prose(project: Project) -> list[Finding]:
 
     for path in project.iter_managed_markdown():
         relative_id = project.relative_id(path)
-        if _is_generated_index(relative_id):
-            continue
         try:
             source = _read_regular(path)
             text = source.decode("utf-8-sig")
@@ -396,10 +394,6 @@ def _is_prose_path(relative_id: str) -> bool:
         return False
     parent = path.parent.as_posix()
     return parent in {"story/chapters", "work/drafts", "kb/samples"}
-
-
-def _is_generated_index(relative_id: str) -> bool:
-    return Path(relative_id).name == "_index.md"
 
 
 def _read_regular(path: Path) -> bytes:

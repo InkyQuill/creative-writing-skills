@@ -172,6 +172,21 @@ class ProseCheckTests(unittest.TestCase):
         metric_paths = [item.path for item in findings if item.code == prose.METRICS]
         self.assertEqual(metric_paths, ["story/chapters/ch-001.md"])
 
+    def test_generated_indexes_still_receive_integrity_and_layer_checks(self):
+        self.write("story/_index.md", "<AI>Forbidden and unclosed\n~~~text\nunclosed fence\n")
+
+        findings = self.findings()
+        index_codes = {
+            item.code for item in findings if item.path == "story/_index.md"
+        }
+        self.assertEqual(
+            index_codes,
+            {prose.SOURCE_TAG, prose.SOURCE_TAG_POLICY, prose.MARKDOWN_FENCE},
+        )
+        self.assertFalse(
+            any(item.code == prose.METRICS and item.path == "story/_index.md" for item in findings)
+        )
+
     def test_unbalanced_and_crossed_source_tags_report_stable_lines(self):
         self.write(
             "story/chapters/ch-001.md",
