@@ -1,3 +1,5 @@
+import io
+import json
 import os
 import tempfile
 import unittest
@@ -5,11 +7,43 @@ from dataclasses import FrozenInstanceError
 from pathlib import Path
 
 from tests.cw_cli import helpers  # noqa: F401
-from cwcli import project
+from cwcli import app
 from cwcli.checks import prose
+from cwcli.findings import Finding
 
 
 class ProseMetricTests(unittest.TestCase):
+    def public_metrics(self, documents: dict[str, str], *, language: str = "ru"):
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        root = Path(temporary.name)
+        (root / "project.md").write_text(
+            "---\nschema-version: 1\ntitle: Parity\n"
+            f"language: {language}\nstatus: drafting\n---\n",
+            encoding="utf-8",
+        )
+        for relative, text in documents.items():
+            path = root / "story/chapters" / relative
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(text, encoding="utf-8")
+
+        stdout, stderr = io.StringIO(), io.StringIO()
+        status = app.run(
+            ["check", "prose", ".", "--format", "json"],
+            cwd=root,
+            stdout=stdout,
+            stderr=stderr,
+        )
+        self.assertEqual("", stderr.getvalue())
+        payload = json.loads(stdout.getvalue())
+        self.assertEqual([], payload["execution_errors"])
+        metrics = {
+            item["path"]: item["message"]
+            for item in payload["findings"]
+            if item["code"] == prose.METRICS
+        }
+        return status, metrics, payload["findings"]
+
     def test_metrics_are_immutable_and_match_representative_legacy_counts(self):
         text = "Она вошла. Он молчал тихо.\n"
         metrics = prose.analyze_prose(text, language="ru")
@@ -147,6 +181,51 @@ class ProseMetricTests(unittest.TestCase):
         self.assertGreater(metrics.sentence_count, 0)
         self.assertEqual(metrics.dialogue_ratio, 2 / 7)
 
+    def test_deleted_analyzer_fixtures_are_exact_through_public_cw_prose(self):
+        sample = """# Глава 1
+
+Я вернулся в дом, когда стемнело, и долго стоял у крыльца, слушая,
+как скрипит под ветром старая яблоня — та самая, под которой мы
+когда-то зарыли жестяную коробку с письмами.
+
+— Ты опять был там? — спросила мать, не оборачиваясь.
+
+— Был, — сказал я и соврал ей впервые за много лет.
+
+Она вздохнула, и в этом вздохе поместилось всё, что она не сказала.
+"""
+        status, metrics, findings = self.public_metrics(
+            {
+                "ch-001.md": "Я вернулся в дом, когда стемнело",
+                "ch-002.md": "Стемнело быстро. Ветер стих! Мы ушли… Дом молчал",
+                "ch-003.md": "— Я здесь!\nОбычная строка.\n«Позже», — сказала она.\nHe said \"later\".\n",
+                "ch-004.md": "Я сказал, что мы уйдём, а она останется",
+                "ch-005.md": "Мое решение в моем письме, твое мнение в твоем ответе и ее выбор.",
+                "ch-006.md": "Мое решение принято. Твое письмо пришло. Ее ответ готов.",
+                "ch-007.md": sample,
+            }
+        )
+
+        self.assertEqual(0, status)
+        self.assertIn("words=6; paragraphs=1; sentences=1", metrics["story/chapters/ch-001.md"])
+        self.assertIn("sentences=4", metrics["story/chapters/ch-002.md"])
+        self.assertIn("dialogue-ratio=0.750", metrics["story/chapters/ch-003.md"])
+        self.assertIn("'first-singular': 1", metrics["story/chapters/ch-004.md"])
+        self.assertIn("'first-plural': 1", metrics["story/chapters/ch-004.md"])
+        self.assertIn("'third-feminine': 1", metrics["story/chapters/ch-004.md"])
+        self.assertIn("'first-singular': 2", metrics["story/chapters/ch-005.md"])
+        self.assertIn("'second': 2", metrics["story/chapters/ch-005.md"])
+        self.assertIn("'third-feminine': 1", metrics["story/chapters/ch-005.md"])
+        self.assertIn("openers={'pronouns': 3", metrics["story/chapters/ch-006.md"])
+        self.assertIn("dialogue-ratio=0.286", metrics["story/chapters/ch-007.md"])
+        self.assertFalse(
+            any(
+                item["code"] == prose.EMPTY_DOCUMENT
+                and item["path"] == "story/chapters/ch-007.md"
+                for item in findings
+            )
+        )
+
 
 class ProseCheckTests(unittest.TestCase):
     def setUp(self):
@@ -164,7 +243,20 @@ class ProseCheckTests(unittest.TestCase):
         return path
 
     def findings(self):
-        return prose.check_prose(project.discover_project(self.root))
+        status, payload = self.run_cli()
+        self.last_status = status
+        self.assertEqual([], payload["execution_errors"])
+        self.assertEqual(["prose"], payload["checks"])
+        return [Finding(**item) for item in payload["findings"]]
+
+    def run_cli(self, *, strict: bool = False):
+        stdout, stderr = io.StringIO(), io.StringIO()
+        argv = ["check", "prose", ".", "--format", "json"]
+        if strict:
+            argv.append("--strict")
+        status = app.run(argv, cwd=self.root, stdout=stdout, stderr=stderr)
+        self.assertEqual("", stderr.getvalue())
+        return status, json.loads(stdout.getvalue())
 
     def test_allowed_balanced_tags_and_fences_have_no_integrity_warning(self):
         self.write(

@@ -1,11 +1,14 @@
+import io
+import json
 import os
 import tempfile
 import unittest
 from pathlib import Path
 
 from tests.cw_cli import helpers  # noqa: F401
-from cwcli import project
+from cwcli import app
 from cwcli.checks import continuity
+from cwcli.findings import Finding
 
 
 TIMELINE = """# Timeline
@@ -130,7 +133,146 @@ class ContinuityParityTests(unittest.TestCase):
         (self.continuity / "scenes/ch-004.md").write_text(scene, encoding="utf-8")
 
     def findings(self):
-        return continuity.check_continuity(project.discover_project(self.root))
+        status, payload = self.run_cli()
+        self.last_status = status
+        self.assertEqual([], payload["execution_errors"])
+        self.assertEqual(["continuity"], payload["checks"])
+        return [Finding(**item) for item in payload["findings"]]
+
+    def run_cli(self, *, strict: bool = False):
+        stdout, stderr = io.StringIO(), io.StringIO()
+        argv = ["check", "continuity", ".", "--format", "json"]
+        if strict:
+            argv.append("--strict")
+        status = app.run(argv, cwd=self.root, stdout=stdout, stderr=stderr)
+        self.assertEqual("", stderr.getvalue())
+        return status, json.loads(stdout.getvalue())
+
+    def write_clean_records(self):
+        self.write_records(
+            timeline=(
+                "# Timeline\n\n## Story\n\n"
+                "| When | Event | Threads | Anchor | Chapter |\n"
+                "|---|---|---|---|---|\n"
+                "| Day 1 | Arrival | main | arrival | Ch 1 |\n"
+                "| Day 4 | Crossing | main | crossing | Ch 4 |\n"
+            ),
+            state=(
+                "current-chapter: 4\nstory-status: draft\n\n"
+                "| Character | State | Since |\n|---|---|---|\n| ivo | alive | Ch 1 |\n"
+            ),
+            promises=(
+                "| Promise | Status | Planted | Payoff | POV knows | Evidence |\n"
+                "|---|---|---|---|---|---|\n"
+                "| crossing | paid-off | Ch 1 | Ch 4 | reader | explicit |\n"
+            ),
+            questions=(
+                "| Question | Status | Introduced | Answered | Evidence |\n"
+                "|---|---|---|---|---|\n"
+                "| route | answered | Ch 1 | Ch 4 | explicit |\n"
+            ),
+            scene=(
+                "| Scene | POV | Location | Present | Mentions | Anchor | State changes |\n"
+                "|---|---|---|---|---|---|---|\n"
+                "| 1 | ivo | quay | ivo |  | crossing | none |\n"
+            ),
+        )
+
+    def test_clean_project_and_exit_status_are_exact_through_public_command(self):
+        self.write_clean_records()
+        status, payload = self.run_cli()
+        self.assertEqual(0, status)
+        self.assertEqual([], payload["findings"])
+
+    def test_full_chapter_citation_is_parsed_through_public_command(self):
+        self.write_clean_records()
+        (self.continuity / "promises.md").write_text(
+            "| Promise | Status | Planted | Payoff | POV knows | Evidence |\n"
+            "|---|---|---|---|---|---|\n"
+            "| letter | paid-off | Chapter 1: Scene where it is sealed | "
+            "Chapter 4: Scene where it is opened | reader | explicit |\n",
+            encoding="utf-8",
+        )
+        status, payload = self.run_cli()
+        self.assertEqual(0, status)
+        self.assertEqual([], payload["findings"])
+
+    def test_partial_records_keep_exact_public_warning_and_strict_exit(self):
+        (self.continuity / "timeline.md").write_text("# Timeline\n", encoding="utf-8")
+        normal_status, normal = self.run_cli()
+        strict_status, strict = self.run_cli(strict=True)
+        expected = [
+            ("kb/continuity/promises.md", "canonical continuity record is missing"),
+            ("kb/continuity/questions.md", "canonical continuity record is missing"),
+            ("kb/continuity/state.md", "canonical continuity record is missing"),
+        ]
+        actual = sorted(
+            (item["path"], item["message"])
+            for item in normal["findings"]
+            if item["code"] == continuity.RECORD
+        )
+        self.assertEqual(sorted(expected), actual)
+        self.assertEqual(0, normal_status)
+        self.assertEqual(1, strict_status)
+        self.assertTrue(strict["strict_failure"])
+
+    def test_legacy_plot_fixture_is_discovered_after_public_migration_targeting(self):
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        legacy_root = Path(temporary.name)
+        (legacy_root / "project.md").write_text("# Legacy\n", encoding="utf-8")
+        (legacy_root / "plot").mkdir()
+        (legacy_root / "plot/timeline.md").write_text("# Timeline\n", encoding="utf-8")
+        stdout, stderr = io.StringIO(), io.StringIO()
+        plan_status = app.run(
+            ["migrate", "--plan", "--format", "json"],
+            cwd=legacy_root,
+            stdout=stdout,
+            stderr=stderr,
+        )
+        self.assertEqual(0, plan_status)
+        self.assertEqual("", stderr.getvalue())
+        self.assertIn(
+            {
+                "action": "move",
+                "destination": "kb/continuity/timeline.md",
+                "source": "plot/timeline.md",
+            },
+            json.loads(stdout.getvalue())["operations"],
+        )
+
+        self.write_clean_records()
+        status, payload = self.run_cli()
+        self.assertEqual(0, status)
+        self.assertEqual([], payload["findings"])
+
+    def test_dual_legacy_roots_are_rejected_by_public_migration_plan(self):
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        root = Path(temporary.name)
+        (root / "project.md").write_text("# Test\n", encoding="utf-8")
+        for base in ("plot", "kb"):
+            (root / base).mkdir()
+            (root / base / "timeline.md").write_text("# Timeline\n", encoding="utf-8")
+
+        stdout, stderr = io.StringIO(), io.StringIO()
+        status = app.run(
+            ["migrate", "--plan", "--format", "json"],
+            cwd=root,
+            stdout=stdout,
+            stderr=stderr,
+        )
+        self.assertEqual(0, status)
+        self.assertEqual("", stderr.getvalue())
+        unresolved = json.loads(stdout.getvalue())["unresolved"]
+        self.assertIn(
+            {
+                "destination": None,
+                "reason": "mixed-layout",
+                "sources": ["kb/timeline.md", "plot/timeline.md"],
+            },
+            unresolved,
+        )
 
     def test_deaths_knowledge_scene_cast_and_state_horizon_keep_legacy_rules(self):
         self.write_records()
