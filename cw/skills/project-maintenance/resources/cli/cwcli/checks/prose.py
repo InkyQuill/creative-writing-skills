@@ -141,7 +141,9 @@ class _VisibleDocument:
 def analyze_prose(text: str, *, language: str) -> ProseMetrics:
     """Measure prose with legacy preprocessing and Unicode-aware tokenization."""
 
-    prose_text = _strip_markdown(_strip_frontmatter_and_fences(text))
+    prose_text = _strip_markdown(
+        _strip_inline_code(_strip_frontmatter_and_fences(text))
+    )
     word_list = _words(prose_text)
     paragraph_list = _paragraphs(prose_text)
     dense_lines = [line.strip() for line in prose_text.splitlines() if line.strip()]

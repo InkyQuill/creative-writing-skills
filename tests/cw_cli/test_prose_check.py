@@ -130,16 +130,37 @@ class ProseMetricTests(unittest.TestCase):
                 metrics = prose.analyze_prose(text, language="en")
                 self.assertEqual((metrics.sentence_count, metrics.sentence_lengths), expected)
 
-    def test_preprocessing_matches_legacy_paragraph_words_and_dialogue(self):
+    def test_preprocessing_excludes_inline_code_from_paragraph_words_and_dialogue(self):
         text = (
             "Before `\"inline quote\" code` words.\n"
             "```python\nignored = 'quoted code'\n```\n"
             "After words.\n"
         )
         metrics = prose.analyze_prose(text, language="en")
-        self.assertEqual(metrics.word_count, 7)
+        self.assertEqual(metrics.word_count, 4)
         self.assertEqual(metrics.paragraph_count, 1)
-        self.assertEqual(metrics.dialogue_ratio, 0.5)
+        self.assertEqual(metrics.dialogue_ratio, 0.0)
+
+    def test_russian_inline_code_cannot_create_dialogue_or_repeated_openings(self):
+        metrics = prose.analyze_prose(
+            "Она вошла.\n\n`Она` села.\n\n`— Я здесь!`\n",
+            language="ru",
+        )
+
+        self.assertEqual(metrics.word_count, 3)
+        self.assertEqual(metrics.dialogue_ratio, 0.0)
+        self.assertEqual(metrics.repeated_openings, ())
+
+    def test_unsupported_language_inline_code_cannot_create_universal_repetition(self):
+        metrics = prose.analyze_prose(
+            "`Ghost` Alpha un.\n\n`Ghost` Beta deux.\n",
+            language="fr",
+        )
+
+        self.assertEqual(metrics.word_count, 4)
+        self.assertEqual(metrics.repeated_openings, ())
+        self.assertIsNone(metrics.dialogue_ratio)
+        self.assertEqual(metrics.skipped_metrics, prose.LANGUAGE_SENSITIVE_METRICS)
 
     def test_punctuation_only_sentences_and_paragraphs_match_legacy_behavior(self):
         text = "!!! Text.\n\n...\n\nAlpha alpha alpha.\n"
