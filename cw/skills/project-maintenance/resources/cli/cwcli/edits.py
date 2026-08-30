@@ -1,4 +1,4 @@
-"""Read-only planning for exact-anchor story document edits."""
+"""Read-only planning for guarded story document edits."""
 
 from __future__ import annotations
 
@@ -22,7 +22,7 @@ class EditPlanError(ValueError):
 
 
 class EditConflict(EditPlanError):
-    """Raised when an exact anchor does not have the declared match count."""
+    """Raised when an edit anchor does not have the declared match count."""
 
 
 _TEXT_OPERATION_FIELDS = {
@@ -214,7 +214,8 @@ def _apply_operation(source: bytes, operation: EditOperation, relative: str) -> 
     anchor = operation[anchor_key]
     assert isinstance(anchor, str)
     normalized_anchor = _normalize_newlines(anchor)
-    actual = _match_count(normalized_body, normalized_anchor)
+    matcher = _text_matcher(normalized_anchor, flexible_whitespace=kind == "replace")
+    actual = sum(1 for _ in matcher.finditer(normalized_body))
     _require_count(actual, operation)
 
     if kind == "replace":
@@ -226,7 +227,7 @@ def _apply_operation(source: bytes, operation: EditOperation, relative: str) -> 
     else:
         replacement = ""
     normalized_replacement = _normalize_newlines(str(replacement))
-    edited = normalized_body.replace(normalized_anchor, normalized_replacement)
+    edited = matcher.sub(lambda _match: normalized_replacement, normalized_body)
     rendered_body = edited.replace("\n", document.newline).encode("utf-8")
     prefix = _raw_document_prefix(source, document)
     rendered = prefix + rendered_body
@@ -294,8 +295,13 @@ def _json_object(pairs: list[tuple[str, object]]) -> dict[str, object]:
     return result
 
 
-def _match_count(text: str, needle: str) -> int:
-    return text.count(needle)
+def _text_matcher(anchor: str, *, flexible_whitespace: bool) -> re.Pattern[str]:
+    if not flexible_whitespace:
+        return re.compile(re.escape(anchor))
+
+    parts = re.split(r"(\s+)", anchor)
+    pattern = "".join(r"\s+" if part.isspace() else re.escape(part) for part in parts)
+    return re.compile(pattern)
 
 
 def _require_count(actual: int, operation: EditOperation) -> None:

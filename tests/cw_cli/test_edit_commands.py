@@ -79,6 +79,27 @@ class EditCommandTests(unittest.TestCase):
         )
         self.assertEqual(1, len(manifests))
 
+    def test_replace_cli_tolerates_indentation_and_nbsp(self):
+        self.target.write_text(
+            "---\nnumber: 1\n---\n    Rain.\u00a0\u00a0Falls.\n",
+            encoding="utf-8",
+        )
+        old = self.content_file("spaced-old.txt", "\tRain. Falls.")
+        new = self.content_file("spaced-new.txt", "Snow falls.")
+
+        status, output, error = self.run_cli(
+            [
+                "edit", "replace", str(self.target),
+                "--old-file", old, "--new-file", new,
+                "--format", "json", "--apply",
+            ]
+        )
+
+        self.assertEqual(0, status)
+        self.assertEqual("", error)
+        self.assertEqual("committed", json.loads(output)["status"])
+        self.assertIn(b"Snow falls.", self.target.read_bytes())
+
     def test_simple_insert_delete_and_batch_apply_use_shared_transaction_output(self):
         anchor = self.content_file("anchor.txt", "Rain.")
         addition = self.content_file("addition.txt", "Cold ")

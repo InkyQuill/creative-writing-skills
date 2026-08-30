@@ -86,7 +86,7 @@ character/reader knowledge-boundary uncertainty would materially change canon
 or knowledge boundaries. The agent carries plan hashes and `base-revision`
 values between commands without asking the author to maintain them.
 
-## Exact edits and transaction history
+## Guarded edits and transaction history
 
 ```text
 edit replace|insert-before|insert-after|delete ...
@@ -102,6 +102,11 @@ recover operations before `--apply`. `history` is append-only evidence: undo
 creates a new inverse transaction and refuses diverged targets. Recovery rolls
 an interrupted transaction back only when journal evidence still proves the
 safe before-state.
+
+`edit replace` treats every non-empty whitespace run in `--old-file` as
+equivalent to any other non-empty whitespace run in the target. This includes
+ordinary spaces, indentation, tabs, non-breaking spaces, and line breaks.
+Match-count guards apply to all whitespace-equivalent matches.
 
 ## Exit status
 

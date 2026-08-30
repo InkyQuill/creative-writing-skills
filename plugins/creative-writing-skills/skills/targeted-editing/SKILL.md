@@ -83,7 +83,10 @@ Trace what the edit touches:
 Choose the literary scope first: target and change level, intended reader
 effect, and ripple boundaries. Only then translate the approved change into an
 exact-anchor operation or a batch of exact operations. Read current bytes just
-before planning. Each repeated match needs an explicit expected-count assertion;
+before planning. Within a replacement anchor, `cw edit replace` treats
+non-empty whitespace runs as equivalent, including indentation, tabs,
+non-breaking spaces, and line breaks. Each repeated match needs an explicit
+expected-count assertion, including matches that differ only in whitespace;
 never let a common phrase silently select the first occurrence.
 
 Preview the exact operation or complete batch before apply. Inspect every

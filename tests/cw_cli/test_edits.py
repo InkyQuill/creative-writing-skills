@@ -75,6 +75,45 @@ class EditPlanningTests(unittest.TestCase):
         )
         self.assertEqual(b"Snow.\nSnow.\n", plan.changes[0].after)
 
+    def test_replace_matches_whitespace_runs_including_nbsp_and_newlines(self):
+        self.make_file(
+            "story/chapters/ch-001.md",
+            "\tОн\u00a0\u00a0сказал:\n    да.\n",
+        )
+
+        plan = edits.plan_edits(
+            self.project,
+            [
+                {
+                    "op": "replace",
+                    "path": "story/chapters/ch-001.md",
+                    "old": "    Он сказал: да.",
+                    "new": "Он ответил: да.",
+                }
+            ],
+        )
+
+        self.assertEqual("Он ответил: да.\n".encode(), plan.changes[0].after)
+
+    def test_whitespace_equivalent_replace_matches_remain_counted_for_safety(self):
+        self.make_file(
+            "story/chapters/ch-001.md",
+            "Он сказал.\nОн  сказал.\nОн\u00a0сказал.\n",
+        )
+
+        with self.assertRaisesRegex(edits.EditConflict, "found 3"):
+            edits.plan_edits(
+                self.project,
+                [
+                    {
+                        "op": "replace",
+                        "path": "story/chapters/ch-001.md",
+                        "old": "Он сказал.",
+                        "new": "Он ответил.",
+                    }
+                ],
+            )
+
     def test_insert_before_after_and_delete_are_sequential_on_one_file(self):
         self.make_file("story/chapters/ch-001.md", "Начало.\nЯкорь.\nКонец.\n")
         plan = edits.plan_edits(
