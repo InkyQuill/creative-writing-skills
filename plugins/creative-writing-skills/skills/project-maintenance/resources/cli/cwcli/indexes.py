@@ -16,6 +16,7 @@ from .transactions import Change, TransactionPlan
 _INDEX_TITLES = {
     "story/_index.md": "Story",
     "story/chapters/_index.md": "Chapters",
+    "story/side-stories/_index.md": "Side Stories",
     "work/_index.md": "Work",
     "work/drafts/_index.md": "Drafts",
     "work/plans/_index.md": "Plans",
@@ -35,6 +36,7 @@ _INDEX_TITLES = {
 
 _FRONTMATTER_FIELDS = {
     "chapter": ("number", "title", "status"),
+    "side-story": ("after", "subtype", "title", "status"),
     "work-artifact": ("title", "status", "target", "subject", "base-revision"),
     "kb-content": ("title", "status", "subject", "class", "sources"),
     "continuity-scene": ("title", "status", "subject", "sources"),
@@ -65,6 +67,7 @@ def plan_reindex(
             continue
         if allowed_document_kind(relative_id) not in {
             "chapter",
+            "side-story",
             "work-artifact",
             "kb-content",
             "continuity-scene",
@@ -140,6 +143,7 @@ def _is_indexable(relative_id: str, document: Document) -> bool:
     kind = allowed_document_kind(relative_id)
     if kind not in {
         "chapter",
+        "side-story",
         "work-artifact",
         "kb-content",
         "continuity-scene",

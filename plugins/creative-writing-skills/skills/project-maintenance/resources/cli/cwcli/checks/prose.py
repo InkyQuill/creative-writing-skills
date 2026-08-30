@@ -732,7 +732,7 @@ def _is_prose_path(relative_id: str) -> bool:
     if path.name == "_index.md" or path.suffix.casefold() != ".md":
         return False
     parent = path.parent.as_posix()
-    return parent in {"story/chapters", "work/drafts", "kb/samples"}
+    return parent in {"story/chapters", "story/side-stories", "work/drafts", "kb/samples"}
 
 
 def _read_regular(path: Path) -> bytes:

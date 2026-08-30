@@ -45,7 +45,7 @@ class CliDoctorSkillTests(unittest.TestCase):
     def test_diagnosis_precedes_any_setup_offer(self):
         text = SKILL.read_text(encoding="utf-8")
         diagnosis = text.index("Diagnose first")
-        setup = text.index("Only after the active task")
+        setup = text.index("Launcher installation or repair")
         self.assertLess(diagnosis, setup)
         self.assertRegex(text, r"(?is)diagnos.{0,120}(first|before).{0,180}(launcher|setup)")
 
@@ -95,17 +95,11 @@ class CliDoctorSkillTests(unittest.TestCase):
         self.assertRegex(text, r"(?is)(do not|never).{0,100}cop(y|ied).{0,100}(story|project)")
         self.assertNotRegex(text, r"(?i)(pip|uv|poetry) install")
 
-    def test_persistent_changes_require_preview_and_explicit_approval(self):
+    def test_managed_launcher_is_attempted_without_changing_path_or_profile(self):
         text = all_runtime_markdown()
-        self.assertRegex(
-            text,
-            r"(?is)preview.{0,260}(PATH|profile|launcher)",
-        )
-        self.assertRegex(
-            text,
-            r"(?is)explicit (approval|permission).{0,220}(persistent launcher|PATH|profile)",
-        )
-        self.assertRegex(text, r"(?is)(never|do not).{0,100}(silently|without approval).{0,120}(profile|PATH)")
+        self.assertRegex(text, r"(?is)(install|create).{0,160}(managed )?(wrapper|launcher)")
+        self.assertRegex(text, r"(?is)(refresh|repair).{0,180}(plugin|entrypoint).{0,120}path")
+        self.assertRegex(text, r"(?is)never.{0,100}(change|modify).{0,80}(PATH|shell profile)")
 
     def test_main_skill_keeps_persistent_setup_in_resource(self):
         main = SKILL.read_text(encoding="utf-8")
@@ -117,14 +111,13 @@ class CliDoctorSkillTests(unittest.TestCase):
     def test_launcher_is_executable_wrapper_not_symlink_to_cw_py(self):
         text = LAUNCHER_SETUP.read_text(encoding="utf-8")
         self.assertRegex(text, r"(?is)user-(owned|scoped).{0,120}executable wrapper")
-        self.assertNotIn("symlink", text.lower())
+        self.assertNotRegex(text, r"(?i)ln\s+-s|symlink\s+to\s+.*cw\.py")
 
     def test_documented_posix_wrapper_executes_from_spaced_path(self):
         text = LAUNCHER_SETUP.read_text(encoding="utf-8")
         wrapper_source = re.search(r"```sh\n(.+?)\n```", text, re.DOTALL)
         self.assertIsNotNone(wrapper_source)
-        self.assertRegex(text, r"(?is)preview.{0,220}executable (mode|permission)")
-        self.assertRegex(text, r"(?is)after approval.{0,120}set executable mode")
+        self.assertRegex(text, r"(?is)(atomic|atomically).{0,160}executable mode `0700`")
         with tempfile.TemporaryDirectory(prefix="cw wrapper test ") as directory:
             root = Path(directory)
             skill_root = root / "installed skills" / "project maintenance"

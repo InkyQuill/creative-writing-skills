@@ -35,9 +35,16 @@ Classify the folder without moving anything:
 - An existing canonical project is extended in place. Do not reinitialize or
   reorganize it merely because optional material is absent.
 
-The canonical layout is rooted by `project.md`. Manuscript chapters live in
-`story/chapters/`; draft work in `work/drafts/`; durable knowledge in `kb/`;
-and machine-checkable story state in `kb/continuity/`. The scaffold also owns
+Treat a legacy `inspiration/` directory as an opaque author-owned corpus. The
+migration plan must account for every regular file in it, including Pocket
+Editor `.pocket-editor.json` and `*.review.json`, images, documents, hidden
+metadata, and unknown service files. Preserve its relative tree and exact bytes
+in place; do not classify those files by extension or promote them into the KB.
+
+The canonical layout is rooted by `project.md`. Numbered manuscript chapters
+live in `story/chapters/`; accepted bonus prose with explicit `after` placement
+lives in `story/side-stories/`; draft work lives in `work/drafts/`; durable
+knowledge in `kb/`; and machine-checkable story state in `kb/continuity/`. The scaffold also owns
 its generated indexes and `.creative-writing/` maintenance state. There is no
 alternative layout choice.
 

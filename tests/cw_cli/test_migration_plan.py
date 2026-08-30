@@ -57,6 +57,81 @@ def write_plan(root: Path, payload: dict[str, object], *, rehash: bool = True) -
 
 
 class MigrationPlanningTests(unittest.TestCase):
+    def test_inspiration_corpus_preserves_every_regular_file_without_parsing(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            files = {
+                "inspiration/.pocket-editor.json": b'{"schema_version":2,"future":{"keep":true}}\n',
+                "inspiration/reference.md": b"# Reference\n",
+                "inspiration/reference.md.review.json": b'{"schema_version":1,"signals":[{"id":"keep"}]}\n',
+                "inspiration/images/mood.png": b"\x89PNG\r\n\x1a\n\x00binary",
+                "inspiration/documents/notes.doc": b"\xd0\xcf\x11\xe0legacy-doc",
+                "inspiration/documents/notes.docx": b"PK\x03\x04docx",
+                "inspiration/documents/notes.rtf": b"{\\rtf1 exact}",
+                "inspiration/.service/state.bin": b"\x00\xffservice",
+            }
+            for relative, content in files.items():
+                path = root / relative
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_bytes(content)
+            (root / "unrelated.bin").write_bytes(b"leave unmanaged")
+
+            plan = migration.plan_migration(root)
+
+            self.assertEqual(
+                {(path, path, "preserve") for path in files},
+                operation_pairs(plan),
+            )
+            self.assertEqual((), plan.unresolved)
+            self.assertNotIn("unrelated.bin", repr(plan.to_payload()))
+
+    def test_inspiration_symlink_is_reported_without_following_it(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            inspiration = root / "inspiration"
+            inspiration.mkdir()
+            outside = root / "outside.bin"
+            outside.write_bytes(b"outside")
+            link = inspiration / "linked.bin"
+            try:
+                os.symlink(outside, link)
+            except (OSError, NotImplementedError):
+                self.skipTest("symlinks unavailable")
+
+            plan = migration.plan_migration(root)
+
+            self.assertEqual((), plan.operations)
+            self.assertEqual(
+                ({
+                    "sources": ("inspiration/linked.bin",),
+                    "destination": None,
+                    "reason": "unsafe-inspiration-entry",
+                },),
+                plan.unresolved,
+            )
+
+    def test_inspiration_nested_project_is_reported_without_inventorying_it(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            nested = root / "inspiration/reference-book"
+            nested.mkdir(parents=True)
+            (nested / "project.md").write_text(
+                "---\nschema-version: 1\n---\n", encoding="utf-8"
+            )
+            (nested / "private.bin").write_bytes(b"nested")
+
+            plan = migration.plan_migration(root)
+
+            self.assertEqual((), plan.operations)
+            self.assertEqual(
+                ({
+                    "sources": ("inspiration/reference-book",),
+                    "destination": None,
+                    "reason": "unsafe-inspiration-entry",
+                },),
+                plan.unresolved,
+            )
+
     def test_layout_a_complete_mapping_table(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -95,6 +170,25 @@ class MigrationPlanningTests(unittest.TestCase):
             for name in ("timeline", "state", "promises", "questions"):
                 self.assertIn((f"kb/{name}.md", f"kb/continuity/{name}.md", "move"), pairs)
             self.assertIn(("kb/scenes/harbor.md", "kb/continuity/scenes/harbor.md", "move"), pairs)
+
+    def test_side_story_layout_maps_to_managed_prose(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            materialize(
+                root,
+                {
+                    "side-stories/omake.md": (
+                        "---\nafter: story/chapters/ch-003.md\n---\nBonus.\n"
+                    ),
+                },
+            )
+
+            pairs = operation_pairs(migration.plan_migration(root))
+
+            self.assertIn(
+                ("side-stories/omake.md", "story/side-stories/omake.md", "move"),
+                pairs,
+            )
 
     def test_single_timeline_file_maps_but_multiple_remain_unresolved(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -465,7 +559,7 @@ class MigrationPlanLoadingTests(unittest.TestCase):
                 migration.load_migration_plan(linked)
 
     @unittest.skipUnless(hasattr(os, "symlink"), "symlinks are unavailable")
-    def test_loader_refuses_plan_through_symlinked_parent(self):
+    def test_loader_resolves_plan_through_symlinked_parent_but_not_the_file(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             real_parent = root / "real"
@@ -473,8 +567,10 @@ class MigrationPlanLoadingTests(unittest.TestCase):
             plan = write_plan(real_parent, self.base_payload())
             linked_parent = root / "linked"
             linked_parent.symlink_to(real_parent, target_is_directory=True)
-            with self.assertRaisesRegex(migration.MigrationPlanError, "directory link"):
-                migration.load_migration_plan(linked_parent / plan.name)
+            self.assertEqual(
+                migration.load_migration_plan(plan),
+                migration.load_migration_plan(linked_parent / plan.name),
+            )
 
     @unittest.skipUnless(hasattr(os, "symlink"), "symlinks are unavailable")
     def test_loader_does_not_follow_operation_parent_links(self):

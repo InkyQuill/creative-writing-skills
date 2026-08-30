@@ -93,6 +93,28 @@ class IndexTests(unittest.TestCase):
             self.assertLess(rendered.index("alpha.md"), rendered.index("zeta.md"))
             self.assertIn('number=1; title="Alpha"', rendered)
 
+    def test_side_story_index_records_placement_and_subtype(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            story = make_project(root)
+            (root / "story/side-stories/omake.md").write_text(
+                "---\nafter: story/chapters/ch-003.md\nsubtype: omake\ntitle: Tea\n---\nTea.\n",
+                encoding="utf-8",
+            )
+
+            plan = indexes.plan_reindex(story)
+            rendered = next(
+                change.after
+                for change in plan.changes
+                if change.path == "story/side-stories/_index.md"
+            )
+
+            assert rendered is not None
+            self.assertIn(
+                'after="story/chapters/ch-003.md"; subtype="omake"; title="Tea"',
+                rendered.decode("utf-8"),
+            )
+
     def test_archived_and_unmanaged_documents_are_excluded(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

@@ -44,6 +44,7 @@ class ScaffoldTests(unittest.TestCase):
         expected_indexes = {
             "story/_index.md",
             "story/chapters/_index.md",
+            "story/side-stories/_index.md",
             "work/_index.md",
             "work/drafts/_index.md",
             "work/plans/_index.md",
@@ -63,6 +64,7 @@ class ScaffoldTests(unittest.TestCase):
         self.assertEqual(expected_indexes, {path for path in rendered if path.endswith("/_index.md")})
         self.assertIn("Project instructions", manifest.body)
         self.assertIn("story/chapters/", manifest.body)
+        self.assertIn("story/side-stories/", manifest.body)
         self.assertNotIn("AGENTS.md", manifest.body)
         self.assertNotIn("CLAUDE.md", manifest.body)
 
@@ -95,6 +97,22 @@ class ScaffoldTests(unittest.TestCase):
 
 
 class MetadataValidationTests(unittest.TestCase):
+    def test_side_story_has_explicit_anchor_and_optional_slug_subtype(self):
+        valid = schema.validate_metadata(
+            "story/side-stories/omake-001.md",
+            document({"after": "story/chapters/chapter-003.md", "subtype": "omake"}),
+        )
+        invalid = schema.validate_metadata(
+            "story/side-stories/bonus.md",
+            document({"after": "work/drafts/chapter.md", "subtype": "Bonus Episode"}),
+        )
+
+        self.assertEqual([], valid)
+        self.assertEqual(
+            {schema.INVALID_SIDE_STORY_AFTER, schema.INVALID_SIDE_STORY_SUBTYPE},
+            {finding.code for finding in invalid},
+        )
+
     def test_valid_manifest_and_document_metadata_produce_no_findings(self):
         findings = schema.validate_metadata(
             "project.md",

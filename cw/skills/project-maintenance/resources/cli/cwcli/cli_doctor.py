@@ -8,13 +8,16 @@ import shlex
 import shutil
 import stat
 import subprocess
+import tempfile
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Mapping
 
 from . import __version__
 
 
 _TIMEOUT_SECONDS = 5.0
+_MANAGED_MARKER = "managed by creative-writing-skills cli-doctor"
 
 
 @dataclass(frozen=True)
@@ -87,8 +90,15 @@ class CliDoctorReport:
         return "\n".join(lines)
 
 
-def diagnose_cli(entrypoint: Path, python: Path) -> CliDoctorReport:
-    """Probe the supplied runtime without creating files or configuring a launcher."""
+def diagnose_cli(
+    entrypoint: Path,
+    python: Path,
+    *,
+    repair_launcher: bool = False,
+    environ: Mapping[str, str] | None = None,
+    home: Path | None = None,
+) -> CliDoctorReport:
+    """Probe the runtime and optionally install or refresh a managed launcher."""
 
     try:
         python = Path(python)
@@ -137,8 +147,26 @@ def diagnose_cli(entrypoint: Path, python: Path) -> CliDoctorReport:
         version=detected_version,
     )
 
+    launcher_action: str | None = None
+    launcher_problem: str | None = None
+    if repair_launcher and version_result.ok:
+        try:
+            launcher_path, launcher_action, launcher_problem = _ensure_launcher(
+                entrypoint,
+                python,
+                environ=os.environ if environ is None else environ,
+                home=Path.home() if home is None else Path(home),
+            )
+        except (OSError, TypeError, UnicodeError, ValueError) as error:
+            launcher_path = None
+            launcher_problem = f"automatic cw launcher setup failed safely: {error}"
+    else:
+        launcher_path = None
+
     try:
-        launcher_path = shutil.which("cw")
+        if launcher_path is None:
+            search_path = None if environ is None else environ.get("PATH")
+            launcher_path = shutil.which("cw", path=search_path)
     except (OSError, TypeError, UnicodeError, ValueError) as error:
         launcher_result = CliDiagnostic(
             name="launcher",
@@ -155,7 +183,10 @@ def diagnose_cli(entrypoint: Path, python: Path) -> CliDoctorReport:
             name="launcher",
             ok=False,
             required=False,
-            message="optional cw launcher was not found; keep using direct invocation",
+            message=(
+                launcher_problem
+                or "cw launcher was not found and no safe user-owned PATH directory was available"
+            ),
         )
     elif launcher_path is not None:
         launcher_result, launcher_version = _probe_version(
@@ -167,9 +198,27 @@ def diagnose_cli(entrypoint: Path, python: Path) -> CliDoctorReport:
                 ok=False,
                 required=False,
                 message=(
-                    f"optional launcher reports stale cw {launcher_version}; "
-                    f"bundled runtime is {__version__}; keep using direct invocation"
+                    f"launcher reports stale cw {launcher_version}; bundled runtime is {__version__}; "
+                    "automatic repair was not safe"
                 ),
+                command=launcher_result.command,
+                version=launcher_version,
+            )
+        elif launcher_result.ok and launcher_action is not None:
+            launcher_result = CliDiagnostic(
+                name="launcher",
+                ok=True,
+                required=False,
+                message=f"managed cw launcher {launcher_action} and verified",
+                command=launcher_result.command,
+                version=launcher_version,
+            )
+        elif launcher_result.ok and launcher_problem is not None:
+            launcher_result = CliDiagnostic(
+                name="launcher",
+                ok=True,
+                required=False,
+                message=f"{launcher_problem}; the existing launcher still reports the current version",
                 command=launcher_result.command,
                 version=launcher_version,
             )
@@ -181,6 +230,135 @@ def diagnose_cli(entrypoint: Path, python: Path) -> CliDoctorReport:
         version_agreement=version_result,
         launcher=launcher_result,
     )
+
+
+def _ensure_launcher(
+    entrypoint: Path,
+    python: Path,
+    *,
+    environ: Mapping[str, str],
+    home: Path,
+) -> tuple[str | None, str | None, str | None]:
+    path_value = environ.get("PATH", "")
+    discovered = shutil.which("cw", path=path_value)
+    desired = _launcher_bytes(entrypoint, python)
+    if discovered is not None:
+        target = Path(discovered)
+        if _safe_launcher_target(target, home, allow_missing=False):
+            current = target.read_bytes()
+            if current == desired:
+                return str(target), None, None
+            if _is_repairable_launcher(current):
+                _replace_launcher(target, desired)
+                return str(target), "refreshed", None
+        return None, None, "existing cw launcher is not a managed user-owned file; it was not overwritten"
+
+    name = "cw.cmd" if os.name == "nt" else "cw"
+    for raw_directory in path_value.split(os.pathsep):
+        if not raw_directory:
+            continue
+        directory = Path(raw_directory)
+        target = directory / name
+        if not _safe_launcher_target(target, home, allow_missing=True):
+            continue
+        if os.path.lexists(target):
+            try:
+                if not _is_repairable_launcher(target.read_bytes()):
+                    continue
+            except OSError:
+                continue
+        _replace_launcher(target, desired)
+        return str(target), "installed", None
+    return None, None, "cw launcher could not be installed: no safe user-owned directory is present in PATH"
+
+
+def _launcher_bytes(entrypoint: Path, python: Path) -> bytes:
+    if os.name == "nt":
+        command = subprocess.list2cmdline([str(python), str(entrypoint)])
+        return f"@rem {_MANAGED_MARKER}\r\n@{command} %*\r\n".encode("utf-8")
+    return (
+        f"#!/bin/sh\n# {_MANAGED_MARKER}\n"
+        f"exec {shlex.quote(str(python))} {shlex.quote(str(entrypoint))} \"$@\"\n"
+    ).encode("utf-8")
+
+
+def _is_managed_launcher(content: bytes) -> bool:
+    return content.startswith(
+        (
+            f"@rem {_MANAGED_MARKER}\r\n" if os.name == "nt" else f"#!/bin/sh\n# {_MANAGED_MARKER}\n"
+        ).encode("utf-8")
+    )
+
+
+def _is_repairable_launcher(content: bytes) -> bool:
+    if _is_managed_launcher(content):
+        return True
+    try:
+        text = content.decode("utf-8")
+    except UnicodeDecodeError:
+        return False
+    if os.name == "nt":
+        lines = text.splitlines()
+        return (
+            len(lines) == 1
+            and lines[0].startswith("@py -3 \"")
+            and lines[0].endswith("\\project-maintenance\\resources\\cli\\cw.py\" %*")
+        )
+    lines = text.splitlines()
+    if len(lines) != 2 or lines[0] != "#!/bin/sh" or not lines[1].startswith("exec "):
+        return False
+    try:
+        command = shlex.split(lines[1].removeprefix("exec "))
+    except ValueError:
+        return False
+    return (
+        len(command) == 3
+        and command[2] == "$@"
+        and command[1].endswith("/project-maintenance/resources/cli/cw.py")
+    )
+
+
+def _safe_launcher_target(target: Path, home: Path, *, allow_missing: bool) -> bool:
+    try:
+        home_real = home.resolve(strict=True)
+        directory_real = target.parent.resolve(strict=True)
+        directory_real.relative_to(home_real)
+        if target.parent.absolute() != directory_real:
+            return False
+        directory_stat = directory_real.stat()
+        if not stat.S_ISDIR(directory_stat.st_mode) or not os.access(directory_real, os.W_OK):
+            return False
+        if hasattr(os, "getuid") and directory_stat.st_uid != os.getuid():
+            return False
+        entry = target.lstat()
+    except FileNotFoundError:
+        return allow_missing and target.parent.is_dir()
+    except (OSError, RuntimeError, ValueError):
+        return False
+    if not stat.S_ISREG(entry.st_mode):
+        return False
+    return not hasattr(os, "getuid") or entry.st_uid == os.getuid()
+
+
+def _replace_launcher(target: Path, content: bytes) -> None:
+    descriptor, temporary_name = tempfile.mkstemp(
+        prefix=".cw-launcher-", suffix=".tmp", dir=target.parent
+    )
+    temporary = Path(temporary_name)
+    try:
+        with os.fdopen(descriptor, "wb") as stream:
+            descriptor = -1
+            stream.write(content)
+            stream.flush()
+            os.fsync(stream.fileno())
+        if os.name != "nt":
+            temporary.chmod(0o700)
+        os.replace(temporary, target)
+    finally:
+        if descriptor >= 0:
+            os.close(descriptor)
+        if temporary.exists():
+            temporary.unlink()
 
 
 def _diagnose_python(python: Path) -> CliDiagnostic:

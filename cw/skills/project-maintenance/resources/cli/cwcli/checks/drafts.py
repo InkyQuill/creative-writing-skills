@@ -92,7 +92,7 @@ def check_drafts(project: Project, store: TransactionStore) -> list[Finding]:
             findings.append(
                 _warning(
                     INVALID_TARGET,
-                    "draft target must be story/chapters/<name>.md",
+                    "draft target must be story/chapters/<name>.md or story/side-stories/<name>.md",
                     relative,
                 )
             )
@@ -205,7 +205,7 @@ def _valid_target(value: str) -> bool:
     return (
         "\\" not in value
         and path.as_posix() == value
-        and path.parent.as_posix() == "story/chapters"
+        and path.parent.as_posix() in {"story/chapters", "story/side-stories"}
         and path.name != "_index.md"
         and path.suffix.casefold() == ".md"
     )

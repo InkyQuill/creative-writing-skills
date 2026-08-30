@@ -1,30 +1,37 @@
-# Optional launcher setup
+# Managed launcher setup
 
-The launcher is user-scoped convenience, not a prerequisite. Keep using the
-already resolved direct Python command for the current task while discussing
-setup. Do not install third-party packages or copy `cw.py` into the story
-project.
+The launcher is user-scoped convenience, not a runtime prerequisite. After the
+required probes pass, `cw cli-doctor` tries to install or refresh it. Keep using
+the resolved direct Python command if that attempt cannot be completed. Do not
+install third-party packages or copy `cw.py` into the story project.
 
-First identify the operating system, the user's actual shell, the installed
-`project-maintenance` skill path, and a user-owned launcher directory. Build a
-small wrapper that invokes `/project-maintenance`'s exact bundled
-`resources/cli/cw.py` with Python 3.10 or newer and forwards every argument.
-Use a user-owned executable wrapper in an existing user PATH directory; do not
-modify system directories.
+The command identifies the operating system, installed `project-maintenance`
+skill path, and an existing user-owned launcher directory already present in
+PATH. It builds a small managed wrapper that invokes `/project-maintenance`'s
+exact bundled `resources/cli/cw.py` with the verified Python 3.10+ interpreter
+and forwards every argument. It never creates or modifies system directories.
 
-Before any write, show a complete preview containing:
+Automatic setup is allowed only when all of these conditions hold:
 
-- the exact launcher path and full wrapper contents;
-- the executable mode `0700` and the exact `chmod 700 <launcher>` command;
-- any PATH or shell-profile line to add, including the exact profile file;
-- the verification command `cw cli-doctor --format json`;
-- how to remove every proposed change.
+- the launcher's parent is an existing, writable, user-owned directory beneath
+  the user's home and is already in PATH;
+- the destination is absent or is a regular file carrying the cli-doctor
+  managed marker;
+- the generated wrapper contains the current absolute interpreter and bundled
+  entrypoint paths;
+- POSIX wrappers are installed atomically with executable mode `0700`.
 
-Ask for explicit approval or permission for that preview. Approval for direct
-CLI work is not approval for a persistent launcher, PATH edit, or profile edit.
-Never silently change a shell profile or PATH. If approval is absent, stop the
-setup and retain direct invocation. After approval, create the exact previewed
-wrapper and set executable mode `0700` with the previewed `chmod` command.
+An absent managed launcher is created. An existing managed launcher is compared
+byte-for-byte and atomically replaced when its interpreter or plugin entrypoint
+path changed. This is what repairs `cw` after a plugin update moves the bundled
+files. The exact legacy wrapper shape documented below may be adopted once and
+rewritten with the managed marker. Any other unmanaged `cw`, symlink, non-user
+file, or system location is reported and left untouched.
+
+Never silently change a shell profile or PATH. If no safe directory is already
+available, report that automatic installation was not possible and retain the
+direct invocation. Adding a new PATH entry or editing a shell profile remains a
+separate author-approved action.
 
 For Linux and macOS, a user-owned executable wrapper may call:
 
@@ -39,7 +46,6 @@ For Windows, a user-owned `cw.cmd` may call:
 @py -3 "C:\absolute\project-maintenance\resources\cli\cw.py" %*
 ```
 
-After an approved change, run the launcher diagnosis and compare its reported
-version with the direct entrypoint. If it is missing or stale, keep the direct
-command as the working route and report the launcher problem; do not make
-further persistent changes without a new preview and approval.
+After creation or refresh, the command invokes the launcher and compares its
+reported version with the direct entrypoint. If verification fails, keep the
+direct command as the working route and report the launcher problem.

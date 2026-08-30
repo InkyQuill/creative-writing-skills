@@ -82,6 +82,25 @@ class StructureCheckTests(unittest.TestCase):
             )
             self.assertTrue(all(finding.severity == "error" for finding in findings if finding.code == "CW-STRUCT-030"))
 
+    def test_side_story_anchor_must_exist_and_must_not_cycle(self):
+        directory, root = self.make_project()
+        with directory:
+            (root / "story/side-stories/missing.md").write_text(
+                "---\nafter: story/chapters/missing.md\n---\nBonus.\n", encoding="utf-8"
+            )
+            (root / "story/side-stories/a.md").write_text(
+                "---\nafter: story/side-stories/b.md\n---\nA.\n", encoding="utf-8"
+            )
+            (root / "story/side-stories/b.md").write_text(
+                "---\nafter: story/side-stories/a.md\n---\nB.\n", encoding="utf-8"
+            )
+
+            findings = self.findings_for(root)
+            by_code = {finding.code for finding in findings}
+
+            self.assertIn(structure.MISSING_SIDE_STORY_ANCHOR, by_code)
+            self.assertIn(structure.CYCLIC_SIDE_STORY_ANCHOR, by_code)
+
     def test_malformed_frontmatter_reports_its_path_and_does_not_stop_other_checks(self):
         directory, root = self.make_project()
         with directory:

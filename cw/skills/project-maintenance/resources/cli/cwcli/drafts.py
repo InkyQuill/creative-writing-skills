@@ -32,6 +32,7 @@ _AI_TAG = re.compile(r"</?AI>")
 _ACCEPT_INDEXES = (
     "story/_index.md",
     "story/chapters/_index.md",
+    "story/side-stories/_index.md",
     "work/_index.md",
     "work/archive/_index.md",
     "work/drafts/_index.md",
@@ -747,11 +748,14 @@ def _validate_target_path(path: str) -> None:
     pure = PurePosixPath(path)
     if (
         str(pure) != path
-        or pure.parent != PurePosixPath("story/chapters")
+        or pure.parent
+        not in {PurePosixPath("story/chapters"), PurePosixPath("story/side-stories")}
         or pure.name == "_index.md"
         or pure.suffix.casefold() != ".md"
     ):
-        raise DraftError("draft target must be story/chapters/<name>.md")
+        raise DraftError(
+            "draft target must be story/chapters/<name>.md or story/side-stories/<name>.md"
+        )
 
 
 def _validate_draft_path(path: str) -> None:

@@ -30,7 +30,7 @@ _KINDS = frozenset({"draft", "chapter", "kb"})
 _ACTIVE_PLAN = frozenset({"active", "planned", "ready", "review", "working"})
 _ACTIVE_ISSUE = frozenset({"active", "blocked", "open", "review", "working"})
 _SELECTABLE_KINDS = frozenset(
-    {"chapter", "work-artifact", "kb-content", "continuity-record", "continuity-scene", "vocabulary"}
+    {"chapter", "side-story", "work-artifact", "kb-content", "continuity-record", "continuity-scene", "vocabulary"}
 )
 _DIRECT_KEYS = ("related", "context", "links", "sources", "subject")
 _CONTINUITY = (
@@ -203,7 +203,7 @@ def plan_context(project: Project, kind: str, path: str, role: str) -> ContextPl
                 warnings=warnings,
                 catalog=catalog,
                 project_relative=True,
-                expected_kind="chapter",
+                expected_kind=("chapter", "side-story"),
             )
             if target is not None:
                 anchors.add(target)
@@ -253,7 +253,7 @@ def plan_context(project: Project, kind: str, path: str, role: str) -> ContextPl
 
     chapter = target if kind == "draft" else subject if kind == "chapter" else None
     if chapter is not None:
-        for neighbor in _chapter_neighbors(project, chapter, catalog, unresolved, warnings):
+        for neighbor in _manuscript_neighbors(project, chapter, catalog, unresolved, warnings):
             _add_selected_path(
                 project, neighbor, suggested, catalog=catalog,
                 unresolved=unresolved, warnings=warnings,
@@ -1463,12 +1463,14 @@ def _validate_role(project: Project, role: str) -> str | None:
 
 def _validate_subject(project: Project, kind: str, value: str) -> str:
     relative = _normalize_relative(value)
-    expected = {"draft": "work/drafts", "chapter": "story/chapters", "kb": "kb"}[kind]
+    expected = {"draft": "work/drafts", "chapter": "story", "kb": "kb"}[kind]
     inferred = allowed_document_kind(relative)
     if kind == "draft" and not (PurePosixPath(relative).parent.as_posix() == expected and inferred == "work-artifact"):
         raise ContextPlanError("draft context subject must be a direct work/drafts Markdown file")
-    if kind == "chapter" and inferred != "chapter":
-        raise ContextPlanError("chapter context subject must be a direct story/chapters Markdown file")
+    if kind == "chapter" and inferred not in {"chapter", "side-story"}:
+        raise ContextPlanError(
+            "chapter context subject must be a direct chapter or side-story Markdown file"
+        )
     if kind == "kb" and inferred not in {"kb-content", "continuity-record", "continuity-scene", "vocabulary"}:
         raise ContextPlanError("kb context subject must be an authored KB Markdown file")
     if not _safe_regular(project, relative):
@@ -1501,7 +1503,7 @@ def _add_reference(
     warnings: "_OrderedStrings",
     catalog: "_PathCatalog",
     project_relative: bool,
-    expected_kind: str | None = None,
+    expected_kind: str | tuple[str, ...] | None = None,
 ) -> str | None:
     try:
         relative = _resolve_reference(
@@ -1520,7 +1522,8 @@ def _add_reference(
         unresolved.add(relative)
         warnings.add(f"explicit reference is outside managed context roots: {relative}")
         return None
-    if expected_kind is not None and allowed_document_kind(relative) != expected_kind:
+    expected_kinds = (expected_kind,) if isinstance(expected_kind, str) else expected_kind
+    if expected_kinds is not None and allowed_document_kind(relative) not in expected_kinds:
         unresolved.add(relative)
         warnings.add(f"explicit reference has the wrong document kind: {relative}")
         return None
@@ -1591,7 +1594,7 @@ def _markdown_destination(raw: str) -> str:
     return destination
 
 
-def _chapter_neighbors(
+def _manuscript_neighbors(
     project: Project,
     chapter: str,
     catalog: "_PathCatalog",
@@ -1599,41 +1602,80 @@ def _chapter_neighbors(
     warnings: "_OrderedStrings",
 ) -> tuple[str, ...]:
     numbered: dict[int, list[str]] = {}
-    directory = project.root / "story/chapters"
-    if not directory.is_dir() or directory.is_symlink():
-        return ()
-    for path in sorted(directory.iterdir(), key=lambda item: _identity(item.name)):
-        relative = f"story/chapters/{path.name}"
-        if path.name == "_index.md" or path.suffix.casefold() != ".md" or not _safe_regular(project, relative):
+    side_stories: dict[str, str] = {}
+    for directory_id, kind in (
+        ("story/chapters", "chapter"),
+        ("story/side-stories", "side-story"),
+    ):
+        directory = project.root / directory_id
+        if not directory.is_dir() or directory.is_symlink():
             continue
-        if catalog.collision(relative) is not None:
-            _record_collision(relative, catalog, unresolved, warnings)
-            continue
-        try:
-            number = _read_document(path).metadata.get("number")
-        except (OSError, UnicodeError, ValueError) as error:
-            warnings.add(f"cannot inspect chapter order for {relative}: {error}")
-            continue
-        if isinstance(number, int) and not isinstance(number, bool) and number > 0:
-            numbered.setdefault(number, []).append(relative)
+        for path in sorted(directory.iterdir(), key=lambda item: _identity(item.name)):
+            relative = f"{directory_id}/{path.name}"
+            if path.name == "_index.md" or path.suffix.casefold() != ".md" or not _safe_regular(project, relative):
+                continue
+            if catalog.collision(relative) is not None:
+                _record_collision(relative, catalog, unresolved, warnings)
+                continue
+            try:
+                metadata = _read_document(path).metadata
+            except (OSError, UnicodeError, ValueError) as error:
+                warnings.add(f"cannot inspect manuscript order for {relative}: {error}")
+                continue
+            if kind == "chapter":
+                number = metadata.get("number")
+                if isinstance(number, int) and not isinstance(number, bool) and number > 0:
+                    numbered.setdefault(number, []).append(relative)
+            else:
+                after = metadata.get("after")
+                if isinstance(after, str):
+                    side_stories[relative] = after
 
     duplicates = {number: paths for number, paths in numbered.items() if len(paths) > 1}
     for number, paths in sorted(duplicates.items()):
         unresolved.add(f"chapter-number:{number} ({', '.join(sorted(paths, key=_identity))})")
 
-    subject_number = next((number for number, paths in numbered.items() if chapter in paths), None)
-    if subject_number is None:
-        unresolved.add(f"chapter-number:{chapter}")
+    chapters = [paths[0] for _number, paths in sorted(numbered.items()) if len(paths) == 1]
+    children: dict[str, list[str]] = {}
+    manuscript = set(chapters) | set(side_stories)
+    for relative, after in side_stories.items():
+        if after not in manuscript or after == relative:
+            unresolved.add(f"side-story-after:{relative} -> {after}")
+            continue
+        children.setdefault(after, []).append(relative)
+
+    ordered: list[str] = []
+    emitted: set[str] = set()
+
+    def emit(relative: str, trail: frozenset[str]) -> None:
+        if relative in trail:
+            unresolved.add(f"side-story-cycle:{relative}")
+            return
+        if relative in emitted:
+            return
+        emitted.add(relative)
+        ordered.append(relative)
+        next_trail = trail | {relative}
+        for child in sorted(children.get(relative, ()), key=_identity):
+            emit(child, next_trail)
+
+    for relative in chapters:
+        emit(relative, frozenset())
+    for relative in sorted(set(side_stories) - emitted, key=_identity):
+        unresolved.add(f"side-story-placement:{relative}")
+
+    if chapter not in ordered:
+        if chapter.startswith("story/chapters/"):
+            unresolved.add(f"chapter-number:{chapter}")
+        else:
+            unresolved.add(f"side-story-placement:{chapter}")
         return ()
-    if subject_number in duplicates:
-        return ()
-    ordered = sorted(numbered.items())
-    index = next(index for index, item in enumerate(ordered) if item[0] == subject_number)
+    index = ordered.index(chapter)
     neighbors: list[str] = []
-    if index > 0 and len(ordered[index - 1][1]) == 1:
-        neighbors.append(ordered[index - 1][1][0])
-    if index + 1 < len(ordered) and len(ordered[index + 1][1]) == 1:
-        neighbors.append(ordered[index + 1][1][0])
+    if index > 0:
+        neighbors.append(ordered[index - 1])
+    if index + 1 < len(ordered):
+        neighbors.append(ordered[index + 1])
     return tuple(neighbors)
 
 

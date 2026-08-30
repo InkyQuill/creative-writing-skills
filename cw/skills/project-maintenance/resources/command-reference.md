@@ -3,7 +3,8 @@
 Resolve the installed `project-maintenance` skill and invoke
 `resources/cli/cw.py` directly with Python. Run from the relevant project path
 or pass the project path where the command accepts one. A user-scoped `cw`
-launcher is optional convenience, never a prerequisite.
+launcher is convenience, never a runtime prerequisite. `cw cli-doctor` tries
+to install or refresh its managed wrapper in a safe user-owned PATH directory.
 
 Use `--format json` when structured output helps. Transactional previews do
 not modify the project. Transactional mutations preview by default and write
@@ -56,9 +57,22 @@ migrate --preview <plan.json> --expect-plan-hash <hash>
 migrate --apply <plan.json> --expect-plan-hash <hash>
 ```
 
+Migration inventories the entire legacy `inspiration/` tree, not only
+Markdown. Every regular file is represented by an in-place `preserve`
+operation and remains byte-for-byte unchanged: Pocket Editor binders and
+review sidecars, images, DOC/DOCX/RTF and other documents, hidden metadata, and
+unknown service files are all opaque author material. Symlinks, special files,
+and nested projects are not followed and appear as unresolved safety entries.
+
 New projects receive `prose-profile: general`. Existing schema-v1 projects
 without the optional field behave the same way, and valid custom profile slugs
 are preserved by migration, rebase, and exact document edits.
+
+Draft targets may be numbered chapters under `story/chapters/` or ordered side
+stories under `story/side-stories/`. A side story requires an `after` path to an
+accepted manuscript document and may declare a lower-case `subtype`. Use
+`context chapter` for either accepted manuscript role; it follows their
+aggregate reading order when selecting neighbors.
 
 Preview every lifecycle mutation. Draft acceptance changes the story target;
 it does not itself write material into the KB. After acceptance, re-read the

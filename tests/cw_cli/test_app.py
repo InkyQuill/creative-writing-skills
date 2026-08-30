@@ -35,7 +35,7 @@ class AppTests(unittest.TestCase):
         stdout = io.StringIO()
         status = app.run(["--version", "--format", "json"], cwd=Path.cwd(), stdout=stdout, stderr=io.StringIO())
         self.assertEqual(status, 0)
-        self.assertEqual({"name": "cw", "version": "0.1.0"}, json.loads(stdout.getvalue()))
+        self.assertEqual({"name": "cw", "version": "0.2.0"}, json.loads(stdout.getvalue()))
 
     def test_strict_warning_returns_one_without_changing_severity(self):
         report = findings.Report(

@@ -92,6 +92,25 @@ class ContextPlanTests(unittest.TestCase):
         self.assertNotIn("story/chapters/first.md", duplicate.suggested)
         self.assertNotIn("story/chapters/last.md", duplicate.suggested)
 
+    def test_side_story_participates_in_aggregate_reading_order(self):
+        self.write("story/chapters/three.md", "---\nnumber: 3\n---\nThree.\n")
+        self.write("story/chapters/four.md", "---\nnumber: 4\n---\nFour.\n")
+        self.write(
+            "story/side-stories/omake.md",
+            "---\nafter: story/chapters/three.md\nsubtype: omake\n---\nTea.\n",
+        )
+
+        chapter = self.plan("chapter", "story/chapters/three.md")
+        side_story = self.plan("chapter", "story/side-stories/omake.md")
+        following = self.plan("chapter", "story/chapters/four.md")
+
+        self.assertEqual(("story/side-stories/omake.md",), chapter.suggested[:1])
+        self.assertEqual(
+            ("story/chapters/three.md", "story/chapters/four.md"),
+            side_story.suggested[:2],
+        )
+        self.assertEqual(("story/side-stories/omake.md",), following.suggested[:1])
+
     def test_kb_backlinks_deduplicate_by_portable_identity(self):
         self.write("kb/world/place.md", "---\ntitle: Place\n---\n")
         self.write(

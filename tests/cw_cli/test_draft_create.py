@@ -64,6 +64,17 @@ class DraftCreateTests(unittest.TestCase):
         self.assertFalse((root / "story/chapters/ch-005.md").exists())
         self.assertFalse(store.root.exists())
 
+    def test_new_draft_can_target_a_side_story(self):
+        _root, model, store = self.make_project()
+
+        plan = drafts.plan_create_draft(
+            model, "story/side-stories/omake-001.md", None, store
+        )
+        created = documents.parse_document(plan.changes[0].after)
+
+        self.assertEqual("work/drafts/omake-001.md", plan.changes[0].path)
+        self.assertEqual("story/side-stories/omake-001.md", created.metadata["target"])
+
     def test_rejects_outside_duplicate_and_colliding_draft_paths(self):
         root, model, store = self.make_project()
         with self.assertRaisesRegex(drafts.DraftError, "story/chapters"):

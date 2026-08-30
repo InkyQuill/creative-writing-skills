@@ -29,7 +29,7 @@ _MOVE_OPERATION_KEYS = frozenset({"source", "destination", "action"})
 _MERGE_OPERATION_KEYS = frozenset({"sources", "destination", "action", "content"})
 _UNRESOLVED_KEYS = frozenset({"sources", "destination", "reason"})
 _A_ROOTS = frozenset(
-    {"chapters", "drafts", "characters", "worldbuilding", "samples", "style", "styles", "plot"}
+    {"chapters", "side-stories", "drafts", "characters", "worldbuilding", "samples", "style", "styles", "plot"}
 )
 _CONTINUITY_NAMES = frozenset({"timeline.md", "state.md", "promises.md", "questions.md"})
 _WINDOWS_RESERVED_NAMES = frozenset(
@@ -144,18 +144,34 @@ def plan_migration(root: Path) -> MigrationPlan:
     root = Path(root).absolute()
     _require_real_directory(root, "migration root")
     paths = _walk_markdown(root)
-    path_set = set(paths)
+    inspiration_paths, unsafe_inspiration_entries = _walk_inspiration(root)
+    semantic_paths = tuple(path for path in paths if not _is_inspiration_path(path))
+    path_set = set(paths) | set(inspiration_paths)
     source_schema = _source_schema(root)
     if source_schema > TARGET_SCHEMA:
         raise MigrationPlanError(f"cannot plan a downgrade from schema {source_schema}")
 
-    layout_a_evidence = tuple(path for path in paths if _is_layout_a(path))
-    layout_b_evidence = tuple(path for path in paths if _is_layout_b(path))
+    layout_a_evidence = tuple(path for path in semantic_paths if _is_layout_a(path))
+    layout_b_evidence = tuple(path for path in semantic_paths if _is_layout_b(path))
     mixed_layout = bool(layout_a_evidence and layout_b_evidence)
 
     operations: list[MigrationOperation] = []
-    unresolved: list[dict[str, object]] = []
+    unresolved: list[dict[str, object]] = [
+        _unresolved((path,), None, "unsafe-inspiration-entry")
+        for path in unsafe_inspiration_entries
+    ]
     handled: set[str] = set()
+
+    for path in inspiration_paths:
+        try:
+            _source_path(path, "inspiration source")
+            _strict_path(path, "portable inspiration path")
+        except MigrationPlanError as error:
+            unresolved.append(
+                _unresolved((path,), None, f"nonportable-inspiration-path: {error}")
+            )
+            continue
+        operations.append(MigrationOperation(path, path, "preserve"))
 
     if "project.md" in path_set and source_schema == 0:
         try:
@@ -169,12 +185,16 @@ def plan_migration(root: Path) -> MigrationPlan:
             )
             handled.add("project.md")
 
-    instruction_paths = tuple(path for path in paths if _is_platform_instruction(path))
+    instruction_paths = tuple(path for path in semantic_paths if _is_platform_instruction(path))
     for path in instruction_paths:
         unresolved.append(_unresolved((path,), "project.md", "project-instructions"))
         handled.add(path)
 
-    domain_vocab = tuple(path for path in paths if path != "kb/vocab.md" and _basename(path) == "vocab.md")
+    domain_vocab = tuple(
+        path
+        for path in semantic_paths
+        if path != "kb/vocab.md" and _basename(path) == "vocab.md"
+    )
     if domain_vocab:
         vocab_sources = domain_vocab + (("kb/vocab.md",) if "kb/vocab.md" in path_set else ())
         unresolved.append(_unresolved(vocab_sources, "kb/vocab.md", "domain-vocab-merge"))
@@ -184,7 +204,7 @@ def plan_migration(root: Path) -> MigrationPlan:
 
     timeline_sources = tuple(
         path
-        for path in paths
+        for path in semantic_paths
         if (
             path in {"plot/timeline.md", "kb/timeline.md", "kb/continuity/timeline.md"}
             or _parts(path)[:2] == ("kb", "timeline")
@@ -200,7 +220,7 @@ def plan_migration(root: Path) -> MigrationPlan:
         unresolved.append(_unresolved(mixed_sources, None, "mixed-layout"))
         handled.update(mixed_sources)
 
-    for path in paths:
+    for path in semantic_paths:
         if path in handled or _basename(path) == "_index.md":
             continue
         destination = _canonical_destination(path, timeline_count=len(timeline_sources))
@@ -262,7 +282,7 @@ def plan_migration(root: Path) -> MigrationPlan:
 def load_migration_plan(path: Path, root: Path | None = None) -> MigrationPlan:
     """Load a plan, checking filesystem boundaries only against an explicit root."""
 
-    path = Path(path).absolute()
+    path = _canonical_plan_path(Path(path))
     migration_root = Path(root).absolute() if root is not None else None
     try:
         raw = _read_regular_file_no_follow(path, "migration plan")
@@ -391,6 +411,19 @@ def load_migration_plan(path: Path, root: Path | None = None) -> MigrationPlan:
         unresolved=tuple(unresolved),
         plan_hash=stored_hash,
     )
+
+
+def _canonical_plan_path(path: Path) -> Path:
+    """Resolve directory aliases while retaining no-follow checks for the plan file."""
+
+    absolute = path.absolute()
+    try:
+        parent = absolute.parent.resolve(strict=True)
+    except (OSError, RuntimeError) as error:
+        raise MigrationPlanError(
+            f"migration plan parent cannot be resolved safely: {absolute.parent}"
+        ) from error
+    return parent / absolute.name
 
 
 def plan_apply_migration(
@@ -655,8 +688,13 @@ def _validate_apply_plan(plan: MigrationPlan, expected_hash: str) -> None:
                 raise MigrationPlanError(
                     "merged project.md content must declare schema-version 1"
                 )
+        inspiration_preserve = (
+            operation.action == "preserve"
+            and operation.source == operation.destination
+            and _is_inspiration_path(operation.destination)
+        )
         if (
-            kind is None
+            (kind is None and not inspiration_preserve)
             or kind == "generated-index"
             or (kind == "manifest" and not (root_manifest or merge_manifest))
         ):
@@ -792,6 +830,61 @@ def _walk_markdown(root: Path) -> tuple[str, ...]:
     return tuple(results)
 
 
+def _walk_inspiration(root: Path) -> tuple[tuple[str, ...], tuple[str, ...]]:
+    """List regular inspiration files and unsafe entries without following links."""
+
+    inspiration = root / "inspiration"
+    try:
+        root_stat = inspiration.lstat()
+    except FileNotFoundError:
+        return (), ()
+    except OSError as error:
+        raise MigrationPlanError("cannot inspect migration source inspiration") from error
+    if stat.S_ISLNK(root_stat.st_mode) or not stat.S_ISDIR(root_stat.st_mode):
+        return (), ("inspiration",)
+    if _directory_has_manifest(inspiration):
+        return (), ("inspiration",)
+
+    files: list[str] = []
+    unsafe: list[str] = []
+
+    def visit(directory: Path, prefix: tuple[str, ...]) -> None:
+        try:
+            with os.scandir(directory) as scanner:
+                entries = sorted(scanner, key=lambda entry: _path_sort_key(entry.name))
+        except OSError as error:
+            relative = PurePosixPath(*prefix).as_posix()
+            raise MigrationPlanError(f"cannot inspect migration source {relative}") from error
+        for entry in entries:
+            relative_parts = (*prefix, entry.name)
+            relative = PurePosixPath(*relative_parts).as_posix()
+            try:
+                entry_stat = entry.stat(follow_symlinks=False)
+            except OSError as error:
+                raise MigrationPlanError(f"cannot inspect migration source {relative}") from error
+            if stat.S_ISLNK(entry_stat.st_mode):
+                unsafe.append(relative)
+            elif stat.S_ISDIR(entry_stat.st_mode):
+                if _directory_has_manifest(Path(entry.path)):
+                    unsafe.append(relative)
+                    continue
+                visit(Path(entry.path), relative_parts)
+            elif stat.S_ISREG(entry_stat.st_mode):
+                files.append(relative)
+            else:
+                unsafe.append(relative)
+
+    visit(inspiration, ("inspiration",))
+    files.sort(key=_path_sort_key)
+    unsafe.sort(key=_path_sort_key)
+    return tuple(files), tuple(unsafe)
+
+
+def _is_inspiration_path(path: str) -> bool:
+    parts = _parts(path)
+    return len(parts) >= 2 and parts[0] == "inspiration"
+
+
 def _directory_has_manifest(directory: Path) -> bool:
     manifest = directory / "project.md"
     try:
@@ -812,6 +905,8 @@ def _canonical_destination(path: str, *, timeline_count: int) -> str | None:
     rest = parts[1:]
     if first == "chapters" and rest:
         return _direct_destination(rest, "story/chapters")
+    if first == "side-stories" and rest:
+        return _direct_destination(rest, "story/side-stories")
     if first == "drafts" and rest:
         return _direct_destination(rest, "work/drafts")
     if first == "characters" and rest:
@@ -856,6 +951,7 @@ def _is_canonical(path: str) -> bool:
         return True
     if len(parts) == 3 and "/".join(parts[:2]) in {
         "story/chapters",
+        "story/side-stories",
         "work/drafts",
         "work/plans",
         "work/reviews",

@@ -3,8 +3,9 @@
 ## Establish the mechanical floor
 
 1. Resolve the nearest `project.md` from the material the user placed in scope.
-2. Run the bundled `resources/cli/cw.py` directly with Python; do not make
-   launcher installation a prerequisite.
+2. Run the bundled `resources/cli/cw.py` directly with Python; `cli-doctor`
+   will also try to install or refresh its managed launcher without making that
+   launcher a prerequisite.
 3. Run `check all` or the checker relevant to the task and inspect its
    structured findings.
 4. Preview each unambiguous repair, confirm the diff stays in scope, then use
@@ -37,6 +38,11 @@ retcon, uncertain source tags, or uncertain character and reader knowledge
 boundaries. Use `draft abandon` for a rejected draft so it moves to archive
 without becoming canon.
 
+For bonus prose, target `story/side-stories/<name>.md` and retain required
+`after: <accepted-manuscript-path>` placement metadata plus any optional
+lower-case `subtype`. Review the aggregate neighbors with `context chapter`.
+Do not assign the side story a chapter number or renumber main chapters.
+
 ## Migrate an older layout
 
 Run `migrate --plan --format json` from the legacy project and save its output
@@ -51,6 +57,7 @@ and canonical schema-v1 destinations:
 ```json
 {"source": "chapters/one.md", "destination": "story/chapters/one.md", "action": "move"}
 {"source": "story/chapters/one.md", "destination": "story/chapters/one.md", "action": "preserve"}
+{"source": "side-stories/omake.md", "destination": "story/side-stories/omake.md", "action": "move"}
 {"sources": ["kb/timeline/a.md", "kb/timeline/b.md"], "destination": "kb/continuity/timeline.md", "action": "merge", "content": "# Reviewed merged content\n"}
 ```
 
@@ -59,11 +66,19 @@ source and destination. A `merge` has a non-empty unique `sources` list and
 the exact reviewed UTF-8 output in `content`; it does not ask the CLI to invent
 the merge.
 
+The planner treats legacy `inspiration/` as one opaque author-owned corpus. It
+adds an in-place `preserve` operation for every regular file, including Pocket
+Editor binders and review sidecars, images, documents, hidden metadata, and
+unknown binary files. Do not remove those operations or reinterpret the files
+as Markdown roles. Inspect any `unsafe-inspiration-entry` separately; the CLI
+does not follow links, special entries, or nested project boundaries.
+
 An `unknown-role` item with no canonical destination may intentionally remain
 unmanaged. In that branch, remove the item from `unresolved` and add no
-operation; leave its source file untouched. For an unmanaged path, do not
-invent a `preserve` operation: migration validation accepts `preserve` only at
-a canonical schema-v1 destination.
+operation; leave its source file untouched. For another unmanaged path, do not
+invent a `preserve` operation: migration validation accepts it only at a
+canonical schema-v1 destination or for an in-place file below the recognized
+`inspiration/` corpus.
 
 Assign every managed source once, keep destinations unique, preserve unknown
 files, and never reinterpret ambiguous material as canon automatically. Do not

@@ -255,7 +255,8 @@ def _render_manifest(title: str, language: str) -> bytes:
     body = (
         f"# {title}\n\n"
         "## Project instructions\n\n"
-        "Keep manuscript prose in `story/chapters/`. Keep plans, drafts, reviews, and brainstorming "
+        "Keep numbered manuscript prose in `story/chapters/` and ordered bonus prose in "
+        "`story/side-stories/`. Keep plans, drafts, reviews, and brainstorming "
         "in `work/`. Record durable story knowledge in `kb/`, and keep project-specific conventions "
         "and decisions in this manifest.\n"
     )

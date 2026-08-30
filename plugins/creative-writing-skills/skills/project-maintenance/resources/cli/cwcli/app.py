@@ -229,7 +229,7 @@ def run(argv: list[str], *, cwd: Path, stdout: TextIO, stderr: TextIO) -> int:
 
     if args.command == "cli-doctor":
         entrypoint = Path(__file__).absolute().parent.parent / "cw.py"
-        result = diagnose_cli(entrypoint, Path(sys.executable))
+        result = diagnose_cli(entrypoint, Path(sys.executable), repair_launcher=True)
         if args.format == "json":
             _write_command_data(result.as_dict(), output_format="json", stdout=stdout)
         else:

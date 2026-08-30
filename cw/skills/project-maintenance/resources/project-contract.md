@@ -9,6 +9,15 @@ migration, repair, and reindexing must preserve them. Markdown outside managed
 roots may produce an informational finding, but Git is optional and the CLI
 does not require a repository to provide transaction history or undo.
 
+Legacy `inspiration/` is a recognized author-owned migration corpus, not a
+managed Markdown root. Migration inventories every regular file below it and
+preserves the complete relative tree and exact bytes in place. This includes
+Pocket Editor `.pocket-editor.json` binders and `*.review.json` sidecars,
+images, office documents, RTF, hidden metadata, and unknown service files. The
+CLI does not parse, reindex, rename, or infer meaning from this material.
+Links, special filesystem entries, and nested project boundaries are reported
+for review and never followed.
+
 ## Manifest language and prose profile
 
 Schema v1 requires a non-empty `language` tag and accepts any project language.
@@ -40,6 +49,21 @@ maintenance: hashes, tags, indexes, base revisions, repair-command selection
 and execution, and runtime setup. The CLI performs only the deterministic
 mechanics requested by the agent. Never ask a nontechnical author to edit an
 index, calculate a hash, copy a tag, or maintain a base revision.
+
+## Manuscript roles and reading order
+
+Numbered main chapters are direct Markdown children of `story/chapters/` and
+use unique positive integer `number` metadata. Accepted bonus prose is a direct
+Markdown child of `story/side-stories/`; it uses required `after` metadata that
+names an accepted chapter or side story, plus an optional lower-case `subtype`
+such as `omake` or `interlude`. Side stories do not take chapter numbers.
+
+The aggregate reading order starts with chapters ordered by `number`, then
+places each side story after its durable `after` anchor. Multiple
+side stories sharing an anchor are ordered by portable path identity. Missing
+or cyclic anchors are structural errors. Both manuscript roles are valid draft
+targets, accepted prose inputs, prose-check inputs, and `context chapter`
+subjects. Their separate generated indexes remain derived state.
 
 Contract drift that can be repaired without guessing is an agent task. An
 unknown schema, unsafe path, changed precondition, ambiguous anchor, or

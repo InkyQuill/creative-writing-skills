@@ -15,7 +15,7 @@ jobs:
   validate:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Check out licensed vendor source
         env:
@@ -39,7 +39,7 @@ jobs:
         run: python3 scripts/sync_claude_distribution.py --check
 
       - name: Setup Node.js for Claude validation
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: "20"
 
@@ -65,13 +65,13 @@ jobs:
     needs: validate
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Build 31 Claude.ai skill packages
         run: python3 scripts/create_skill_zips.py
 
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           generate_release_notes: true
           fail_on_unmatched_files: true

@@ -75,6 +75,55 @@ class MigrationApplyTests(unittest.TestCase):
         for relative in ("story", "work", "kb"):
             self.assertFalse((self.root / relative).exists())
 
+    def test_inspiration_assets_and_pocket_editor_sidecars_survive_apply_and_undo_exactly(self):
+        files = {
+            "inspiration/.pocket-editor.json": b'{"schema_version":2,"book_id":"keep","unknown":7}\n',
+            "inspiration/reference.md.review.json": b'{"schema_version":1,"chapter_id":"keep","signals":[{"id":"signal-1"}]}\n',
+            "inspiration/reference.jpg": b"\xff\xd8\xff\x00image",
+            "inspiration/source.docx": b"PK\x03\x04\x00document",
+            "inspiration/source.rtf": b"{\\rtf1\x00exact}",
+            "inspiration/.cache/service.dat": b"\x00\xff\x10state",
+        }
+        for relative, content in files.items():
+            path = self.root / relative
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(content)
+        legacy = self.legacy.read_bytes()
+        plan_path, expected = self.preview()
+        planned = json.loads(plan_path.read_text(encoding="utf-8"))
+        self.assertEqual(
+            {(relative, relative, "preserve") for relative in files},
+            {
+                (item["source"], item["destination"], item["action"])
+                for item in planned["operations"]
+                if item["source"].startswith("inspiration/")
+            },
+        )
+
+        status, applied, error = self.run_cli(
+            [
+                "migrate", "--apply", str(plan_path),
+                "--expect-plan-hash", expected, "--format", "json",
+            ]
+        )
+
+        self.assertEqual((0, ""), (status, error))
+        self.assertEqual(
+            files,
+            {relative: (self.root / relative).read_bytes() for relative in files},
+        )
+        self.assertEqual(legacy, (self.root / "story/chapters/ch-001.md").read_bytes())
+
+        status, _, error = self.run_cli(
+            ["undo", applied["transaction_id"], "--apply", "--format", "json"]
+        )
+        self.assertEqual((0, ""), (status, error))
+        self.assertEqual(
+            files,
+            {relative: (self.root / relative).read_bytes() for relative in files},
+        )
+        self.assertEqual(legacy, self.legacy.read_bytes())
+
     def test_preview_exposes_full_transaction_diff_without_writes(self):
         plan_path, expected = self.preview()
         before = {
@@ -411,6 +460,7 @@ class MigrationApplyTests(unittest.TestCase):
             "story/chapters/_index.md",
             "story/chapters/project.md",
             "work/unsafe.md",
+            "inspiration/new.bin",
             ".creative-writing/owned.md",
         ):
             with self.subTest(destination=destination):

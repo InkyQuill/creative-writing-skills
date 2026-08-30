@@ -23,6 +23,7 @@ GENERATED_INDEX_FILES: tuple[str, ...] = (
     "kb/world/_index.md",
     "story/_index.md",
     "story/chapters/_index.md",
+    "story/side-stories/_index.md",
     "work/_index.md",
     "work/archive/_index.md",
     "work/brainstorm/_index.md",
@@ -59,6 +60,7 @@ SCAFFOLD_DIRECTORIES: tuple[str, ...] = (
     "kb/world",
     "story",
     "story/chapters",
+    "story/side-stories",
     "work",
     "work/archive",
     "work/brainstorm",
@@ -82,6 +84,8 @@ INVALID_PROSE_PROFILE = "CW-SCHEMA-013"
 REPEATED_DOCUMENT_ID = "CW-SCHEMA-020"
 REPEATED_DOCUMENT_TYPE = "CW-SCHEMA-021"
 INVALID_CHAPTER_NUMBER = "CW-SCHEMA-030"
+INVALID_SIDE_STORY_AFTER = "CW-SCHEMA-031"
+INVALID_SIDE_STORY_SUBTYPE = "CW-SCHEMA-032"
 INVALID_GENERATED_MARKER = "CW-SCHEMA-040"
 
 
@@ -103,6 +107,8 @@ def allowed_document_kind(relative_id: str) -> str | None:
     parent = path.parent.as_posix()
     if parent == "story/chapters":
         return "chapter"
+    if parent == "story/side-stories":
+        return "side-story"
     if parent in WORK_ARTIFACT_DIRECTORIES:
         return "work-artifact"
     if parent in KB_CONTENT_DIRECTORIES:
@@ -145,7 +151,43 @@ def validate_metadata(relative_id: str, document: Document) -> list[Finding]:
                     "Set number to a unique positive integer after confirming the intended chapter order.",
                 )
             )
+    elif kind == "side-story":
+        after = document.metadata.get("after")
+        if not _is_manuscript_reference(after):
+            findings.append(
+                _warning(
+                    INVALID_SIDE_STORY_AFTER,
+                    "after must name a direct chapter or side-story Markdown document",
+                    relative_id,
+                    "Set after to the durable manuscript path that anchors this side story's placement.",
+                )
+            )
+        subtype = document.metadata.get("subtype")
+        if subtype is not None and (
+            not isinstance(subtype, str)
+            or re.fullmatch(r"[a-z0-9]+(?:-[a-z0-9]+)*", subtype) is None
+        ):
+            findings.append(
+                _warning(
+                    INVALID_SIDE_STORY_SUBTYPE,
+                    "subtype must be a lower-case slug when present",
+                    relative_id,
+                    "Use a stable subtype such as omake or interlude, or remove the optional field.",
+                )
+            )
     return findings
+
+
+def _is_manuscript_reference(value: object) -> bool:
+    if not isinstance(value, str):
+        return False
+    path = PurePosixPath(value)
+    return (
+        str(path) == value
+        and path.parent.as_posix() in {"story/chapters", "story/side-stories"}
+        and path.name != "_index.md"
+        and path.suffix.casefold() == ".md"
+    )
 
 
 def _validate_manifest(metadata: dict[str, object], relative_id: str) -> list[Finding]:

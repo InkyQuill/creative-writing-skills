@@ -20,6 +20,12 @@ The durable format belongs to
 that actually exist in the book folder before acting; do not create Pocket
 Editor artifacts for a project that has neither a binder nor review sidecars.
 
+During legacy project migration, a Pocket Editor book below `inspiration/` is
+opaque author material. Keep its binder, every sidecar, every unresolved record
+and field, companion documents, and relative paths byte-for-byte in place. The
+migration CLI inventories regular files but does not consume review feedback or
+rewrite Pocket Editor JSON.
+
 ## Read the Overlay Safely
 
 Scan the relevant chapter folder for `.pocket-editor.json` and sibling

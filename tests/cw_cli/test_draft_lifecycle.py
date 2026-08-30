@@ -181,6 +181,31 @@ class DraftLifecycleTests(unittest.TestCase):
         )
         self.assertEqual(target_change.after, (self.root / target_change.path).read_bytes())
 
+    def test_accept_side_story_updates_its_generated_index(self):
+        draft_path, _target = self.make_draft(
+            target_exists=False,
+            target="story/side-stories/omake-001.md",
+            body="Bonus.\n",
+        )
+        document = documents.parse_document(draft_path.read_bytes())
+        metadata = dict(document.metadata)
+        metadata.update(
+            {"status": "ready", "after": "story/chapters/ch-003.md", "subtype": "omake"}
+        )
+        draft_path.write_bytes(
+            documents.render_document(
+                documents.Document(metadata, document.body, document.newline, document.bom)
+            )
+        )
+
+        plan = drafts.plan_accept_draft(
+            self.model, "work/drafts/omake-001.md", self.store, "tx-side-story"
+        )
+        changed = {change.path for change in plan.changes}
+
+        self.assertIn("story/side-stories/omake-001.md", changed)
+        self.assertIn("story/side-stories/_index.md", changed)
+
     def test_existing_target_format_wins_when_logical_bytes_are_equal(self):
         self.make_draft(body="Draft line one\nDraft line two\n")
         target = self.root / "story/chapters/ch-004.md"

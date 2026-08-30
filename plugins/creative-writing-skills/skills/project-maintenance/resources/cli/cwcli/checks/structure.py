@@ -24,6 +24,8 @@ WRONG_PATH_KIND = "CW-STRUCT-011"
 INVALID_FRONTMATTER = "CW-STRUCT-020"
 MISSING_FRONTMATTER = "CW-STRUCT-021"
 DUPLICATE_CHAPTER = "CW-STRUCT-030"
+MISSING_SIDE_STORY_ANCHOR = "CW-STRUCT-031"
+CYCLIC_SIDE_STORY_ANCHOR = "CW-STRUCT-032"
 MIXED_NEWLINES = "CW-STRUCT-040"
 CASE_COLLISION = "CW-STRUCT-050"
 ILLEGAL_LOCATION = "CW-STRUCT-060"
@@ -67,9 +69,12 @@ def check_structure(project: Project) -> list[Finding]:
         findings.append(_missing_frontmatter_finding("project.md"))
 
     chapters: dict[int, list[str]] = {}
+    manuscript_paths: set[str] = set()
+    side_story_anchors: dict[str, str] = {}
     for path in project.iter_managed_markdown():
         relative_id = project.relative_id(path)
-        if allowed_document_kind(relative_id) is None:
+        document_kind = allowed_document_kind(relative_id)
+        if document_kind is None:
             findings.append(
                 Finding(
                     code=ILLEGAL_LOCATION,
@@ -102,6 +107,10 @@ def check_structure(project: Project) -> list[Finding]:
             findings.append(_missing_frontmatter_finding(relative_id))
             continue
         findings.extend(validate_metadata(relative_id, document))
+        if document_kind in {"chapter", "side-story"}:
+            manuscript_paths.add(relative_id)
+        if document_kind == "side-story" and isinstance(document.metadata.get("after"), str):
+            side_story_anchors[relative_id] = str(document.metadata["after"])
         number = document.metadata.get("number")
         if (
             allowed_document_kind(relative_id) == "chapter"
@@ -110,6 +119,35 @@ def check_structure(project: Project) -> list[Finding]:
             and number >= 1
         ):
             chapters.setdefault(number, []).append(relative_id)
+
+    for relative_id, anchor in sorted(side_story_anchors.items()):
+        if anchor not in manuscript_paths:
+            findings.append(
+                Finding(
+                    code=MISSING_SIDE_STORY_ANCHOR,
+                    severity="error",
+                    message=f"side-story placement anchor does not exist: {anchor}",
+                    path=relative_id,
+                    next_action="Set after to an existing accepted chapter or side story.",
+                )
+            )
+            continue
+        visited = {relative_id}
+        cursor = anchor
+        while cursor in side_story_anchors:
+            if cursor in visited:
+                findings.append(
+                    Finding(
+                        code=CYCLIC_SIDE_STORY_ANCHOR,
+                        severity="error",
+                        message="side-story placement anchors form a cycle",
+                        path=relative_id,
+                        next_action="Anchor the side-story chain to a numbered chapter.",
+                    )
+                )
+                break
+            visited.add(cursor)
+            cursor = side_story_anchors[cursor]
 
     for number, paths in sorted(chapters.items()):
         if len(paths) < 2:

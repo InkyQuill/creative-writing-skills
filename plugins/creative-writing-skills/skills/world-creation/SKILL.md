@@ -15,7 +15,7 @@ Direct author answers that settle durable lore are confirmation; persist them
 incrementally without asking for redundant confirmation. Suggestions, inferred
 implications, and unresolved options remain provisional and are not canonized.
 
-Treat canonical prose under `story/chapters/` and draft prose under
+Treat canonical prose under `story/chapters/` and `story/side-stories/`, and draft prose under
 `work/drafts/` as read-only evidence. Never rewrite, patch, or directly edit
 prose or scene text in this workflow, regardless of location.
 
@@ -27,7 +27,7 @@ prose or scene text in this workflow, regardless of location.
 
 Use the canonical schema-v1 roots: `kb/world/` for setting lore,
 `kb/characters/` for character facts, `work/plans/` for planning artifacts,
-`story/chapters/` for accepted prose, and `work/drafts/` for draft prose. Use
+`story/chapters/` and `story/side-stories/` for accepted prose, and `work/drafts/` for draft prose. Use
 `$project-maintenance` for schema checks, previewed recoverable mutations,
 indexes, and reindexing. If a project needs scaffold or migration before these
 roots are writable, route that preparation through `$project-maintenance`;
@@ -35,7 +35,7 @@ never establish an alternate writable layout from local folder names.
 
 Use folder index files first when they exist, then search filenames and file
 contents, then read the relevant files faithfully before asking substantive
-questions. Files under `story/chapters/` and `work/drafts/` may be read to
+questions. Files under `story/chapters/`, `story/side-stories/`, and `work/drafts/` may be read to
 understand on-page evidence but remain read-only. This skill may point out that
 lore decisions require later prose edits, but it must not perform those edits.
 
@@ -60,8 +60,9 @@ Before asking substantive lore questions:
 6. If no index exists, fall back to filename discovery and content search
    within the canonical roots. The agent handles reindexing when a durable
    transaction changes discoverability.
-7. If the topic touches story events, search `story/chapters/` and
-   `work/drafts/` for evidence only after reading lore and character files.
+7. If the topic touches story events, search `story/chapters/`,
+   `story/side-stories/`, and `work/drafts/` for evidence only after reading
+   lore and character files.
    Keep all prose read-only.
 
 Index files are maps, not canon by themselves unless they explicitly contain canon facts. Prefer source topic files for final wording and conflict checks.
@@ -103,6 +104,7 @@ Editable through previewed, recoverable `$project-maintenance` transactions:
 Read-only in this workflow:
 
 - `story/chapters/` canonical prose
+- `story/side-stories/` canonical bonus prose
 - `work/drafts/` draft prose
 - any other prose or scene text, regardless of location
 

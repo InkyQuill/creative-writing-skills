@@ -4,6 +4,7 @@ import os
 import shlex
 import stat
 import subprocess
+import shutil
 import sys
 import tempfile
 import unittest
@@ -170,7 +171,10 @@ class CliDoctorTests(unittest.TestCase):
     def test_cli_doctor_is_projectless_and_text_json_agree(self):
         with tempfile.TemporaryDirectory() as directory:
             stdout, stderr = io.StringIO(), io.StringIO()
-            with mock.patch("cwcli.cli_doctor.shutil.which", return_value=None):
+            with mock.patch(
+                "cwcli.cli_doctor._ensure_launcher",
+                return_value=(None, None, "no safe test launcher directory"),
+            ), mock.patch("cwcli.cli_doctor.shutil.which", return_value=None):
                 status = app.run(
                     ["cli-doctor", "--format", "json"],
                     cwd=Path(directory),
@@ -184,13 +188,103 @@ class CliDoctorTests(unittest.TestCase):
             self.assertFalse(payload["launcher"]["required"])
 
             stdout = io.StringIO()
-            with mock.patch("cwcli.cli_doctor.shutil.which", return_value=None):
+            with mock.patch(
+                "cwcli.cli_doctor._ensure_launcher",
+                return_value=(None, None, "no safe test launcher directory"),
+            ), mock.patch("cwcli.cli_doctor.shutil.which", return_value=None):
                 status = app.run(
                     ["cli-doctor"], cwd=Path(directory), stdout=stdout, stderr=io.StringIO()
                 )
             self.assertEqual(0, status)
             self.assertIn("direct invocation is the default solution", stdout.getvalue())
             self.assertIn(__version__, stdout.getvalue())
+
+    def test_command_installs_and_refreshes_managed_launcher_for_new_plugin_path(self):
+        with tempfile.TemporaryDirectory() as directory:
+            home = Path(directory)
+            launcher_directory = home / "bin"
+            launcher_directory.mkdir()
+            environment = {"PATH": str(launcher_directory)}
+
+            installed = cli_doctor.diagnose_cli(
+                self.entrypoint,
+                Path(sys.executable),
+                repair_launcher=True,
+                environ=environment,
+                home=home,
+            )
+            launcher = launcher_directory / "cw"
+            self.assertTrue(installed.launcher.ok)
+            self.assertIn("installed", installed.launcher.message)
+            self.assertIn(str(self.entrypoint), launcher.read_text(encoding="utf-8"))
+            self.assertEqual(0o700, stat.S_IMODE(launcher.stat().st_mode))
+
+            updated_cli = home / "updated plugin" / "resources" / "cli"
+            shutil.copytree(self.entrypoint.parent, updated_cli)
+            updated_entrypoint = updated_cli / "cw.py"
+            refreshed = cli_doctor.diagnose_cli(
+                updated_entrypoint,
+                Path(sys.executable),
+                repair_launcher=True,
+                environ=environment,
+                home=home,
+            )
+
+            self.assertTrue(refreshed.launcher.ok)
+            self.assertIn("refreshed", refreshed.launcher.message)
+            wrapper = launcher.read_text(encoding="utf-8")
+            self.assertIn(str(updated_entrypoint), wrapper)
+            self.assertNotIn(str(self.entrypoint), wrapper)
+
+    def test_automatic_setup_never_overwrites_an_unmanaged_path_entry(self):
+        with tempfile.TemporaryDirectory() as directory:
+            home = Path(directory)
+            launcher_directory = home / "bin"
+            launcher_directory.mkdir()
+            launcher = launcher_directory / "cw"
+            launcher.write_text("author-owned\n", encoding="utf-8")
+
+            report = cli_doctor.diagnose_cli(
+                self.entrypoint,
+                Path(sys.executable),
+                repair_launcher=True,
+                environ={"PATH": str(launcher_directory)},
+                home=home,
+            )
+
+            self.assertTrue(report.ok)
+            self.assertFalse(report.launcher.ok)
+            self.assertEqual("author-owned\n", launcher.read_text(encoding="utf-8"))
+
+    def test_automatic_setup_adopts_the_legacy_documented_wrapper(self):
+        with tempfile.TemporaryDirectory() as directory:
+            home = Path(directory)
+            launcher_directory = home / "bin"
+            launcher_directory.mkdir()
+            launcher = launcher_directory / "cw"
+            legacy_entrypoint = (
+                home
+                / "old plugin/project-maintenance/resources/cli/cw.py"
+            )
+            launcher.write_text(
+                f'#!/bin/sh\nexec python3 "{legacy_entrypoint}" "$@"\n',
+                encoding="utf-8",
+            )
+            launcher.chmod(0o700)
+
+            report = cli_doctor.diagnose_cli(
+                self.entrypoint,
+                Path(sys.executable),
+                repair_launcher=True,
+                environ={"PATH": str(launcher_directory)},
+                home=home,
+            )
+
+            self.assertTrue(report.launcher.ok)
+            self.assertIn("refreshed", report.launcher.message)
+            wrapper = launcher.read_text(encoding="utf-8")
+            self.assertIn("managed by creative-writing-skills cli-doctor", wrapper)
+            self.assertIn(str(self.entrypoint), wrapper)
 
 
 if __name__ == "__main__":
