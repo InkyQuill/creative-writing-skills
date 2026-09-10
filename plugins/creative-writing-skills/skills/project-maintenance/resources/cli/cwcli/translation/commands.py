@@ -26,6 +26,12 @@ def add_commands(subparsers, error_stream):
         command.add_argument('--file', required=True)
         command.add_argument('--apply', action='store_true')
         command.add_argument('--format', choices=('text', 'json'), default=argparse.SUPPRESS)
+    memory = commands.add_parser('memory', error_stream=error_stream)
+    memory.add_argument('--direction', default='')
+    memory.add_argument('--kind', choices=('terms', 'voices', 'decisions', 'style', 'entity'), required=True)
+    memory.add_argument('--file', required=True)
+    memory.add_argument('--apply', action='store_true')
+    memory.add_argument('--format', choices=('text', 'json'), default=argparse.SUPPRESS)
 
 
 def plan_enable(project, work_kind):
@@ -53,6 +59,9 @@ def run_translation(args, *, cwd, stdout, stderr):
         project = discover_project(cwd)
         if args.translation_command == 'enable':
             plan = plan_enable(project, args.work_kind)
+        elif args.translation_command == 'memory':
+            from .memory import plan_memory
+            plan = plan_memory(project, args.direction, args.kind, (cwd / args.file).read_bytes())
         elif args.translation_command in ('direction', 'alignment'):
             from .directions import plan_direction, plan_alignment
             planner = plan_direction if args.translation_command == 'direction' else plan_alignment

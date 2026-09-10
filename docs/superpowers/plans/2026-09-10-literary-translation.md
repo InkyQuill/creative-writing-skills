@@ -336,7 +336,7 @@ for field in ("primary-edition", "auxiliary-editions", "inheritance"):
 
 **Interfaces:** Implements `plan_memory` and `select_memory`. Add `scope_matches(record: dict[str, object], context: dict[str, list[str]]) -> bool` in contract. Shared entity creation uses `memory --kind entity` as an additional accepted command kind with no direction argument; entity records go only to `kb/entities/`. Update argparse choices and command reference accordingly. Entity identity statements do not carry target-language rules.
 
-- [ ] Add an executable scope test and fixtures for accepted/proposed records:
+- [x] Add an executable scope test and fixtures for accepted/proposed records:
 
 ```python
 from cwcli.translation.contract import scope_matches
@@ -349,8 +349,8 @@ self.assertFalse(scope_matches({"scope-volumes": ["v023"]},
                                {"scope-volumes": ["v001"]}))
 ```
 
-- [ ] Run `python3 -m unittest tests.cw_cli.test_translation_memory -v`; expect missing scope/memory interfaces.
-- [ ] Implement matching with exact identity values:
+- [x] Run `python3 -m unittest tests.cw_cli.test_translation_memory -v`; expect missing scope/memory interfaces.
+- [x] Implement matching with exact identity values:
 
 ```python
 fields = ("scope-volumes", "scope-units", "scope-entities", "scope-relationships")
@@ -361,8 +361,8 @@ return all(not record.get(field) or
 
 Validate list types before matching. Select accepted rules only; reject overlapping same-subject rules unless an explicit valid narrower `supersedes` relation resolves the overlap. Detect supersession cycles and cross-direction supersession. Global replacement marks old record superseded in the same transaction; a scoped exception leaves the general record active outside its scope.
 
-- [ ] Store rule prose, examples, evidence, variants and rationale without translating or inferring them in Python. Test polysemous identical surface forms with different subjects, narrator voices, relationship scope, no cross-language leakage, rejected cycles, user-edited rule content and inheritance proposals remaining provisional.
-- [ ] Run memory and transaction tests. Commit: `feat: persist scoped translation terminology and voices`.
+- [x] Store rule prose, examples, evidence, variants and rationale without translating or inferring them in Python. Test polysemous identical surface forms with different subjects, narrator voices, relationship scope, no cross-language leakage, rejected cycles, user-edited rule content and inheritance proposals remaining provisional.
+- [x] Run memory and transaction tests. Commit: `feat: persist scoped translation terminology and voices`.
 
 ## Task 6: Fixed context packets and complete dependency tracking
 

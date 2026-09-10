@@ -66,3 +66,12 @@ def translation_kind(relative):
     if len(rest) == 2 and rest[0] in ('drafts', 'reviews', 'accepted'):
         return 'translation-' + rest[0]
     return None
+
+
+def scope_matches(record, context):
+    return all(not strings(record, field) or bool(set(strings(record, field)) & set(strings(context, field))) for field in SCOPE_FIELDS)
+
+
+def scope_contains(general, specific):
+    """Every point in specific scope is also inside general scope."""
+    return all(not strings(general, field) or (bool(strings(specific, field)) and set(strings(specific, field)) <= set(strings(general, field))) for field in SCOPE_FIELDS)
