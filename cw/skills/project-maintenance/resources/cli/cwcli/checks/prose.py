@@ -268,6 +268,8 @@ def check_prose(project: Project) -> list[Finding]:
     seen: set[str] = set()
     for path in paths:
         relative_id = project.relative_id(path)
+        if project.manifest.metadata.get("schema-version") == 2 and relative_id.startswith("sources/"):
+            continue
         if relative_id in seen:
             continue
         seen.add(relative_id)
@@ -302,10 +304,20 @@ def check_prose(project: Project) -> list[Finding]:
         findings.extend(_tag_findings(relative_id, integrity))
         findings.extend(_tag_policy_findings(relative_id, integrity))
 
-        if not _is_prose_path(relative_id):
+        from ..translation.contract import translation_kind
+        translated = project.manifest.metadata.get("schema-version") == 2 and translation_kind(relative_id) in ("translation-drafts", "translation-accepted")
+        if not _is_prose_path(relative_id) and not translated:
             continue
 
         document_language = _prose_language(relative_id, source, language)
+        if translated:
+            from ..translation.catalog import read_source
+            try:
+                direction = Path(relative_id).parts[1]
+                document_language = parse_document(read_source(project, f"translations/{direction}/translation.md")).metadata["language"]
+            except (OSError, ValueError, KeyError) as error:
+                findings.append(Finding(UNREADABLE_DOCUMENT, "warning", str(error), path=relative_id))
+                continue
         if _normalize_language(document_language) == "ru":
             for hit in scan_lines(_typography_lines(visible.lines)):
                 findings.append(

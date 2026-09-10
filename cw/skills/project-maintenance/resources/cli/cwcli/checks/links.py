@@ -63,7 +63,7 @@ def check_links(project: Project) -> list[Finding]:
         findings.append(_finding(INDEX_DRIFT, "warning", f"derived index drift could not be calculated safely: {error}", None, None, "Repair unreadable managed paths, then preview cw reindex."))
     else:
         for change in reindex.changes:
-            if change.path in GENERATED_INDEX_FILES:
+            if change.path in GENERATED_INDEX_FILES or (project.manifest.metadata.get("schema-version") == 2 and change.path.endswith("/_index.md")):
                 findings.append(_finding(INDEX_DRIFT, "warning", "generated registry differs from authored managed documents", change.path, None, "Preview cw reindex, review the diff, then apply it explicitly."))
     return sorted(findings, key=_finding_key)
 

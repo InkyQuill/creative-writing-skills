@@ -54,6 +54,10 @@ def plan_reindex(
 ) -> TransactionPlan:
     """Plan exact replacements for every stale generated registry."""
 
+    if project.manifest.metadata.get("schema-version") == 2:
+        from .translation.indexes import plan_translation_indexes
+        return plan_translation_indexes(project, overlay=overlay, index_ids=index_ids, skip_unparseable=skip_unparseable)
+
     selected = tuple(GENERATED_INDEX_FILES if index_ids is None else index_ids)
     if len(set(selected)) != len(selected) or any(
         index_id not in GENERATED_INDEX_FILES for index_id in selected

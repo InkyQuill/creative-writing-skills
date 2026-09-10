@@ -412,7 +412,7 @@ All reads use catalog boundary enforcement. Packet metadata explicitly states so
 
 **Interfaces:** Implements the three draft services and `check_translation`. Draft metadata: `direction-id`, `draft-id`, `source-units`, `packet-transaction`, `base-revision`, `status: draft | reviewed | accepted`; body contains prose. Status transition to reviewed uses an additional `cw translation set-status DRAFT_PATH reviewed` command; no arbitrary acceptance through generic edits. Draft content remains editable with exact edits. Accepted path mirrors draft basename within its volume. Revisions replace that accepted file only after matching its captured base; journal retains prior bytes.
 
-- [ ] Add lifecycle tests, including independence of acceptance and freshness:
+- [x] Add lifecycle tests, including independence of acceptance and freshness:
 
 ```python
 state = translation_status(project, draft_path)
@@ -425,8 +425,8 @@ self.assertEqual("needs-review", state["freshness"])
 self.assertEqual(accepted_before, accepted_path.read_bytes())
 ```
 
-- [ ] Run the three new modules; expect missing lifecycle/checker interfaces.
-- [ ] Validate packet fields and re-read dependencies when creating a draft; never trust arbitrary packet text as current project input. Store packet text/provenance in immutable transaction metadata, with generated transaction ID allocated before rendering draft metadata. Reject stale/missing snapshots at accept; user/agent must build a fresh context and reviewed revision. Preserve read-only status for accepted-but-stale text.
+- [x] Run the three new modules; expect missing lifecycle/checker interfaces.
+- [x] Validate packet fields and re-read dependencies when creating a draft; never trust arbitrary packet text as current project input. Store packet text/provenance in immutable transaction metadata, with generated transaction ID allocated before rendering draft metadata. Reject stale/missing snapshots at accept; user/agent must build a fresh context and reviewed revision. Preserve read-only status for accepted-but-stale text.
 
 ```python
 freshness = "needs-review" if changed_paths or memory_inventory_changed else "current"
@@ -434,10 +434,10 @@ return {"status": draft.metadata["status"], "freshness": freshness,
         "changed-dependencies": sorted(changed_paths)}
 ```
 
-- [ ] Acceptance requires reviewed state, current input guards and unchanged accepted base. Reject hidden material and preserve existing accepted-text handling of balanced AI suggestion wrappers. Unit coverage is explicit: reject duplicate accepted coverage in one direction unless it is the revision of the same output; support a draft translating multiple units from one volume. For cross-volume work use separate drafts. Detect omissions against declared direction coverage and available unit inventory; do not infer completeness from paragraph counts.
-- [ ] Add generated `sources/_index.md`, `translations/_index.md`, per-direction indexes and shared entity/comparison indexes via v2-aware index selection. No index inside `originals/`. Add new paths to doctor/link/KB behavior without scanning opaque originals. Prose checks select the direction language/profile for translation outputs and exclude original source text; v1 authoring output remains unchanged.
-- [ ] Check recovery after interrupted acceptance, undo of accepted replacement, missing journal, new rule inventory, deleted source, source file rename with stable ID, two target directions, same-language editions, and old v1 fixtures. Findings use `CW-TRANS-*`, descriptive paths and existing severity/exit conventions; `check all` includes translation but v1 returns no translation findings.
-- [ ] Run `PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tests/cw_cli -t . -v`. Commit: `feat: track and accept translation drafts with revision checks`.
+- [x] Acceptance requires reviewed state, current input guards and unchanged accepted base. Reject hidden material and preserve existing accepted-text handling of balanced AI suggestion wrappers. Unit coverage is explicit: reject duplicate accepted coverage in one direction unless it is the revision of the same output; support a draft translating multiple units from one volume. For cross-volume work use separate drafts. Detect omissions against declared direction coverage and available unit inventory; do not infer completeness from paragraph counts.
+- [x] Add generated `sources/_index.md`, `translations/_index.md`, per-direction indexes and shared entity/comparison indexes via v2-aware index selection. No index inside `originals/`. Add new paths to doctor/link/KB behavior without scanning opaque originals. Prose checks select the direction language/profile for translation outputs and exclude original source text; v1 authoring output remains unchanged.
+- [x] Check recovery after interrupted acceptance, undo of accepted replacement, missing journal, new rule inventory, deleted source, source file rename with stable ID, two target directions, same-language editions, and old v1 fixtures. Findings use `CW-TRANS-*`, descriptive paths and existing severity/exit conventions; `check all` includes translation but v1 returns no translation findings.
+- [x] Run `PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tests/cw_cli -t . -v`. Commit: `feat: track and accept translation drafts with revision checks`.
 
 ## Task 8: Literary skills, integration, distribution and end-to-end evidence
 

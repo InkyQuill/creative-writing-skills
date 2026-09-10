@@ -822,6 +822,16 @@ class TransactionEngine:
         return inverse
 
     def _validate_read_guards(self, metadata):
+        packet = metadata.get("translation-packet")
+        if packet is not None:
+            from .translation.context import build_packet
+            try:
+                plain = _jsonable(packet)
+                current = build_packet(self.project, plain["direction"], tuple(plain["units"]), plain["scope"])
+                if plain != current:
+                    raise ValueError("translation context changed")
+            except (KeyError, OSError, TypeError, ValueError) as error:
+                raise TransactionConflict(f"stale translation context: {error}") from error
         guards = metadata.get("read-guards", {})
         if not isinstance(guards, Mapping):
             raise TransactionError("read-guards must be a mapping")

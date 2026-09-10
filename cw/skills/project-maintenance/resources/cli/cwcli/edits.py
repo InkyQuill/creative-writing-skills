@@ -73,6 +73,10 @@ def plan_edits(project: Project, operations: Iterable[EditOperation]) -> Transac
             raise EditPlanError(str(error)) from error
         if not target.is_file() or target.is_symlink():
             raise EditPlanError(f"edit target is not an existing regular file: {relative}")
+        if project.manifest.metadata.get("schema-version") == 2 and operation.get("op") == "frontmatter-set":
+            protected = {"unit-id", "edition-id", "direction-id", "entity-id", "record-id", "alignment-id", "draft-id", "packet-transaction", "source-units", "review-hash", "original-path", "original-sha256", "manuscript-path", "project-kind", "work-kind", "translation-enabled"}
+            if operation.get("key") in protected:
+                raise EditPlanError("use a translation domain command to change identity or lifecycle metadata")
         targets.setdefault(relative, target)
 
     originals: dict[str, bytes] = {}

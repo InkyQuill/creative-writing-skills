@@ -37,6 +37,20 @@ def add_commands(subparsers, error_stream):
     context.add_argument('--units', nargs='+', required=True)
     context.add_argument('--scope')
     context.add_argument('--format', choices=('text', 'json'), default=argparse.SUPPRESS)
+    draft = commands.add_parser('draft', error_stream=error_stream)
+    draft.add_argument('--direction', required=True)
+    draft.add_argument('--draft-id', required=True)
+    draft.add_argument('--packet', required=True)
+    draft.add_argument('--file', required=True)
+    draft.add_argument('--apply', action='store_true')
+    draft.add_argument('--format', choices=('text', 'json'), default=argparse.SUPPRESS)
+    for name in ('accept', 'status', 'set-status'):
+        command = commands.add_parser(name, error_stream=error_stream)
+        command.add_argument('draft_path')
+        if name == 'set-status':
+            command.add_argument('status', choices=('reviewed',))
+        command.add_argument('--apply', action='store_true')
+        command.add_argument('--format', choices=('text', 'json'), default=argparse.SUPPRESS)
 
 
 def plan_enable(project, work_kind):
@@ -68,7 +82,17 @@ def run_translation(args, *, cwd, stdout, stderr):
             packet = build_packet(project, args.direction, tuple(args.units), scope)
             stdout.write(json.dumps(packet, ensure_ascii=False, indent=2) + '\n')
             return 0
-        if args.translation_command == 'enable':
+        if args.translation_command == 'status':
+            from .drafts import translation_status
+            stdout.write(json.dumps(translation_status(project, args.draft_path), ensure_ascii=False) + '\n')
+            return 0
+        if args.translation_command == 'draft':
+            from .drafts import plan_translation_draft
+            plan = plan_translation_draft(project, args.direction, args.draft_id, json.loads((cwd / args.packet).read_text()), (cwd / args.file).read_bytes())
+        elif args.translation_command in ('accept', 'set-status'):
+            from .drafts import plan_translation_accept, plan_translation_status
+            plan = plan_translation_accept(project, args.draft_path) if args.translation_command == 'accept' else plan_translation_status(project, args.draft_path, args.status)
+        elif args.translation_command == 'enable':
             plan = plan_enable(project, args.work_kind)
         elif args.translation_command == 'memory':
             from .memory import plan_memory
@@ -87,6 +111,6 @@ def run_translation(args, *, cwd, stdout, stderr):
                 if field in request and not Path(request[field]).is_absolute():
                     request[field] = str(cwd / request[field])
             plan = plan_source(project, request)
-        return _preview_or_apply(TransactionEngine(project), plan, apply=args.apply, output_format=args.format, stdout=stdout)
+        return _preview_or_apply(TransactionEngine(project), plan, apply=args.apply, output_format=args.format, stdout=stdout, transaction_id=plan.metadata.get("transaction-id"))
     except (OSError, ValueError, TransactionError) as error:
         return _write_command_error(error, conflict=isinstance(error, TransactionConflict), output_format=args.format, stdout=stdout, stderr=stderr)
