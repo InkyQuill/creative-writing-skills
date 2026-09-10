@@ -36,3 +36,18 @@ Read only the resource needed for the current operation:
   protected paths, and preservation boundaries.
 - [Agent workflows](resources/agent-workflows.md) for checks, drafts,
   migration, history, undo, recovery, and failure handling.
+
+## Literary translation mechanics
+
+For translation work, use the opt-in schema-v2 contract and `cw translation`
+commands in the command reference. Keep schema-v1 author projects unchanged
+until translation is enabled. Source originals are opaque and immutable to
+agent edits; refreshed extraction is a separately journaled working revision.
+
+Run `cw check translation` for coverage, references and stale drafts; reindex
+through `cw reindex`. A finding about changed inputs requests literary review,
+not automatic retranslation or replacement. Direction language controls checks
+of its output. Build context with relevant entities and relationships and keep
+its exact snapshot with the draft. The CLI never performs literary translation
+or decides whether a proposed rule is true; $literary-translation,
+$translation-memory and $translation-review supply that judgment.

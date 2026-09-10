@@ -34,6 +34,8 @@ def _target(path):
 
 def plan_translation_draft(project, direction, draft_id, packet, content):
     slug(direction); slug(draft_id)
+    if not isinstance(packet, dict):
+        raise ValueError('packet must be a JSON object')
     if packet.get('direction') != direction or packet != build_packet(project, direction, tuple(packet.get('units', [])), packet.get('scope', {})):
         raise ValueError('translation packet is stale or has been modified')
     _, source = resolve_unit(project, packet['units'][0])

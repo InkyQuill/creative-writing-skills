@@ -1,0 +1,4 @@
+interface:
+  display_name: "Translation Review"
+  short_description: "Review fidelity, voice, and target-language prose"
+  default_prompt: "Use $translation-review for the requested literary translation task."

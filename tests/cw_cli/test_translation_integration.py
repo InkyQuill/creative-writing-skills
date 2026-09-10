@@ -48,3 +48,33 @@ class TranslationIntegrationTests(TranslationFixture):
     def test_generic_edit_cannot_forge_domain_identity(self):
         with self.assertRaises(ValueError):
             plan_edits(self.project, [{'op': 'frontmatter-set', 'path': 'sources/ja/volumes/v001/text/u001.md', 'key': 'unit-id', 'value': 'other'}])
+
+
+class TranslationSeriesScenarioTests(TranslationFixture):
+    def test_32_originals_22_references_support_independent_continuations(self):
+        self.edition(coverage=[f'v{i:03}' for i in range(1, 33)])
+        self.edition('en-official', 'en', coverage=[f'v{i:03}' for i in range(1, 23)])
+        self.unit('next', volume='v023', text='未訳の巻')
+        for name, language in [('en-continuation', 'en'), ('ru-main', 'ru')]:
+            self.apply(plan_direction(self.project, md({'direction-id': name, 'language': language, 'primary-edition': 'ja', 'coverage': [f'v{i:03}' for i in range(23, 33)]})))
+        before = build_packet(self.project, 'en-continuation', ('ja:next',), {})
+        self.apply(plan_memory(self.project, 'ru-main', 'voices', md({'record-id': 'narrator', 'subject': 'narrator', 'status': 'accepted', 'evidence': ['user: Russian narrator choice']})))
+        self.assertEqual(before, build_packet(self.project, 'en-continuation', ('ja:next',), {}))
+        self.assertEqual(1, len(build_packet(self.project, 'ru-main', ('ja:next',), {})['rules']))
+
+    def test_standalone_book_import_omits_volume_layer(self):
+        from cwcli.scaffold import apply_init
+        from cwcli.project import discover_project
+        from cwcli.translation.sources import plan_source
+        from cwcli.transactions import TransactionEngine
+        book = self.root.parent / 'book'
+        apply_init(book, 'Book', 'ru', kind='translation', work_kind='book')
+        project = discover_project(book)
+        engine = TransactionEngine(project)
+        engine.apply(plan_source(project, {'action': 'edition', 'content': md({'edition-id': 'source', 'language': 'ja', 'edition-role': 'original', 'revision-label': 'first'}).decode()}))
+        original = self.root.parent / 'original.txt'; original.write_text('原文')
+        engine.apply(plan_source(project, {'action': 'unit', 'edition': 'source', 'unit': 'one', 'original-file': str(original), 'text-file': str(original)}))
+        engine.apply(plan_direction(project, md({'direction-id': 'ru', 'language': 'ru', 'primary-edition': 'source'})))
+        packet = build_packet(project, 'ru', ('source:one',), {})
+        self.assertEqual('sources/source/text/one.md', packet['primary-text'][0]['path'])
+        self.assertFalse((book / 'sources/source/volumes').exists())

@@ -7,7 +7,7 @@ from .contract import SCOPE_FIELDS, slug, strings, scope_matches, scope_contains
 def memory_records(project, direction):
     slug(direction)
     read_source(project, f'translations/{direction}/translation.md')
-    return {d.metadata['record-id']: (p, d) for p, d in load_catalog(project).items() if p.startswith(f'translations/{direction}/memory/')}
+    return {d.metadata['record-id']: (p, d) for p, d in load_catalog(project, strict=False).items() if p.startswith(f'translations/{direction}/memory/')}
 
 
 def validate_graph(records):

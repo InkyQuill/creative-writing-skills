@@ -19,7 +19,7 @@ def plan_translation_indexes(project, *, overlay=(), index_ids=None, skip_unpars
             records[change.path] = parse_document(change.after)
     _, required = required_paths(project.manifest.metadata)
     selected = {p for p in required if p.endswith('_index.md') and (kind == 'translation' or p.startswith(('sources/', 'translations/', 'kb/entities/', 'kb/source-comparisons/')))}
-    selected.update(f'translations/{d.metadata["direction-id"]}/_index.md' for p, d in records.items() if p.endswith('/translation.md'))
+    selected.update(f'translations/{d.metadata["direction-id"]}/_index.md' for p, d in records.items() if PurePosixPath(p).name == 'translation.md')
     changes = []
     if kind == 'authoring':
         legacy = Project(project.root, replace(project.manifest, metadata=dict(project.manifest.metadata, **{'schema-version': 1})))

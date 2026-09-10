@@ -112,5 +112,5 @@ def run_translation(args, *, cwd, stdout, stderr):
                     request[field] = str(cwd / request[field])
             plan = plan_source(project, request)
         return _preview_or_apply(TransactionEngine(project), plan, apply=args.apply, output_format=args.format, stdout=stdout, transaction_id=plan.metadata.get("transaction-id"))
-    except (OSError, ValueError, TransactionError) as error:
+    except (KeyError, TypeError, OSError, ValueError, TransactionError) as error:
         return _write_command_error(error, conflict=isinstance(error, TransactionConflict), output_format=args.format, stdout=stdout, stderr=stderr)

@@ -13,7 +13,7 @@ def read_source(project, relative):
     return path.read_bytes()
 
 
-def load_catalog(project):
+def load_catalog(project, *, strict=True, volume=None):
     _, work, enabled = project_settings(project.manifest.metadata)
     if not enabled:
         raise ValueError('enable translation before using translation commands')
@@ -28,7 +28,13 @@ def load_catalog(project):
             volume_path = len(parts) > 3 and parts[2] == 'volumes'
             if kind in ('source-unit', 'translation-drafts', 'translation-reviews', 'translation-accepted', 'direction-settings') and volume_path != (work == 'series'):
                 raise ValueError(f'mixed book/series layout: {relative}')
-        doc = parse_document(read_source(project, relative))
+        try:
+            doc = parse_document(read_source(project, relative))
+        except (OSError, ValueError):
+            path_volume = parts[3] if len(parts) > 3 and parts[2] == 'volumes' else ''
+            if strict or kind != 'source-unit' or (volume is not None and path_volume == volume):
+                raise
+            continue
         key = {'edition': 'edition-id', 'direction': 'direction-id', 'source-unit': 'unit-id', 'entity': 'entity-id', 'alignment': 'alignment-id', 'translation-memory': 'record-id'}.get(kind)
         if key:
             value = doc.metadata.get(key)
@@ -58,7 +64,7 @@ def make_plan(project, command, changes, metadata=None):
 
 
 def find_record(project, key, value, *, prefix=''):
-    matches = [(p, d) for p, d in load_catalog(project).items() if p.startswith(prefix) and d.metadata.get(key) == value]
+    matches = [(p, d) for p, d in load_catalog(project, strict=False).items() if p.startswith(prefix) and d.metadata.get(key) == value]
     if len(matches) != 1:
         raise ValueError(f'expected one {key}={value}, found {len(matches)}')
     return matches[0]

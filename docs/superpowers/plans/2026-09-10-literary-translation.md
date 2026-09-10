@@ -467,7 +467,7 @@ return {"status": draft.metadata["status"], "freshness": freshness,
 
 **Interfaces:** Three skills route to the implemented commands, sharing the contract resource through `$project-maintenance`. Skill-owned resources use relative links. No new worker role is required: muse can assign a bounded translation task through existing worker conventions with a fixed packet and distinct output paths. Sequential execution is fully described. UI metadata follows existing authored skill conventions and is excluded from generated Claude runtime by the existing generator.
 
-- [ ] Add a distribution test for the new authored inventory and a real lifecycle integration scenario before adding skill files:
+- [x] Add a distribution test for the new authored inventory and a real lifecycle integration scenario before adding skill files:
 
 ```python
 config = json.loads((ROOT / "config/distribution.json").read_text())
@@ -478,8 +478,8 @@ self.assertEqual(35, len(config["canonical_skills"]))
 
 Use `ROOT = Path(__file__).resolve().parents[1]` and standard `unittest` imports. Integration test executes `app.run`, not a regex proxy for literary correctness. Create small synthetic Japanese/English excerpts instead of committing copyrighted book text; declare coverage v001–v032/v001–v022 and materialize only the units needed by each fixture.
 
-- [ ] Run `python3 -m unittest tests.test_translation_skills -v`; expect missing inventory/resources.
-- [ ] Write the three skills as imperative instructions. `literary-translation` must include this operational core:
+- [x] Run `python3 -m unittest tests.test_translation_skills -v`; expect missing inventory/resources.
+- [x] Write the three skills as imperative instructions. `literary-translation` must include this operational core:
 
 ```text
 Resolve the direction and source coverage before translating. Treat the selected
@@ -491,10 +491,10 @@ observations provisional. Continue independent units when one source is blocked.
 ```
 
 `translation-memory` explains identity versus surface form, source observation versus target instruction, scoped exceptions, narrator/relationship voice, evidence, author-confirmed acceptance and inherited-policy limits. `translation-review` requires source and target locators, diagnosis and severity; offers separate fidelity and target-language passes and explicitly says technical checks do not establish literary quality. Examples cover direct/indirect translation, existing English continuity and independent Russian choices.
-- [ ] Integrate setup/muse/memory/doctor routing and document all final commands, including `memory --kind entity` and `set-status`. Add frontmatter/body examples from this plan, direction-specific language behavior and v1 upgrade preview. Keep implementation hashes and cache mechanics out of author-facing questions.
-- [ ] Update exact inventory assertions and README/AGENTS counts to 35. Locate remaining inventory assumptions with `rg -n '\b32\b|EXPECTED_SKILLS|authored_skills' scripts tests README.md AGENTS.md config`; change only inventory-related occurrences. Preserve pinned vendored content and plugin version.
-- [ ] Record pressure scenarios and inspect outcomes: English precedent contradicts Japanese meaning; a polite threatening voice; identical term spelling with two meanings; late-volume secret; unavailable auxiliary v023; two simultaneous languages; no subagents; user correction supersedes a term. In `results.md`, record actual observed responses/commands and pass/fail with limitations, never claim a model evaluation from static substring tests. Execute these scenarios via the chosen execution mode; no new user-visible tasks are necessary.
-- [ ] Run required repository checks in order:
+- [x] Integrate setup/muse/memory/doctor routing and document all final commands, including `memory --kind entity` and `set-status`. Add frontmatter/body examples from this plan, direction-specific language behavior and v1 upgrade preview. Keep implementation hashes and cache mechanics out of author-facing questions.
+- [x] Update exact inventory assertions and README/AGENTS counts to 35. Locate remaining inventory assumptions with `rg -n '\b32\b|EXPECTED_SKILLS|authored_skills' scripts tests README.md AGENTS.md config`; change only inventory-related occurrences. Preserve pinned vendored content and plugin version.
+- [x] Record pressure scenarios and inspect outcomes: English precedent contradicts Japanese meaning; a polite threatening voice; identical term spelling with two meanings; late-volume secret; unavailable auxiliary v023; two simultaneous languages; no subagents; user correction supersedes a term. In `results.md`, record actual observed responses/commands and pass/fail with limitations, never claim a model evaluation from static substring tests. Execute these scenarios via the chosen execution mode; no new user-visible tasks are necessary.
+- [x] Run required repository checks in order:
 
 ```bash
 python3 scripts/sync_claude_distribution.py --apply
@@ -506,11 +506,21 @@ python3 scripts/create_skill_zips.py
 git diff --check
 ```
 
-- [ ] Inspect generated skill inventory, Codex reference transformations and exclusion of `agents/openai.yaml`. Run archive creation a second time and compare SHA-256 maps of `zips/*.zip` to verify deterministic results for the new inventory. Do not hand-fix generator output.
-- [ ] Commit canonical resources, tests and generated changes together: `feat: ship literary translation skills and workflows`. Report checks and any literary evaluation limitations. Do not release, tag or push without an explicit request.
+- [x] Inspect generated skill inventory, Codex reference transformations and exclusion of `agents/openai.yaml`. Run archive creation a second time and compare SHA-256 maps of `zips/*.skill` to verify deterministic results for the new inventory. Do not hand-fix generator output.
+- [x] Commit canonical resources, tests and generated changes together: `feat: ship literary translation skills and workflows`. Report checks and any literary evaluation limitations. Do not release, tag or push without an explicit request.
 
 ## Plan self-review and handoff
 
 Coverage mapping: compatible storage/schema (tasks 1–2), original preservation/revisions (3), editions/directions/coverage/alignment (4), terminology/voices/provenance/acceptance (5), context and language isolation (6), lifecycle/staleness/recovery/checks (7), three skills/distribution/all six approved scenarios (8). Source read guards are implemented before consumers; all cross-task service names are declared above. Commands for entity records and reviewed status are explicitly added by tasks 5 and 7.
 
 This document is a plan, not evidence that runtime functionality exists. Before implementation, use either subagent-driven-development with review between tasks or executing-plans sequentially in this session. Start from the approved spec and this plan; preserve unrelated workspace edits.
+
+
+## Execution refinements
+
+- Empty list fields are interpreted through the existing flat parser (no YAML dependency).
+- Source units store a positive per-volume order; context must not infer chronology from IDs.
+- Context tolerates malformed source files only outside the selected volume; project checks still report them.
+- `translation/indexes.py` isolates v2 indexes while preserving the v1 index service.
+- Historical muse pressure outputs retain their exact tested snapshot; translation evaluation is recorded separately.
+- Additional integration coverage lives in `tests/cw_cli/test_translation_boundaries.py`.

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Literary Translation"
+  short_description: "Translate books with source-aware literary continuity"
+  default_prompt: "Use $literary-translation for the requested literary translation task."

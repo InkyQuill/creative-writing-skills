@@ -1,0 +1,4 @@
+interface:
+  display_name: "Translation Memory"
+  short_description: "Preserve terms, voices, and translation decisions"
+  default_prompt: "Use $translation-memory for the requested literary translation task."

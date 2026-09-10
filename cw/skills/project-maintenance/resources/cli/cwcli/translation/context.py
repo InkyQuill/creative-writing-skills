@@ -14,16 +14,18 @@ def digest(data):
 
 def build_packet(project, direction, units, scope):
     slug(direction)
+    if not isinstance(scope, dict):
+        raise ValueError('scope must be a JSON object')
     if not units or len(set(units)) != len(units):
         raise ValueError('select unique source units')
     if set(scope) - set(SCOPE_FIELDS):
         raise ValueError('unknown context scope field')
-    catalog = load_catalog(project)
     selected = [resolve_unit(project, ref) for ref in units]
     volumes = {doc.metadata.get('volume-id', '') for _, doc in selected}
     if len(volumes) != 1:
         raise ValueError('request one volume per context packet')
     volume = next(iter(volumes))
+    catalog = load_catalog(project, strict=False, volume=volume)
     settings = effective_direction(project, direction, volume)
     if any(ref.split(':')[0] != settings['primary-edition'] for ref in units):
         raise ValueError('selected units must belong to the primary edition')
@@ -72,7 +74,7 @@ def build_packet(project, direction, units, scope):
                     if ref.split(':')[0] in settings['auxiliary-editions']:
                         auxiliary_paths.add(resolve_unit(project, ref)[0])
     references = [text(path) for path in sorted(auxiliary_paths)]
-    ordered = sorted((d.metadata['unit-id'], p) for p, d in catalog.items() if p.startswith(f'sources/{primary}/') and 'unit-id' in d.metadata and d.metadata.get('volume-id', '') == volume)
+    ordered = sorted((d.metadata.get('order', 0), p) for p, d in catalog.items() if p.startswith(f'sources/{primary}/') and 'unit-id' in d.metadata and d.metadata.get('volume-id', '') == volume)
     chosen_paths = {p for p, _ in selected}
     neighbors = set()
     for index, (_, path) in enumerate(ordered):

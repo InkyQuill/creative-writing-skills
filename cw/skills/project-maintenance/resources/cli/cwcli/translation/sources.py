@@ -15,6 +15,8 @@ def external_bytes(value):
 
 
 def plan_source(project, request):
+    if not isinstance(request, dict):
+        raise ValueError('source request must be a JSON object')
     _, work, enabled = project_settings(project.manifest.metadata)
     if not enabled:
         raise ValueError('enable translation first')
@@ -54,7 +56,11 @@ def plan_source(project, request):
     base = f'sources/{edition}' + (f'/volumes/{volume}' if volume else '')
     if any(d.metadata.get('unit-id') == unit for p, d in load_catalog(project).items() if p.startswith(f'sources/{edition}/')):
         raise ValueError(f'duplicate unit identity: {unit}')
-    metadata = {'unit-id': unit}
+    orders = [d.metadata.get('order', 0) for p, d in load_catalog(project).items() if p.startswith(base + '/text/')]
+    order = request.get('order', max(orders, default=0) + 1)
+    if type(order) is not int or order < 1 or order in orders:
+        raise ValueError('unit order must be a unique positive integer within its volume')
+    metadata = {'unit-id': unit, 'order': order}
     if volume:
         metadata['volume-id'] = volume
     changes = []
