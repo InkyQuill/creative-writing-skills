@@ -25,6 +25,8 @@ def slug(value):
 
 def strings(metadata, key):
     value = metadata.get(key, [])
+    if value == '':
+        return []  # The restricted frontmatter parser reads an empty list as an empty field.
     if not isinstance(value, list) or any(not isinstance(v, str) or not v for v in value):
         raise ValueError(f'{key} must be a list of nonempty strings')
     if len(set(value)) != len(value):

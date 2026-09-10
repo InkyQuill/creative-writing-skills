@@ -68,6 +68,8 @@ def effective_direction(project, direction, volume):
         _, doc = find_record(project, 'edition-id', edition)
         if work == 'series' and volume not in strings(doc.metadata, 'coverage'):
             raise ValueError(f'edition {edition} does not cover {volume}; set an explicit source override')
+    for field in ('auxiliary-editions', 'inheritance', 'coverage'):
+        settings[field] = strings(settings, field)
     return settings
 
 
