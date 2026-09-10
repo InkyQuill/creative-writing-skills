@@ -14,7 +14,7 @@ exceptions described below.
 ## Inspect and prepare context
 
 ```text
-check structure|links|kb|continuity|drafts|prose|journal|all [project]
+check structure|links|kb|continuity|drafts|prose|journal|translation|all [project]
 doctor
 context draft|chapter|kb <path> [--as trusted|reader|character:<id>] [--snapshot]
 clean-context

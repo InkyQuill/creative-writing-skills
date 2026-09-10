@@ -9,7 +9,9 @@ from cwcli.transactions import TransactionEngine
 
 class TranslationDraftTests(TranslationFixture):
     def setUp(self):
-        super().setUp(); self.edition(); self.unit()
+        super().setUp()
+        self.edition()
+        self.unit()
         self.apply(plan_direction(self.project, md({'direction-id': 'ru', 'language': 'ru', 'primary-edition': 'ja', 'coverage': ['v001']})))
         self.path = 'translations/ru/volumes/v001/drafts/first.md'
         self.target = self.root / 'translations/ru/volumes/v001/accepted/first.md'
@@ -37,7 +39,8 @@ class TranslationDraftTests(TranslationFixture):
 
     def test_modified_packet_is_rejected_and_hidden_text_cannot_be_accepted(self):
         packet = build_packet(self.project, 'ru', ('ja:u001',), {})
-        forged = copy.deepcopy(packet); forged['primary-text'][0]['text'] = 'different'
+        forged = copy.deepcopy(packet)
+        forged['primary-text'][0]['text'] = 'different'
         with self.assertRaises(ValueError):
             plan_translation_draft(self.project, 'ru', 'bad', forged, b'text')
         self.draft('<hidden>secret</hidden>')
@@ -47,7 +50,8 @@ class TranslationDraftTests(TranslationFixture):
         self.assertFalse(self.target.exists())
 
     def test_revision_requires_unchanged_accepted_base(self):
-        self.draft(); self.apply(plan_translation_status(self.project, self.path, 'reviewed'))
+        self.draft()
+        self.apply(plan_translation_status(self.project, self.path, 'reviewed'))
         self.apply(plan_translation_accept(self.project, self.path))
         self.draft('Новая версия.')
         self.apply(plan_translation_status(self.project, self.path, 'reviewed'))

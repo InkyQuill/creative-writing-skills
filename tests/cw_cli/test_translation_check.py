@@ -7,7 +7,8 @@ from cwcli.checks.structure import check_structure
 
 class TranslationCheckTests(TranslationFixture):
     def test_missing_translation_is_reported_and_indexes_are_idempotent(self):
-        self.edition(); self.unit()
+        self.edition()
+        self.unit()
         self.apply(plan_direction(self.project, md({'direction-id': 'ru', 'language': 'ru', 'primary-edition': 'ja', 'coverage': ['v001']})))
         findings = check_translation(self.project)
         self.assertTrue(any(f.code == 'CW-TRANS-020' for f in findings))

@@ -588,11 +588,11 @@ def _run_draft(args: argparse.Namespace, *, cwd: Path, stdout: TextIO, stderr: T
 
 
 def _run_migrate(args: argparse.Namespace, *, cwd: Path, stdout: TextIO, stderr: TextIO) -> int:
-    manifest_path = Path(cwd) / "project.md"
-    if manifest_path.is_file() and parse_document(manifest_path.read_bytes()).metadata.get("schema-version") == 2:
-        return _write_command_error(ValueError("v2 projects must not use legacy v1 migration"), conflict=False, output_format=args.format, stdout=stdout, stderr=stderr)
     root = Path(cwd).absolute()
     try:
+        manifest_path = root / "project.md"
+        if manifest_path.is_file() and parse_document(manifest_path.read_bytes()).metadata.get("schema-version") == 2:
+            raise ValueError("v2 projects must not use legacy v1 migration")
         if args.plan:
             if args.expect_plan_hash is not None:
                 raise MigrationPlanError("--expect-plan-hash is valid only with --preview or --apply")

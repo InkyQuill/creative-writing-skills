@@ -1,6 +1,6 @@
 """Boundary-aware record discovery; original files are opaque."""
 import stat
-from ..documents import parse_document
+from ..documents import DocumentError, parse_document
 from .contract import project_settings, translation_kind
 
 
@@ -13,7 +13,7 @@ def read_source(project, relative):
     return path.read_bytes()
 
 
-def load_catalog(project, *, strict=True, volume=None):
+def load_catalog(project, *, strict=True, volume=None, skip_unparseable=False):
     _, work, enabled = project_settings(project.manifest.metadata)
     if not enabled:
         raise ValueError('enable translation before using translation commands')
@@ -30,7 +30,9 @@ def load_catalog(project, *, strict=True, volume=None):
                 raise ValueError(f'mixed book/series layout: {relative}')
         try:
             doc = parse_document(read_source(project, relative))
-        except (OSError, ValueError):
+        except (OSError, ValueError) as error:
+            if skip_unparseable and isinstance(error, DocumentError):
+                continue
             path_volume = parts[3] if len(parts) > 3 and parts[2] == 'volumes' else ''
             if strict or kind != 'source-unit' or (volume is not None and path_volume == volume):
                 raise
@@ -63,8 +65,9 @@ def make_plan(project, command, changes, metadata=None):
     return TransactionPlan(tuple(command), tuple(changes), details)
 
 
-def find_record(project, key, value, *, prefix=''):
-    matches = [(p, d) for p, d in load_catalog(project, strict=False).items() if p.startswith(prefix) and d.metadata.get(key) == value]
+def find_record(project, key, value, *, prefix='', catalog=None):
+    records = load_catalog(project, strict=False) if catalog is None else catalog
+    matches = [(p, d) for p, d in records.items() if p.startswith(prefix) and d.metadata.get(key) == value]
     if len(matches) != 1:
         raise ValueError(f'expected one {key}={value}, found {len(matches)}')
     return matches[0]

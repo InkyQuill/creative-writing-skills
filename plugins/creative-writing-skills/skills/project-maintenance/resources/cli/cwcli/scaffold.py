@@ -42,9 +42,10 @@ def render_scaffold(title: str, language: str, *, kind: str = "authoring", work_
     """Render every authored file in a new project in stable path order."""
 
     if kind == "translation":
+        from .translation.indexes import render_translation_index
         metadata = {"schema-version": 2, "title": title, "language": language, "status": "planning", "project-kind": kind, "work-kind": work_kind, "translation-enabled": True}
         _, files = required_paths(metadata)
-        return {p: _render_document(metadata, f"# {title}\n\nTranslation project. Sources and directions define text languages.\n") if p == "project.md" else _render_document({"generated": True}, "# Index\n") for p in files}
+        return {p: _render_document(metadata, f"# {title}\n\nTranslation project. Sources and directions define text languages.\n") if p == "project.md" else render_translation_index() for p in files}
     rendered: dict[str, bytes] = {}
     for relative_id in SCAFFOLD_FILES:
         if relative_id == "project.md":

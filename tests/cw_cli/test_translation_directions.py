@@ -16,8 +16,11 @@ class TranslationDirectionTests(TranslationFixture):
             effective_direction(self.project, 'ru-other', 'v023')
 
     def test_split_alignment_uses_ids_and_rejects_missing_units(self):
-        self.edition(); self.edition('en', 'en')
-        self.unit(); self.unit('a', 'en'); self.unit('b', 'en')
+        self.edition()
+        self.edition('en', 'en')
+        self.unit()
+        self.unit('a', 'en')
+        self.unit('b', 'en')
         self.apply(plan_alignment(self.project, md({'alignment-id': 'split', 'source-units': ['ja:u001'], 'reference-units': ['en:a', 'en:b'], 'status': 'accepted', 'relation': 'split'})))
         with self.assertRaises(ValueError):
             plan_alignment(self.project, md({'alignment-id': 'bad', 'source-units': ['ja:missing'], 'reference-units': ['en:a'], 'status': 'accepted', 'relation': 'equivalent'}))

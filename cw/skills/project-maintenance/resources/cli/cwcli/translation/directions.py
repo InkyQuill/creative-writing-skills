@@ -4,12 +4,13 @@ from .catalog import find_record, load_catalog, make_plan, read_source, replacem
 from .contract import project_settings, slug, strings
 
 
-def resolve_unit(project, reference):
+def resolve_unit(project, reference, *, catalog=None):
     if not isinstance(reference, str) or reference.count(':') != 1:
         raise ValueError(f'invalid unit reference: {reference}')
     edition, unit = reference.split(':')
-    slug(edition); slug(unit)
-    return find_record(project, 'unit-id', unit, prefix=f'sources/{edition}/')
+    slug(edition)
+    slug(unit)
+    return find_record(project, 'unit-id', unit, prefix=f'sources/{edition}/', catalog=catalog)
 
 
 def plan_direction(project, content):
@@ -23,7 +24,9 @@ def plan_direction(project, content):
         if work != 'series':
             raise ValueError('volume override requires a series')
         root_path = f'translations/{name}/translation.md'
-        read_source(project, root_path)
+        root = parse_document(read_source(project, root_path))
+        if volume not in strings(root.metadata, 'coverage'):
+            raise ValueError(f'direction does not cover {volume}')
         path = f'translations/{name}/volumes/{volume}/settings.md'
         allowed = {'direction-id', 'volume-id', 'primary-edition', 'auxiliary-editions', 'inheritance'}
         if set(doc.metadata) - allowed:
@@ -48,24 +51,27 @@ def plan_direction(project, content):
     return make_plan(project, ('translation', 'direction'), [replacement(project, path, content)])
 
 
-def effective_direction(project, direction, volume):
+def effective_direction(project, direction, volume, *, catalog=None):
     slug(direction)
     path = f'translations/{direction}/translation.md'
-    settings = dict(parse_document(read_source(project, path)).metadata)
+    doc = parse_document(read_source(project, path)) if catalog is None else catalog[path]
+    settings = dict(doc.metadata)
     _, work, _ = project_settings(project.manifest.metadata)
     if work == 'series':
         if volume not in strings(settings, 'coverage'):
             raise ValueError(f'direction does not cover {volume}')
         override = f'translations/{direction}/volumes/{slug(volume)}/settings.md'
         if (project.root / override).exists():
-            metadata = parse_document(read_source(project, override)).metadata
+            metadata = (parse_document(read_source(project, override)) if catalog is None else catalog[override]).metadata
             for field in ('primary-edition', 'auxiliary-editions', 'inheritance'):
                 if field in metadata:
                     settings[field] = metadata[field]
     elif volume:
         raise ValueError('book direction cannot select a volume')
+    if not isinstance(settings.get('primary-edition'), str):
+        raise ValueError('direction requires primary-edition')
     for edition in [settings['primary-edition'], *strings(settings, 'auxiliary-editions')]:
-        _, doc = find_record(project, 'edition-id', edition)
+        _, doc = find_record(project, 'edition-id', edition, catalog=catalog)
         if work == 'series' and volume not in strings(doc.metadata, 'coverage'):
             raise ValueError(f'edition {edition} does not cover {volume}; set an explicit source override')
     for field in ('auxiliary-editions', 'inheritance', 'coverage'):

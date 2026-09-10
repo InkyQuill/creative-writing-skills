@@ -1,13 +1,15 @@
 """Explicit target-language decisions, scoped exceptions and provenance."""
+from itertools import product
 from ..documents import parse_document
 from .catalog import load_catalog, make_plan, read_source, render, replacement
 from .contract import SCOPE_FIELDS, slug, strings, scope_matches, scope_contains
 
 
-def memory_records(project, direction):
+def memory_records(project, direction, *, catalog=None):
     slug(direction)
     read_source(project, f'translations/{direction}/translation.md')
-    return {d.metadata['record-id']: (p, d) for p, d in load_catalog(project, strict=False).items() if p.startswith(f'translations/{direction}/memory/')}
+    catalog = load_catalog(project, strict=False) if catalog is None else catalog
+    return {d.metadata['record-id']: (p, d) for p, d in catalog.items() if p.startswith(f'translations/{direction}/memory/')}
 
 
 def validate_graph(records):
@@ -47,6 +49,8 @@ def plan_memory(project, direction, kind, content):
     path = f'translations/{direction}/memory/' + ('style.md' if kind == 'style' else f'{kind}/{name}.md')
     if name in records and records[name][0] != path:
         raise ValueError('record identity already exists at another path')
+    if any(p == path and identity != name for identity, (p, _) in records.items()):
+        raise ValueError('cannot change record identity at an existing memory path')
     updated = dict(records)
     updated[name] = (path, doc)
     validate_graph(updated)
@@ -59,21 +63,29 @@ def plan_memory(project, direction, kind, content):
     return make_plan(project, ('translation', 'memory'), changes)
 
 
-def select_memory(project, direction, scope):
-    records = memory_records(project, direction)
+def select_memory(project, direction, scope, *, catalog=None):
+    records = memory_records(project, direction, catalog=catalog)
     validate_graph(records)
-    selected = {k: (p, d) for k, (p, d) in records.items() if d.metadata.get('status') == 'accepted' and scope_matches(d.metadata, scope)}
-    excluded = set()
-    for _, doc in selected.values():
-        parent = doc.metadata.get('supersedes')
-        while parent:
-            excluded.add(parent)
-            parent = records[parent][1].metadata.get('supersedes')
-    chosen = [(p, d) for name, (p, d) in selected.items() if name not in excluded]
-    subjects = set()
-    for path, doc in chosen:
-        subject = doc.metadata['subject']
-        if subject in subjects:
-            raise ValueError(f'memory conflict for {subject}: {path}')
-        subjects.add(subject)
-    return tuple(sorted(p for p, _ in chosen))
+    # Resolve supersession per point, then union the rules needed by the batch.
+    # A narrow exception must not erase the general rule for other units.
+    chosen_paths = set()
+    dimensions = [strings(scope, field) or [None] for field in SCOPE_FIELDS]
+    for point in product(*dimensions):
+        context = {field: [value] if value is not None else [] for field, value in zip(SCOPE_FIELDS, point)}
+        selected = {k: (p, d) for k, (p, d) in records.items() if d.metadata.get('status') == 'accepted' and scope_matches(d.metadata, context)}
+        excluded = set()
+        for _, doc in selected.values():
+            parent = doc.metadata.get('supersedes')
+            while parent:
+                excluded.add(parent)
+                parent = records[parent][1].metadata.get('supersedes')
+        subjects = set()
+        for name, (path, doc) in selected.items():
+            if name in excluded:
+                continue
+            subject = doc.metadata['subject']
+            if subject in subjects:
+                raise ValueError(f'memory conflict for {subject}: {path}')
+            subjects.add(subject)
+            chosen_paths.add(path)
+    return tuple(sorted(chosen_paths))

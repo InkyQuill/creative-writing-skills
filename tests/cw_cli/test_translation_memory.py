@@ -5,7 +5,8 @@ from cwcli.translation.memory import plan_memory, select_memory
 
 class TranslationMemoryTests(TranslationFixture):
     def setUp(self):
-        super().setUp(); self.edition(coverage=['v001', 'v023'])
+        super().setUp()
+        self.edition(coverage=['v001', 'v023'])
         for name in ('ru', 'en'):
             self.apply(plan_direction(self.project, md({'direction-id': name, 'language': name, 'primary-edition': 'ja', 'coverage': ['v001', 'v023']})))
 

@@ -22,6 +22,8 @@ def plan_source(project, request):
         raise ValueError('enable translation first')
     action = request.get('action')
     if action == 'edition':
+        if not isinstance(request.get('content'), str):
+            raise ValueError('edition content must be text')
         doc = parse_document(request['content'].encode('utf-8'))
         edition = slug(doc.metadata.get('edition-id'))
         for key in ('language', 'revision-label'):
@@ -65,8 +67,8 @@ def plan_source(project, request):
         metadata['volume-id'] = volume
     changes = []
     if action == 'manuscript-unit':
-        relative = request['manuscript-path']
-        if not relative.startswith(('story/chapters/', 'story/side-stories/')):
+        relative = request.get('manuscript-path')
+        if not isinstance(relative, str) or not relative.startswith(('story/chapters/', 'story/side-stories/')):
             raise ValueError('manuscript source must be accepted story prose')
         data = read_source(project, relative)
         guards[relative] = hashlib.sha256(data).hexdigest()

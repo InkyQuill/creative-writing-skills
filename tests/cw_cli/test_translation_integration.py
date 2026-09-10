@@ -13,7 +13,9 @@ from cwcli.checks.prose import check_prose
 
 class TranslationIntegrationTests(TranslationFixture):
     def setUp(self):
-        super().setUp(); self.edition(); self.unit(text='<AI>source</AI>')
+        super().setUp()
+        self.edition()
+        self.unit(text='<AI>source</AI>')
         self.apply(plan_direction(self.project, md({'direction-id': 'en', 'language': 'en', 'primary-edition': 'ja', 'coverage': ['v001']})))
 
     def run_cli(self, args):
@@ -25,8 +27,10 @@ class TranslationIntegrationTests(TranslationFixture):
     def test_cli_context_draft_review_accept_and_correct_prose_language(self):
         status, packet = self.run_cli(['translation', 'context', '--direction', 'en', '--units', 'ja:u001'])
         self.assertEqual(0, status)
-        packet_file = self.root.parent / 'packet.json'; packet_file.write_text(json.dumps(packet))
-        text_file = self.root.parent / 'draft.md'; text_file.write_text('She offered him tea.')
+        packet_file = self.root.parent / 'packet.json'
+        packet_file.write_text(json.dumps(packet))
+        text_file = self.root.parent / 'draft.md'
+        text_file.write_text('She offered him tea.')
         status, result = self.run_cli(['translation', 'draft', '--direction', 'en', '--draft-id', 'first', '--packet', str(packet_file), '--file', str(text_file), '--apply'])
         self.assertEqual(0, status, result)
         path = 'translations/en/volumes/v001/drafts/first.md'
@@ -72,7 +76,8 @@ class TranslationSeriesScenarioTests(TranslationFixture):
         project = discover_project(book)
         engine = TransactionEngine(project)
         engine.apply(plan_source(project, {'action': 'edition', 'content': md({'edition-id': 'source', 'language': 'ja', 'edition-role': 'original', 'revision-label': 'first'}).decode()}))
-        original = self.root.parent / 'original.txt'; original.write_text('原文')
+        original = self.root.parent / 'original.txt'
+        original.write_text('原文')
         engine.apply(plan_source(project, {'action': 'unit', 'edition': 'source', 'unit': 'one', 'original-file': str(original), 'text-file': str(original)}))
         engine.apply(plan_direction(project, md({'direction-id': 'ru', 'language': 'ru', 'primary-edition': 'source'})))
         packet = build_packet(project, 'ru', ('source:one',), {})

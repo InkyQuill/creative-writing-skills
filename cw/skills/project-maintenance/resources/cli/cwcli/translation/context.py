@@ -12,7 +12,7 @@ def digest(data):
     return hashlib.sha256(data).hexdigest()
 
 
-def build_packet(project, direction, units, scope):
+def build_packet(project, direction, units, scope, *, catalog=None, cache=None):
     slug(direction)
     if not isinstance(scope, dict):
         raise ValueError('scope must be a JSON object')
@@ -20,13 +20,15 @@ def build_packet(project, direction, units, scope):
         raise ValueError('select unique source units')
     if set(scope) - set(SCOPE_FIELDS):
         raise ValueError('unknown context scope field')
-    selected = [resolve_unit(project, ref) for ref in units]
+    lookup_catalog = load_catalog(project, strict=False) if catalog is None else catalog
+    selected = [resolve_unit(project, ref, catalog=lookup_catalog) for ref in units]
     volumes = {doc.metadata.get('volume-id', '') for _, doc in selected}
     if len(volumes) != 1:
         raise ValueError('request one volume per context packet')
     volume = next(iter(volumes))
-    catalog = load_catalog(project, strict=False, volume=volume)
-    settings = effective_direction(project, direction, volume)
+    catalog = load_catalog(project, strict=False, volume=volume) if catalog is None else catalog
+    cache = {} if cache is None else cache
+    settings = effective_direction(project, direction, volume, catalog=catalog)
     if any(ref.split(':')[0] != settings['primary-edition'] for ref in units):
         raise ValueError('selected units must belong to the primary edition')
     context_scope = {field: strings(scope, field) for field in SCOPE_FIELDS}
@@ -37,10 +39,23 @@ def build_packet(project, direction, units, scope):
         context_scope[field] = values
     dependencies = {}
 
+    def cached_read(path):
+        key = ('bytes', path)
+        if key not in cache:
+            data = read_source(project, path)
+            cache[key] = (data, digest(data))
+        return cache[key]
+
     def read(path):
-        data = read_source(project, path)
-        dependencies[path] = digest(data)
+        data, fingerprint = cached_read(path)
+        dependencies[path] = fingerprint
         return data
+
+    def inventory_digest(key, paths):
+        if key not in cache:
+            inventory = {p: cached_read(p)[1] for p in paths}
+            cache[key] = digest(json.dumps(inventory, sort_keys=True).encode())
+        return cache[key]
 
     def text(path):
         doc = parse_document(read(path))
@@ -60,19 +75,18 @@ def build_packet(project, direction, units, scope):
     primary = settings['primary-edition']
     editions = [primary, *settings['auxiliary-editions']]
     for edition in editions:
-        path, _ = find_record(project, 'edition-id', edition)
+        path, _ = find_record(project, 'edition-id', edition, catalog=catalog)
         read(path)
     primary_text = [text(path) for path, _ in selected]
     auxiliary_paths = set()
-    alignment_inventory = {}
+    alignment_digest = inventory_digest(('alignments',), (p for p in catalog if p.startswith('kb/source-comparisons/')))
     for path, doc in catalog.items():
         if path.startswith('kb/source-comparisons/'):
-            alignment_inventory[path] = digest(read_source(project, path))
             if doc.metadata.get('status') == 'accepted' and set(strings(doc.metadata, 'source-units')) & set(units):
                 read(path)
                 for ref in strings(doc.metadata, 'reference-units'):
                     if ref.split(':')[0] in settings['auxiliary-editions']:
-                        auxiliary_paths.add(resolve_unit(project, ref)[0])
+                        auxiliary_paths.add(resolve_unit(project, ref, catalog=catalog)[0])
     references = [text(path) for path in sorted(auxiliary_paths)]
     ordered = sorted((d.metadata.get('order', 0), p) for p, d in catalog.items() if p.startswith(f'sources/{primary}/') and 'unit-id' in d.metadata and d.metadata.get('volume-id', '') == volume)
     chosen_paths = {p for p, _ in selected}
@@ -83,21 +97,26 @@ def build_packet(project, direction, units, scope):
                 if 0 <= index + offset < len(ordered):
                     neighbors.add(ordered[index + offset][1])
     neighbor_text = [text(path) for path in sorted(neighbors - chosen_paths)]
-    rules = [text(path) for path in select_memory(project, direction, context_scope)]
+    rules = []
+    for path in select_memory(project, direction, context_scope, catalog=catalog):
+        metadata = catalog[path].metadata
+        rules.append(dict(text(path), **{'record-id': metadata['record-id'],
+            'scope': {field: strings(metadata, field) for field in SCOPE_FIELDS},
+            'supersedes': metadata.get('supersedes')}))
     entities = []
     for entity in context_scope['scope-entities']:
-        path, _ = find_record(project, 'entity-id', slug(entity))
+        path, _ = find_record(project, 'entity-id', slug(entity), catalog=catalog)
         entities.append(text(path))
-    inventory = {p: digest(read_source(project, p)) for p in catalog if p.startswith(f'translations/{direction}/memory/')}
-    source_inventory = {p: digest(read_source(project, p)) for p in catalog if any(p.startswith(f'sources/{e}/') for e in editions)}
-    _, primary_doc = find_record(project, 'edition-id', primary)
+    memory_digest = inventory_digest(('memory', direction), (p for p in catalog if p.startswith(f'translations/{direction}/memory/')))
+    source_digest = inventory_digest(('sources', *editions), (p for p in catalog if any(p.startswith(f'sources/{e}/') for e in editions)))
+    _, primary_doc = find_record(project, 'edition-id', primary, catalog=catalog)
     return {'packet-version': 1, 'direction': direction, 'units': list(units), 'scope': context_scope,
             'primary-text': primary_text, 'reference-text': references, 'neighbor-text': neighbor_text,
             'rules': rules, 'entities': entities, 'dependencies': dict(sorted(dependencies.items())),
-            'memory-catalog-digest': digest(json.dumps(inventory, sort_keys=True).encode()),
-            'source-catalog-digest': digest(json.dumps(source_inventory, sort_keys=True).encode()),
-            'alignment-catalog-digest': digest(json.dumps(alignment_inventory, sort_keys=True).encode()),
+            'memory-catalog-digest': memory_digest,
+            'source-catalog-digest': source_digest,
+            'alignment-catalog-digest': alignment_digest,
             'provenance': {'primary-edition': primary, 'auxiliary-editions': settings['auxiliary-editions'],
                            'indirect': primary_doc.metadata['edition-role'] == 'translation', 'language': settings['language'],
                            'inheritance': settings['inheritance']},
-            'instructions': 'Primary source controls meaning. Neighbor text is read-only context, not output. Preserve deliberate ambiguity and reveal timing. Hidden material is trusted context only, never publishable prose.'}
+            'instructions': 'Apply each memory rule only within its scope; supersedes overrides its parent only within that scope. Primary source controls meaning. Neighbor text is read-only context, not output. Preserve deliberate ambiguity and reveal timing. Hidden material is trusted context only, never publishable prose.'}

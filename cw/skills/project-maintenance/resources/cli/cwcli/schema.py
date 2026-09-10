@@ -10,6 +10,7 @@ from .findings import Finding
 
 
 SCHEMA_VERSION = 1
+SUPPORTED_SCHEMA_VERSIONS = (1, 2)
 PROJECT_STATUSES = frozenset({"planning", "drafting", "revising", "complete", "archived"})
 GENERATED_INDEX_FILES: tuple[str, ...] = (
     "kb/_index.md",
@@ -198,16 +199,16 @@ def _is_manuscript_reference(value: object) -> bool:
 def _validate_manifest(metadata: dict[str, object], relative_id: str) -> list[Finding]:
     findings: list[Finding] = []
     schema_version = metadata.get("schema-version")
-    if not isinstance(schema_version, int) or isinstance(schema_version, bool) or schema_version not in (1, 2):
+    if not isinstance(schema_version, int) or isinstance(schema_version, bool) or schema_version not in SUPPORTED_SCHEMA_VERSIONS:
         findings.append(
             Finding(
                 code=INVALID_SCHEMA_VERSION,
                 severity="error",
-                message="schema-version must be the actual non-boolean integer 1",
+                message="schema-version must be a supported non-boolean integer 1 or 2",
                 path=relative_id,
                 next_action=(
-                    "Inspect or migrate the project contract, then set schema-version to integer 1 only "
-                    "when it follows schema v1."
+                    "Inspect or migrate the project contract, then set schema-version to the matching "
+                    "supported version (1 or 2)."
                 ),
             )
         )

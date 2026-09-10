@@ -16,6 +16,8 @@ def _draft(project, path):
     doc = parse_document(read_source(project, path))
     if doc.metadata.get('direction-id') != PurePosixPath(path).parts[1]:
         raise ValueError('draft direction does not match path')
+    if doc.metadata.get('status') not in ('draft', 'reviewed', 'accepted'):
+        raise ValueError(f'missing or invalid draft status: {path}')
     return doc
 
 
@@ -33,7 +35,8 @@ def _target(path):
 
 
 def plan_translation_draft(project, direction, draft_id, packet, content):
-    slug(direction); slug(draft_id)
+    slug(direction)
+    slug(draft_id)
     if not isinstance(packet, dict):
         raise ValueError('packet must be a JSON object')
     if packet.get('direction') != direction or packet != build_packet(project, direction, tuple(packet.get('units', [])), packet.get('scope', {})):
@@ -48,7 +51,7 @@ def plan_translation_draft(project, direction, draft_id, packet, content):
     return make_plan(project, ('translation', 'draft'), [replacement(project, path, render(metadata, content.decode('utf-8-sig')))], {'transaction-id': transaction_id, 'translation-packet': packet, 'read-guards': packet['dependencies']})
 
 
-def translation_status(project, draft_path):
+def translation_status(project, draft_path, *, catalog=None, cache=None):
     doc = _draft(project, draft_path)
     packet = _packet(project, doc)
     changed, diagnostics = [], []
@@ -59,7 +62,7 @@ def translation_status(project, draft_path):
         except (OSError, ValueError):
             changed.append(path)
     try:
-        current = build_packet(project, packet['direction'], tuple(packet['units']), packet['scope'])
+        current = build_packet(project, packet['direction'], tuple(packet['units']), packet['scope'], catalog=catalog, cache=cache)
         for key in ('memory-catalog-digest', 'source-catalog-digest', 'alignment-catalog-digest'):
             if packet.get(key) != current.get(key):
                 diagnostics.append(key + ' changed')
@@ -87,9 +90,8 @@ def plan_translation_accept(project, draft_path):
     existing = read_source(project, target) if (project.root / target).exists() else None
     if (digest(existing) if existing is not None else 'absent') != doc.metadata['base-revision']:
         raise ValueError('accepted base changed; preserve the user edit and rebuild the draft')
-    for path, other in load_catalog(project).items():
-        if translation_kind(path) == 'translation-accepted' and path != target and other.metadata.get('direction-id') == doc.metadata['direction-id'] and set(strings(other.metadata, 'source-units')) & set(packet['units']):
-            raise ValueError('duplicate accepted source coverage')
+    coverage_guard = {'direction': doc.metadata['direction-id'], 'target': target, 'units': packet['units']}
+    validate_accepted_coverage(project, coverage_guard)
     _reject_hidden_material(doc.body.encode())
     body = _strip_balanced_ai_wrappers(doc.body)
     _validate_accepted_manuscript(body.encode())
@@ -97,4 +99,13 @@ def plan_translation_accept(project, draft_path):
         raise ValueError('cannot accept empty translation')
     metadata = dict(doc.metadata, status='accepted')
     accepted = render(metadata, body)
-    return make_plan(project, ('translation', 'accept'), [replacement(project, target, accepted), replacement(project, draft_path, render(metadata, doc.body))], {'translation-packet': packet, 'read-guards': packet['dependencies']})
+    return make_plan(project, ('translation', 'accept'), [replacement(project, target, accepted), replacement(project, draft_path, render(metadata, doc.body))], {'accepted-coverage-guard': coverage_guard, 'translation-packet': packet, 'read-guards': packet['dependencies']})
+
+
+def validate_accepted_coverage(project, guard):
+    """Recheck uniqueness under the transaction lock before writing accepted prose."""
+    for path, other in load_catalog(project).items():
+        if (translation_kind(path) == 'translation-accepted' and path != guard['target']
+                and other.metadata.get('direction-id') == guard['direction']
+                and set(strings(other.metadata, 'source-units')) & set(guard['units'])):
+            raise ValueError('duplicate accepted source coverage')

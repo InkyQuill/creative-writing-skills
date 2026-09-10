@@ -822,6 +822,13 @@ class TransactionEngine:
         return inverse
 
     def _validate_read_guards(self, metadata):
+        coverage = metadata.get("accepted-coverage-guard")
+        if coverage is not None:
+            from .translation.drafts import validate_accepted_coverage
+            try:
+                validate_accepted_coverage(self.project, _jsonable(coverage))
+            except (KeyError, OSError, TypeError, ValueError) as error:
+                raise TransactionConflict(f"stale accepted coverage: {error}") from error
         packet = metadata.get("translation-packet")
         if packet is not None:
             from .translation.context import build_packet

@@ -6,7 +6,12 @@ from cwcli.translation.context import build_packet
 
 class TranslationContextTests(TranslationFixture):
     def setUp(self):
-        super().setUp(); self.edition(); self.edition('en', 'en'); self.unit(text='日本語'); self.unit('u002', text='次'); self.unit('en-one', 'en', text='English rendering')
+        super().setUp()
+        self.edition()
+        self.edition('en', 'en')
+        self.unit(text='日本語')
+        self.unit('u002', text='次')
+        self.unit('en-one', 'en', text='English rendering')
         self.apply(plan_direction(self.project, md({'direction-id': 'ru', 'language': 'ru', 'primary-edition': 'ja', 'auxiliary-editions': ['en'], 'coverage': ['v001']})))
         self.apply(plan_alignment(self.project, md({'alignment-id': 'one', 'source-units': ['ja:u001'], 'reference-units': ['en:en-one'], 'status': 'accepted', 'relation': 'equivalent'})))
 

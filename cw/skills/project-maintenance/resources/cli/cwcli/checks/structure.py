@@ -11,7 +11,7 @@ from ..documents import DocumentError, parse_document
 from ..findings import Finding
 from ..project import MANAGED_ROOTS, Project
 from ..schema import (
-    SCHEMA_VERSION,
+    SUPPORTED_SCHEMA_VERSIONS,
     required_paths,
     SCAFFOLD_DIRECTORIES,
     SCAFFOLD_FILES,
@@ -37,7 +37,7 @@ def check_structure(project: Project) -> list[Finding]:
     """Return deterministic findings without mutating or halting on bad files."""
 
     schema_version = project.manifest.metadata.get("schema-version")
-    if isinstance(schema_version, int) and not isinstance(schema_version, bool) and schema_version > 2:
+    if isinstance(schema_version, int) and not isinstance(schema_version, bool) and schema_version > max(SUPPORTED_SCHEMA_VERSIONS):
         return [
             Finding(
                 code=NEWER_SCHEMA,
@@ -84,7 +84,7 @@ def check_structure(project: Project) -> list[Finding]:
                 Finding(
                     code=ILLEGAL_LOCATION,
                     severity="warning",
-                    message="Markdown is not in a schema-v1 allowed managed location",
+                    message="Markdown is not in an allowed managed location for this project schema",
                     path=relative_id,
                     next_action=(
                         "Identify this artifact's role, then move it to an allowed managed directory "

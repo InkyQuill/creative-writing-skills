@@ -10,6 +10,9 @@ runtime is `plugins/creative-writing-skills/` and the canonical manifest is
 
 `cw/` is committed generated output for Claude Code, Cowork, Claude.ai, and
 ZCode. It is never an independent source tree and must not be hand-edited.
+Generated skills do not need separate content or code review: review their
+canonical sources instead. Keep the generator synchronization checks; they
+verify that the generated distribution matches those reviewed sources.
 Make every runtime change in the canonical plugin first, then regenerate `cw/`.
 
 The repository marketplace is `.agents/plugins/marketplace.json`. The exact
