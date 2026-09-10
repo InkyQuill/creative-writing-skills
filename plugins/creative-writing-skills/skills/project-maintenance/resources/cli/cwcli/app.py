@@ -21,7 +21,7 @@ from .context import (
     render_snapshot,
 )
 from .doctor import diagnose_project
-from .documents import DocumentError, logical_hash
+from .documents import parse_document, DocumentError, logical_hash
 from .drafts import (
     DraftConflict,
     DraftError,
@@ -97,6 +97,9 @@ def _parser(*, error_stream: TextIO) -> argparse.ArgumentParser:
     parser.add_argument("--strict", action="store_true", help="treat warnings as failures")
     commands = parser.add_subparsers(dest="command", parser_class=_Parser)
 
+    from .translation.commands import add_commands
+    add_commands(commands, error_stream)
+
     check = commands.add_parser("check", error_stream=error_stream)
     check_commands = check.add_subparsers(dest="check_command", required=True, parser_class=_Parser)
     for name in (*sorted(CHECKERS), "all"):
@@ -124,6 +127,8 @@ def _parser(*, error_stream: TextIO) -> argparse.ArgumentParser:
     init.add_argument("path", nargs="?", default=".")
     init.add_argument("--title", required=True)
     init.add_argument("--language", required=True)
+    init.add_argument("--kind", choices=("authoring", "translation"), default="authoring")
+    init.add_argument("--work-kind", choices=("book", "series"), default="book")
     _mutation_options(init)
 
     reindex = commands.add_parser("reindex", error_stream=error_stream)
@@ -223,6 +228,10 @@ def run(argv: list[str], *, cwd: Path, stdout: TextIO, stderr: TextIO) -> int:
             stdout.write(f"cw {__version__}")
         stdout.write("\n")
         return 0
+
+    if args.command == "translation":
+        from .translation.commands import run_translation
+        return run_translation(args, cwd=cwd, stdout=stdout, stderr=stderr)
 
     if args.command == "init":
         return _run_init(args, cwd=cwd, stdout=stdout, stderr=stderr)
@@ -473,13 +482,13 @@ def _run_recover(args: argparse.Namespace, *, cwd: Path, stdout: TextIO, stderr:
 def _run_init(args: argparse.Namespace, *, cwd: Path, stdout: TextIO, stderr: TextIO) -> int:
     target = _from_cwd(cwd, args.path)
     try:
-        plan = preview_init(target, args.title, args.language)
+        plan = preview_init(target, args.title, args.language, kind=args.kind, work_kind=args.work_kind)
         if not args.apply:
             json.dump(_init_preview(plan), stdout)
             stdout.write("\n")
             return 0
 
-        applied = apply_init(target, args.title, args.language)
+        applied = apply_init(target, args.title, args.language, kind=args.kind, work_kind=args.work_kind)
         record = applied.record
         _write_command_data(
             {
@@ -579,6 +588,9 @@ def _run_draft(args: argparse.Namespace, *, cwd: Path, stdout: TextIO, stderr: T
 
 
 def _run_migrate(args: argparse.Namespace, *, cwd: Path, stdout: TextIO, stderr: TextIO) -> int:
+    manifest_path = Path(cwd) / "project.md"
+    if manifest_path.is_file() and parse_document(manifest_path.read_bytes()).metadata.get("schema-version") == 2:
+        return _write_command_error(ValueError("v2 projects must not use legacy v1 migration"), conflict=False, output_format=args.format, stdout=stdout, stderr=stderr)
     root = Path(cwd).absolute()
     try:
         if args.plan:

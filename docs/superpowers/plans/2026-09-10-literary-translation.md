@@ -229,7 +229,7 @@ if version == 1:
 
 **Interfaces:** Add optional keyword-only `kind="authoring", work_kind="book"` to scaffold public calls. `commands.add_commands(subparsers, error_stream)` and `commands.run_translation(args, *, cwd, stdout, stderr) -> int` attach to existing app dispatch. Transaction metadata may include `read-guards: {relative_path: exact_sha256}` and `translation-packet`; old journals without these keys retain behavior. Reject any guard path crossing protected read boundaries, links or nested projects. Validate guards before first apply write; recovery continues the stored transaction and retains the original snapshot rather than rebasing it.
 
-- [ ] Add preview/apply tests using the existing `app.run` injection pattern:
+- [x] Add preview/apply tests using the existing `app.run` injection pattern:
 
 ```python
 stdout, stderr = io.StringIO(), io.StringIO()
@@ -240,9 +240,9 @@ self.assertEqual(0, status, stderr.getvalue())
 self.assertFalse(root.exists())
 ```
 
-- [ ] Run `python3 -m unittest tests.cw_cli.test_translation_setup -v`; expect argparse rejection until implemented.
-- [ ] Implement new initialization using `required_paths`, and `translation enable` as one plan changing manifest and creating absent translation directories/indexes. Existing populated `sources/` or `translations/` require explicit registration, never automatic adoption or overwrite. Preserve author manuscript bytes and unknown paths; do not route canonical v2 through legacy v1 migration. Legacy migration on v2 returns an actionable unsupported-operation error without writes.
-- [ ] Add transaction guard checks using exact binary digests, not UTF-8 logical hashes:
+- [x] Run `python3 -m unittest tests.cw_cli.test_translation_setup -v`; expect argparse rejection until implemented.
+- [x] Implement new initialization using `required_paths`, and `translation enable` as one plan changing manifest and creating absent translation directories/indexes. Existing populated `sources/` or `translations/` require explicit registration, never automatic adoption or overwrite. Preserve author manuscript bytes and unknown paths; do not route canonical v2 through legacy v1 migration. Legacy migration on v2 returns an actionable unsupported-operation error without writes.
+- [x] Add transaction guard checks using exact binary digests, not UTF-8 logical hashes:
 
 ```python
 import hashlib
@@ -253,8 +253,8 @@ if actual != expected_digest:
 
 Read through existing safe regular-file facilities, validate metadata when preparing/loading a journal, and preserve preview purity. This is optimistic conflict detection consistent with existing transactions, not a promise to lock out external editors.
 
-- [ ] Test a source edited between preview and apply: conflict, no output write. Test undo of enable, interrupted apply/recovery, unknown schema rejection and old init unchanged. Run all four listed modules.
-- [ ] Commit task files: `feat: initialize and enable translation projects safely`.
+- [x] Test a source edited between preview and apply: conflict, no output write. Test undo of enable, interrupted apply/recovery, unknown schema rejection and old init unchanged. Run all four listed modules.
+- [x] Commit task files: `feat: initialize and enable translation projects safely`.
 
 ## Task 3: Source editions, opaque originals and working revisions
 

@@ -550,6 +550,7 @@ class TransactionEngine:
             # Staging may take time. Re-resolve and re-read every target before
             # allowing the first externally visible replacement.
             self._validate_changes(plan.changes)
+            self._validate_read_guards(plan.metadata)
 
             for change in plan.changes:
                 intents.append(change.path)
@@ -820,7 +821,23 @@ class TransactionEngine:
             raise
         return inverse
 
+    def _validate_read_guards(self, metadata):
+        guards = metadata.get("read-guards", {})
+        if not isinstance(guards, Mapping):
+            raise TransactionError("read-guards must be a mapping")
+        for relative, digest in guards.items():
+            _validate_digest(digest, "read guard")
+            try:
+                target = self.project.resolve(relative, for_write=True)
+                with _open_regular_file(target, "guarded source") as stream:
+                    actual = hashlib.sha256(stream.read()).hexdigest()
+            except (OSError, ValueError, TransactionError) as error:
+                raise TransactionConflict(f"unreadable guarded source {relative}: {error}") from error
+            if actual != digest:
+                raise TransactionConflict(f"stale read precondition for {relative}")
+
     def _validate_plan(self, plan: TransactionPlan) -> None:
+        self._validate_read_guards(plan.metadata)
         self._validate_directories(plan.metadata)
         self._validate_changes(plan.changes)
 

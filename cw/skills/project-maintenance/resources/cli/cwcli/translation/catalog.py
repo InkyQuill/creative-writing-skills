@@ -41,3 +41,17 @@ def load_catalog(project):
             identities.add(identity)
         records[relative] = doc
     return records
+
+
+def make_plan(project, command, changes, metadata=None):
+    """Add recoverable creation of every missing output parent."""
+    from ..transactions import TransactionPlan
+    directories = set()
+    for change in changes:
+        parent = project.resolve(change.path, for_write=True).parent
+        while parent != project.root and not parent.exists():
+            directories.add(project.relative_id(parent))
+            parent = parent.parent
+    details = dict(metadata or {})
+    details['directory-changes'] = {'create': sorted(directories, key=lambda p: (p.count('/'), p)), 'remove': []}
+    return TransactionPlan(tuple(command), tuple(changes), details)
