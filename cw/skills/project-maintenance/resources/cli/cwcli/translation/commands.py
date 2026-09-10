@@ -21,6 +21,11 @@ def add_commands(subparsers, error_stream):
     source.add_argument('--request', required=True)
     source.add_argument('--apply', action='store_true')
     source.add_argument('--format', choices=('text', 'json'), default=argparse.SUPPRESS)
+    for name in ('direction', 'alignment'):
+        command = commands.add_parser(name, error_stream=error_stream)
+        command.add_argument('--file', required=True)
+        command.add_argument('--apply', action='store_true')
+        command.add_argument('--format', choices=('text', 'json'), default=argparse.SUPPRESS)
 
 
 def plan_enable(project, work_kind):
@@ -48,6 +53,10 @@ def run_translation(args, *, cwd, stdout, stderr):
         project = discover_project(cwd)
         if args.translation_command == 'enable':
             plan = plan_enable(project, args.work_kind)
+        elif args.translation_command in ('direction', 'alignment'):
+            from .directions import plan_direction, plan_alignment
+            planner = plan_direction if args.translation_command == 'direction' else plan_alignment
+            plan = planner(project, (cwd / args.file).read_bytes())
         else:
             from .sources import plan_source
             request_path = Path(args.request)

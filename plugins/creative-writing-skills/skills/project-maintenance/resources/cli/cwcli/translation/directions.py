@@ -1,0 +1,90 @@
+"""Explicit source precedence, coverage and edition alignment."""
+from ..documents import parse_document
+from .catalog import find_record, load_catalog, make_plan, read_source, replacement
+from .contract import project_settings, slug, strings
+
+
+def resolve_unit(project, reference):
+    if not isinstance(reference, str) or reference.count(':') != 1:
+        raise ValueError(f'invalid unit reference: {reference}')
+    edition, unit = reference.split(':')
+    slug(edition); slug(unit)
+    return find_record(project, 'unit-id', unit, prefix=f'sources/{edition}/')
+
+
+def plan_direction(project, content):
+    _, work, _ = project_settings(project.manifest.metadata)
+    load_catalog(project)
+    doc = parse_document(content)
+    name = slug(doc.metadata.get('direction-id'))
+    volume = doc.metadata.get('volume-id')
+    if volume is not None:
+        slug(volume)
+        if work != 'series':
+            raise ValueError('volume override requires a series')
+        root_path = f'translations/{name}/translation.md'
+        read_source(project, root_path)
+        path = f'translations/{name}/volumes/{volume}/settings.md'
+        allowed = {'direction-id', 'volume-id', 'primary-edition', 'auxiliary-editions', 'inheritance'}
+        if set(doc.metadata) - allowed:
+            raise ValueError('volume overrides may change only source and inheritance fields')
+    else:
+        path = f'translations/{name}/translation.md'
+        if not isinstance(doc.metadata.get('language'), str) or not doc.metadata['language'].strip():
+            raise ValueError('direction requires target language')
+        if 'primary-edition' not in doc.metadata:
+            raise ValueError('direction requires primary-edition')
+        for item in strings(doc.metadata, 'coverage'):
+            slug(item)
+    for field in ('auxiliary-editions', 'inheritance'):
+        strings(doc.metadata, field)
+    editions = strings(doc.metadata, 'auxiliary-editions')
+    if 'primary-edition' in doc.metadata:
+        editions = [doc.metadata['primary-edition'], *editions]
+    if len(editions) != len(set(editions)):
+        raise ValueError('primary and auxiliary sources must be distinct')
+    for edition in editions:
+        find_record(project, 'edition-id', slug(edition))
+    return make_plan(project, ('translation', 'direction'), [replacement(project, path, content)])
+
+
+def effective_direction(project, direction, volume):
+    slug(direction)
+    path = f'translations/{direction}/translation.md'
+    settings = dict(parse_document(read_source(project, path)).metadata)
+    _, work, _ = project_settings(project.manifest.metadata)
+    if work == 'series':
+        if volume not in strings(settings, 'coverage'):
+            raise ValueError(f'direction does not cover {volume}')
+        override = f'translations/{direction}/volumes/{slug(volume)}/settings.md'
+        if (project.root / override).exists():
+            metadata = parse_document(read_source(project, override)).metadata
+            for field in ('primary-edition', 'auxiliary-editions', 'inheritance'):
+                if field in metadata:
+                    settings[field] = metadata[field]
+    elif volume:
+        raise ValueError('book direction cannot select a volume')
+    for edition in [settings['primary-edition'], *strings(settings, 'auxiliary-editions')]:
+        _, doc = find_record(project, 'edition-id', edition)
+        if work == 'series' and volume not in strings(doc.metadata, 'coverage'):
+            raise ValueError(f'edition {edition} does not cover {volume}; set an explicit source override')
+    return settings
+
+
+def plan_alignment(project, content):
+    doc = parse_document(content)
+    name = slug(doc.metadata.get('alignment-id'))
+    source, reference = strings(doc.metadata, 'source-units'), strings(doc.metadata, 'reference-units')
+    relation = doc.metadata.get('relation')
+    if doc.metadata.get('status') not in ('observed', 'accepted'):
+        raise ValueError('alignment must be observed or accepted')
+    if not source or relation not in ('equivalent', 'split', 'merge', 'reordered', 'omitted'):
+        raise ValueError('alignment needs source units and a valid relation')
+    if relation == 'omitted':
+        if reference or not doc.body.strip():
+            raise ValueError('omitted alignment needs an explanation and no reference units')
+    elif not reference:
+        raise ValueError('alignment needs reference units')
+    for unit in [*source, *reference]:
+        resolve_unit(project, unit)
+    return make_plan(project, ('translation', 'alignment'), [replacement(project, f'kb/source-comparisons/{name}.md', content)])

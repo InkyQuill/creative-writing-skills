@@ -303,7 +303,7 @@ return TransactionPlan(("translation", "source"), tuple(changes), metadata)
 
 **Interfaces:** Implements `plan_direction`, `plan_alignment`. Add `effective_direction(project, direction, volume) -> dict[str, object]` in `directions.py`. `direction --file` accepts either a full direction record or a volume settings record containing `direction-id` and `volume-id`. Root direction must exist before applying an override.
 
-- [ ] Write tests for two same-language directions and per-volume precedence:
+- [x] Write tests for two same-language directions and per-volume precedence:
 
 ```python
 settings = effective_direction(project, "ru-main", "v023")
@@ -313,8 +313,8 @@ self.assertEqual([], settings["auxiliary-editions"])
 
 Fixture: root names `en-official` as auxiliary, v023 override explicitly has an empty auxiliary list because the edition ends at v022. Also test absence of an override: unavailable auxiliary is reported, not silently fabricated; required primary absence blocks the affected unit.
 
-- [ ] Run `python3 -m unittest tests.cw_cli.test_translation_directions -v`; expect missing service.
-- [ ] Implement flat field override, validating source IDs, language tags, coverage and reference cycles. An empty list is an explicit replacement, not missing:
+- [x] Run `python3 -m unittest tests.cw_cli.test_translation_directions -v`; expect missing service.
+- [x] Implement flat field override, validating source IDs, language tags, coverage and reference cycles. An empty list is an explicit replacement, not missing:
 
 ```python
 effective = dict(direction_metadata)
@@ -323,8 +323,8 @@ for field in ("primary-edition", "auxiliary-editions", "inheritance"):
         effective[field] = volume_metadata[field]
 ```
 
-- [ ] Implement explicit alignments as independent Markdown records. Test one-to-many, many-to-one, reordered and omitted records, accepted versus observed status, invalid references and distinct editions with identical chapter titles. Translation source as primary is accepted with indirect provenance.
-- [ ] Run module and contract tests. Commit: `feat: model translation directions and source alignment`.
+- [x] Implement explicit alignments as independent Markdown records. Test one-to-many, many-to-one, reordered and omitted records, accepted versus observed status, invalid references and distinct editions with identical chapter titles. Translation source as primary is accepted with indirect provenance.
+- [x] Run module and contract tests. Commit: `feat: model translation directions and source alignment`.
 
 ## Task 5: Scoped memory with explicit acceptance and precedence
 
