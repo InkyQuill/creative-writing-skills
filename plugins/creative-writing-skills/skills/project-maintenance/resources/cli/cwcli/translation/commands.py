@@ -32,6 +32,11 @@ def add_commands(subparsers, error_stream):
     memory.add_argument('--file', required=True)
     memory.add_argument('--apply', action='store_true')
     memory.add_argument('--format', choices=('text', 'json'), default=argparse.SUPPRESS)
+    context = commands.add_parser('context', error_stream=error_stream)
+    context.add_argument('--direction', required=True)
+    context.add_argument('--units', nargs='+', required=True)
+    context.add_argument('--scope')
+    context.add_argument('--format', choices=('text', 'json'), default=argparse.SUPPRESS)
 
 
 def plan_enable(project, work_kind):
@@ -57,6 +62,12 @@ def run_translation(args, *, cwd, stdout, stderr):
     from ..app import _preview_or_apply, _write_command_error
     try:
         project = discover_project(cwd)
+        if args.translation_command == 'context':
+            from .context import build_packet
+            scope = json.loads((cwd / args.scope).read_text()) if args.scope else {}
+            packet = build_packet(project, args.direction, tuple(args.units), scope)
+            stdout.write(json.dumps(packet, ensure_ascii=False, indent=2) + '\n')
+            return 0
         if args.translation_command == 'enable':
             plan = plan_enable(project, args.work_kind)
         elif args.translation_command == 'memory':

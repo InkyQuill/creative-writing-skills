@@ -373,7 +373,7 @@ Validate list types before matching. Select accepted rules only; reject overlapp
 
 **Interfaces:** Implements `build_packet`. JSON shape: `packet-version: 1`, `direction`, `units`, `scope`, `primary-text`, `reference-text`, `neighbor-text`, `rules`, `dependencies`, `memory-catalog-digest`, `provenance`. Text values are ordered lists of `{path, text}` objects. Dependencies map regular project paths to exact SHA-256. Rules come from `select_memory`; source resolution from catalog/effective direction. The catalog digest covers the direction's entire memory inventory to detect newly added applicable rules, not just changes to previously selected files.
 
-- [ ] Add packet tests using task-3 source and task-5 memory fixtures:
+- [x] Add packet tests using task-3 source and task-5 memory fixtures:
 
 ```python
 packet = build_packet(project, "ru-main", ("ja-original:u001",), {})
@@ -383,8 +383,8 @@ self.assertIn("translations/ru-main/translation.md", packet["dependencies"])
 self.assertNotIn("translations/en-continuation/memory/style.md", packet["dependencies"])
 ```
 
-- [ ] Run `python3 -m unittest tests.cw_cli.test_translation_context -v`; expect missing packet builder.
-- [ ] Build text from exact source revisions and relevant accepted alignments; include adjacent units read-only with clear exclusion from the translation scope. Derived scope-units and scope-volumes cannot be contradicted by input. Include primary/auxiliary settings, evidence and neighbor dependencies, manifest and selected memory. No automatic five-chunk sampling is treated as a complete glossary.
+- [x] Run `python3 -m unittest tests.cw_cli.test_translation_context -v`; expect missing packet builder.
+- [x] Build text from exact source revisions and relevant accepted alignments; include adjacent units read-only with clear exclusion from the translation scope. Derived scope-units and scope-volumes cannot be contradicted by input. Include primary/auxiliary settings, evidence and neighbor dependencies, manifest and selected memory. No automatic five-chunk sampling is treated as a complete glossary.
 
 ```python
 dependencies = {path: hashlib.sha256(data).hexdigest()
@@ -393,8 +393,8 @@ dependencies = {path: hashlib.sha256(data).hexdigest()
 
 All reads use catalog boundary enforcement. Packet metadata explicitly states source precedence, indirect translation provenance, and the requirement to preserve early ambiguity. Hidden content remains marked in trusted translator packets, never becomes publishable prose. Do not reuse unrestricted packets as character/reader simulation contexts.
 
-- [ ] Test incomplete auxiliary coverage with an explicit override, changed neighbor text, new memory records, source alignment changes, missing primary and stable output on unchanged files. A partial failure must identify only affected units; separate context requests for other units succeed.
-- [ ] Run context and existing context-redaction tests. Commit: `feat: assemble versioned literary translation context`.
+- [x] Test incomplete auxiliary coverage with an explicit override, changed neighbor text, new memory records, source alignment changes, missing primary and stable output on unchanged files. A partial failure must identify only affected units; separate context requests for other units succeed.
+- [x] Run context and existing context-redaction tests. Commit: `feat: assemble versioned literary translation context`.
 
 ## Task 7: Draft acceptance, freshness, indexes and project health
 
