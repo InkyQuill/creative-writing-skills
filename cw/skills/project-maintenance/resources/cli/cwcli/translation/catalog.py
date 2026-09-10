@@ -55,3 +55,21 @@ def make_plan(project, command, changes, metadata=None):
     details = dict(metadata or {})
     details['directory-changes'] = {'create': sorted(directories, key=lambda p: (p.count('/'), p)), 'remove': []}
     return TransactionPlan(tuple(command), tuple(changes), details)
+
+
+def find_record(project, key, value, *, prefix=''):
+    matches = [(p, d) for p, d in load_catalog(project).items() if p.startswith(prefix) and d.metadata.get(key) == value]
+    if len(matches) != 1:
+        raise ValueError(f'expected one {key}={value}, found {len(matches)}')
+    return matches[0]
+
+
+def render(metadata, body):
+    from ..documents import Document, render_document
+    return render_document(Document(metadata, body, '\n', False))
+
+
+def replacement(project, path, data):
+    from ..transactions import Change
+    target = project.resolve(path, for_write=True)
+    return Change(path, read_source(project, path) if target.exists() else None, data)

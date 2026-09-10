@@ -1,5 +1,7 @@
 """Translation command adapters. Planning never mutates project files."""
 import argparse
+import json
+from pathlib import Path
 from dataclasses import replace
 from ..documents import Document, render_document
 from ..project import discover_project
@@ -15,6 +17,10 @@ def add_commands(subparsers, error_stream):
     enable.add_argument('--work-kind', choices=('book', 'series'), default='book')
     enable.add_argument('--apply', action='store_true')
     enable.add_argument('--format', choices=('text', 'json'), default=argparse.SUPPRESS)
+    source = commands.add_parser('source', error_stream=error_stream)
+    source.add_argument('--request', required=True)
+    source.add_argument('--apply', action='store_true')
+    source.add_argument('--format', choices=('text', 'json'), default=argparse.SUPPRESS)
 
 
 def plan_enable(project, work_kind):
@@ -40,7 +46,18 @@ def run_translation(args, *, cwd, stdout, stderr):
     from ..app import _preview_or_apply, _write_command_error
     try:
         project = discover_project(cwd)
-        plan = plan_enable(project, args.work_kind)
+        if args.translation_command == 'enable':
+            plan = plan_enable(project, args.work_kind)
+        else:
+            from .sources import plan_source
+            request_path = Path(args.request)
+            if not request_path.is_absolute():
+                request_path = cwd / request_path
+            request = json.loads(request_path.read_text())
+            for field in ('original-file', 'text-file'):
+                if field in request and not Path(request[field]).is_absolute():
+                    request[field] = str(cwd / request[field])
+            plan = plan_source(project, request)
         return _preview_or_apply(TransactionEngine(project), plan, apply=args.apply, output_format=args.format, stdout=stdout)
     except (OSError, ValueError, TransactionError) as error:
         return _write_command_error(error, conflict=isinstance(error, TransactionConflict), output_format=args.format, stdout=stdout, stderr=stderr)

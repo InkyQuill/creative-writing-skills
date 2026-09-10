@@ -267,7 +267,7 @@ Read through existing safe regular-file facilities, validate metadata when prepa
 
 **Interfaces:** Implements `plan_source`. Request actions: `edition` with `content` Markdown string; `unit` with `edition`, `unit`, optional `volume`, `original-file`, `text-file`; `manuscript-unit` with `edition`, `unit`, optional `volume`, `manuscript-path`; `refresh-unit` with `edition`, `unit`, `text-file`. Import paths are explicit user-selected external regular files; source target paths are generated internally. Refuse symlink input and nonregular files. Existing original destinations cannot be replaced. A new supplied original uses a new edition identity; refreshing extraction preserves originals.
 
-- [ ] Write source tests; use a temporary v2 project initialized by the task-2 CLI. The helper `apply_plan(project, plan)` may follow the existing transaction test setup, but must invoke the real engine, not directly write planned changes.
+- [x] Write source tests; use a temporary v2 project initialized by the task-2 CLI. The helper `apply_plan(project, plan)` may follow the existing transaction test setup, but must invoke the real engine, not directly write planned changes.
 
 ```python
 request = {"action": "unit", "edition": "ja-original", "unit": "u001",
@@ -280,8 +280,8 @@ self.assertEqual(before, copies[0].after)
 self.assertIsNone(copies[0].before)
 ```
 
-- [ ] Run `python3 -m unittest tests.cw_cli.test_translation_sources -v`; expect missing `plan_source`.
-- [ ] Implement imports as `Change` objects plus provenance in edition/unit records. Use SHA-256 for original bytes and existing journal snapshots for all overwritten working text. `refresh-unit` changes only working text/provenance, preserving `unit-id`. A manuscript descriptor reads the actual `story/` file; do not create a prose copy in `sources/`.
+- [x] Run `python3 -m unittest tests.cw_cli.test_translation_sources -v`; expect missing `plan_source`.
+- [x] Implement imports as `Change` objects plus provenance in edition/unit records. Use SHA-256 for original bytes and existing journal snapshots for all overwritten working text. `refresh-unit` changes only working text/provenance, preserving `unit-id`. A manuscript descriptor reads the actual `story/` file; do not create a prose copy in `sources/`.
 
 ```python
 changes.append(Change(destination, None, original_bytes))
@@ -290,8 +290,8 @@ metadata = {"read-guards": current_project_input_hashes,
 return TransactionPlan(("translation", "source"), tuple(changes), metadata)
 ```
 
-- [ ] Protect `originals/` and domain identity/lifecycle frontmatter from generic agent edits while allowing direct user changes to be detected. Test binary and Markdown originals, extraction correction, missing volume coverage, manuscript edit detection, duplicate identity, nested project and symlink refusal.
-- [ ] Run source tests plus `tests.cw_cli.test_edits`, `tests.cw_cli.test_transactions_apply`. Commit: `feat: register translation sources with preserved provenance`.
+- [x] Protect `originals/` and domain identity/lifecycle frontmatter from generic agent edits while allowing direct user changes to be detected. Test binary and Markdown originals, extraction correction, missing volume coverage, manuscript edit detection, duplicate identity, nested project and symlink refusal.
+- [x] Run source tests plus `tests.cw_cli.test_edits`, `tests.cw_cli.test_transactions_apply`. Commit: `feat: register translation sources with preserved provenance`.
 
 ## Task 4: Directions, explicit coverage and alignment
 

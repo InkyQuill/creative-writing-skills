@@ -61,6 +61,8 @@ def plan_edits(project: Project, operations: Iterable[EditOperation]) -> Transac
     for operation in validated:
         relative = operation["path"]
         assert isinstance(relative, str)
+        if relative.startswith("sources/") and "originals" in Path(relative).parts:
+            raise EditPlanError("original sources cannot be edited")
         if Path(relative).name.casefold() == "_index.md":
             raise EditPlanError(f"generated index cannot be edited directly: {relative}")
         if Path(relative).suffix.casefold() != ".md":
