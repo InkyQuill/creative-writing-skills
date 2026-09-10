@@ -1,0 +1,43 @@
+"""Boundary-aware record discovery; original files are opaque."""
+import stat
+from ..documents import parse_document
+from .contract import project_settings, translation_kind
+
+
+def read_source(project, relative):
+    # The write resolver provides portable-name, link and nested-boundary checks,
+    # without performing a write. Internal journal reads use TransactionStore.
+    path = project.resolve(relative, for_write=True)
+    if not stat.S_ISREG(path.lstat().st_mode):
+        raise ValueError(f'not a regular source: {relative}')
+    return path.read_bytes()
+
+
+def load_catalog(project):
+    _, work, enabled = project_settings(project.manifest.metadata)
+    if not enabled:
+        raise ValueError('enable translation before using translation commands')
+    records, identities = {}, set()
+    for path in project.iter_managed_markdown():
+        relative = project.relative_id(path)
+        kind = translation_kind(relative)
+        if kind is None or kind == 'generated-index':
+            continue
+        parts = path.relative_to(project.root).parts
+        if parts[0] in ('sources', 'translations'):
+            volume_path = len(parts) > 3 and parts[2] == 'volumes'
+            if kind in ('source-unit', 'translation-drafts', 'translation-reviews', 'translation-accepted', 'direction-settings') and volume_path != (work == 'series'):
+                raise ValueError(f'mixed book/series layout: {relative}')
+        doc = parse_document(read_source(project, relative))
+        key = {'edition': 'edition-id', 'direction': 'direction-id', 'source-unit': 'unit-id', 'entity': 'entity-id', 'alignment': 'alignment-id', 'translation-memory': 'record-id'}.get(kind)
+        if key:
+            value = doc.metadata.get(key)
+            if not isinstance(value, str) or not value:
+                raise ValueError(f'missing {key}: {relative}')
+            namespace = parts[1] if kind in ('source-unit', 'translation-memory') else ''
+            identity = (kind, namespace, value)
+            if identity in identities:
+                raise ValueError(f'duplicate {key}: {value}')
+            identities.add(identity)
+        records[relative] = doc
+    return records

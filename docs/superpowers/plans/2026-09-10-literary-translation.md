@@ -184,7 +184,7 @@ All commands support `--format json`. `context` emits the packet without mutatin
 
 **Interfaces:** Produces `project_settings` and `catalog.load_catalog(project) -> dict[str, Document]`, keyed by project-relative path. Catalog reads regular permitted records, rejects symlink/nested-boundary references and duplicate domain IDs, skips opaque originals. Preserve existing `allowed_document_kind(relative_id)` as a v1 default; add keyword `schema_version=1` for v2 callers. Add `schema.required_paths(metadata) -> tuple[tuple[str, ...], tuple[str, ...]]` returning directories/files for the selected project kind. Existing v1 constants retain their meanings.
 
-- [ ] Add failing tests including this compatibility example:
+- [x] Add failing tests including this compatibility example:
 
 ```python
 import unittest
@@ -202,8 +202,8 @@ class TranslationContractTests(unittest.TestCase):
             "work-kind": "series", "translation-enabled": True, "language": "ru"}))
 ```
 
-- [ ] Run `PYTHONDONTWRITEBYTECODE=1 python3 -m unittest tests.cw_cli.test_translation_contract -v`; expect missing module/interface failure.
-- [ ] Implement schema dispatch without changing YAML parsing. Use this branching core, then enforce v2 enum/boolean fields with `ValueError` in services and findings in read-only checks:
+- [x] Run `PYTHONDONTWRITEBYTECODE=1 python3 -m unittest tests.cw_cli.test_translation_contract -v`; expect missing module/interface failure.
+- [x] Implement schema dispatch without changing YAML parsing. Use this branching core, then enforce v2 enum/boolean fields with `ValueError` in services and findings in read-only checks:
 
 ```python
 version = metadata.get("schema-version")
@@ -213,9 +213,9 @@ if version == 1:
     return "authoring", "book", False
 ```
 
-- [ ] Extend managed walking only for enabled v2: `sources` and `translations`; prune every `originals` subtree before parsing. Register strict v2 record paths including per-volume settings and shared entity/alignment paths. Test mixed book/series layout rejection and identical IDs at renamed paths. Keep unknown entries untouched.
-- [ ] Run the four listed test modules. Assert v1 generated paths and errors remain unchanged, standalone translation does not require `story/`, and sources outside the nearest project cannot be read through a reference.
-- [ ] Commit task files and their generated counterparts: `feat: define compatible translation project schema`.
+- [x] Extend managed walking only for enabled v2: `sources` and `translations`; prune every `originals` subtree before parsing. Register strict v2 record paths including per-volume settings and shared entity/alignment paths. Test mixed book/series layout rejection and identical IDs at renamed paths. Keep unknown entries untouched.
+- [x] Run the four listed test modules. Assert v1 generated paths and errors remain unchanged, standalone translation does not require `story/`, and sources outside the nearest project cannot be read through a reference.
+- [x] Commit task files and their generated counterparts: `feat: define compatible translation project schema`.
 
 ## Task 2: Recoverable setup, enabling and transaction input guards
 

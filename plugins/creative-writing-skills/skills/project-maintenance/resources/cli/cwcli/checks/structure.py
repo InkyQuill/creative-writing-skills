@@ -12,6 +12,7 @@ from ..findings import Finding
 from ..project import MANAGED_ROOTS, Project
 from ..schema import (
     SCHEMA_VERSION,
+    required_paths,
     SCAFFOLD_DIRECTORIES,
     SCAFFOLD_FILES,
     allowed_document_kind,
@@ -36,7 +37,7 @@ def check_structure(project: Project) -> list[Finding]:
     """Return deterministic findings without mutating or halting on bad files."""
 
     schema_version = project.manifest.metadata.get("schema-version")
-    if isinstance(schema_version, int) and not isinstance(schema_version, bool) and schema_version > SCHEMA_VERSION:
+    if isinstance(schema_version, int) and not isinstance(schema_version, bool) and schema_version > 2:
         return [
             Finding(
                 code=NEWER_SCHEMA,
@@ -51,11 +52,15 @@ def check_structure(project: Project) -> list[Finding]:
         ]
 
     findings: list[Finding] = []
-    for relative_id in SCAFFOLD_DIRECTORIES:
+    try:
+        required_dirs, required_files = required_paths(project.manifest.metadata)
+    except ValueError:
+        required_dirs, required_files = SCAFFOLD_DIRECTORIES, SCAFFOLD_FILES
+    for relative_id in required_dirs:
         finding = _expected_path_finding(project, relative_id, expected_kind="directory")
         if finding is not None:
             findings.append(finding)
-    for relative_id in SCAFFOLD_FILES:
+    for relative_id in required_files:
         finding = _expected_path_finding(project, relative_id, expected_kind="regular file")
         if finding is not None:
             findings.append(finding)
@@ -73,7 +78,7 @@ def check_structure(project: Project) -> list[Finding]:
     side_story_anchors: dict[str, str] = {}
     for path in project.iter_managed_markdown():
         relative_id = project.relative_id(path)
-        document_kind = allowed_document_kind(relative_id)
+        document_kind = allowed_document_kind(relative_id, schema_version=project.manifest.metadata.get("schema-version", 1))
         if document_kind is None:
             findings.append(
                 Finding(
@@ -113,7 +118,7 @@ def check_structure(project: Project) -> list[Finding]:
             side_story_anchors[relative_id] = str(document.metadata["after"])
         number = document.metadata.get("number")
         if (
-            allowed_document_kind(relative_id) == "chapter"
+            allowed_document_kind(relative_id, schema_version=project.manifest.metadata.get("schema-version", 1)) == "chapter"
             and isinstance(number, int)
             and not isinstance(number, bool)
             and number >= 1

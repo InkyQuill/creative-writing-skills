@@ -89,9 +89,14 @@ INVALID_SIDE_STORY_SUBTYPE = "CW-SCHEMA-032"
 INVALID_GENERATED_MARKER = "CW-SCHEMA-040"
 
 
-def allowed_document_kind(relative_id: str) -> str | None:
+def allowed_document_kind(relative_id: str, *, schema_version: int = 1) -> str | None:
     """Return the schema-v1 path-inferred kind for an allowed Markdown path."""
 
+    if schema_version == 2:
+        from .translation.contract import translation_kind
+        kind = translation_kind(relative_id)
+        if kind is not None:
+            return kind
     if relative_id == "project.md":
         return "manifest"
     if relative_id in GENERATED_INDEX_FILES:
@@ -193,7 +198,7 @@ def _is_manuscript_reference(value: object) -> bool:
 def _validate_manifest(metadata: dict[str, object], relative_id: str) -> list[Finding]:
     findings: list[Finding] = []
     schema_version = metadata.get("schema-version")
-    if not isinstance(schema_version, int) or isinstance(schema_version, bool) or schema_version != SCHEMA_VERSION:
+    if not isinstance(schema_version, int) or isinstance(schema_version, bool) or schema_version not in (1, 2):
         findings.append(
             Finding(
                 code=INVALID_SCHEMA_VERSION,
@@ -206,6 +211,12 @@ def _validate_manifest(metadata: dict[str, object], relative_id: str) -> list[Fi
                 ),
             )
         )
+    if schema_version == 2:
+        from .translation.contract import project_settings
+        try:
+            project_settings(metadata)
+        except ValueError as error:
+            findings.append(Finding(code=INVALID_SCHEMA_VERSION, severity="error", message=str(error), path=relative_id, next_action="Repair v2 project settings."))
     findings.extend(
         _validate_non_empty_string(
             metadata,
@@ -317,3 +328,17 @@ __all__ = [
     "prose_profile",
     "validate_metadata",
 ]
+
+
+def required_paths(metadata):
+    from .translation.contract import project_settings
+    kind, _, enabled = project_settings(metadata)
+    if not enabled:
+        return SCAFFOLD_DIRECTORIES, SCAFFOLD_FILES
+    extra_dirs = ('sources', 'translations', 'kb/entities', 'kb/source-comparisons')
+    extra_files = tuple(p + '/_index.md' for p in extra_dirs)
+    dirs, files = SCAFFOLD_DIRECTORIES, SCAFFOLD_FILES
+    if kind == 'translation':
+        dirs = tuple(p for p in dirs if p in ('.creative-writing', '.creative-writing/context', '.creative-writing/transactions', 'kb'))
+        files = ('project.md', 'kb/_index.md')
+    return tuple(sorted(set(dirs + extra_dirs))), tuple(sorted(set(files + extra_files)))
