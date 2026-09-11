@@ -10,6 +10,7 @@ from .findings import Finding
 
 
 SCHEMA_VERSION = 1
+SUPPORTED_SCHEMA_VERSIONS = (1, 2)
 PROJECT_STATUSES = frozenset({"planning", "drafting", "revising", "complete", "archived"})
 GENERATED_INDEX_FILES: tuple[str, ...] = (
     "kb/_index.md",
@@ -89,9 +90,14 @@ INVALID_SIDE_STORY_SUBTYPE = "CW-SCHEMA-032"
 INVALID_GENERATED_MARKER = "CW-SCHEMA-040"
 
 
-def allowed_document_kind(relative_id: str) -> str | None:
+def allowed_document_kind(relative_id: str, *, schema_version: int = 1) -> str | None:
     """Return the schema-v1 path-inferred kind for an allowed Markdown path."""
 
+    if schema_version == 2:
+        from .translation.contract import translation_kind
+        kind = translation_kind(relative_id)
+        if kind is not None:
+            return kind
     if relative_id == "project.md":
         return "manifest"
     if relative_id in GENERATED_INDEX_FILES:
@@ -193,19 +199,25 @@ def _is_manuscript_reference(value: object) -> bool:
 def _validate_manifest(metadata: dict[str, object], relative_id: str) -> list[Finding]:
     findings: list[Finding] = []
     schema_version = metadata.get("schema-version")
-    if not isinstance(schema_version, int) or isinstance(schema_version, bool) or schema_version != SCHEMA_VERSION:
+    if not isinstance(schema_version, int) or isinstance(schema_version, bool) or schema_version not in SUPPORTED_SCHEMA_VERSIONS:
         findings.append(
             Finding(
                 code=INVALID_SCHEMA_VERSION,
                 severity="error",
-                message="schema-version must be the actual non-boolean integer 1",
+                message="schema-version must be a supported non-boolean integer 1 or 2",
                 path=relative_id,
                 next_action=(
-                    "Inspect or migrate the project contract, then set schema-version to integer 1 only "
-                    "when it follows schema v1."
+                    "Inspect or migrate the project contract, then set schema-version to the matching "
+                    "supported version (1 or 2)."
                 ),
             )
         )
+    if schema_version == 2:
+        from .translation.contract import project_settings
+        try:
+            project_settings(metadata)
+        except ValueError as error:
+            findings.append(Finding(code=INVALID_SCHEMA_VERSION, severity="error", message=str(error), path=relative_id, next_action="Repair v2 project settings."))
     findings.extend(
         _validate_non_empty_string(
             metadata,
@@ -317,3 +329,17 @@ __all__ = [
     "prose_profile",
     "validate_metadata",
 ]
+
+
+def required_paths(metadata):
+    from .translation.contract import project_settings
+    kind, _, enabled = project_settings(metadata)
+    if not enabled:
+        return SCAFFOLD_DIRECTORIES, SCAFFOLD_FILES
+    extra_dirs = ('sources', 'translations', 'kb/entities', 'kb/source-comparisons')
+    extra_files = tuple(p + '/_index.md' for p in extra_dirs)
+    dirs, files = SCAFFOLD_DIRECTORIES, SCAFFOLD_FILES
+    if kind == 'translation':
+        dirs = tuple(p for p in dirs if p in ('.creative-writing', '.creative-writing/context', '.creative-writing/transactions', 'kb'))
+        files = ('project.md', 'kb/_index.md')
+    return tuple(sorted(set(dirs + extra_dirs))), tuple(sorted(set(files + extra_files)))

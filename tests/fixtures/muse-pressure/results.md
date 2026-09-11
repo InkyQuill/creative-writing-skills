@@ -1,5 +1,10 @@
 # Muse Pressure Verification
 
+Historical evidence: the embedded skill snapshot and its hash identify the tested
+version. The 2026-09-10 translation extension is evaluated separately in
+`tests/fixtures/translation-pressure/results.md`; these old outputs were not rerun
+or relabeled as results of the extended muse.
+
 Revised skill SHA-256: `4bdc98391d9fb95e1117e7d9971f765eb6cad54cac5b40f03da8434f464392cb`
 
 `<repo-root>` denotes the root of the checkout used to replay these samples.

@@ -11,7 +11,7 @@ from pathlib import Path
 from .documents import Document, parse_document, render_document
 from .indexes import render_index
 from .project import MANAGED_ROOTS, Project
-from .schema import GENERATED_INDEX_FILES, SCHEMA_VERSION, SCAFFOLD_DIRECTORIES, SCAFFOLD_FILES
+from .schema import GENERATED_INDEX_FILES, SCHEMA_VERSION, SCAFFOLD_DIRECTORIES, SCAFFOLD_FILES, required_paths
 from .transactions import Change, TransactionEngine, TransactionPlan, TransactionRecord, _fsync_directory
 
 _STARTER_DOCUMENTS = {
@@ -38,9 +38,14 @@ _STARTER_DOCUMENTS = {
 }
 
 
-def render_scaffold(title: str, language: str) -> dict[str, bytes]:
+def render_scaffold(title: str, language: str, *, kind: str = "authoring", work_kind: str = "book") -> dict[str, bytes]:
     """Render every authored file in a new project in stable path order."""
 
+    if kind == "translation":
+        from .translation.indexes import render_translation_index
+        metadata = {"schema-version": 2, "title": title, "language": language, "status": "planning", "project-kind": kind, "work-kind": work_kind, "translation-enabled": True}
+        _, files = required_paths(metadata)
+        return {p: _render_document(metadata, f"# {title}\n\nTranslation project. Sources and directions define text languages.\n") if p == "project.md" else render_translation_index() for p in files}
     rendered: dict[str, bytes] = {}
     for relative_id in SCAFFOLD_FILES:
         if relative_id == "project.md":
@@ -71,14 +76,15 @@ class AppliedInit:
     diagnostics: tuple[str, ...] = ()
 
 
-def plan_init(target: Path, title: str, language: str) -> TransactionPlan:
+def plan_init(target: Path, title: str, language: str, *, kind: str = "authoring", work_kind: str = "book") -> TransactionPlan:
     """Plan missing scaffold files for an absent or existing ordinary folder."""
 
     root = Path(target).absolute()
     _validate_init_target(root)
-    rendered = render_scaffold(title, language)
+    rendered = render_scaffold(title, language, kind=kind, work_kind=work_kind)
+    directories, _ = required_paths(parse_document(rendered["project.md"]).metadata)
     created_directories = tuple(
-        relative for relative in SCAFFOLD_DIRECTORIES if not (root / relative).is_dir()
+        relative for relative in directories if not (root / relative).is_dir()
     )
     protected_directories = tuple(
         relative
@@ -103,21 +109,21 @@ def plan_init(target: Path, title: str, language: str) -> TransactionPlan:
     )
 
 
-def apply_init(target: Path, title: str, language: str) -> AppliedInit:
+def apply_init(target: Path, title: str, language: str, *, kind: str = "authoring", work_kind: str = "book") -> AppliedInit:
     """Apply bootstrap atomically for an absent target or transactionally in-place."""
 
     root = Path(target).absolute()
     if root.exists() or root.is_symlink():
-        plan = plan_init(root, title, language)
-        _create_scaffold_directories(root)
-        return AppliedInit(TransactionEngine(_bootstrap_project(root, title, language)).apply(plan))
-    return _apply_absent_init(root, title, language)
+        plan = plan_init(root, title, language, kind=kind, work_kind=work_kind)
+        _create_scaffold_directories(root, kind=kind, work_kind=work_kind)
+        return AppliedInit(TransactionEngine(_bootstrap_project(root, title, language, kind=kind, work_kind=work_kind)).apply(plan))
+    return _apply_absent_init(root, title, language, kind=kind, work_kind=work_kind)
 
 
-def preview_init(target: Path, title: str, language: str) -> TransactionPlan:
+def preview_init(target: Path, title: str, language: str, *, kind: str = "authoring", work_kind: str = "book") -> TransactionPlan:
     """Return the bootstrap plan without creating the target or any parent."""
 
-    return plan_init(Path(target).absolute(), title, language)
+    return plan_init(Path(target).absolute(), title, language, kind=kind, work_kind=work_kind)
 
 
 def _validate_init_target(root: Path) -> None:
@@ -141,7 +147,7 @@ def _validate_init_target(root: Path) -> None:
         if schema_version != SCHEMA_VERSION or isinstance(schema_version, bool):
             raise InitError(_migration_message("project.md uses an incompatible schema"))
 
-    for name in MANAGED_ROOTS:
+    for name in (*MANAGED_ROOTS, "sources", "translations"):
         managed = root / name
         if managed.is_symlink() or (managed.exists() and not managed.is_dir()):
             raise InitError(_migration_message(f"managed root {name} has an incompatible kind"))
@@ -192,18 +198,19 @@ def _migration_message(reason: str) -> str:
     return f"{reason}; use cw migrate --plan instead of init to preserve managed content"
 
 
-def _bootstrap_project(root: Path, title: str, language: str) -> Project:
+def _bootstrap_project(root: Path, title: str, language: str, *, kind: str = "authoring", work_kind: str = "book") -> Project:
     manifest_path = root / "project.md"
     manifest_bytes = (
         manifest_path.read_bytes()
         if manifest_path.is_file() and not manifest_path.is_symlink()
-        else render_scaffold(title, language)["project.md"]
+        else render_scaffold(title, language, kind=kind, work_kind=work_kind)["project.md"]
     )
     return Project(root=root.resolve(), manifest=parse_document(manifest_bytes))
 
 
-def _create_scaffold_directories(root: Path) -> None:
-    for relative in SCAFFOLD_DIRECTORIES:
+def _create_scaffold_directories(root: Path, *, kind="authoring", work_kind="book") -> None:
+    directories, _ = required_paths(parse_document(render_scaffold("Project", "en", kind=kind, work_kind=work_kind)["project.md"]).metadata)
+    for relative in directories:
         directory = root / relative
         if directory.is_symlink() or (directory.exists() and not directory.is_dir()):
             raise InitError(f"cannot create scaffold directory {relative}: incompatible path")
@@ -211,13 +218,13 @@ def _create_scaffold_directories(root: Path) -> None:
         _fsync_directory(directory.parent)
 
 
-def _apply_absent_init(root: Path, title: str, language: str) -> AppliedInit:
+def _apply_absent_init(root: Path, title: str, language: str, *, kind: str = "authoring", work_kind: str = "book") -> AppliedInit:
     temporary = Path(tempfile.mkdtemp(prefix=f".{root.name}.cw-init-", dir=root.parent))
     installed = False
     try:
-        plan = plan_init(temporary, title, language)
-        _create_scaffold_directories(temporary)
-        record = TransactionEngine(_bootstrap_project(temporary, title, language)).apply(plan)
+        plan = plan_init(temporary, title, language, kind=kind, work_kind=work_kind)
+        _create_scaffold_directories(temporary, kind=kind, work_kind=work_kind)
+        record = TransactionEngine(_bootstrap_project(temporary, title, language, kind=kind, work_kind=work_kind)).apply(plan)
         _fsync_tree(temporary)
         if root.exists() or root.is_symlink():
             raise InitError("initialization target appeared while bootstrap was being prepared")

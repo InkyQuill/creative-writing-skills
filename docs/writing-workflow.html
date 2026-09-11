@@ -367,7 +367,7 @@
       "story-memory": {
         "name": "story-memory",
         "path": "plugins/creative-writing-skills/skills/story-memory/SKILL.md",
-        "description": "Creative-writing domain knowledge for durable story state. Load when preserving or retrieving project memory \u2014 fact extraction, context scoping, reference writing, artifact layout, and issue tracking. Apply it directly for fiction-specific categories and conventions during knowledge work.",
+        "description": "Creative-writing domain knowledge for durable story state. Load when preserving or retrieving project memory — fact extraction, context scoping, reference writing, artifact layout, and issue tracking. Apply it directly for fiction-specific categories and conventions during knowledge work.",
         "type": "reference",
         "modelInvocable": true,
         "loads": [],
@@ -479,7 +479,7 @@
       "decision-grill": {
         "name": "decision-grill",
         "path": "plugins/creative-writing-skills/skills/decision-grill/SKILL.md",
-        "description": "Use when challenging a plan \u2014 grills the author against documented decisions and sharpens terminology.",
+        "description": "Use when challenging a plan — grills the author against documented decisions and sharpens terminology.",
         "type": "canonical skill",
         "modelInvocable": true,
         "loads": [
@@ -680,7 +680,7 @@
       "structured-artifact": {
         "name": "structured-artifact",
         "path": "plugins/creative-writing-skills/skills/structured-artifact/SKILL.md",
-        "description": "Load when building a static HTML artifact \u2014 single page or multi-page site \u2014\nto make structured information explorable through layout and navigation.",
+        "description": "Load when building a static HTML artifact — single page or multi-page site —\nto make structured information explorable through layout and navigation.",
         "type": "canonical skill",
         "modelInvocable": true,
         "loads": [
@@ -704,13 +704,61 @@
       "zoom-out": {
         "name": "zoom-out",
         "path": "plugins/creative-writing-skills/skills/zoom-out/SKILL.md",
-        "description": "Use when orienting in an unfamiliar area \u2014 fans out exploration across structure, knowledge, and history, then synthesizes one orientation map.",
+        "description": "Use when orienting in an unfamiliar area — fans out exploration across structure, knowledge, and history, then synthesizes one orientation map.",
         "type": "canonical skill",
         "modelInvocable": true,
         "loads": [
           "qi-layer"
         ],
         "resources": [],
+        "source": "canonical plugin"
+      },
+      "literary-translation": {
+        "name": "literary-translation",
+        "path": "plugins/creative-writing-skills/skills/literary-translation/SKILL.md",
+        "description": "Translate literary prose, books, or series; continue an existing translation; or coordinate several target-language editions using primary originals, reference translations, character voices, and durable translation decisions.",
+        "type": "workflow",
+        "modelInvocable": true,
+        "loads": [
+          "creative-writing-muse",
+          "project-maintenance",
+          "project-setup",
+          "translation-memory",
+          "translation-review"
+        ],
+        "resources": [
+          "resources/workflow.md"
+        ],
+        "source": "canonical plugin"
+      },
+      "translation-memory": {
+        "name": "translation-memory",
+        "path": "plugins/creative-writing-skills/skills/translation-memory/SKILL.md",
+        "description": "Preserve or retrieve literary translation terminology, names, character and narrator voices, source-edition comparisons, inheritance policies, and scoped translation decisions across books and target languages.",
+        "type": "reference",
+        "modelInvocable": true,
+        "loads": [
+          "project-maintenance",
+          "story-memory"
+        ],
+        "resources": [
+          "resources/records.md"
+        ],
+        "source": "canonical plugin"
+      },
+      "translation-review": {
+        "name": "translation-review",
+        "path": "plugins/creative-writing-skills/skills/translation-review/SKILL.md",
+        "description": "Review literary translations against primary originals and reference editions for fidelity, omissions, additions, ambiguity, voice continuity, terminology, and natural target-language prose; review revisions without flattening style.",
+        "type": "workflow",
+        "modelInvocable": true,
+        "loads": [
+          "project-maintenance",
+          "translation-memory"
+        ],
+        "resources": [
+          "resources/review-rubric.md"
+        ],
         "source": "canonical plugin"
       }
     }

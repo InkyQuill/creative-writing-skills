@@ -14,7 +14,7 @@ exceptions described below.
 ## Inspect and prepare context
 
 ```text
-check structure|links|kb|continuity|drafts|prose|journal|all [project]
+check structure|links|kb|continuity|drafts|prose|journal|translation|all [project]
 doctor
 context draft|chapter|kb <path> [--as trusted|reader|character:<id>] [--snapshot]
 clean-context
@@ -115,3 +115,116 @@ Match-count guards apply to all whitespace-equivalent matches.
   unrelated creative work while planning a bounded repair.
 - Exit 2: the CLI could not execute. Follow the `cli-doctor` workflow; keep
   runtime setup away from the author.
+
+
+## Literary translation (schema v2)
+
+All mutations preview by default and execute only with `--apply`. All commands
+support `--format json`; the agent prepares files and runs mechanics.
+Transaction writes hold a project-wide OS lock through validation, installation
+and rollback (`flock` on POSIX, a named mutex on Windows).
+Context scope is limited to 4096 combinations of units, entities and
+relationships per volume; split larger requests into smaller packets.
+
+```bash
+cw init book --title "Book" --language ru --kind translation --work-kind series
+cw translation enable --work-kind series
+cw translation source --request source.json
+cw translation direction --file direction.md
+cw translation alignment --file alignment.md
+cw translation memory --direction ru --kind voices --file voice.md
+cw translation memory --kind entity --file entity.md
+cw translation context --direction ru --units ja:u001 --scope scope.json
+cw translation draft --direction ru --draft-id first --packet packet.json --file prose.md
+cw translation set-status translations/ru/volumes/v001/drafts/first.md reviewed
+cw translation accept translations/ru/volumes/v001/drafts/first.md
+cw translation status translations/ru/volumes/v001/drafts/first.md
+cw check translation
+cw reindex
+```
+
+`source.json` is one request object. An edition request contains `action: edition`
+and `content`, a Markdown string with edition frontmatter and provenance body.
+Other requests use these shapes (paths are resolved from command working directory):
+
+```json
+{"action":"unit","edition":"ja","unit":"u001","volume":"v001","original-file":"input.pdf","text-file":"extracted.md"}
+```
+
+```json
+{"action":"refresh-unit","edition":"ja","unit":"u001","text-file":"corrected.md"}
+```
+
+```json
+{"action":"manuscript-unit","edition":"ja","unit":"u001","volume":"v001","manuscript-path":"story/chapters/one.md"}
+```
+
+Omit `volume` for a book. Unit requests optionally accept a positive integer
+`order`; otherwise they append in import order. Duplicate orders are rejected. Original imports are regular, explicitly selected files;
+no automatic converter is run. Existing original destinations cannot be replaced.
+Example edition content and direction file:
+
+```markdown
+---
+edition-id: ja
+language: ja
+edition-role: original
+revision-label: first
+coverage:
+  - v001
+---
+# Japanese edition
+Record supplied edition provenance here.
+```
+
+```markdown
+---
+direction-id: ru
+language: ru
+primary-edition: ja
+auxiliary-editions:
+coverage:
+  - v001
+inheritance:
+---
+# Russian translation
+Follow the Japanese source for meaning; preserve deliberate ambiguity.
+```
+
+An empty list is written as a bare field with no list items. This is the existing
+restricted frontmatter format, not nested YAML or inline `[]`.
+
+A voice record uses this structure; replace its body with actual evidence-based
+instructions. Accepted status must represent a settled decision.
+
+```markdown
+---
+record-id: host-voice
+subject: host-voice
+status: proposed
+scope-volumes:
+  - v001
+scope-entities:
+  - host
+evidence:
+  - "ja:u001 — Chapter 3: Scene where the host threatens the guest"
+---
+Observation: the host remains formally courteous.
+Proposal: preserve formal address and composed syntax even in threats.
+```
+
+Register the corresponding entity before including its identity in context
+scope. Example `scope.json`: `{"scope-entities":["host"]}`. Volume and unit
+scope are derived from selected units; contradictory overrides are rejected.
+The context command emits a read-only JSON packet. Save that output to a
+temporary file for `--packet`; do not edit its source text or dependency fields.
+Packets include trusted hidden context and must not be treated as publication
+artifacts or character/reader simulation contexts.
+
+Directions, alignments and memory are registered/updated from their Markdown
+files. Volume settings include `direction-id` and `volume-id` and only override
+source/inheritance fields. For `memory`, kinds are terms, voices, decisions,
+style, and shared entity. Use generic exact edits for draft prose; use domain
+commands for protected lifecycle metadata. `history`, `undo`, and `recover`
+apply to translation transactions too. A changed base or input requires a
+fresh reviewed draft, never a forced accept.

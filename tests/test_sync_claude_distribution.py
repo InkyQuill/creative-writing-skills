@@ -28,6 +28,7 @@ from scripts.sync_claude_distribution import (
 
 
 EXPECTED_SKILLS = {
+    "literary-translation", "translation-memory", "translation-review",
     "character-sim",
     "cli-doctor",
     "creative-research",
@@ -1109,7 +1110,7 @@ class ClaudeDistributionCliTests(unittest.TestCase):
                 apply_status = main(["--apply"], repo_root=repo_root)
 
             self.assertEqual(0, apply_status)
-            self.assertEqual(32, apply_output.getvalue().count("synced skill "))
+            self.assertEqual(35, apply_output.getvalue().count("synced skill "))
             self.assertEqual(11, apply_output.getvalue().count("synced agent "))
             marketplace = json.loads(marketplace_path.read_text())
             canonical_manifest = json.loads(

@@ -69,3 +69,76 @@ Contract drift that can be repaired without guessing is an agent task. An
 unknown schema, unsafe path, changed precondition, ambiguous anchor, or
 unrecoverable journal requires a conflict finding and no write. These
 mechanical constraints do not decide literary meaning.
+
+
+## Schema v2: literary translation
+
+Schema v1 remains supported unchanged. Enabling translation uses schema v2 with
+`project-kind: authoring` or `translation`, `work-kind: book` or `series`, and
+`translation-enabled: true`. Unknown schema versions are not mutation targets.
+A v2 author project keeps `story/`, `work/`, `kb/` and its manuscript-language
+meaning. In a standalone translation project `language` describes working
+communication/documentation, not all text; no author manuscript scaffold is
+required. Each edition and direction declares its own language.
+
+Additional managed roots are `sources/` and `translations/`. Shared identities
+live in `kb/entities/`; explicit comparisons in `kb/source-comparisons/`. Opaque
+original files, including Markdown, are excluded from managed text walking and
+generic edits. All mutations preserve nested boundaries, unknown files and
+recoverability. Per-direction indexes and the source index are derived.
+
+An edition at `sources/<edition>/edition.md` declares `edition-id`, `language`,
+`edition-role` (original or translation), `revision-label` and `coverage` (volume
+IDs). Supplied files live in `originals/` and working source units in `text/`.
+For a series, both directories live under `volumes/<volume>/`; for a book they
+are directly under the edition. Do not mix these layouts. A unit has `unit-id`, positive `order` within its volume,
+optional `volume-id`, and `original-path` plus `original-sha256`, or a
+`manuscript-path` reference to existing author prose. Unit identities are unique
+within an edition and survive file renames. A different supplied original
+revision uses a new edition; extraction corrections retain the unit identity.
+
+A direction at `translations/<direction>/translation.md` declares
+`direction-id`, target `language`, `primary-edition`, `auxiliary-editions`,
+`coverage` and optional `inheritance` categories. Its body contains literary
+strategy. Several directions/editions may share a language. A series permits
+`volumes/<volume>/settings.md` to override explicit source/inheritance fields;
+missing fields inherit, empty fields clear lists. Do not fall back from a
+missing primary or silently use an unavailable auxiliary. A translation edition
+may be primary, but preserve indirect provenance.
+
+Direction memory uses `memory/terms/`, `memory/voices/`, `memory/decisions/` and
+`memory/style.md`. Each record has `record-id`, `subject`, `status`, `evidence`
+and optional `scope-volumes`, `scope-units`, `scope-entities`,
+`scope-relationships`, `supersedes`. Scope dimensions combine with AND; list
+entries within a dimension combine with OR. Empty scope is unrestricted.
+Unit references use `edition:unit`. Statuses are `observed`, `proposed`,
+`accepted`, `superseded`. Actual instructions and examples remain in the body.
+An explicit narrower exception leaves the general rule active elsewhere;
+same-scope replacement supersedes the predecessor. Conflicts and cycles are
+findings, not permission to choose a rule silently.
+
+Alignment records carry `alignment-id`, `source-units`, `reference-units`,
+`status` (observed/accepted), and `relation` (equivalent/split/merge/reordered/
+omitted). Omission needs a body explanation and no target units. No equal
+paragraph or chapter count is required. Shared entities use `entity-id` and
+evidence; they do not impose a rendering on all directions.
+
+A direction's `drafts/`, `reviews/`, `accepted/` directories are direct children
+for a book, or under `volumes/<volume>/` for a series. A draft stores
+`direction-id`, `draft-id`, `source-units`, `packet-transaction`, `base-revision`
+and lifecycle status (`draft`, `reviewed`, `accepted`). The journal transaction
+retains its exact context packet, source provenance and dependency hashes.
+Review records a prose hash; later prose edits require a new review. Acceptance
+checks the input snapshot and existing accepted base. It never changes another
+direction or automatically accepts memory proposals.
+
+Acceptance and freshness are separate: an accepted text can need review after a
+source or memory change. Adding a new rule also invalidates prior contexts.
+Rebuild and review a draft to revise accepted prose. Do not manually maintain
+snapshots, hashes, protected identifiers or generated indexes. Direct user edits
+remain inputs and must be preserved. Technical checks cannot certify semantic
+completeness or literary quality.
+
+Source import assigns the next order within a volume unless the request provides
+an explicit unique positive order. Import units in reading order or supply it;
+context neighbors use this order, never alphabetic identity.

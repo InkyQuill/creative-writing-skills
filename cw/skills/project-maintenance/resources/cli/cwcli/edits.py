@@ -61,6 +61,8 @@ def plan_edits(project: Project, operations: Iterable[EditOperation]) -> Transac
     for operation in validated:
         relative = operation["path"]
         assert isinstance(relative, str)
+        if relative.startswith("sources/") and "originals" in Path(relative).parts:
+            raise EditPlanError("original sources cannot be edited")
         if Path(relative).name.casefold() == "_index.md":
             raise EditPlanError(f"generated index cannot be edited directly: {relative}")
         if Path(relative).suffix.casefold() != ".md":
@@ -71,6 +73,10 @@ def plan_edits(project: Project, operations: Iterable[EditOperation]) -> Transac
             raise EditPlanError(str(error)) from error
         if not target.is_file() or target.is_symlink():
             raise EditPlanError(f"edit target is not an existing regular file: {relative}")
+        if project.manifest.metadata.get("schema-version") == 2 and operation.get("op") == "frontmatter-set":
+            protected = {"unit-id", "edition-id", "direction-id", "entity-id", "record-id", "alignment-id", "draft-id", "packet-transaction", "source-units", "review-hash", "original-path", "original-sha256", "manuscript-path", "project-kind", "work-kind", "translation-enabled"}
+            if operation.get("key") in protected:
+                raise EditPlanError("use a translation domain command to change identity or lifecycle metadata")
         targets.setdefault(relative, target)
 
     originals: dict[str, bytes] = {}

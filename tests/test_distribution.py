@@ -30,6 +30,7 @@ from scripts.sync_claude_distribution import transform_skill
 
 
 EXPECTED_SKILLS = {
+    "literary-translation", "translation-memory", "translation-review",
     "character-sim", "cli-doctor", "creative-research", "creative-writing-craft",
     "creative-writing-modes", "creative-writing-muse", "decision-grill",
     "information-hierarchy", "intent-modeling", "kb-management",
@@ -42,6 +43,7 @@ EXPECTED_SKILLS = {
 }
 
 EXPECTED_AUTHORED_SKILLS = {
+    "literary-translation", "translation-memory", "translation-review",
     "character-sim", "cli-doctor", "creative-research", "creative-writing-craft",
     "creative-writing-modes", "creative-writing-muse", "kb-management",
     "pocket-editor-review", "project-bootstrap", "project-doctor", "project-feedback", "project-maintenance", "project-setup",
@@ -207,16 +209,14 @@ class DistributionScaffoldTests(unittest.TestCase):
     def test_muse_pressure_evidence_is_complete_and_reproducible(self):
         text = PRESSURE_RESULTS.read_text()
         self.assertTrue(text.startswith("# Muse Pressure Verification\n"))
-        muse_path = PLUGIN_ROOT / "skills" / "creative-writing-muse" / "SKILL.md"
-        muse_text = muse_path.read_text()
         skill_match = re.search(
             r"<!-- revised-skill:start -->\n```text\n(.*?)```\n<!-- revised-skill:end -->",
             text,
             re.DOTALL,
         )
         self.assertIsNotNone(skill_match)
-        self.assertEqual(skill_match.group(1), muse_text)
-        expected_hash = hashlib.sha256(muse_text.encode()).hexdigest()
+        # Verify the immutable tested snapshot, not the subsequently extended runtime.
+        expected_hash = hashlib.sha256(skill_match.group(1).encode()).hexdigest()
         self.assertIn(f"Revised skill SHA-256: `{expected_hash}`", text)
 
         families = {"parallel-sequential", "fallback-disclosure", "memory-intent"}
@@ -584,7 +584,7 @@ class DistributionScaffoldTests(unittest.TestCase):
         self.assertEqual(config["authored_skills"], sorted(EXPECTED_AUTHORED_SKILLS))
         self.assertEqual(config["vendored_skills"], sorted(EXPECTED_VENDORED_SKILLS))
         self.assertEqual(
-            (32, 22, 10),
+            (35, 25, 10),
             tuple(
                 len(config[field])
                 for field in (

@@ -32,6 +32,7 @@ else:
 PLUGIN_NAME = "creative-writing-skills"
 REPOSITORY = "https://github.com/InkyQuill/creative-writing-skills"
 EXPECTED_SKILLS = {
+    "literary-translation", "translation-memory", "translation-review",
     "character-sim", "cli-doctor", "creative-research", "creative-writing-craft",
     "creative-writing-modes", "creative-writing-muse", "decision-grill",
     "information-hierarchy", "intent-modeling", "kb-management",
@@ -43,6 +44,7 @@ EXPECTED_SKILLS = {
     "writing-staffing", "zoom-out",
 }
 AUTHORED_SKILLS = {
+    "literary-translation", "translation-memory", "translation-review",
     "character-sim", "cli-doctor", "creative-research", "creative-writing-craft",
     "creative-writing-modes", "creative-writing-muse", "kb-management",
     "pocket-editor-review", "project-bootstrap", "project-doctor", "project-feedback", "project-maintenance", "project-setup",
