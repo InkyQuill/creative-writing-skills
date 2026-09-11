@@ -75,3 +75,12 @@ def scope_matches(record, context):
 def scope_contains(general, specific):
     """Every point in specific scope is also inside general scope."""
     return all(not strings(general, field) or (bool(strings(specific, field)) and set(strings(specific, field)) <= set(strings(general, field))) for field in SCOPE_FIELDS)
+
+
+def validate_scope_size(scope):
+    """Bound memory selection to 4096 points; empty dimensions count as one."""
+    size = 1
+    for field in SCOPE_FIELDS:
+        size *= max(1, len(strings(scope, field)))
+        if size > 4096:
+            raise ValueError('translation scope is too large (maximum 4096 combinations); split the context request')

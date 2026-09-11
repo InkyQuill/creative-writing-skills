@@ -40,6 +40,7 @@ from .migration import (
     migration_project,
     plan_apply_migration,
     plan_migration,
+    _read_regular_file_no_follow,
 )
 from .project import Project, ProjectDiscoveryError, ProjectPathError, discover_project
 from .scaffold import InitError, apply_init, preview_init
@@ -591,7 +592,9 @@ def _run_migrate(args: argparse.Namespace, *, cwd: Path, stdout: TextIO, stderr:
     root = Path(cwd).absolute()
     try:
         manifest_path = root / "project.md"
-        if manifest_path.is_file() and parse_document(manifest_path.read_bytes()).metadata.get("schema-version") == 2:
+        if (manifest_path.exists() or manifest_path.is_symlink()) and parse_document(
+            _read_regular_file_no_follow(manifest_path, "project manifest", root=root)
+        ).metadata.get("schema-version") == 2:
             raise ValueError("v2 projects must not use legacy v1 migration")
         if args.plan:
             if args.expect_plan_hash is not None:

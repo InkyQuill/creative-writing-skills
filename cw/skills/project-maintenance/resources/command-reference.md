@@ -121,9 +121,13 @@ Match-count guards apply to all whitespace-equivalent matches.
 
 All mutations preview by default and execute only with `--apply`. All commands
 support `--format json`; the agent prepares files and runs mechanics.
+Transaction writes hold a project-wide OS lock through validation, installation
+and rollback (`flock` on POSIX, a named mutex on Windows).
+Context scope is limited to 4096 combinations of units, entities and
+relationships per volume; split larger requests into smaller packets.
 
 ```bash
-cw init book --title "Book" --language ru --kind translation --work-kind book
+cw init book --title "Book" --language ru --kind translation --work-kind series
 cw translation enable --work-kind series
 cw translation source --request source.json
 cw translation direction --file direction.md

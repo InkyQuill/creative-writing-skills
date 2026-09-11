@@ -114,7 +114,7 @@ translation layout is a separate explicit project kind, not an ad hoc relocation
 
 Collect only the selected original/reference editions, target direction, work
 kind (book or series), actual source coverage and material strategy choices.
-Use `cw init --kind translation --work-kind book` or the series variant for a
+Use `cw init --title "<title>" --language <language> --kind translation --work-kind book` or the series variant for a
 new project; use `cw translation enable --work-kind book` or
 `cw translation enable --work-kind series`, matching the selected work kind,
 to extend an author project without moving its manuscript. Preview the concrete setup, then apply within the user's

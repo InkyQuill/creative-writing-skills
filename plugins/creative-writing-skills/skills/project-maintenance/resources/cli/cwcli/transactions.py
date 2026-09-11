@@ -13,6 +13,7 @@ import tempfile
 import uuid
 import warnings
 from collections.abc import Callable, Mapping
+from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path, PurePosixPath, PureWindowsPath
@@ -516,8 +517,13 @@ class TransactionEngine:
     def apply(
         self, plan: TransactionPlan, *, transaction_id: str | None = None
     ) -> TransactionRecord:
-        """Apply ``plan`` only while every exact before-snapshot still matches."""
+        """Serialize validation and installation across project writers."""
+        with _project_transaction_lock(self.project.root):
+            return self._apply_locked(plan, transaction_id=transaction_id)
 
+    def _apply_locked(
+        self, plan: TransactionPlan, *, transaction_id: str | None = None
+    ) -> TransactionRecord:
         self._validate_plan(plan)
         identifier = transaction_id or uuid.uuid4().hex
         for change in plan.changes:
@@ -732,8 +738,11 @@ class TransactionEngine:
         return record
 
     def recover(self, transaction_id: str) -> TransactionRecord:
-        """Restore an interrupted transaction from before-blobs; never roll forward."""
+        """Restore interrupted writes while excluding active project writers."""
+        with _project_transaction_lock(self.project.root):
+            return self._recover_locked(transaction_id)
 
+    def _recover_locked(self, transaction_id: str) -> TransactionRecord:
         record = self.preflight_recovery(transaction_id)
 
         changes = self._persisted_changes(transaction_id)
@@ -1720,3 +1729,57 @@ __all__ = [
     "TransactionRecord",
     "TransactionStore",
 ]
+
+
+@contextmanager
+def _project_transaction_lock(root: Path):
+    """Lock the stable project directory inode, without a removable lock file."""
+    _require_directory(root, 'project root')
+    if os.name == 'nt':
+        with _windows_project_mutex(root):
+            yield
+        return
+    try:
+        import fcntl
+    except ImportError as error:
+        raise TransactionError('project transaction locking is unsupported on this platform') from error
+    descriptor = os.open(root, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+    try:
+        fcntl.flock(descriptor, fcntl.LOCK_EX)
+        yield
+    finally:
+        os.close(descriptor)
+
+
+@contextmanager
+def _windows_project_mutex(root: Path):
+    """Use a kernel mutex across processes and sessions, released on process exit."""
+    import ctypes
+    from ctypes import wintypes
+
+    kernel = ctypes.WinDLL('kernel32', use_last_error=True)
+    kernel.CreateMutexW.argtypes = (ctypes.c_void_p, wintypes.BOOL, wintypes.LPCWSTR)
+    kernel.CreateMutexW.restype = wintypes.HANDLE
+    kernel.WaitForSingleObject.argtypes = (wintypes.HANDLE, wintypes.DWORD)
+    kernel.WaitForSingleObject.restype = wintypes.DWORD
+    kernel.ReleaseMutex.argtypes = (wintypes.HANDLE,)
+    kernel.ReleaseMutex.restype = wintypes.BOOL
+    kernel.CloseHandle.argtypes = (wintypes.HANDLE,)
+    kernel.CloseHandle.restype = wintypes.BOOL
+    identity = hashlib.sha256(os.path.normcase(str(root.resolve())).encode('utf-8')).hexdigest()
+    handle = kernel.CreateMutexW(None, False, 'Global\\cwcli-transaction-' + identity)
+    if not handle:
+        raise TransactionError(f'cannot create project mutex: {ctypes.WinError(ctypes.get_last_error())}')
+    acquired = False
+    try:
+        result = kernel.WaitForSingleObject(handle, 0xFFFFFFFF)
+        # An abandoned mutex transfers ownership too; journal recovery remains
+        # explicit and the ordinary before-snapshot guards still run.
+        if result not in (0, 0x80):
+            raise TransactionError(f'cannot acquire project mutex: {ctypes.WinError(ctypes.get_last_error())}')
+        acquired = True
+        yield
+    finally:
+        if acquired:
+            kernel.ReleaseMutex(handle)
+        kernel.CloseHandle(handle)

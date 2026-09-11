@@ -3,7 +3,7 @@ import hashlib
 import json
 from ..documents import parse_document
 from .catalog import load_catalog, read_source, find_record
-from .contract import SCOPE_FIELDS, strings, slug
+from .contract import SCOPE_FIELDS, strings, slug, validate_scope_size
 from .directions import effective_direction, resolve_unit
 from .memory import select_memory
 
@@ -20,6 +20,7 @@ def build_packet(project, direction, units, scope, *, catalog=None, cache=None):
         raise ValueError('select unique source units')
     if set(scope) - set(SCOPE_FIELDS):
         raise ValueError('unknown context scope field')
+    validate_scope_size(dict(scope, **{'scope-units': list(units), 'scope-volumes': []}))
     lookup_catalog = load_catalog(project, strict=False) if catalog is None else catalog
     selected = [resolve_unit(project, ref, catalog=lookup_catalog) for ref in units]
     volumes = {doc.metadata.get('volume-id', '') for _, doc in selected}
@@ -96,7 +97,7 @@ def build_packet(project, direction, units, scope, *, catalog=None, cache=None):
             for offset in (-1, 1):
                 if 0 <= index + offset < len(ordered):
                     neighbors.add(ordered[index + offset][1])
-    neighbor_text = [text(path) for path in sorted(neighbors - chosen_paths)]
+    neighbor_text = [text(path) for _, path in ordered if path in neighbors and path not in chosen_paths]
     rules = []
     for path in select_memory(project, direction, context_scope, catalog=catalog):
         metadata = catalog[path].metadata

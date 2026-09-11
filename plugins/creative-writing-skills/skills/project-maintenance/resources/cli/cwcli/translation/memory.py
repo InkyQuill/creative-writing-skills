@@ -2,7 +2,7 @@
 from itertools import product
 from ..documents import parse_document
 from .catalog import load_catalog, make_plan, read_source, render, replacement
-from .contract import SCOPE_FIELDS, slug, strings, scope_matches, scope_contains
+from .contract import SCOPE_FIELDS, slug, strings, scope_matches, scope_contains, validate_scope_size
 
 
 def memory_records(project, direction, *, catalog=None):
@@ -64,6 +64,7 @@ def plan_memory(project, direction, kind, content):
 
 
 def select_memory(project, direction, scope, *, catalog=None):
+    validate_scope_size(scope)
     records = memory_records(project, direction, catalog=catalog)
     validate_graph(records)
     # Resolve supersession per point, then union the rules needed by the batch.

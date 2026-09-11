@@ -1,4 +1,5 @@
 """Explicit source precedence, coverage and edition alignment."""
+import hashlib
 from ..documents import parse_document
 from .catalog import find_record, load_catalog, make_plan, read_source, replacement
 from .contract import project_settings, slug, strings
@@ -18,13 +19,16 @@ def plan_direction(project, content):
     load_catalog(project)
     doc = parse_document(content)
     name = slug(doc.metadata.get('direction-id'))
+    guards = {}
     volume = doc.metadata.get('volume-id')
     if volume is not None:
         slug(volume)
         if work != 'series':
             raise ValueError('volume override requires a series')
         root_path = f'translations/{name}/translation.md'
-        root = parse_document(read_source(project, root_path))
+        root_bytes = read_source(project, root_path)
+        root = parse_document(root_bytes)
+        guards[root_path] = hashlib.sha256(root_bytes).hexdigest()
         if volume not in strings(root.metadata, 'coverage'):
             raise ValueError(f'direction does not cover {volume}')
         path = f'translations/{name}/volumes/{volume}/settings.md'
@@ -48,7 +52,7 @@ def plan_direction(project, content):
         raise ValueError('primary and auxiliary sources must be distinct')
     for edition in editions:
         find_record(project, 'edition-id', slug(edition))
-    return make_plan(project, ('translation', 'direction'), [replacement(project, path, content)])
+    return make_plan(project, ('translation', 'direction'), [replacement(project, path, content)], {'read-guards': guards})
 
 
 def effective_direction(project, direction, volume, *, catalog=None):
