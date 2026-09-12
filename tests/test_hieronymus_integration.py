@@ -85,6 +85,11 @@ class HieronymusIntegrationTests(unittest.TestCase):
             "inspect through available public read tools",
             "do not resend blindly",
             "no supported idempotency key",
+            "Never probe a mutating tool",
+            "needed schema is unavailable",
+            "Keep a rejected intended disposition unresolved",
+            "additional advisory copy is a separate mutation",
+            "Existing authorization is sufficient",
             "operation UUID",
             "unresolved",
         ):

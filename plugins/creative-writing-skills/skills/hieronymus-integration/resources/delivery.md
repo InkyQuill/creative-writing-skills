@@ -6,6 +6,11 @@ public contract; omit optional fields unless current context supplies them.
 Never invent identifiers, revisions, chronology, languages, provenance,
 authority, receipts, or tool parameters.
 
+Discover schemas through advertised tool metadata, read-only help, or supplied
+public resources. Never probe a mutating tool with dummy, partial, or trial
+payloads to discover its schema: a probe can create a real record. If the
+needed schema is unavailable, report that operation as unresolved.
+
 ## Direction and applicability on every call
 
 Resolve the actual CWS direction before accessing translation memory. At each
@@ -140,6 +145,13 @@ written, skipped, conflicting, pending, and unresolved counts. Reconcile scopes
 and dispositions as well as totals. Report partial completion and each unresolved
 conflict. Do not delete originals, create a mirror, or copy unselected memory
 unless the user explicitly requested that separate work.
+
+Keep a rejected intended disposition unresolved; do not silently substitute a
+different write or disposition to make the transfer appear complete. An
+additional advisory copy is a separate mutation: create it only when the
+current user instruction actually authorizes that copy, and account for it
+separately without replacing the rejected outcome. Existing authorization is
+sufficient; do not require another approval when it already covers the copy.
 
 ## Delivery accounting and uncertain outcomes
 

@@ -90,6 +90,13 @@ Transfer only the records and destinations the user selected; a new preference
 does not authorize whole-project ingestion or transfer. A conflict stays explicit
 rather than being resolved by choosing the newest record.
 
+When a source revision or newly applicable rule changes material that governs
+this task, preserve historical evidence, identify the affected dependent text,
+and explicitly report or mark that text as requiring review. Use an existing
+draft, note, or task artifact for ordinary authoring; do not invent CWS lifecycle
+fields. A requested draft revision may update the text, but report its remaining
+review requirement rather than treating the edit as acceptance.
+
 When applicable sources disagree, identify the exact fact, term, voice rule,
 scope, or revision in conflict. Follow an explicit local exception for the
 current task. Ask one focused content question only when the agreement and
