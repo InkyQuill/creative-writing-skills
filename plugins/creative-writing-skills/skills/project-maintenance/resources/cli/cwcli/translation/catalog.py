@@ -13,13 +13,27 @@ def read_source(project, relative):
     return path.read_bytes()
 
 
-def load_catalog(project, *, strict=True, volume=None, skip_unparseable=False):
+def memory_excluded(relative, excluded_memory):
+    """Selectors match a memory file or its subtree, including future records."""
+    if translation_kind(relative) != 'translation-memory':
+        return False
+    return any(relative == selector.rstrip('/') or relative.startswith(selector.rstrip('/') + '/')
+               for selector in excluded_memory)
+
+
+def filter_catalog(catalog, excluded_memory):
+    return {path: doc for path, doc in catalog.items() if not memory_excluded(path, excluded_memory)}
+
+
+def load_catalog(project, *, strict=True, volume=None, skip_unparseable=False, excluded_memory=()):
     _, work, enabled = project_settings(project.manifest.metadata)
     if not enabled:
         raise ValueError('enable translation before using translation commands')
     records, identities = {}, set()
     for path in project.iter_managed_markdown():
         relative = project.relative_id(path)
+        if memory_excluded(relative, excluded_memory):
+            continue
         kind = translation_kind(relative)
         if kind is None or kind == 'generated-index':
             continue

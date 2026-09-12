@@ -840,10 +840,10 @@ class TransactionEngine:
                 raise TransactionConflict(f"stale accepted coverage: {error}") from error
         packet = metadata.get("translation-packet")
         if packet is not None:
-            from .translation.context import build_packet
+            from .translation.context import rebuild_packet
             try:
                 plain = _jsonable(packet)
-                current = build_packet(self.project, plain["direction"], tuple(plain["units"]), plain["scope"])
+                current = rebuild_packet(self.project, plain)
                 if plain != current:
                     raise ValueError("translation context changed")
             except (KeyError, OSError, TypeError, ValueError) as error:

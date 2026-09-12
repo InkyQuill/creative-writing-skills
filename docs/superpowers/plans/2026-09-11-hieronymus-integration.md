@@ -353,6 +353,21 @@ def assess_external_memory(
 
 Namespace identifies the observed service identity plus series, so numeric IDs cannot collide across services. Use actual `status.instance_id` from `hiero status --json` (authenticated daemon `/status` payload is nested under `status`) together with the actual series slug; a daemon restart may conservatively require renewed verification. Do not invent a persistent database UUID that the service does not expose, or identify a database only by its pathname. If the host cannot obtain service identity through available public status/CLI surfaces, freshness is unknown rather than matched by bare record ID. Require caller-supplied nonempty strings from observed public results; no source text in this type. Record individual references and a conservative series authority revision reference when available, because a newly applicable rule may not change old record revisions. Lack of a public revision for an advisory item is unknown freshness, not a manufactured digest of backend state.
 
+**Task 7 implementation clarification (2026-09-12):** Preserve the three top-level
+selection keys and strict `ExternalMemoryRef`. Captured reference arrays,
+including `external-entities` values, additionally permit the separate tagged
+marker `{"unverified":"<nonempty technical reason>"}` for used dependencies
+without public identity or revision. The reason describes missing technical
+evidence, not source text or trust policy. Observed arrays accept strict references
+only. Changed/missing known references take precedence as `needs-review`; otherwise
+any captured marker keeps freshness `unknown`, including after fallback acceptance.
+Verifiable replacements for markers require a new task packet. Fallback acceptance
+records unknown freshness at acceptance in the transaction. Later matching public
+observations can establish current freshness for strict references without erasing
+the historical limitation; markers remain unknown. A fallback never relaxes known
+changes or local guards. The historical literary translation
+plan's completed work remains unchanged; this is its packet-v2 storage extension.
+
 - [ ] Add executable tests:
 
 ```python

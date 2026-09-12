@@ -143,6 +143,79 @@ cw check translation
 cw reindex
 ```
 
+For operation-local external memory, add `--memory-input memory-input.json` to
+`translation context`. Omitting it preserves packet version 1. A supplied JSON
+object creates packet version 2; `{}` keeps the same file-memory selection.
+Only these three keys are permitted (each is optional):
+
+```json
+{
+  "external-memory-refs": [],
+  "excluded-file-memory": ["translations/ru/memory/voices/"],
+  "external-entities": {}
+}
+```
+
+Exclusions are project-relative files or directories inside the selected
+direction's `memory/`, including the whole memory directory. Directory selectors
+also exclude future records. Exclusion occurs before parsing and graph validation;
+it never removes source, original bytes, alignment, direction strategy, manifest,
+or accepted-base guards. A retained rule depending on an excluded supersession
+parent is unresolved. Ordinary project diagnostics still inspect all file memory.
+
+Each `external-memory-refs` item is an object containing exactly the nonempty
+string fields `provider`, `namespace`, `record_kind`, `record_id`, and `revision`.
+For Hieronymus, form `namespace` from the actual public `status.instance_id` and
+actual series slug. `hiero status --json` exposes the daemon payload under
+`status`; process identity may change on restart. Capture each used record's
+public revision and the series authority revision when available. Do not invent
+a persistent service UUID, use a database path as identity, or manufacture a
+revision from a backend digest.
+
+If a used advisory item has no public revision or service identity, include
+`{"unverified":"Public evidence response has no revision"}` as a separate item.
+The reason describes the missing technical evidence, never source text or the
+user's agreement. This marker can coexist with strict references and always
+remains unverified; replacing it with verifiable evidence requires a new packet.
+`external-entities` maps IDs in this task's `scope-entities` to nonempty arrays of
+the same references or markers. These selected entities need no `kb/entities/`
+mirror and their references participate in freshness checks.
+
+Keep passing the captured packet to `translation draft --packet packet.json`.
+Packet version 2 stores validated selections under `memory-input`; draft planning,
+status, and validation under the local transaction lock rebuild the packet from
+those selections and compare all captured context and dependency data. The local
+snapshot records task inputs; it does not fetch or mirror external record text.
+
+```bash
+cw translation status translations/ru/volumes/v001/drafts/first.md --external-memory-observed observed.json
+cw translation accept translations/ru/volumes/v001/drafts/first.md --external-memory-observed observed.json
+cw translation accept translations/ru/volumes/v001/drafts/first.md --external-fallback-note fallback.txt
+```
+
+`observed.json` must be a JSON array of strict reference objects, without
+unverified markers. An omitted observation file means verification is unavailable;
+an empty array means no captured references were found. Known changed or missing
+references yield `needs-review`; unavailable verification or a captured marker
+yields `unknown`. A plain offline check reports `CW-TRANS-012` for unknown external
+freshness and never claims to have queried a service.
+
+For an expressly authorized fallback, `--external-fallback-note` reads nonempty
+UTF-8 text recording the task-specific limitation. It may accompany observations
+when some used dependencies remain unverified. Acceptance records the note and
+supplied observations in its transaction. Its `external-memory-freshness` field
+records `unknown` as the historical acceptance limitation. Without observations, freshness
+stays unknown. Later matching observations for all captured strict references can
+report current freshness while preserving that historical limitation; captured
+unverified markers still keep freshness unknown. A note never permits known changed
+references, stale local inputs, edited unreviewed prose, changed accepted bases,
+duplicate coverage, or unsafe paths. The CLI cannot authenticate the agent's
+observations or interpret the user's free-text agreement; the skill must obtain
+fresh public evidence and apply that agreement. These fields are bookkeeping,
+not a trust setting, atomic remote check, or trusted correction receipt. No network
+call runs under the local lock, and recovery only restores the frozen local
+transaction; it never replays external writes.
+
 `source.json` is one request object. An edition request contains `action: edition`
 and `content`, a Markdown string with edition frontmatter and provenance body.
 Other requests use these shapes (paths are resolved from command working directory):

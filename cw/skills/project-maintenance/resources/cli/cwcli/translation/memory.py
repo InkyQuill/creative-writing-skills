@@ -19,7 +19,7 @@ def validate_graph(records):
         while current.metadata.get('supersedes'):
             target = current.metadata['supersedes']
             if target not in records or target in seen:
-                raise ValueError('missing or cyclic memory supersession')
+                raise ValueError(f'missing or cyclic memory supersession for {name}: {target}')
             seen.add(target)
             parent = records[target][1]
             if current.metadata.get('subject') != parent.metadata.get('subject') or not scope_contains(parent.metadata, current.metadata):

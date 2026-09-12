@@ -36,6 +36,7 @@ def add_commands(subparsers, error_stream):
     context.add_argument('--direction', required=True)
     context.add_argument('--units', nargs='+', required=True)
     context.add_argument('--scope')
+    context.add_argument('--memory-input')
     context.add_argument('--format', choices=('text', 'json'), default=argparse.SUPPRESS)
     draft = commands.add_parser('draft', error_stream=error_stream)
     draft.add_argument('--direction', required=True)
@@ -49,6 +50,10 @@ def add_commands(subparsers, error_stream):
         command.add_argument('draft_path')
         if name == 'set-status':
             command.add_argument('status', choices=('reviewed',))
+        else:
+            command.add_argument('--external-memory-observed')
+        if name == 'accept':
+            command.add_argument('--external-fallback-note')
         command.add_argument('--apply', action='store_true')
         command.add_argument('--format', choices=('text', 'json'), default=argparse.SUPPRESS)
 
@@ -72,6 +77,16 @@ def plan_enable(project, work_kind):
     return make_plan(project, ("translation", "enable"), changes)
 
 
+def _json_input(cwd, filename, expected_type):
+    if filename is None:
+        return None
+    value = json.loads((cwd / filename).read_text(encoding='utf-8'))
+    if not isinstance(value, expected_type):
+        shape = 'object' if expected_type is dict else 'array'
+        raise ValueError(f'{filename} must contain a JSON {shape}')
+    return value
+
+
 def run_translation(args, *, cwd, stdout, stderr):
     from ..app import _preview_or_apply, _write_command_error
     try:
@@ -79,19 +94,26 @@ def run_translation(args, *, cwd, stdout, stderr):
         if args.translation_command == 'context':
             from .context import build_packet
             scope = json.loads((cwd / args.scope).read_text()) if args.scope else {}
-            packet = build_packet(project, args.direction, tuple(args.units), scope)
+            memory_input = _json_input(cwd, args.memory_input, dict)
+            packet = build_packet(project, args.direction, tuple(args.units), scope, memory_input=memory_input)
             stdout.write(json.dumps(packet, ensure_ascii=False, indent=2) + '\n')
             return 0
         if args.translation_command == 'status':
             from .drafts import translation_status
-            stdout.write(json.dumps(translation_status(project, args.draft_path), ensure_ascii=False) + '\n')
+            observed = _json_input(cwd, args.external_memory_observed, list)
+            stdout.write(json.dumps(translation_status(project, args.draft_path, external_memory_observed=observed), ensure_ascii=False) + '\n')
             return 0
         if args.translation_command == 'draft':
             from .drafts import plan_translation_draft
             plan = plan_translation_draft(project, args.direction, args.draft_id, json.loads((cwd / args.packet).read_text()), (cwd / args.file).read_bytes())
         elif args.translation_command in ('accept', 'set-status'):
             from .drafts import plan_translation_accept, plan_translation_status
-            plan = plan_translation_accept(project, args.draft_path) if args.translation_command == 'accept' else plan_translation_status(project, args.draft_path, args.status)
+            if args.translation_command == 'accept':
+                observed = _json_input(cwd, args.external_memory_observed, list)
+                note = (cwd / args.external_fallback_note).read_text(encoding='utf-8') if args.external_fallback_note else None
+                plan = plan_translation_accept(project, args.draft_path, external_memory_observed=observed, external_fallback_note=note)
+            else:
+                plan = plan_translation_status(project, args.draft_path, args.status)
         elif args.translation_command == 'enable':
             plan = plan_enable(project, args.work_kind)
         elif args.translation_command == 'memory':
