@@ -67,11 +67,11 @@ names:
 | --- | --- |
 | `instructions` | Root project-instruction file named in the discovery section |
 | `manifest` | Root `project.md` |
-| `accepted_prose` | Schema-1 chapter or side story; schema-2 translation `accepted/` document |
+| `accepted_prose` | Chapter or side story in either supported schema; schema-2 translation `accepted/` document |
 | `draft` | Schema-2 translation `drafts/` document |
-| `work` | Schema-1 Markdown directly under `work/archive/`, `work/brainstorm/`, `work/drafts/`, `work/plans/`, or `work/reviews/` |
-| `knowledge` | Schema-1 vocabulary, continuity, and managed `kb/` content |
-| `derived` | A recognized generated `_index.md` |
+| `work` | Direct work artifact in either supported schema |
+| `knowledge` | Vocabulary, continuity, or managed knowledge content in either supported schema |
+| `derived` | An exact generated-index path listed below |
 | `private_state` | Content below `.creative-writing/` |
 | `opaque` | Unknown files, legacy originals, and schema-2 supplied originals |
 | `source_edition` | Schema-2 `sources/<edition>/edition.md` |
@@ -90,7 +90,79 @@ free-text agreement, source tags, provenance, lifecycle metadata, and current
 task. Merely detecting CWS, another installed tool, or a technical binding does
 not change that agreement.
 
-## Schema-1 authoring structure
+## Exact retained authoring paths
+
+Schema 2 first recognizes its translation-specific paths, then deliberately
+falls through to the same authoring path rules as schema 1. In particular, a
+schema-2 `project-kind: authoring` project keeps its chapters, side stories,
+work artifacts, knowledge files, continuity files, and base generated indexes
+in their existing roles. For the patterns below, `<name>.md` is one direct
+Markdown filename, cannot be `_index.md`, and cannot contain another path
+separator.
+
+`accepted_prose` recognizes these direct paths in either supported schema:
+
+- `story/chapters/<name>.md`
+- `story/side-stories/<name>.md`
+
+`work` recognizes a direct `<name>.md` child of exactly these directories in
+either supported schema:
+
+- `work/archive/`
+- `work/brainstorm/`
+- `work/drafts/`
+- `work/plans/`
+- `work/reviews/`
+
+`knowledge` recognizes exactly these fixed files and direct-child patterns in
+either supported schema:
+
+- `kb/vocab.md`
+- `kb/continuity/promises.md`
+- `kb/continuity/questions.md`
+- `kb/continuity/state.md`
+- `kb/continuity/timeline.md`
+- `kb/continuity/scenes/<name>.md`
+- `kb/canon/<name>.md`
+- `kb/characters/<name>.md`
+- `kb/issues/<name>.md`
+- `kb/samples/<name>.md`
+- `kb/styles/<name>.md`
+- `kb/world/<name>.md`
+
+`derived` recognizes exactly these base files in either supported schema:
+
+- `kb/_index.md`
+- `kb/canon/_index.md`
+- `kb/characters/_index.md`
+- `kb/continuity/_index.md`
+- `kb/continuity/scenes/_index.md`
+- `kb/issues/_index.md`
+- `kb/samples/_index.md`
+- `kb/styles/_index.md`
+- `kb/world/_index.md`
+- `story/_index.md`
+- `story/chapters/_index.md`
+- `story/side-stories/_index.md`
+- `work/_index.md`
+- `work/archive/_index.md`
+- `work/brainstorm/_index.md`
+- `work/drafts/_index.md`
+- `work/plans/_index.md`
+- `work/reviews/_index.md`
+
+Schema 2 additionally recognizes exactly these generated-index paths, where
+`<direction>` is one path component and is not `originals`:
+
+- `sources/_index.md`
+- `translations/_index.md`
+- `kb/entities/_index.md`
+- `kb/source-comparisons/_index.md`
+- `translations/<direction>/_index.md`
+
+No other `_index.md` receives the `derived` role under contract version 1.
+
+## Authoring structure in both schemas
 
 Numbered main chapters are direct Markdown children of `story/chapters/` with a
 unique positive integer `number`. Accepted side stories are direct Markdown
@@ -100,10 +172,8 @@ chapter or side story and may have a lowercase `subtype` slug. Chapters sort by
 path identity breaking ties between siblings. Missing anchors and cycles are
 technical structural errors.
 
-The recognized knowledge paths are `kb/vocab.md`, the fixed continuity records,
-direct Markdown children of the managed knowledge directories, and direct
-Markdown children of `kb/continuity/scenes/`. Other files remain opaque. Root
-entries outside managed roots are allowed and must remain untouched.
+Other files remain opaque. Root entries outside managed roots are allowed and
+must remain untouched.
 
 ## Schema-2 translation structure
 
@@ -121,12 +191,17 @@ A series may override source and inheritance fields at
 lists clear the inherited values. Never silently fall back from a missing or
 uncovered edition.
 
-Direction memory lives below `memory/`; alignments and shared entities live in
-`kb/source-comparisons/` and `kb/entities/`. Shared entities identify the same
-subject across editions or directions but do not impose one rendering. Draft,
-review, and accepted paths are direct children of their direction for a book and
-of its volume directory for a series. Lifecycle metadata, source-unit lists,
-packet transaction, base revision, and review hash remain CLI-owned.
+`translation_memory` recognizes exactly
+`translations/<direction>/memory/style.md` and a direct Markdown child of
+`translations/<direction>/memory/terms/`, `voices/`, or `decisions/`. No deeper
+path and no other memory subdirectory has that role; `<direction>` has the same
+component restriction stated for generated indexes. Alignments and shared
+entities are direct Markdown children of `kb/source-comparisons/` and
+`kb/entities/`. Shared entities identify the same subject across editions or
+directions but do not impose one rendering. Draft, review, and accepted paths
+are direct children of their direction for a book and of its volume directory
+for a series. Lifecycle metadata, source-unit lists, packet transaction, base
+revision, and review hash remain CLI-owned.
 
 ## Preservation and authority boundaries
 

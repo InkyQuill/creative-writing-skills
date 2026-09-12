@@ -3,7 +3,6 @@ from pathlib import Path
 
 from tests.cw_cli import helpers  # noqa: F401
 from tests.cw_cli.translation_helpers import TranslationFixture
-from cwcli.documents import parse_document
 from cwcli.project import discover_project
 from cwcli.schema import allowed_document_kind, validate_metadata
 from cwcli.translation.catalog import load_catalog
@@ -150,6 +149,32 @@ class ExternalProjectContractTests(TranslationFixture):
             effective_direction(
                 series, "ru-literary", "v002", catalog=series_catalog
             )["language"],
+        )
+
+    def test_schema_v2_authoring_keeps_authoring_document_roles(self):
+        cases = {case["name"]: case for case in self.fixture["cases"]}
+        case = cases["authoring-v2-retained-structure"]
+        project = discover_project(self.materialize(case))
+
+        self.assertEqual(
+            ("authoring", "book", True), project_settings(project.manifest.metadata)
+        )
+        expected = {
+            "story/chapters/01.md": "accepted_prose",
+            "story/side-stories/after-01.md": "accepted_prose",
+            "work/drafts/revision.md": "work",
+            "kb/vocab.md": "knowledge",
+            "kb/continuity/state.md": "knowledge",
+            "kb/continuity/scenes/arrival.md": "knowledge",
+            "kb/canon/premise.md": "knowledge",
+            "story/chapters/_index.md": "derived",
+        }
+        self.assertEqual(
+            expected,
+            {
+                relative: self.public_role(relative, 2)
+                for relative in expected
+            },
         )
 
     @staticmethod

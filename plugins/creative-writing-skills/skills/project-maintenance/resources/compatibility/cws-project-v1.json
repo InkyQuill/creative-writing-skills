@@ -54,6 +54,37 @@
       }
     },
     {
+      "name": "authoring-v2-retained-structure",
+      "files": {
+        "AGENTS\u002emd": "Retain the authoring corpus when translation is enabled.\n",
+        "project.md": "---\nschema-version: 2\ntitle: Authoring With Translation\nlanguage: ru\nstatus: revising\nproject-kind: authoring\nwork-kind: book\ntranslation-enabled: true\n---\n",
+        "story/chapters/01.md": "---\nnumber: 1\n---\nChapter one.\n",
+        "story/side-stories/after-01.md": "---\nafter: story/chapters/01.md\nsubtype: interlude\n---\nAn anchored interlude.\n",
+        "story/chapters/_index.md": "---\ngenerated: true\n---\n# Chapters\n",
+        "work/drafts/revision.md": "---\ntarget: story/chapters/01.md\nbase-revision: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\nstatus: working\n---\nRevision notes.\n",
+        "kb/vocab.md": "# Vocabulary\n\n| Term | Meaning |\n| --- | --- |\n| Gate | Threshold |\n",
+        "kb/continuity/state.md": "# Current State\n\nAuthor-maintained continuity.\n",
+        "kb/continuity/scenes/arrival.md": "---\nchapter: 1\n---\nArrival scene record.\n",
+        "kb/canon/premise.md": "---\ntitle: Premise\n---\nEstablished premise.\n"
+      },
+      "expect": {
+        "root": ".",
+        "schema_version": 2,
+        "roles": {
+          "AGENTS\u002emd": "instructions",
+          "project.md": "manifest",
+          "story/chapters/01.md": "accepted_prose",
+          "story/side-stories/after-01.md": "accepted_prose",
+          "story/chapters/_index.md": "derived",
+          "work/drafts/revision.md": "work",
+          "kb/vocab.md": "knowledge",
+          "kb/continuity/state.md": "knowledge",
+          "kb/continuity/scenes/arrival.md": "knowledge",
+          "kb/canon/premise.md": "knowledge"
+        }
+      }
+    },
+    {
       "name": "nested-project-boundary",
       "files": {
         "project.md": "---\nschema-version: 1\ntitle: Outer\nlanguage: ru\nstatus: drafting\n---\n",
