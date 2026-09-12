@@ -184,7 +184,7 @@ All commands support `--format json`. `context` emits the packet without mutatin
 
 **Interfaces:** Produces `project_settings` and `catalog.load_catalog(project) -> dict[str, Document]`, keyed by project-relative path. Catalog reads regular permitted records, rejects symlink/nested-boundary references and duplicate domain IDs, skips opaque originals. Preserve existing `allowed_document_kind(relative_id)` as a v1 default; add keyword `schema_version=1` for v2 callers. Add `schema.required_paths(metadata) -> tuple[tuple[str, ...], tuple[str, ...]]` returning directories/files for the selected project kind. Existing v1 constants retain their meanings.
 
-- [ ] Add failing tests including this compatibility example:
+- [x] Add failing tests including this compatibility example:
 
 ```python
 import unittest
@@ -202,8 +202,8 @@ class TranslationContractTests(unittest.TestCase):
             "work-kind": "series", "translation-enabled": True, "language": "ru"}))
 ```
 
-- [ ] Run `PYTHONDONTWRITEBYTECODE=1 python3 -m unittest tests.cw_cli.test_translation_contract -v`; expect missing module/interface failure.
-- [ ] Implement schema dispatch without changing YAML parsing. Use this branching core, then enforce v2 enum/boolean fields with `ValueError` in services and findings in read-only checks:
+- [x] Run `PYTHONDONTWRITEBYTECODE=1 python3 -m unittest tests.cw_cli.test_translation_contract -v`; expect missing module/interface failure.
+- [x] Implement schema dispatch without changing YAML parsing. Use this branching core, then enforce v2 enum/boolean fields with `ValueError` in services and findings in read-only checks:
 
 ```python
 version = metadata.get("schema-version")
@@ -213,9 +213,9 @@ if version == 1:
     return "authoring", "book", False
 ```
 
-- [ ] Extend managed walking only for enabled v2: `sources` and `translations`; prune every `originals` subtree before parsing. Register strict v2 record paths including per-volume settings and shared entity/alignment paths. Test mixed book/series layout rejection and identical IDs at renamed paths. Keep unknown entries untouched.
-- [ ] Run the four listed test modules. Assert v1 generated paths and errors remain unchanged, standalone translation does not require `story/`, and sources outside the nearest project cannot be read through a reference.
-- [ ] Commit task files and their generated counterparts: `feat: define compatible translation project schema`.
+- [x] Extend managed walking only for enabled v2: `sources` and `translations`; prune every `originals` subtree before parsing. Register strict v2 record paths including per-volume settings and shared entity/alignment paths. Test mixed book/series layout rejection and identical IDs at renamed paths. Keep unknown entries untouched.
+- [x] Run the four listed test modules. Assert v1 generated paths and errors remain unchanged, standalone translation does not require `story/`, and sources outside the nearest project cannot be read through a reference.
+- [x] Commit task files and their generated counterparts: `feat: define compatible translation project schema`.
 
 ## Task 2: Recoverable setup, enabling and transaction input guards
 
@@ -229,7 +229,7 @@ if version == 1:
 
 **Interfaces:** Add optional keyword-only `kind="authoring", work_kind="book"` to scaffold public calls. `commands.add_commands(subparsers, error_stream)` and `commands.run_translation(args, *, cwd, stdout, stderr) -> int` attach to existing app dispatch. Transaction metadata may include `read-guards: {relative_path: exact_sha256}` and `translation-packet`; old journals without these keys retain behavior. Reject any guard path crossing protected read boundaries, links or nested projects. Validate guards before first apply write; recovery continues the stored transaction and retains the original snapshot rather than rebasing it.
 
-- [ ] Add preview/apply tests using the existing `app.run` injection pattern:
+- [x] Add preview/apply tests using the existing `app.run` injection pattern:
 
 ```python
 stdout, stderr = io.StringIO(), io.StringIO()
@@ -240,9 +240,9 @@ self.assertEqual(0, status, stderr.getvalue())
 self.assertFalse(root.exists())
 ```
 
-- [ ] Run `python3 -m unittest tests.cw_cli.test_translation_setup -v`; expect argparse rejection until implemented.
-- [ ] Implement new initialization using `required_paths`, and `translation enable` as one plan changing manifest and creating absent translation directories/indexes. Existing populated `sources/` or `translations/` require explicit registration, never automatic adoption or overwrite. Preserve author manuscript bytes and unknown paths; do not route canonical v2 through legacy v1 migration. Legacy migration on v2 returns an actionable unsupported-operation error without writes.
-- [ ] Add transaction guard checks using exact binary digests, not UTF-8 logical hashes:
+- [x] Run `python3 -m unittest tests.cw_cli.test_translation_setup -v`; expect argparse rejection until implemented.
+- [x] Implement new initialization using `required_paths`, and `translation enable` as one plan changing manifest and creating absent translation directories/indexes. Existing populated `sources/` or `translations/` require explicit registration, never automatic adoption or overwrite. Preserve author manuscript bytes and unknown paths; do not route canonical v2 through legacy v1 migration. Legacy migration on v2 returns an actionable unsupported-operation error without writes.
+- [x] Add transaction guard checks using exact binary digests, not UTF-8 logical hashes:
 
 ```python
 import hashlib
@@ -253,8 +253,8 @@ if actual != expected_digest:
 
 Read through existing safe regular-file facilities, validate metadata when preparing/loading a journal, and preserve preview purity. This is optimistic conflict detection consistent with existing transactions, not a promise to lock out external editors.
 
-- [ ] Test a source edited between preview and apply: conflict, no output write. Test undo of enable, interrupted apply/recovery, unknown schema rejection and old init unchanged. Run all four listed modules.
-- [ ] Commit task files: `feat: initialize and enable translation projects safely`.
+- [x] Test a source edited between preview and apply: conflict, no output write. Test undo of enable, interrupted apply/recovery, unknown schema rejection and old init unchanged. Run all four listed modules.
+- [x] Commit task files: `feat: initialize and enable translation projects safely`.
 
 ## Task 3: Source editions, opaque originals and working revisions
 
@@ -267,7 +267,7 @@ Read through existing safe regular-file facilities, validate metadata when prepa
 
 **Interfaces:** Implements `plan_source`. Request actions: `edition` with `content` Markdown string; `unit` with `edition`, `unit`, optional `volume`, `original-file`, `text-file`; `manuscript-unit` with `edition`, `unit`, optional `volume`, `manuscript-path`; `refresh-unit` with `edition`, `unit`, `text-file`. Import paths are explicit user-selected external regular files; source target paths are generated internally. Refuse symlink input and nonregular files. Existing original destinations cannot be replaced. A new supplied original uses a new edition identity; refreshing extraction preserves originals.
 
-- [ ] Write source tests; use a temporary v2 project initialized by the task-2 CLI. The helper `apply_plan(project, plan)` may follow the existing transaction test setup, but must invoke the real engine, not directly write planned changes.
+- [x] Write source tests; use a temporary v2 project initialized by the task-2 CLI. The helper `apply_plan(project, plan)` may follow the existing transaction test setup, but must invoke the real engine, not directly write planned changes.
 
 ```python
 request = {"action": "unit", "edition": "ja-original", "unit": "u001",
@@ -280,8 +280,8 @@ self.assertEqual(before, copies[0].after)
 self.assertIsNone(copies[0].before)
 ```
 
-- [ ] Run `python3 -m unittest tests.cw_cli.test_translation_sources -v`; expect missing `plan_source`.
-- [ ] Implement imports as `Change` objects plus provenance in edition/unit records. Use SHA-256 for original bytes and existing journal snapshots for all overwritten working text. `refresh-unit` changes only working text/provenance, preserving `unit-id`. A manuscript descriptor reads the actual `story/` file; do not create a prose copy in `sources/`.
+- [x] Run `python3 -m unittest tests.cw_cli.test_translation_sources -v`; expect missing `plan_source`.
+- [x] Implement imports as `Change` objects plus provenance in edition/unit records. Use SHA-256 for original bytes and existing journal snapshots for all overwritten working text. `refresh-unit` changes only working text/provenance, preserving `unit-id`. A manuscript descriptor reads the actual `story/` file; do not create a prose copy in `sources/`.
 
 ```python
 changes.append(Change(destination, None, original_bytes))
@@ -290,8 +290,8 @@ metadata = {"read-guards": current_project_input_hashes,
 return TransactionPlan(("translation", "source"), tuple(changes), metadata)
 ```
 
-- [ ] Protect `originals/` and domain identity/lifecycle frontmatter from generic agent edits while allowing direct user changes to be detected. Test binary and Markdown originals, extraction correction, missing volume coverage, manuscript edit detection, duplicate identity, nested project and symlink refusal.
-- [ ] Run source tests plus `tests.cw_cli.test_edits`, `tests.cw_cli.test_transactions_apply`. Commit: `feat: register translation sources with preserved provenance`.
+- [x] Protect `originals/` and domain identity/lifecycle frontmatter from generic agent edits while allowing direct user changes to be detected. Test binary and Markdown originals, extraction correction, missing volume coverage, manuscript edit detection, duplicate identity, nested project and symlink refusal.
+- [x] Run source tests plus `tests.cw_cli.test_edits`, `tests.cw_cli.test_transactions_apply`. Commit: `feat: register translation sources with preserved provenance`.
 
 ## Task 4: Directions, explicit coverage and alignment
 
@@ -303,7 +303,7 @@ return TransactionPlan(("translation", "source"), tuple(changes), metadata)
 
 **Interfaces:** Implements `plan_direction`, `plan_alignment`. Add `effective_direction(project, direction, volume) -> dict[str, object]` in `directions.py`. `direction --file` accepts either a full direction record or a volume settings record containing `direction-id` and `volume-id`. Root direction must exist before applying an override.
 
-- [ ] Write tests for two same-language directions and per-volume precedence:
+- [x] Write tests for two same-language directions and per-volume precedence:
 
 ```python
 settings = effective_direction(project, "ru-main", "v023")
@@ -313,8 +313,8 @@ self.assertEqual([], settings["auxiliary-editions"])
 
 Fixture: root names `en-official` as auxiliary, v023 override explicitly has an empty auxiliary list because the edition ends at v022. Also test absence of an override: unavailable auxiliary is reported, not silently fabricated; required primary absence blocks the affected unit.
 
-- [ ] Run `python3 -m unittest tests.cw_cli.test_translation_directions -v`; expect missing service.
-- [ ] Implement flat field override, validating source IDs, language tags, coverage and reference cycles. An empty list is an explicit replacement, not missing:
+- [x] Run `python3 -m unittest tests.cw_cli.test_translation_directions -v`; expect missing service.
+- [x] Implement flat field override, validating source IDs, language tags, coverage and reference cycles. An empty list is an explicit replacement, not missing:
 
 ```python
 effective = dict(direction_metadata)
@@ -323,8 +323,8 @@ for field in ("primary-edition", "auxiliary-editions", "inheritance"):
         effective[field] = volume_metadata[field]
 ```
 
-- [ ] Implement explicit alignments as independent Markdown records. Test one-to-many, many-to-one, reordered and omitted records, accepted versus observed status, invalid references and distinct editions with identical chapter titles. Translation source as primary is accepted with indirect provenance.
-- [ ] Run module and contract tests. Commit: `feat: model translation directions and source alignment`.
+- [x] Implement explicit alignments as independent Markdown records. Test one-to-many, many-to-one, reordered and omitted records, accepted versus observed status, invalid references and distinct editions with identical chapter titles. Translation source as primary is accepted with indirect provenance.
+- [x] Run module and contract tests. Commit: `feat: model translation directions and source alignment`.
 
 ## Task 5: Scoped memory with explicit acceptance and precedence
 
@@ -336,7 +336,7 @@ for field in ("primary-edition", "auxiliary-editions", "inheritance"):
 
 **Interfaces:** Implements `plan_memory` and `select_memory`. Add `scope_matches(record: dict[str, object], context: dict[str, list[str]]) -> bool` in contract. Shared entity creation uses `memory --kind entity` as an additional accepted command kind with no direction argument; entity records go only to `kb/entities/`. Update argparse choices and command reference accordingly. Entity identity statements do not carry target-language rules.
 
-- [ ] Add an executable scope test and fixtures for accepted/proposed records:
+- [x] Add an executable scope test and fixtures for accepted/proposed records:
 
 ```python
 from cwcli.translation.contract import scope_matches
@@ -349,8 +349,8 @@ self.assertFalse(scope_matches({"scope-volumes": ["v023"]},
                                {"scope-volumes": ["v001"]}))
 ```
 
-- [ ] Run `python3 -m unittest tests.cw_cli.test_translation_memory -v`; expect missing scope/memory interfaces.
-- [ ] Implement matching with exact identity values:
+- [x] Run `python3 -m unittest tests.cw_cli.test_translation_memory -v`; expect missing scope/memory interfaces.
+- [x] Implement matching with exact identity values:
 
 ```python
 fields = ("scope-volumes", "scope-units", "scope-entities", "scope-relationships")
@@ -361,8 +361,8 @@ return all(not record.get(field) or
 
 Validate list types before matching. Select accepted rules only; reject overlapping same-subject rules unless an explicit valid narrower `supersedes` relation resolves the overlap. Detect supersession cycles and cross-direction supersession. Global replacement marks old record superseded in the same transaction; a scoped exception leaves the general record active outside its scope.
 
-- [ ] Store rule prose, examples, evidence, variants and rationale without translating or inferring them in Python. Test polysemous identical surface forms with different subjects, narrator voices, relationship scope, no cross-language leakage, rejected cycles, user-edited rule content and inheritance proposals remaining provisional.
-- [ ] Run memory and transaction tests. Commit: `feat: persist scoped translation terminology and voices`.
+- [x] Store rule prose, examples, evidence, variants and rationale without translating or inferring them in Python. Test polysemous identical surface forms with different subjects, narrator voices, relationship scope, no cross-language leakage, rejected cycles, user-edited rule content and inheritance proposals remaining provisional.
+- [x] Run memory and transaction tests. Commit: `feat: persist scoped translation terminology and voices`.
 
 ## Task 6: Fixed context packets and complete dependency tracking
 
@@ -373,7 +373,7 @@ Validate list types before matching. Select accepted rules only; reject overlapp
 
 **Interfaces:** Implements `build_packet`. JSON shape: `packet-version: 1`, `direction`, `units`, `scope`, `primary-text`, `reference-text`, `neighbor-text`, `rules`, `dependencies`, `memory-catalog-digest`, `provenance`. Text values are ordered lists of `{path, text}` objects. Dependencies map regular project paths to exact SHA-256. Rules come from `select_memory`; source resolution from catalog/effective direction. The catalog digest covers the direction's entire memory inventory to detect newly added applicable rules, not just changes to previously selected files.
 
-- [ ] Add packet tests using task-3 source and task-5 memory fixtures:
+- [x] Add packet tests using task-3 source and task-5 memory fixtures:
 
 ```python
 packet = build_packet(project, "ru-main", ("ja-original:u001",), {})
@@ -383,8 +383,8 @@ self.assertIn("translations/ru-main/translation.md", packet["dependencies"])
 self.assertNotIn("translations/en-continuation/memory/style.md", packet["dependencies"])
 ```
 
-- [ ] Run `python3 -m unittest tests.cw_cli.test_translation_context -v`; expect missing packet builder.
-- [ ] Build text from exact source revisions and relevant accepted alignments; include adjacent units read-only with clear exclusion from the translation scope. Derived scope-units and scope-volumes cannot be contradicted by input. Include primary/auxiliary settings, evidence and neighbor dependencies, manifest and selected memory. No automatic five-chunk sampling is treated as a complete glossary.
+- [x] Run `python3 -m unittest tests.cw_cli.test_translation_context -v`; expect missing packet builder.
+- [x] Build text from exact source revisions and relevant accepted alignments; include adjacent units read-only with clear exclusion from the translation scope. Derived scope-units and scope-volumes cannot be contradicted by input. Include primary/auxiliary settings, evidence and neighbor dependencies, manifest and selected memory. No automatic five-chunk sampling is treated as a complete glossary.
 
 ```python
 dependencies = {path: hashlib.sha256(data).hexdigest()
@@ -393,8 +393,8 @@ dependencies = {path: hashlib.sha256(data).hexdigest()
 
 All reads use catalog boundary enforcement. Packet metadata explicitly states source precedence, indirect translation provenance, and the requirement to preserve early ambiguity. Hidden content remains marked in trusted translator packets, never becomes publishable prose. Do not reuse unrestricted packets as character/reader simulation contexts.
 
-- [ ] Test incomplete auxiliary coverage with an explicit override, changed neighbor text, new memory records, source alignment changes, missing primary and stable output on unchanged files. A partial failure must identify only affected units; separate context requests for other units succeed.
-- [ ] Run context and existing context-redaction tests. Commit: `feat: assemble versioned literary translation context`.
+- [x] Test incomplete auxiliary coverage with an explicit override, changed neighbor text, new memory records, source alignment changes, missing primary and stable output on unchanged files. A partial failure must identify only affected units; separate context requests for other units succeed.
+- [x] Run context and existing context-redaction tests. Commit: `feat: assemble versioned literary translation context`.
 
 ## Task 7: Draft acceptance, freshness, indexes and project health
 
@@ -412,7 +412,7 @@ All reads use catalog boundary enforcement. Packet metadata explicitly states so
 
 **Interfaces:** Implements the three draft services and `check_translation`. Draft metadata: `direction-id`, `draft-id`, `source-units`, `packet-transaction`, `base-revision`, `status: draft | reviewed | accepted`; body contains prose. Status transition to reviewed uses an additional `cw translation set-status DRAFT_PATH reviewed` command; no arbitrary acceptance through generic edits. Draft content remains editable with exact edits. Accepted path mirrors draft basename within its volume. Revisions replace that accepted file only after matching its captured base; journal retains prior bytes.
 
-- [ ] Add lifecycle tests, including independence of acceptance and freshness:
+- [x] Add lifecycle tests, including independence of acceptance and freshness:
 
 ```python
 state = translation_status(project, draft_path)
@@ -425,8 +425,8 @@ self.assertEqual("needs-review", state["freshness"])
 self.assertEqual(accepted_before, accepted_path.read_bytes())
 ```
 
-- [ ] Run the three new modules; expect missing lifecycle/checker interfaces.
-- [ ] Validate packet fields and re-read dependencies when creating a draft; never trust arbitrary packet text as current project input. Store packet text/provenance in immutable transaction metadata, with generated transaction ID allocated before rendering draft metadata. Reject stale/missing snapshots at accept; user/agent must build a fresh context and reviewed revision. Preserve read-only status for accepted-but-stale text.
+- [x] Run the three new modules; expect missing lifecycle/checker interfaces.
+- [x] Validate packet fields and re-read dependencies when creating a draft; never trust arbitrary packet text as current project input. Store packet text/provenance in immutable transaction metadata, with generated transaction ID allocated before rendering draft metadata. Reject stale/missing snapshots at accept; user/agent must build a fresh context and reviewed revision. Preserve read-only status for accepted-but-stale text.
 
 ```python
 freshness = "needs-review" if changed_paths or memory_inventory_changed else "current"
@@ -434,10 +434,10 @@ return {"status": draft.metadata["status"], "freshness": freshness,
         "changed-dependencies": sorted(changed_paths)}
 ```
 
-- [ ] Acceptance requires reviewed state, current input guards and unchanged accepted base. Reject hidden material and preserve existing accepted-text handling of balanced AI suggestion wrappers. Unit coverage is explicit: reject duplicate accepted coverage in one direction unless it is the revision of the same output; support a draft translating multiple units from one volume. For cross-volume work use separate drafts. Detect omissions against declared direction coverage and available unit inventory; do not infer completeness from paragraph counts.
-- [ ] Add generated `sources/_index.md`, `translations/_index.md`, per-direction indexes and shared entity/comparison indexes via v2-aware index selection. No index inside `originals/`. Add new paths to doctor/link/KB behavior without scanning opaque originals. Prose checks select the direction language/profile for translation outputs and exclude original source text; v1 authoring output remains unchanged.
-- [ ] Check recovery after interrupted acceptance, undo of accepted replacement, missing journal, new rule inventory, deleted source, source file rename with stable ID, two target directions, same-language editions, and old v1 fixtures. Findings use `CW-TRANS-*`, descriptive paths and existing severity/exit conventions; `check all` includes translation but v1 returns no translation findings.
-- [ ] Run `PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tests/cw_cli -t . -v`. Commit: `feat: track and accept translation drafts with revision checks`.
+- [x] Acceptance requires reviewed state, current input guards and unchanged accepted base. Reject hidden material and preserve existing accepted-text handling of balanced AI suggestion wrappers. Unit coverage is explicit: reject duplicate accepted coverage in one direction unless it is the revision of the same output; support a draft translating multiple units from one volume. For cross-volume work use separate drafts. Detect omissions against declared direction coverage and available unit inventory; do not infer completeness from paragraph counts.
+- [x] Add generated `sources/_index.md`, `translations/_index.md`, per-direction indexes and shared entity/comparison indexes via v2-aware index selection. No index inside `originals/`. Add new paths to doctor/link/KB behavior without scanning opaque originals. Prose checks select the direction language/profile for translation outputs and exclude original source text; v1 authoring output remains unchanged.
+- [x] Check recovery after interrupted acceptance, undo of accepted replacement, missing journal, new rule inventory, deleted source, source file rename with stable ID, two target directions, same-language editions, and old v1 fixtures. Findings use `CW-TRANS-*`, descriptive paths and existing severity/exit conventions; `check all` includes translation but v1 returns no translation findings.
+- [x] Run `PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tests/cw_cli -t . -v`. Commit: `feat: track and accept translation drafts with revision checks`.
 
 ## Task 8: Literary skills, integration, distribution and end-to-end evidence
 
@@ -467,7 +467,7 @@ return {"status": draft.metadata["status"], "freshness": freshness,
 
 **Interfaces:** Three skills route to the implemented commands, sharing the contract resource through `$project-maintenance`. Skill-owned resources use relative links. No new worker role is required: muse can assign a bounded translation task through existing worker conventions with a fixed packet and distinct output paths. Sequential execution is fully described. UI metadata follows existing authored skill conventions and is excluded from generated Claude runtime by the existing generator.
 
-- [ ] Add a distribution test for the new authored inventory and a real lifecycle integration scenario before adding skill files:
+- [x] Add a distribution test for the new authored inventory and a real lifecycle integration scenario before adding skill files:
 
 ```python
 config = json.loads((ROOT / "config/distribution.json").read_text())
@@ -478,8 +478,8 @@ self.assertEqual(35, len(config["canonical_skills"]))
 
 Use `ROOT = Path(__file__).resolve().parents[1]` and standard `unittest` imports. Integration test executes `app.run`, not a regex proxy for literary correctness. Create small synthetic Japanese/English excerpts instead of committing copyrighted book text; declare coverage v001–v032/v001–v022 and materialize only the units needed by each fixture.
 
-- [ ] Run `python3 -m unittest tests.test_translation_skills -v`; expect missing inventory/resources.
-- [ ] Write the three skills as imperative instructions. `literary-translation` must include this operational core:
+- [x] Run `python3 -m unittest tests.test_translation_skills -v`; expect missing inventory/resources.
+- [x] Write the three skills as imperative instructions. `literary-translation` must include this operational core:
 
 ```text
 Resolve the direction and source coverage before translating. Treat the selected
@@ -491,10 +491,10 @@ observations provisional. Continue independent units when one source is blocked.
 ```
 
 `translation-memory` explains identity versus surface form, source observation versus target instruction, scoped exceptions, narrator/relationship voice, evidence, author-confirmed acceptance and inherited-policy limits. `translation-review` requires source and target locators, diagnosis and severity; offers separate fidelity and target-language passes and explicitly says technical checks do not establish literary quality. Examples cover direct/indirect translation, existing English continuity and independent Russian choices.
-- [ ] Integrate setup/muse/memory/doctor routing and document all final commands, including `memory --kind entity` and `set-status`. Add frontmatter/body examples from this plan, direction-specific language behavior and v1 upgrade preview. Keep implementation hashes and cache mechanics out of author-facing questions.
-- [ ] Update exact inventory assertions and README/AGENTS counts to 35. Locate remaining inventory assumptions with `rg -n '\b32\b|EXPECTED_SKILLS|authored_skills' scripts tests README.md AGENTS.md config`; change only inventory-related occurrences. Preserve pinned vendored content and plugin version.
-- [ ] Record pressure scenarios and inspect outcomes: English precedent contradicts Japanese meaning; a polite threatening voice; identical term spelling with two meanings; late-volume secret; unavailable auxiliary v023; two simultaneous languages; no subagents; user correction supersedes a term. In `results.md`, record actual observed responses/commands and pass/fail with limitations, never claim a model evaluation from static substring tests. Execute these scenarios via the chosen execution mode; no new user-visible tasks are necessary.
-- [ ] Run required repository checks in order:
+- [x] Integrate setup/muse/memory/doctor routing and document all final commands, including `memory --kind entity` and `set-status`. Add frontmatter/body examples from this plan, direction-specific language behavior and v1 upgrade preview. Keep implementation hashes and cache mechanics out of author-facing questions.
+- [x] Update exact inventory assertions and README/AGENTS counts to 35. Locate remaining inventory assumptions with `rg -n '\b32\b|EXPECTED_SKILLS|authored_skills' scripts tests README.md AGENTS.md config`; change only inventory-related occurrences. Preserve pinned vendored content and plugin version.
+- [x] Record pressure scenarios and inspect outcomes: English precedent contradicts Japanese meaning; a polite threatening voice; identical term spelling with two meanings; late-volume secret; unavailable auxiliary v023; two simultaneous languages; no subagents; user correction supersedes a term. In `results.md`, record actual observed responses/commands and pass/fail with limitations, never claim a model evaluation from static substring tests. Execute these scenarios via the chosen execution mode; no new user-visible tasks are necessary.
+- [x] Run required repository checks in order:
 
 ```bash
 python3 scripts/sync_claude_distribution.py --apply
@@ -506,11 +506,21 @@ python3 scripts/create_skill_zips.py
 git diff --check
 ```
 
-- [ ] Inspect generated skill inventory, Codex reference transformations and exclusion of `agents/openai.yaml`. Run archive creation a second time and compare SHA-256 maps of `zips/*.zip` to verify deterministic results for the new inventory. Do not hand-fix generator output.
-- [ ] Commit canonical resources, tests and generated changes together: `feat: ship literary translation skills and workflows`. Report checks and any literary evaluation limitations. Do not release, tag or push without an explicit request.
+- [x] Inspect generated skill inventory, Codex reference transformations and exclusion of `agents/openai.yaml`. Run archive creation a second time and compare SHA-256 maps of `zips/*.skill` to verify deterministic results for the new inventory. Do not hand-fix generator output.
+- [x] Commit canonical resources, tests and generated changes together: `feat: ship literary translation skills and workflows`. Report checks and any literary evaluation limitations. Do not release, tag or push without an explicit request.
 
 ## Plan self-review and handoff
 
 Coverage mapping: compatible storage/schema (tasks 1–2), original preservation/revisions (3), editions/directions/coverage/alignment (4), terminology/voices/provenance/acceptance (5), context and language isolation (6), lifecycle/staleness/recovery/checks (7), three skills/distribution/all six approved scenarios (8). Source read guards are implemented before consumers; all cross-task service names are declared above. Commands for entity records and reviewed status are explicitly added by tasks 5 and 7.
 
 This document is a plan, not evidence that runtime functionality exists. Before implementation, use either subagent-driven-development with review between tasks or executing-plans sequentially in this session. Start from the approved spec and this plan; preserve unrelated workspace edits.
+
+
+## Execution refinements
+
+- Empty list fields are interpreted through the existing flat parser (no YAML dependency).
+- Source units store a positive per-volume order; context must not infer chronology from IDs.
+- Context tolerates malformed source files only outside the selected volume; project checks still report them.
+- `translation/indexes.py` isolates v2 indexes while preserving the v1 index service.
+- Historical muse pressure outputs retain their exact tested snapshot; translation evaluation is recorded separately.
+- Additional integration coverage lives in `tests/cw_cli/test_translation_boundaries.py`.

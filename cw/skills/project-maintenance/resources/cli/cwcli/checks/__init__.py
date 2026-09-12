@@ -14,6 +14,7 @@ from .kb import check_kb
 from .links import check_links
 from .prose import check_prose
 from .structure import check_structure
+from .translation import check_translation
 
 
 Checker = Callable[[Project], list[Finding]]
@@ -33,6 +34,7 @@ CHECKERS: dict[str, Checker] = {
     "links": check_links,
     "prose": check_prose,
     "structure": check_structure,
+    "translation": check_translation,
 }
 
 

@@ -26,3 +26,10 @@ Load the resource needed:
 
 The agent owns hashes, indexes, base revisions, migration mechanics, and repair
 commands. Never delegate SHA or generated-index maintenance to the author.
+
+## Translation boundary
+
+For translation-specific terms, voices and inheritance use /translation-memory.
+Shared entity identity belongs to the project KB, while target expressions and
+voice adaptations belong to the selected direction. Do not promote observations
+from an auxiliary edition into original canon or another language's rules.

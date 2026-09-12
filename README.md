@@ -76,7 +76,7 @@ Upload them under **Customize → Skills**, enable `creative-writing-muse`, and
 describe the writing task. Skills-only chat uses the muse's single-agent
 fallback.
 
-To build the same 32 archives locally:
+To build the same 35 archives locally:
 
 ```bash
 python3 scripts/sync_claude_distribution.py --check
@@ -107,7 +107,26 @@ The archives are written to `zips/` from the generated `cw/skills/` tree.
 | `story-memory` | Durable facts, continuity records with a deterministic checker, canon, terminology, and issue tracking |
 | `writing-staffing` | Small, purpose-built specialist compositions |
 
-All 32 installed skills are listed in `config/distribution.json`.
+All 35 installed skills are listed in `config/distribution.json`.
+
+
+### Literary translation
+
+Use `literary-translation` for a book, a series continuation, or several target
+languages. `translation-memory` preserves terminology and adapted voices with
+source evidence; `translation-review` checks fidelity and literary expression.
+
+Translation projects can stand alone or extend an author project without moving
+its manuscript. Register originals and existing translated editions separately;
+choose primary and auxiliary sources per direction and volume. For example,
+32 Japanese volumes and 22 official English volumes support both an English
+continuation and an independent Russian direction. Existing author projects
+remain compatible; translation is an explicit schema-v2 extension.
+
+The bundled CLI handles imports, context snapshots, drafts, review status,
+acceptance, stale dependencies and recovery. Literary judgment remains the
+agent's task. OCR, book layout and publishing export are outside this workflow.
+
 
 ### Pocket Editor integration
 

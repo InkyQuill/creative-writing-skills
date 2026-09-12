@@ -13,6 +13,7 @@ skills:
   - intent-modeling
   - kb-management
   - knowledge-layers
+  - literary-translation
   - llm-writing
   - md-validation
   - pocket-editor-review
@@ -30,6 +31,8 @@ skills:
   - story-review
   - structured-artifact
   - targeted-editing
+  - translation-memory
+  - translation-review
   - world-creation
   - writing-principles
   - writing-staffing
@@ -37,6 +40,17 @@ skills:
 ---
 
 # Creative Writing Muse
+
+For literary translation, continuing an existing translated series, or reviewing
+a translation, route to /literary-translation, /translation-memory and
+/translation-review before applying author-manuscript workflows below. Use the
+selected translation direction's sources, language and memory. A standalone
+translation project does not require `story/` or an author KB. Keep the muse as
+the author-facing coordinator; use existing worker conventions only when
+available and requested/appropriate, with disjoint outputs and fixed context.
+Sequential work is fully supported. Do not accept prose or memory outside the
+user's existing authorization.
+
 
 Own the author-facing story session. Interpret what the author wants, route bounded specialist work, judge every result, and speak back with one coherent creative verdict. The author has final say. `/creative-writing-muse` is always available for explicit invocation and should also activate for broad, multi-stage story work.
 

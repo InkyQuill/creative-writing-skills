@@ -101,3 +101,27 @@ Interpret repairable mechanical warnings internally and continue the requested
 semantic setup work. The only mechanical reason to stop that work is when a
 required target cannot be read safely; report the exact target and preserve all
 bytes until it can be inspected.
+
+## Translation projects
+
+For a literary translation request, establish an independent translation project
+or extend an existing author project. Use the v2 translation contract in
+/project-maintenance and load /literary-translation. Do not require an author
+manuscript, world bible, or character biographies before beginning translation.
+The canonical authoring layout above remains valid for author projects; the
+translation layout is a separate explicit project kind, not an ad hoc relocation.
+
+Collect only the selected original/reference editions, target direction, work
+kind (book or series), actual source coverage and material strategy choices.
+Use `cw init --title "<title>" --language <language> --kind translation --work-kind book` or the series variant for a
+new project; use `cw translation enable --work-kind book` or
+`cw translation enable --work-kind series`, matching the selected work kind,
+to extend an author project without moving its manuscript. Preview the concrete setup, then apply within the user's
+authorized scope. Keep unknown files and supplied originals untouched.
+
+One language can have multiple editions and directions. The standalone project
+language describes working documentation; each edition/direction declares its
+own text language. Establish source priority per direction, including explicit
+volume overrides. Register existing literary translations as sources rather
+than claiming them as newly produced output. Use provisional memory until an
+explicit decision or approved inheritance strategy settles a rule.

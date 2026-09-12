@@ -57,14 +57,17 @@ class Project:
     def iter_managed_markdown(self) -> Iterator[Path]:
         """Yield managed Markdown files without entering links or nested projects."""
 
-        for root_name in MANAGED_ROOTS:
+        roots = MANAGED_ROOTS
+        if self.manifest.metadata.get("schema-version") == 2 and self.manifest.metadata.get("translation-enabled") is True:
+            roots += ("sources", "translations")
+        for root_name in roots:
             managed_root = self.root / root_name
             if managed_root.is_symlink() or not managed_root.is_dir():
                 continue
             manifest = managed_root / "project.md"
             if not manifest.is_symlink() and manifest.is_file():
                 continue
-            yield from _iter_markdown(managed_root)
+            yield from _iter_markdown(managed_root, skip_originals=root_name == "sources")
 
     def relative_id(self, path: Path) -> str:
         """Return a forward-slash identity for a path lexically inside this project."""
@@ -183,17 +186,17 @@ def _nested_project_root(root: Path, target: Path) -> Path | None:
     return None
 
 
-def _iter_markdown(directory: Path) -> Iterator[Path]:
+def _iter_markdown(directory: Path, *, skip_originals: bool = False) -> Iterator[Path]:
     for path in sorted(
         directory.iterdir(), key=lambda candidate: (_portable_name_identity(candidate.name), candidate.name)
     ):
-        if path.is_symlink():
+        if path.is_symlink() or (skip_originals and path.name == "originals"):
             continue
         if path.is_dir():
             manifest = path / "project.md"
             if not manifest.is_symlink() and manifest.is_file():
                 continue
-            yield from _iter_markdown(path)
+            yield from _iter_markdown(path, skip_originals=skip_originals)
         elif path.is_file() and path.suffix.casefold() == ".md":
             yield path
 

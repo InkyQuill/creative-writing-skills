@@ -34,3 +34,11 @@ project maintenance back to the author.
 
 Read [the repair policy](resources/repair-policy.md) when classifying findings
 or planning a repair.
+
+## Translation health
+
+In schema-v2 projects include `cw check translation`. Handle coverage gaps,
+missing snapshots, source revision changes and memory conflicts at the affected
+unit/direction. Never offer legacy v1 migration for a v2 project or treat missing
+author-only directories as damage in a standalone translation project. Preserve
+accepted prose while resolving stale inputs through a reviewed new draft.
