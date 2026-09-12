@@ -76,7 +76,7 @@ Upload them under **Customize → Skills**, enable `creative-writing-muse`, and
 describe the writing task. Skills-only chat uses the muse's single-agent
 fallback.
 
-To build the same 35 archives locally:
+To build the same 36 archives locally:
 
 ```bash
 python3 scripts/sync_claude_distribution.py --check
@@ -105,9 +105,10 @@ The archives are written to `zips/` from the generated `cw/skills/` tree.
 | `character-sim` | In-character voice and relationship exploration |
 | `world-creation` | Context-first worldbuilding that persists direct settled author answers without redundant confirmation |
 | `story-memory` | Durable facts, continuity records with a deterministic checker, canon, terminology, and issue tracking |
+| `hieronymus-integration` | Optional free-text agreement and safe public-tool workflow for Hieronymus memory |
 | `writing-staffing` | Small, purpose-built specialist compositions |
 
-All 35 installed skills are listed in `config/distribution.json`.
+All 36 installed skills are listed in `config/distribution.json`.
 
 
 ### Literary translation

@@ -35,6 +35,13 @@ project maintenance back to the author.
 Read [the repair policy](resources/repair-policy.md) when classifying findings
 or planning a repair.
 
+If project instructions or a binding refer to Hieronymus, load
+`/hieronymus-integration` to interpret the agreement and inspect only available
+public capabilities. Treat absent optional Hieronymus as ordinary capability
+absence, not broken project state. Report an invalid binding as a scoped
+connection issue; do not start or repair the service, install it, or rewrite the
+agreement as a doctor repair.
+
 ## Translation health
 
 In schema-v2 projects include `cw check translation`. Handle coverage gaps,

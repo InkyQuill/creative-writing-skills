@@ -35,7 +35,7 @@ EXPECTED_SKILLS = {
     "literary-translation", "translation-memory", "translation-review",
     "character-sim", "cli-doctor", "creative-research", "creative-writing-craft",
     "creative-writing-modes", "creative-writing-muse", "decision-grill",
-    "information-hierarchy", "intent-modeling", "kb-management",
+    "hieronymus-integration", "information-hierarchy", "intent-modeling", "kb-management",
     "knowledge-layers", "llm-writing", "md-validation", "pocket-editor-review", "project-bootstrap", "project-doctor",
     "project-feedback", "project-maintenance", "project-setup", "qi-layer",
     "reader-sim", "reflect", "shared-dao", "story-memory",
@@ -46,7 +46,7 @@ EXPECTED_SKILLS = {
 AUTHORED_SKILLS = {
     "literary-translation", "translation-memory", "translation-review",
     "character-sim", "cli-doctor", "creative-research", "creative-writing-craft",
-    "creative-writing-modes", "creative-writing-muse", "kb-management",
+    "creative-writing-modes", "creative-writing-muse", "hieronymus-integration", "kb-management",
     "pocket-editor-review", "project-bootstrap", "project-doctor", "project-feedback", "project-maintenance", "project-setup",
     "reader-sim", "shared-dao", "story-memory",
     "story-planning", "story-review", "targeted-editing", "world-creation",

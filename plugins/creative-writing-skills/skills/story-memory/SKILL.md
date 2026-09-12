@@ -19,6 +19,12 @@ sources are readable; a required target that cannot be read safely is the only
 mechanical reason to stop. Direct author edits remain valid input and must be
 re-read rather than overwritten from remembered state.
 
+When the current user or project agreement refers to Hieronymus, load
+`$hieronymus-integration` before selecting, retrieving, or delivering durable
+memory. Keep file and Hieronymus provenance distinct. Trust assigned by the
+agreement does not authorize a write, and replacement memory does not require a
+file mirror.
+
 Load the resource needed:
 
 - `resources/story-context.md` — what context to pass into handoffs for writers, critics, brainstormers, and knowledge agents.

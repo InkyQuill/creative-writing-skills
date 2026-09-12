@@ -12,6 +12,13 @@ Load `/project-bootstrap` to resolve or reconcile project instruction
 entrypoints. Those instructions are harness guidance; `project.md` remains the
 durable story-writing contract.
 
+If the author wants Hieronymus or existing project evidence refers to it, load
+`/hieronymus-integration`. Keep any memory agreement as narrow free-text in the
+project instructions; do not turn it into required project fields or a trust
+flag. An optional technical binding is separate from that agreement. Do not
+require Hieronymus installation, create a binding during ordinary setup, or
+migrate existing memory automatically.
+
 ## Discover Before Changing
 
 Read canonical `project.md`, generated indexes, and populated content before
