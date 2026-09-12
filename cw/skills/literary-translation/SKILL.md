@@ -11,6 +11,14 @@ project mechanics, /translation-memory for terminology and voices, and
 /translation-review for fidelity and literary review. Read
 [workflow](resources/workflow.md) for the working sequence.
 
+When the user requests Hieronymus or the nearest project agreement or binding
+refers to it, load /hieronymus-integration before selecting memory. Apply the
+free-text memory agreement separately to terms, voices, author intent, accepted
+prose, and other named sources. A valid agreement may make Hieronymus the only
+memory store for a selected scope; continue without requiring Markdown memory
+records while retaining the project, source, review, accepted-base, and coverage
+guards.
+
 ## Establish the task
 
 Read the project contract and relevant edition/direction records. Use
@@ -39,8 +47,9 @@ without flattening rhythm, register, address, or imagery. Treat adaptation of
 wordplay and cultural references as decisions with evidence and alternatives.
 
 Build a fixed translation context with relevant scene entities and relationships.
-Read the selected primary text, applicable memory, accepted comparisons and
-neighbors. Neighbor excerpts are context only, not extra text to translate.
+Read the selected primary text, applicable memory from the stores chosen by the
+agreement, accepted comparisons and neighbors. Neighbor excerpts are context
+only, not extra text to translate.
 For a new long direction, propose a representative trial passage when useful;
 do not require a separate pilot for a directly requested passage.
 

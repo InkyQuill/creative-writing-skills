@@ -6,6 +6,22 @@ public contract; omit optional fields unless current context supplies them.
 Never invent identifiers, revisions, chronology, languages, provenance,
 authority, receipts, or tool parameters.
 
+## Direction and applicability on every call
+
+Resolve the actual CWS direction before accessing translation memory. At each
+call, inspect that tool's current advertised schema and pass only supported
+fields. When supported, include `story_scopes` with
+`cws:direction:<direction-id>` on session creation, recall, memory search,
+termbase contract and validation, and strict RAG. Do not add an unsupported
+parameter merely because another tool advertises it. A stored session must carry
+the same direction predicate; do not reuse one from another direction.
+
+Every typed claim uses complete evidence-limited applicability and includes the
+direction in `applicability.scope_predicates`. Add
+`cws:edition:<edition-id>` only when the evidence is edition-specific. Volume,
+chapter, chronology, scene, and knowledge gates remain separate and are never
+relaxed by the memory agreement.
+
 ## Read recipes
 
 When the workflow needs a stored session and none is active, use the currently
@@ -82,6 +98,48 @@ claim. A real author correction must use the host's authentic trusted ingress;
 otherwise preserve the response as tentative or rejected. An instruction quote
 or imported accepted Markdown rule keeps its actual source provenance. Never
 turn it into a fake host event, fake `user_event`, or fake receipt.
+
+If supported authoritative ingress returns pending, rejected, tentative, or
+unresolved, preserve and report that exact pending result. Do not describe the
+record as an accepted replacement and do not manufacture the authority, event,
+receipt, or revision needed to make it one.
+
+## CWS packet references and freshness
+
+When external memory contributes to a CWS translation packet, record every
+strict dependency with exactly `provider`, `namespace`, `record_kind`,
+`record_id`, and `revision`. For Hieronymus, derive the namespace from the
+actual ephemeral `status.instance_id` and real series identity. Never use a
+database path or fabricate a revision. Capture and short-term responses that
+expose no revision use a separate `{"unverified":"<technical reason>"}` marker;
+the reason identifies the missing technical evidence and contains neither source
+text nor agreement language. The marker may also accompany an external entity,
+which needs no file-KB mirror.
+
+Before status or acceptance, observe used dependencies through current public
+reads and pass the strict results to the CWS `--external-memory-observed` input;
+observed arrays accept strict references only. Known changed or missing
+dependencies yield `needs-review` and take precedence. Otherwise, missing
+observations or any captured unverified marker yield `unknown`. A fallback note
+cannot upgrade either outcome. Historical unknown-at-acceptance remains recorded;
+later matching observations may establish current freshness for captured strict
+references without rewriting that history. These caller observations are not an
+authenticated report, and CWS performs no remote atomic verification.
+
+Local source, original-byte, direction, selected-context, review, accepted-base,
+coverage, and path guards still run. Do not claim external freshness as a bypass
+for any of them.
+
+## Selected transfer
+
+For a transfer the user authorized, inventory only the selected source records
+and record their provenance, scope, disposition, identity, and revision when
+available. Read and write through currently supported public operations. Retain
+actual IDs and revisions from each success, then compare selected, attempted,
+written, skipped, conflicting, pending, and unresolved counts. Reconcile scopes
+and dispositions as well as totals. Report partial completion and each unresolved
+conflict. Do not delete originals, create a mirror, or copy unselected memory
+unless the user explicitly requested that separate work.
 
 ## Delivery accounting and uncertain outcomes
 

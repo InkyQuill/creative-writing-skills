@@ -18,6 +18,13 @@ A current user instruction may create a local exception for the stated task;
 do not persist that exception unless the user separately requests a durable
 agreement change.
 
+Apply a new user instruction in its stated scope immediately. Persist a durable
+change in the nearest project instructions, preserving independent conditions;
+do not globalize a local exception. Changing trust does not prove old records
+were transferred. Resolve and re-read the actual project-instruction entrypoint
+through /project-bootstrap before a requested edit, use the existing recoverable
+project workflow, and preserve unrelated instructions.
+
 Discover only what this task needs. Read the current source files and the
 smallest relevant memory artifacts. If the installed `hiero` CLI is accessible,
 `hiero project-context --cwd /path/to/project --args
@@ -74,6 +81,14 @@ Hieronymus results as advisory. If it makes Hieronymus primary or permits it to
 replace file memory, work without requiring a complete Markdown memory copy.
 There is no mandatory mirror and no automatic migration or deletion. Write to
 both destinations only when the current user instruction authorizes both.
+
+For an authorized transfer, inventory the selected records and their provenance,
+write through supported operations, retain returned IDs, then reconcile counts,
+scopes, dispositions and unresolved conflicts. Report partial completion. Do not
+delete originals or create an ongoing mirror unless that work was requested.
+Transfer only the records and destinations the user selected; a new preference
+does not authorize whole-project ingestion or transfer. A conflict stays explicit
+rather than being resolved by choosing the newest record.
 
 When applicable sources disagree, identify the exact fact, term, voice rule,
 scope, or revision in conflict. Follow an explicit local exception for the

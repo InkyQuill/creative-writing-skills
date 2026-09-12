@@ -127,6 +127,84 @@ class HieronymusIntegrationTests(unittest.TestCase):
             for phrase in phrases:
                 self.assertIn(phrase, normalized, name)
 
+    def test_translation_skills_and_resources_apply_the_memory_agreement(self):
+        files = {
+            "literary-translation/SKILL.md": (
+                "$hieronymus-integration",
+                "memory agreement",
+                "without requiring Markdown memory records",
+            ),
+            "translation-memory/SKILL.md": (
+                "$hieronymus-integration",
+                "memory agreement",
+                "does not require a Markdown copy",
+            ),
+            "translation-review/SKILL.md": (
+                "$hieronymus-integration",
+                "memory agreement",
+                "does not require a Markdown record",
+            ),
+            "literary-translation/resources/workflow.md": (
+                "accepted prose for voice",
+                "external-memory-observed",
+                "unknown",
+            ),
+            "translation-memory/resources/records.md": (
+                "selected store",
+                "no mandatory Markdown mirror",
+                "source revision",
+            ),
+            "translation-review/resources/review-rubric.md": (
+                "external-memory-observed",
+                "known changed or missing",
+                "historical unknown",
+            ),
+        }
+        for relative, phrases in files.items():
+            text = (PLUGIN / "skills" / relative).read_text()
+            normalized = " ".join(text.split())
+            for phrase in phrases:
+                self.assertIn(phrase, normalized, relative)
+
+    def test_workflow_applies_new_instructions_and_transfers_selected_records_only(self):
+        workflow = " ".join(
+            (SKILL / "resources" / "workflow.md").read_text().split()
+        )
+        for phrase in (
+            "Apply a new user instruction in its stated scope immediately.",
+            "Persist a durable change in the nearest project instructions",
+            "preserving independent conditions",
+            "do not globalize a local exception",
+            "Changing trust does not prove old records were transferred.",
+            "For an authorized transfer, inventory the selected records and their provenance",
+            "retain returned IDs",
+            "reconcile counts, scopes, dispositions and unresolved conflicts",
+            "Report partial completion.",
+            "Do not delete originals or create an ongoing mirror",
+        ):
+            self.assertIn(phrase, workflow)
+
+    def test_delivery_carries_direction_and_external_reference_evidence(self):
+        delivery = " ".join(
+            (SKILL / "resources" / "delivery.md").read_text().split()
+        )
+        for phrase in (
+            "story_scopes",
+            "cws:direction:<direction-id>",
+            "applicability.scope_predicates",
+            "provider",
+            "namespace",
+            "record_kind",
+            "record_id",
+            "revision",
+            '{"unverified":"<technical reason>"}',
+            "observed arrays accept strict references only",
+            "status.instance_id",
+            "external-memory-observed",
+            "exact pending result",
+        ):
+            self.assertIn(phrase, delivery)
+
     def test_inventory_adds_one_authored_skill_without_vendor_change(self):
         config = json.loads((ROOT / "config" / "distribution.json").read_text())
         self.assertEqual(36, len(config["canonical_skills"]))
@@ -172,9 +250,11 @@ class HieronymusIntegrationTests(unittest.TestCase):
             "tagged-information",
             "imported-accepted-markdown-rule",
             "direct-h-translate-versus-muse",
+            "reverse-preference-mid-task",
+            "selected-partial-transfer-conflict",
         }
         self.assertEqual(expected_ids, {item["id"] for item in scenarios})
-        self.assertEqual(14, len(scenarios))
+        self.assertEqual(16, len(scenarios))
         required = {
             "id",
             "agreement",
@@ -193,6 +273,25 @@ class HieronymusIntegrationTests(unittest.TestCase):
                 "forbidden_actions",
             ):
                 self.assertIsInstance(item[field], list, (item["id"], field))
+
+        by_id = {item["id"]: item for item in scenarios}
+        durable = by_id["durable-preference-change"]
+        self.assertTrue(
+            any(
+                "preserving unrelated instructions" in action
+                for action in durable["expected_actions"]
+            )
+        )
+        transfer = by_id["selected-partial-transfer-conflict"]
+        self.assertTrue(
+            any("actual IDs" in action for action in transfer["expected_actions"])
+        )
+        self.assertTrue(
+            any(
+                "unresolved conflict" in action
+                for action in transfer["expected_actions"]
+            )
+        )
 
     def test_generated_distribution_contains_integration_skill(self):
         generated = ROOT / "cw" / "skills" / "hieronymus-integration"

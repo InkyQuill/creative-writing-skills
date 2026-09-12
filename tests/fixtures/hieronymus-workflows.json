@@ -50,8 +50,17 @@
     "user_message": "From now on, use Hieronymus as the terminology authority and record that instruction.",
     "available_tools": ["hieronymus_recall"],
     "observed_results": ["The user explicitly requests a durable agreement edit."],
-    "expected_actions": ["Update AGENTS.md narrowly through the existing project workflow."],
+    "expected_actions": ["Update AGENTS.md narrowly through the existing project workflow, preserving unrelated instructions and independent conditions."],
     "forbidden_actions": ["Migrate memory automatically.", "Delete file memory."]
+  },
+  {
+    "id": "reverse-preference-mid-task",
+    "agreement": "Use Hieronymus for terminology and accepted prose for voice; files retain author intent.",
+    "user_message": "For the rest of this review, prefer the accepted file terminology too, but keep Hieronymus voice observations advisory.",
+    "available_tools": ["hieronymus_recall"],
+    "observed_results": ["The instruction reverses the source preference for a stated part of the active task."],
+    "expected_actions": ["Apply the new preference immediately only to the stated review scope and retain the other agreement conditions."],
+    "forbidden_actions": ["Keep applying the superseded task preference.", "Rewrite AGENTS.md without a durable-change request.", "Claim prior records were transferred."]
   },
   {
     "id": "h-replaces-memory",
@@ -79,6 +88,15 @@
     "observed_results": ["The file write succeeds; the Hieronymus call times out."],
     "expected_actions": ["Retain the successful file outcome and inspect the remote destination before any retry."],
     "forbidden_actions": ["Resend blindly.", "Invent an idempotency_key."]
+  },
+  {
+    "id": "selected-partial-transfer-conflict",
+    "agreement": "Files are primary unless I explicitly select records to transfer.",
+    "user_message": "Transfer the three selected Russian term records to Hieronymus; do not move voices or delete the originals.",
+    "available_tools": ["public file reads", "hieronymus_short_term_add_batch", "public read tools"],
+    "observed_results": ["Two writes return actual IDs and revisions; the third conflicts with an active same-scope disposition."],
+    "expected_actions": ["Reconcile three selected, two written with actual IDs, and one unresolved conflict, including provenance, scope, and disposition.", "Report partial completion."],
+    "forbidden_actions": ["Claim full replacement.", "Transfer unselected voices.", "Delete originals.", "Create an ongoing mirror."]
   },
   {
     "id": "multiple-language-directions",

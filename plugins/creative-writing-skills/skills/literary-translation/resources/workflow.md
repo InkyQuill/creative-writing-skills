@@ -7,20 +7,32 @@
    coverage and literary strategy. For a series, set explicit per-volume source
    overrides where a reference edition ends. Do not silently adopt a partial
    reference edition as complete.
-3. Establish a small initial memory from relevant evidence. You need not analyze
-   all earlier volumes before translating a sample. Explain the limits of the
-   evidence; do not label a sampled glossary exhaustive.
+3. Apply the current free-text memory agreement by role and scope before choosing
+   context. It may prefer Hieronymus for terms but accepted prose for voice, or
+   make Hieronymus the selected store for all memory without retaining Markdown
+   records. Establish a small initial memory from relevant evidence. You need not
+   analyze all earlier volumes before translating a sample. Explain the limits of
+   the evidence; do not label a sampled glossary exhaustive.
 4. Select source units in intended reading order. Supply relevant entity and
    relationship identities in context scope. Unknown character identity remains
    a hypothesis, not an invented confirmed entity. Register unit boundaries so
    complete scenes and intended sentence connections remain recoverable.
-5. Build context, translate the selected units, and store a draft. Use adjacent
-   source units to resolve pronouns and transitions, preserving uncertainty where
-   the original preserves it. Record difficult choices separately in memory
-   proposals or a review artifact.
-6. Review fidelity, then target-language literature. Revise the draft, repeat the
-   checks affected by the revision, and mark it reviewed. Once acceptance is
-   authorized, accept it with its exact source/memory snapshot.
+5. Build context, translate the selected units, and store a draft. On every
+   supported Hieronymus memory call and typed claim, carry the selected direction
+   predicate; add an edition predicate only for edition-specific evidence. Record
+   used external record identities and source revisions in the packet. Use
+   adjacent source units to resolve pronouns and transitions, preserving
+   uncertainty where the original preserves it. Record difficult choices
+   separately in memory proposals or a review artifact.
+6. Review fidelity, then target-language literature. Before status or acceptance,
+   obtain fresh public observations for captured external references and pass
+   them through `--external-memory-observed`. Known changed or missing references
+   require review. Unavailable verification or an unverified capture remains
+   `unknown`; do not erase that limitation with a note. Revise the draft, repeat
+   the checks affected by the revision, and mark it reviewed. Once acceptance is
+   authorized, accept it with its exact source/memory snapshot. Preserve a
+   historical unknown recorded at acceptance even if later matching observations
+   establish that strict references are currently fresh.
 7. If a source or rule changes, inspect affected results. Rebuild context and
    produce a reviewed revision; do not overwrite accepted prose as a side effect
    of memory maintenance.
