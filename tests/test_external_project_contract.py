@@ -225,6 +225,42 @@ class ExternalProjectContractTests(TranslationFixture):
             },
         )
 
+    def test_generated_distribution_ships_the_exact_published_fixture(self):
+        generated = (
+            Path(__file__).resolve().parents[1]
+            / "cw/skills/project-maintenance/resources/compatibility/cws-project-v1.json"
+        )
+        self.assertEqual(CONTRACT_FIXTURE.read_bytes(), generated.read_bytes())
+
+    def test_public_discovery_preserves_private_state_and_opaque_documents(self):
+        case = next(
+            case for case in self.fixture["cases"]
+            if case["name"] == "authoring-v2-retained-structure"
+        )
+        root = self.materialize(case)
+        private = root / ".creative-writing" / "acceptance-sentinel.json"
+        private.parent.mkdir(exist_ok=True)
+        private.write_text("private state: deliberately not valid JSON\n")
+        opaque = root / "unknown-author-file.txt"
+        opaque.write_text("Unmanaged author content must survive discovery.\n")
+        before = {
+            path.relative_to(root): path.read_bytes()
+            for path in root.rglob("*") if path.is_file()
+        }
+
+        for _ in range(2):
+            project = discover_project(root / "story" / "chapters")
+            self.assertEqual(root.resolve(), project.root)
+            self.assertEqual("private_state", self.public_role(
+                ".creative-writing/acceptance-sentinel.json", 2
+            ))
+            self.assertEqual("opaque", self.public_role("unknown-author-file.txt", 2))
+
+        self.assertEqual(before, {
+            path.relative_to(root): path.read_bytes()
+            for path in root.rglob("*") if path.is_file()
+        })
+
     @staticmethod
     def public_role(relative, schema_version):
         if relative == "AGENTS.md":
