@@ -91,6 +91,28 @@ class HieronymusIntegrationTests(unittest.TestCase):
             self.assertIn(phrase, normalized)
         self.assertNotIn('"idempotency_key"', text)
 
+    def test_evidence_capture_recipe_matches_discriminated_schema_and_response(self):
+        text = (SKILL / "resources" / "delivery.md").read_text()
+        capture = text.split("Use `hieronymus_evidence_capture`", 1)[1].split(
+            "For an evidence-grounded learned decision", 1
+        )[0]
+        normalized = " ".join(capture.split())
+
+        self.assertIn(
+            '`{"kind":"file","path":...,"expected_hash":...}`',
+            normalized,
+        )
+        self.assertIn(
+            '`{"kind":"retained","evidence_id":...,"expected_hash":...}`',
+            normalized,
+        )
+        self.assertIn(
+            "`reference`, `source_identity`, `selected_text`, "
+            "`paragraph_start`, `paragraph_end`, and `paragraph_text`",
+            normalized,
+        )
+        self.assertNotIn("revision", capture.lower())
+
     def test_existing_skills_route_optional_integration(self):
         routed = {
             "creative-writing-muse": ("project agreement", "binding"),

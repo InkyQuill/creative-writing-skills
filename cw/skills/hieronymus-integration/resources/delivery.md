@@ -52,17 +52,20 @@ user event, receipt, or activated rule.
 ## Evidence and decisions
 
 Use `hieronymus_evidence_capture` only for an authorized full UTF-8 source or
-target snapshot. Pass the actual `series_id`; a `snapshot` that is either a
-file `path` plus `expected_hash` or retained `evidence_id` plus
-`expected_hash`; `kind` as `source_passage` or `aligned_rendering`; a
-byte-offset `selection` with `start`, `end`, and `expected_text`; and a
-`binding` with the observed `concept_id`, `source_language`, complete
-`applicability`, `position_id`, `paragraph_start`, `paragraph_end`, and
-`identity_anchor`. Add `target_language`, `aligned_source_id`, `rendering`, or
-conflict fields only when the current schema permits them and the values were
-actually observed. `expected_text` checks the selected bytes; it is not inline
-evidence. Retain the returned evidence ID, content hash, spans, and revision.
-Do not capture hidden material, an entire project, or unrelated source text.
+target snapshot. Pass the actual `series_id`. The `snapshot` must be one exact
+discriminated variant: `{"kind":"file","path":...,"expected_hash":...}` or
+`{"kind":"retained","evidence_id":...,"expected_hash":...}`. Pass the
+capture `kind` as `source_passage` or `aligned_rendering`; a byte-offset
+`selection` with `start`, `end`, and `expected_text`; and a `binding` with the
+observed `concept_id`, `source_language`, complete `applicability`,
+`position_id`, `paragraph_start`, `paragraph_end`, and `identity_anchor`. Add
+`target_language`, `aligned_source_id`, `rendering`, or conflict fields only
+when the current schema permits them and the values were actually observed.
+`expected_text` checks the selected bytes; it is not inline evidence. Retain
+the returned `reference`, `source_identity`, `selected_text`,
+`paragraph_start`, `paragraph_end`, and `paragraph_text`. The reference carries
+the evidence identity, hash, and selected span. Do not capture hidden material,
+an entire project, or unrelated source text.
 
 For an evidence-grounded learned decision, call `hieronymus_decide` with
 `version: 1`, a fresh decision UUID, the observed `expected_revision`, actual
