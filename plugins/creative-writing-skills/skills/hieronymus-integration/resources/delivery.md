@@ -11,6 +11,17 @@ public resources. Never probe a mutating tool with dummy, partial, or trial
 payloads to discover its schema: a probe can create a real record. If the
 needed schema is unavailable, report that operation as unresolved.
 
+## Write authorization
+
+Before any mutation, confirm that the current user has authorized that operation,
+its destination, and its scope. Existing explicit authorization remains valid;
+do not ask again when it already covers the operation. Source selection, trust,
+and a project binding alone do not authorize writes. This gate applies to
+session creation, `hieronymus_short_term_add`, `hieronymus_short_term_add_batch`,
+evidence capture, `hieronymus_decide`, corrections, and initial-memory
+establishment. Without authorization, do not call mutation tools; keep the result
+as a local proposal for the user.
+
 ## Direction and applicability on every call
 
 Resolve the actual CWS direction before accessing translation memory. At each

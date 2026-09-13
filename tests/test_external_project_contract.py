@@ -89,6 +89,7 @@ class ExternalProjectContractTests(TranslationFixture):
                         if finding.severity == "error"
                     ]
                 )
+                # Partial assertions: omitted files may still have public roles.
                 for relative, expected_role in expect["roles"].items():
                     with self.subTest(case=case["name"], path=relative):
                         self.assertTrue((project.root / relative).exists())
@@ -166,6 +167,8 @@ class ExternalProjectContractTests(TranslationFixture):
                                 project, selection["direction_id"], "v002", catalog=catalog
                             )
                         continue
+                    # Hieronymus tests these resolver outcomes; CWS exposes
+                    # explicit effective settings, not cwd-based selection.
                     if selection["status"] not in ("ready", "unbound"):
                         continue
                     direction = selection.get(

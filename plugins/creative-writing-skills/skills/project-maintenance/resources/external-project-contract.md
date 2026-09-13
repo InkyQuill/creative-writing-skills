@@ -10,6 +10,16 @@ The portable executable examples are
 in that file use `/`, are relative to the fixture directory, and map to complete
 UTF-8 file contents. `expect.root` is relative to the fixture directory, while
 the keys in `expect.roles` are relative to that discovered project root.
+`expect.roles` is a partial assertion map: only listed entries are asserted;
+an omitted path makes no assertion about its structural role.
+
+`expect.selections` supplies consumer direction-selection scenarios. Hieronymus
+owns the working-directory selection resolver and its `status`/`diagnostic`
+outcomes; CWS requires explicit direction and unit arguments and does not expose
+that resolver. CWS tests verify effective source settings and unit identities
+for actionable selections, and uncovered-edition rejection. Consumers must test
+every selection against their resolver, including ambiguous, conflicting,
+unknown-direction, and unbound outcomes.
 
 ## Discovery boundary
 

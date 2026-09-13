@@ -10,7 +10,10 @@
 3. Apply the current free-text memory agreement by role and scope before choosing
    context. It may prefer Hieronymus for terms but accepted prose for voice, or
    make Hieronymus the selected store for all memory without retaining Markdown
-   records. Establish a small initial memory from relevant evidence. You need not
+   records. Establish a small initial memory from relevant evidence only when the
+   user has authorized writes to the selected store and scope. Selection alone
+   does not authorize writes; without that authorization, keep a local proposal.
+   Existing explicit authorization is sufficient. You need not
    analyze all earlier volumes before translating a sample. Explain the limits of
    the evidence; do not label a sampled glossary exhaustive.
 4. Select source units in intended reading order. Supply relevant entity and

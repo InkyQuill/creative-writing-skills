@@ -81,6 +81,25 @@ class ExternalMemoryPacketTests(TranslationFixture):
         self.assertEqual({'external-memory-refs': [], 'excluded-file-memory': [], 'external-entities': {}}, empty.pop('memory-input'))
         self.assertEqual({k: v for k, v in old.items() if k != 'packet-version'}, empty)
 
+    def test_v1_accept_rejects_external_options_before_freshness(self):
+        packet = build_packet(self.project, 'ru', ('ja:u001',), {})
+        self.apply(plan_translation_draft(self.project, 'ru', 'first', packet, b'Translation.'))
+        self.apply(plan_translation_status(self.project, self.path, 'reviewed'))
+        for options in (
+                {'external_memory_observed': []},
+                {'external_memory_observed': [asdict(REF)]},
+                {'external_fallback_note': ''},
+                {'external_fallback_note': 'Authorized fallback'},
+                {'external_memory_observed': [], 'external_fallback_note': 'Fallback'}):
+            with self.subTest(options=options), patch(
+                    'cwcli.translation.drafts.translation_status',
+                    side_effect=AssertionError('unsupported options precede freshness')):
+                with self.assertRaisesRegex(ValueError, 'require packet-version 2'):
+                    plan_translation_accept(self.project, self.path, **options)
+        self.assertFalse(self.target.exists())
+        self.apply(plan_translation_accept(self.project, self.path))
+        self.assertIn('Translation.', self.target.read_text())
+
     def test_selection_validation_precedes_catalog_scan(self):
         invalid = ([], {'trust': True}, {'external-memory-refs': None},
                    {'external-memory-refs': [dict(asdict(REF), revision='')]},

@@ -160,8 +160,9 @@ Exclusions are project-relative files or directories inside the selected
 direction's `memory/`, including the whole memory directory. Directory selectors
 also exclude future records. Exclusion occurs before parsing and graph validation;
 it never removes source, original bytes, alignment, direction strategy, manifest,
-or accepted-base guards. A retained rule depending on an excluded supersession
-parent is unresolved. Ordinary project diagnostics still inspect all file memory.
+or accepted-base guards. If a retained rule supersedes an excluded record, the
+context request is rejected and produces no packet; exclude the dependent rule
+too or keep the parent. Ordinary project diagnostics still inspect all file memory.
 
 Each `external-memory-refs` item is an object containing exactly the nonempty
 string fields `provider`, `namespace`, `record_kind`, `record_id`, and `revision`.

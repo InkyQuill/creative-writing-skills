@@ -15,11 +15,13 @@ sources are readable; a required target that cannot be read safely is the only
 mechanical reason to stop. Direct author edits remain valid input and must be
 re-read rather than overwritten from remembered state.
 
-When the current user or project agreement refers to Hieronymus, load
+When the current user, project agreement, or applicable project binding refers
+to Hieronymus, load
 `/hieronymus-integration` before selecting, retrieving, or delivering durable
 memory. Keep file and Hieronymus provenance distinct. Trust assigned by the
 agreement does not authorize a write, and replacement memory does not require a
-file mirror.
+file mirror. A project binding identifies the destination; it grants neither
+trust nor write authorization.
 
 Load the resource needed:
 

@@ -88,6 +88,9 @@ def plan_translation_accept(project, draft_path, *, external_memory_observed=Non
     doc = _draft(project, draft_path)
     if doc.metadata.get('status') != 'reviewed' or doc.metadata.get('review-hash') != digest(doc.body.encode()):
         raise ValueError('draft must be reviewed after its last prose edit')
+    packet = _packet(project, doc)
+    if packet['packet-version'] != 2 and (external_memory_observed is not None or external_fallback_note is not None):
+        raise ValueError('external-memory acceptance options require packet-version 2')
     if external_fallback_note is not None and (not isinstance(external_fallback_note, str) or not external_fallback_note.strip()):
         raise ValueError('external fallback note must be nonempty UTF-8 text')
     freshness = translation_status(project, draft_path, external_memory_observed=external_memory_observed)['freshness']
@@ -95,7 +98,6 @@ def plan_translation_accept(project, draft_path, *, external_memory_observed=Non
         raise ValueError('translation inputs changed; create and review a fresh draft')
     if freshness == 'unknown' and external_fallback_note is None:
         raise ValueError('external memory is unverified; fresh observations or a task-specific fallback note are required')
-    packet = _packet(project, doc)
     target = _target(draft_path)
     existing = read_source(project, target) if (project.root / target).exists() else None
     if (digest(existing) if existing is not None else 'absent') != doc.metadata['base-revision']:
