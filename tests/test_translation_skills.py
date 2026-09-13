@@ -13,7 +13,7 @@ class TranslationDistributionTests(unittest.TestCase):
         config = json.loads((ROOT / 'config/distribution.json').read_text())
         expected = {'literary-translation', 'translation-memory', 'translation-review'}
         self.assertTrue(expected <= set(config['authored_skills']))
-        self.assertEqual(35, len(config['canonical_skills']))
+        self.assertEqual(36, len(config['canonical_skills']))
         with tempfile.TemporaryDirectory() as directory:
             output = Path(directory) / 'cw'
             render_distribution(output)

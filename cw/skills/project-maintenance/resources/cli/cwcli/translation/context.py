@@ -2,17 +2,31 @@
 import hashlib
 import json
 from ..documents import parse_document
-from .catalog import load_catalog, read_source, find_record
+from .catalog import load_catalog, read_source, find_record, filter_catalog
 from .contract import SCOPE_FIELDS, strings, slug, validate_scope_size
 from .directions import effective_direction, resolve_unit
 from .memory import select_memory
+from .external_memory import validate_memory_input
 
 
 def digest(data):
     return hashlib.sha256(data).hexdigest()
 
 
-def build_packet(project, direction, units, scope, *, catalog=None, cache=None):
+def rebuild_packet(project, captured, *, catalog=None, cache=None):
+    """Rebuild a supported packet from only its validated operation inputs."""
+    if not isinstance(captured, dict) or type(captured.get('packet-version')) is not int:
+        raise ValueError('missing or invalid translation packet version')
+    version = captured['packet-version']
+    if version not in (1, 2):
+        raise ValueError('unsupported translation packet version')
+    if (version == 1 and 'memory-input' in captured) or (version == 2 and not isinstance(captured.get('memory-input'), dict)):
+        raise ValueError('memory-input does not match translation packet version')
+    return build_packet(project, captured['direction'], tuple(captured['units']), captured['scope'],
+                        memory_input=captured.get('memory-input'), catalog=catalog, cache=cache)
+
+
+def build_packet(project, direction, units, scope, *, catalog=None, cache=None, memory_input=None):
     slug(direction)
     if not isinstance(scope, dict):
         raise ValueError('scope must be a JSON object')
@@ -21,13 +35,18 @@ def build_packet(project, direction, units, scope, *, catalog=None, cache=None):
     if set(scope) - set(SCOPE_FIELDS):
         raise ValueError('unknown context scope field')
     validate_scope_size(dict(scope, **{'scope-units': list(units), 'scope-volumes': []}))
-    lookup_catalog = load_catalog(project, strict=False) if catalog is None else catalog
+    if memory_input is not None:
+        memory_input = validate_memory_input(project, direction, scope, memory_input)
+    excluded_memory = () if memory_input is None else memory_input['excluded-file-memory']
+    if catalog is not None:
+        catalog = filter_catalog(catalog, excluded_memory)
+    lookup_catalog = load_catalog(project, strict=False, excluded_memory=excluded_memory) if catalog is None else catalog
     selected = [resolve_unit(project, ref, catalog=lookup_catalog) for ref in units]
     volumes = {doc.metadata.get('volume-id', '') for _, doc in selected}
     if len(volumes) != 1:
         raise ValueError('request one volume per context packet')
     volume = next(iter(volumes))
-    catalog = load_catalog(project, strict=False, volume=volume) if catalog is None else catalog
+    catalog = load_catalog(project, strict=False, volume=volume, excluded_memory=excluded_memory) if catalog is None else catalog
     cache = {} if cache is None else cache
     settings = effective_direction(project, direction, volume, catalog=catalog)
     if any(ref.split(':')[0] != settings['primary-edition'] for ref in units):
@@ -53,6 +72,8 @@ def build_packet(project, direction, units, scope, *, catalog=None, cache=None):
         return data
 
     def inventory_digest(key, paths):
+        if memory_input is not None:
+            key = ('memory-input', json.dumps(memory_input, sort_keys=True), *key)
         if key not in cache:
             inventory = {p: cached_read(p)[1] for p in paths}
             cache[key] = digest(json.dumps(inventory, sort_keys=True).encode())
@@ -106,12 +127,14 @@ def build_packet(project, direction, units, scope, *, catalog=None, cache=None):
             'supersedes': metadata.get('supersedes')}))
     entities = []
     for entity in context_scope['scope-entities']:
+        if memory_input is not None and entity in memory_input['external-entities']:
+            continue
         path, _ = find_record(project, 'entity-id', slug(entity), catalog=catalog)
         entities.append(text(path))
     memory_digest = inventory_digest(('memory', direction), (p for p in catalog if p.startswith(f'translations/{direction}/memory/')))
     source_digest = inventory_digest(('sources', *editions), (p for p in catalog if any(p.startswith(f'sources/{e}/') for e in editions)))
     _, primary_doc = find_record(project, 'edition-id', primary, catalog=catalog)
-    return {'packet-version': 1, 'direction': direction, 'units': list(units), 'scope': context_scope,
+    packet = {'packet-version': 1, 'direction': direction, 'units': list(units), 'scope': context_scope,
             'primary-text': primary_text, 'reference-text': references, 'neighbor-text': neighbor_text,
             'rules': rules, 'entities': entities, 'dependencies': dict(sorted(dependencies.items())),
             'memory-catalog-digest': memory_digest,
@@ -121,3 +144,6 @@ def build_packet(project, direction, units, scope, *, catalog=None, cache=None):
                            'indirect': primary_doc.metadata['edition-role'] == 'translation', 'language': settings['language'],
                            'inheritance': settings['inheritance']},
             'instructions': 'Apply each memory rule only within its scope; supersedes overrides its parent only within that scope. Primary source controls meaning. Neighbor text is read-only context, not output. Preserve deliberate ambiguity and reveal timing. Hidden material is trusted context only, never publishable prose.'}
+    if memory_input is not None:
+        packet.update({'packet-version': 2, 'memory-input': memory_input})
+    return packet

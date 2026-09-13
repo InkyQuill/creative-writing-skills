@@ -9,6 +9,7 @@ skills:
   - creative-writing-modes
   - creative-writing-muse
   - decision-grill
+  - hieronymus-integration
   - information-hierarchy
   - intent-modeling
   - kb-management
@@ -50,6 +51,12 @@ the author-facing coordinator; use existing worker conventions only when
 available and requested/appropriate, with disjoint outputs and fixed context.
 Sequential work is fully supported. Do not accept prose or memory outside the
 user's existing authorization.
+
+When the user requests Hieronymus or the nearest project agreement or binding
+refers to it, load `/hieronymus-integration` as the bounded memory layer. Keep
+the muse as the leading workflow, apply the free-text agreement before using
+retrieved material, and continue independent file-backed work when the optional
+service is unavailable.
 
 
 Own the author-facing story session. Interpret what the author wants, route bounded specialist work, judge every result, and speak back with one coherent creative verdict. The author has final say. `/creative-writing-muse` is always available for explicit invocation and should also activate for broad, multi-stage story work.

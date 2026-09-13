@@ -10,6 +10,12 @@ Use /project-maintenance for mechanical checks and /translation-memory for
 accepted conventions. Use [review rubric](resources/review-rubric.md) for a
 focused fidelity pass, literary pass, or both.
 
+When the user requests Hieronymus or the nearest project agreement or binding
+refers to it, load /hieronymus-integration before choosing review evidence. Apply
+the free-text memory agreement by source role and scope. A convention selected
+from Hieronymus does not require a Markdown record, and an active Hieronymus rule
+does not overrule an agreement that assigns the current decision elsewhere.
+
 Treat the selected primary edition as the content authority. A disagreement with
 an auxiliary translation is a comparison finding, not automatically an error in
 the new translation. Consider official precedent within the approved inheritance

@@ -1,5 +1,10 @@
 # Project Contract
 
+For independent tools that need a stable, versioned description of discovery
+and document roles, use the [external project contract](external-project-contract.md)
+and its executable compatibility examples. Those structural roles do not decide
+authority or permission.
+
 The nearest ancestor containing `project.md` is the project root. Nested
 projects are independent boundaries. The managed roots are `project.md`,
 `story/`, `work/`, `kb/`, and `.creative-writing/`.

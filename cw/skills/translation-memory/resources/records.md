@@ -1,9 +1,13 @@
 # Translation records
 
-Shared entity records belong in the project entity KB. Direction memory contains
-terms, voices, decisions, and a direction-wide style record. Use the flat
-frontmatter contract documented by /project-maintenance; keep the actual
-instructions, examples and rationale in the Markdown body.
+Shared entity identity and direction memory follow the current free-text memory
+agreement. File-backed entity records use the project entity KB, and file-backed
+direction memory contains terms, voices, decisions, and a direction-wide style
+record. When the selected store is Hieronymus, use its supported public records
+without requiring a Markdown catalog or record. There is no mandatory Markdown
+mirror. For file-backed records, use the flat frontmatter contract documented by
+/project-maintenance; keep the actual instructions, examples and rationale in the
+Markdown body.
 
 A term record should state the entity/meaning, preferred rendering, permitted
 inflections or aliases, rejected forms and context-dependent exceptions. A voice
@@ -14,7 +18,9 @@ record should separate observed evidence from the chosen target strategy:
 > slang to intensify the threat. Let the contrast between wording and action
 > carry the menace.
 
-Record references as edition/unit evidence with a readable locator, for example
+Preserve each record's actual provenance, disposition, scope, identifier, and
+source revision when the selected store exposes them. Record file references as
+edition/unit evidence with a readable locator, for example
 `ja-original:u001 — Volume 1, Chapter 3: Scene where the host threatens the guest`.
 For direct user decisions, cite the actual decision in the body and use a
 `user:` evidence label. Never manufacture a citation or assert certainty from an
@@ -36,3 +42,5 @@ When importing precedent, first compare relevant original and translated
 passages. Extract names, recurrent expressions, address and voice tendencies,
 then apply only the approved inheritance categories. A spelling error, omission
 or editorial shortening is a discrepancy to record, not a precedent to repeat.
+Import or transfer only records the user selected and authorized. A preference
+change alone is not proof that any record moved.

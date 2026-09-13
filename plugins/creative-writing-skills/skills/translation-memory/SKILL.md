@@ -8,9 +8,15 @@ description: >
 
 # Translation Memory
 
-Use $project-maintenance for recoverable record operations and
-$story-memory for general story knowledge boundaries. Read
-[record guidance](resources/records.md) when creating or changing memory.
+Use $project-maintenance for recoverable file-record operations when the
+agreement selects file memory, and $story-memory for general story knowledge
+boundaries. Read [record guidance](resources/records.md) when creating or
+changing memory.
+When the user requests Hieronymus or the project agreement or binding refers to
+it, load $hieronymus-integration and apply the free-text memory agreement before
+reading or writing a store. A selected scope stored in Hieronymus does not
+require a Markdown copy. Trust in a source does not authorize a transfer or a
+write to that source.
 
 Separate shared identity from target-language expression. Record that Japanese
 and English names refer to one entity only when supported; keep the Russian
@@ -31,9 +37,10 @@ An approved inheritance policy may settle names but not voices: honor its exact
 scope. Official publication alone does not turn every observed pattern into a
 rule for every target language.
 
-Store unresolved observations and proposed alternatives without making them
-operative rules. Do not mark a semantic inference accepted merely because it
-seems likely. Retain the source tags and author-only knowledge boundaries.
+Store unresolved observations and proposed alternatives in the destination the
+agreement authorizes without making them operative rules. Do not mark a semantic
+inference accepted merely because it seems likely. Retain the source tags and
+author-only knowledge boundaries.
 
 Apply scoped exceptions only within their declared volumes, units, entities or
 relationships. A late-volume revelation must not clarify an intentionally

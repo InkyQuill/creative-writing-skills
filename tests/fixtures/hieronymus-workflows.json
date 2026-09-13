@@ -1,0 +1,146 @@
+[
+  {
+    "id": "no-h-installation",
+    "agreement": "Use the project files as written.",
+    "user_message": "Continue the scene using the project memory.",
+    "available_tools": [],
+    "observed_results": ["No Hieronymus tools or CLI are available."],
+    "expected_actions": ["Use file memory and continue."],
+    "forbidden_actions": ["Request installation.", "Create .hieronymus.json."]
+  },
+  {
+    "id": "h-without-cws-installed",
+    "agreement": "Files are primary; use Hieronymus for terminology suggestions.",
+    "user_message": "Check the term used in this chapter.",
+    "available_tools": ["hiero project-context", "hieronymus_recall"],
+    "observed_results": ["The supported project and its instructions are readable."],
+    "expected_actions": ["Read the agreement and use only public Hieronymus surfaces."],
+    "forbidden_actions": ["Mutate CWS lifecycle state."]
+  },
+  {
+    "id": "no-agreement-clause",
+    "agreement": "No memory-service clause is present.",
+    "user_message": "Resolve the character's current motivation.",
+    "available_tools": ["hieronymus_recall"],
+    "observed_results": ["A Hieronymus observation suggests a motive."],
+    "expected_actions": ["Treat files as primary and the observation as advisory."],
+    "forbidden_actions": ["Promote the observation to canon."]
+  },
+  {
+    "id": "free-text-mixed-agreement",
+    "agreement": "Use Hieronymus for Russian terminology and accepted prose for voice; files retain author intent.",
+    "user_message": "Draft the next Russian paragraph.",
+    "available_tools": ["hieronymus_recall"],
+    "observed_results": ["Terminology, accepted prose, and author notes disagree in emphasis."],
+    "expected_actions": ["Apply each source only to the role stated in the agreement."],
+    "forbidden_actions": ["Collapse the agreement into a mode or numeric score."]
+  },
+  {
+    "id": "in-session-local-exception",
+    "agreement": "Files are primary.",
+    "user_message": "For this naming pass only, prefer the Hieronymus term.",
+    "available_tools": ["hieronymus_recall"],
+    "observed_results": ["The requested term is returned."],
+    "expected_actions": ["Apply the exception only to this task."],
+    "forbidden_actions": ["Write a global preference flag."]
+  },
+  {
+    "id": "durable-preference-change",
+    "agreement": "Files are primary.",
+    "user_message": "From now on, use Hieronymus as the terminology authority and record that instruction.",
+    "available_tools": ["hieronymus_recall"],
+    "observed_results": ["The user explicitly requests a durable agreement edit."],
+    "expected_actions": ["Update AGENTS.md narrowly through the existing project workflow, preserving unrelated instructions and independent conditions."],
+    "forbidden_actions": ["Migrate memory automatically.", "Delete file memory."]
+  },
+  {
+    "id": "reverse-preference-mid-task",
+    "agreement": "Use Hieronymus for terminology and accepted prose for voice; files retain author intent.",
+    "user_message": "For the rest of this review, prefer the accepted file terminology too, but keep Hieronymus voice observations advisory.",
+    "available_tools": ["hieronymus_recall"],
+    "observed_results": ["The instruction reverses the source preference for a stated part of the active task."],
+    "expected_actions": ["Apply the new preference immediately only to the stated review scope and retain the other agreement conditions."],
+    "forbidden_actions": ["Keep applying the superseded task preference.", "Rewrite AGENTS.md without a durable-change request.", "Claim prior records were transferred."]
+  },
+  {
+    "id": "h-replaces-memory",
+    "agreement": "For this project, Hieronymus replaces file memory; keep project instructions and manuscript files.",
+    "user_message": "Continue the chapter.",
+    "available_tools": ["hieronymus_recall"],
+    "observed_results": ["The requested recall succeeds."],
+    "expected_actions": ["Work without creating a file-memory mirror."],
+    "forbidden_actions": ["Require Markdown memory records or a catalog."]
+  },
+  {
+    "id": "service-unavailable",
+    "agreement": "Use Hieronymus for terminology; otherwise use project files.",
+    "user_message": "Review the scene pacing and terminology.",
+    "available_tools": ["hiero status --json"],
+    "observed_results": ["The terminology operation is unavailable; local scene files are readable."],
+    "expected_actions": ["Continue the independent pacing review and follow the stated terminology fallback."],
+    "forbidden_actions": ["Treat all work as blocked.", "Start or repair the service."]
+  },
+  {
+    "id": "partial-uncertain-write",
+    "agreement": "Write approved terminology to Hieronymus and the scene note to files.",
+    "user_message": "Save the approved term and note.",
+    "available_tools": ["hieronymus_short_term_add", "public read tools"],
+    "observed_results": ["The file write succeeds; the Hieronymus call times out."],
+    "expected_actions": ["Retain the successful file outcome and inspect the remote destination before any retry."],
+    "forbidden_actions": ["Resend blindly.", "Invent an idempotency_key."]
+  },
+  {
+    "id": "selected-partial-transfer-conflict",
+    "agreement": "Files are primary unless I explicitly select records to transfer.",
+    "user_message": "Transfer the three selected Russian term records to Hieronymus; do not move voices or delete the originals.",
+    "available_tools": ["public file reads", "hieronymus_short_term_add_batch", "public read tools"],
+    "observed_results": ["Two writes return actual IDs and revisions; the third conflicts with an active same-scope disposition."],
+    "expected_actions": ["Reconcile three selected, two written with actual IDs, and one unresolved conflict, including provenance, scope, and disposition.", "Report partial completion."],
+    "forbidden_actions": ["Claim full replacement.", "Transfer unselected voices.", "Delete originals.", "Create an ongoing mirror."]
+  },
+  {
+    "id": "multiple-language-directions",
+    "agreement": "Use direction-specific Hieronymus rules when the direction is known.",
+    "user_message": "Review the current translation output.",
+    "available_tools": ["hiero project-context", "hieronymus_recall"],
+    "observed_results": ["Two Russian directions and one English direction exist; selection is not actionable yet."],
+    "expected_actions": ["Avoid applying a direction or language rule until selection is resolved."],
+    "forbidden_actions": ["Choose from a map key or filename."]
+  },
+  {
+    "id": "stale-source-or-new-h-rule",
+    "agreement": "Use current Hieronymus terminology with source evidence.",
+    "user_message": "Prepare the next revision.",
+    "available_tools": ["hieronymus_recall"],
+    "observed_results": ["A source revision changed or a newly applicable rule appeared."],
+    "expected_actions": ["Retain historical evidence and mark dependent text for review."],
+    "forbidden_actions": ["Present stale dependent text as current."]
+  },
+  {
+    "id": "tagged-information",
+    "agreement": "Use both stores while preserving source tags and knowledge boundaries.",
+    "user_message": "Write a reader-facing summary.",
+    "available_tools": ["hieronymus_recall"],
+    "observed_results": ["Results include hidden, future, and AI-tagged information."],
+    "expected_actions": ["Exclude secrets and preserve proposals as proposals."],
+    "forbidden_actions": ["Reveal hidden information.", "Promote AI text to canon."]
+  },
+  {
+    "id": "imported-accepted-markdown-rule",
+    "agreement": "Accepted Markdown may be imported as evidence when requested.",
+    "user_message": "Import this accepted style rule as evidence.",
+    "available_tools": ["hieronymus_evidence_capture", "hieronymus_decide"],
+    "observed_results": ["The Markdown file is accepted project material, not a host-authenticated user event."],
+    "expected_actions": ["Capture it with its actual evidence provenance."],
+    "forbidden_actions": ["Fabricate a trusted user event or receipt."]
+  },
+  {
+    "id": "direct-h-translate-versus-muse",
+    "agreement": "Use CWS prose workflow and Hieronymus memory for this translation.",
+    "user_message": "Translate the next passage.",
+    "available_tools": ["creative-writing-muse", "Hieronymus translation workflow"],
+    "observed_results": ["The request can enter through either orchestrator."],
+    "expected_actions": ["Keep the current entry workflow in control and call bounded capabilities."],
+    "forbidden_actions": ["Recursively invoke orchestrators."]
+  }
+]

@@ -34,6 +34,9 @@ Read only the resource needed for the current operation:
   preview/apply behavior.
 - [Project contract](resources/project-contract.md) for managed roots,
   protected paths, and preservation boundaries.
+- [External project contract](resources/external-project-contract.md) for the
+  versioned structural roles and portable compatibility examples exposed to
+  independent tools.
 - [Agent workflows](resources/agent-workflows.md) for checks, drafts,
   migration, history, undo, recovery, and failure handling.
 

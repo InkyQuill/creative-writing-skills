@@ -43,7 +43,9 @@ def check_translation(project):
         if kind == 'translation-drafts':
             try:
                 state = translation_status(project, path, catalog=records, cache=cache)
-                if state['freshness'] != 'current':
+                if state['freshness'] == 'unknown':
+                    add('CW-TRANS-012', 'external memory unverified; obtain fresh public observations or inspect the recorded fallback', path)
+                elif state['freshness'] == 'needs-review':
                     add('CW-TRANS-010', 'translation inputs changed; review dependent prose', path)
             except (KeyError, OSError, TypeError, ValueError, RuntimeError) as error:
                 add('CW-TRANS-011', str(error), path, 'error')

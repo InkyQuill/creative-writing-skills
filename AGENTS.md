@@ -16,7 +16,7 @@ verify that the generated distribution matches those reviewed sources.
 Make every runtime change in the canonical plugin first, then regenerate `cw/`.
 
 The repository marketplace is `.agents/plugins/marketplace.json`. The exact
-35-skill inventory and authored/vendored partition are declared in
+36-skill inventory and authored/vendored partition are declared in
 `config/distribution.json`.
 
 ## Canonical Content
@@ -67,7 +67,7 @@ python3 scripts/create_skill_zips.py
 ```
 
 Archive generation reads only the generated `cw/skills/` tree, requires an
-exact match with the configured 35-skill inventory, and writes deterministic
+exact match with the configured 36-skill inventory, and writes deterministic
 archives under `zips/`.
 
 ## Releases
