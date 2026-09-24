@@ -331,6 +331,17 @@ class ProseCheckTests(unittest.TestCase):
         self.assertIn("accepted story documents", messages["manuscript/chapters/one.md"])
         self.assertIn("working draft prose", messages["manuscript/drafts/two.md"])
 
+    def test_selected_knowledge_folders_obey_durable_source_tag_policy(self):
+        (self.root / ".cws-layout.json").write_text(
+            '{"version":1,"roles":{"characters":"notes/people","world":"notes/setting"}}\n',
+            encoding="utf-8",
+        )
+        self.write("notes/people/aria.md", "<AI>Unconfirmed</AI>\n")
+        self.write("notes/setting/rules.md", "<AI>Unconfirmed</AI>\n")
+        messages = {item.path: item.message for item in self.findings() if item.code == prose.SOURCE_TAG_POLICY}
+        for path in ("notes/people/aria.md", "notes/setting/rules.md"):
+            self.assertIn("durable KB documents", messages[path])
+
     def test_integrity_scans_non_prose_managed_markdown_but_metrics_do_not(self):
         self.write("kb/canon/fact.md", "<hidden>Unclosed boundary\n")
         self.write("work/reviews/review.md", "~~~text\nunclosed fence\n")

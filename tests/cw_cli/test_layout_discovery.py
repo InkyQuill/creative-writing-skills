@@ -6,7 +6,7 @@ from pathlib import Path
 
 from tests.cw_cli import helpers  # noqa: F401
 from cwcli import app
-from cwcli.layout import LayoutAmbiguity, resolve_role, uses_flexible_layout
+from cwcli.layout import LayoutAmbiguity, load_layout, render_layout, resolve_role, uses_flexible_layout
 from cwcli.project import discover_project
 from cwcli import drafts, documents, transactions
 from cwcli import context
@@ -110,6 +110,14 @@ class LayoutDiscoveryTests(unittest.TestCase):
         status = app.run(["get-folder", "characters", "--format", "json"], cwd=self.root, stdout=output, stderr=errors)
         self.assertEqual(2, status)
         self.assertIn("project-relative", json.loads(output.getvalue())["message"])
+
+    def test_roles_cannot_share_the_same_folder(self):
+        shared = {"characters": "notes/shared", "world": "notes/shared"}
+        self.write_layout(shared)
+        with self.assertRaisesRegex(ValueError, "same folder"):
+            load_layout(discover_project(self.root))
+        with self.assertRaisesRegex(ValueError, "same folder"):
+            render_layout(shared)
 
     def test_get_folder_reports_ambiguous_role_without_guessing(self):
         for relative in ("chapters", "story/chapters"):

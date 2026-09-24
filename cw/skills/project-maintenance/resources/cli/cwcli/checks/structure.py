@@ -307,24 +307,26 @@ def _missing_frontmatter_finding(relative_id: str) -> Finding:
 def _iter_unmanaged_markdown(
     project: Project, role_folders: dict[str, tuple[str, ...]]
 ) -> Iterator[Path]:
-    managed_roots = set(MANAGED_ROOTS)
+    managed_folders = set(MANAGED_ROOTS)
     for folders in role_folders.values():
-        managed_roots.update(Path(folder).parts[0] for folder in folders)
-    yield from _iter_unmanaged_markdown_in(project.root, project.root, managed_roots)
+        managed_folders.update(folders)
+    if project.manifest.metadata.get("schema-version") == 2 and project.manifest.metadata.get("translation-enabled") is True:
+        managed_folders.update(("sources", "translations"))
+    yield from _iter_unmanaged_markdown_in(project.root, project.root, managed_folders)
 
 
-def _iter_unmanaged_markdown_in(root: Path, directory: Path, managed_roots: set[str]) -> Iterator[Path]:
+def _iter_unmanaged_markdown_in(root: Path, directory: Path, managed_folders: set[str]) -> Iterator[Path]:
     for path in _sorted_children(directory):
         if path.is_symlink():
             continue
         relative = path.relative_to(root)
         if path.is_dir():
-            if relative.parts[0] in managed_roots or relative.parts[0] == ".creative-writing":
+            if relative.as_posix() in managed_folders or relative.parts[0] == ".creative-writing":
                 continue
             manifest = path / "project.md"
             if path != root and not manifest.is_symlink() and manifest.is_file():
                 continue
-            yield from _iter_unmanaged_markdown_in(root, path, managed_roots)
+            yield from _iter_unmanaged_markdown_in(root, path, managed_folders)
         elif path.is_file() and path.suffix.casefold() == ".md" and relative.as_posix() != "project.md":
             yield path
 

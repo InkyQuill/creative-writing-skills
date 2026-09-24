@@ -82,6 +82,24 @@ class StructureCheckTests(unittest.TestCase):
             self.assertNotIn((structure.UNMANAGED_MARKDOWN, "manuscript/chapters/one.md"),
                              {(item.code, item.path) for item in findings})
 
+    def test_selected_nested_folder_does_not_manage_sibling_markdown(self):
+        directory, root = self.make_project()
+        with directory:
+            (root / ".cws-layout.json").write_text(
+                '{"version":1,"roles":{"characters":"notes/people"}}\n', encoding="utf-8"
+            )
+            selected = root / "notes/people"
+            selected.mkdir(parents=True)
+            (selected / "aria.md").write_text("---\ntitle: Aria\n---\nText\n", encoding="utf-8")
+            (root / "notes/todo.md").write_text("# Personal note\n", encoding="utf-8")
+            model = project.discover_project(root)
+            managed = {model.relative_id(path) for path in model.iter_managed_markdown()}
+            self.assertIn("notes/people/aria.md", managed)
+            self.assertNotIn("notes/todo.md", managed)
+            findings = self.findings_for(root)
+            sibling = [item for item in findings if item.path == "notes/todo.md"]
+            self.assertEqual([structure.UNMANAGED_MARKDOWN], [item.code for item in sibling])
+
     def test_selected_side_story_can_anchor_selected_chapter(self):
         directory, root = self.make_project()
         with directory:

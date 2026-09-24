@@ -59,22 +59,24 @@ class Project:
 
         from .layout import ROLE_CANDIDATES, role_directories
 
-        roots = list(MANAGED_ROOTS)
+        roots = [Path(root) for root in MANAGED_ROOTS]
         for role in ROLE_CANDIDATES:
             for directory in role_directories(self, role):
-                root_name = Path(directory).parts[0]
-                if root_name not in roots:
-                    roots.append(root_name)
+                roots.append(Path(directory))
         if self.manifest.metadata.get("schema-version") == 2 and self.manifest.metadata.get("translation-enabled") is True:
-            roots.extend(("sources", "translations"))
-        for root_name in roots:
-            managed_root = self.root / root_name
+            roots.extend((Path("sources"), Path("translations")))
+        covered: list[Path] = []
+        for relative_root in sorted(set(roots), key=lambda path: (len(path.parts), path.as_posix())):
+            if any(parent == relative_root or parent in relative_root.parents for parent in covered):
+                continue
+            covered.append(relative_root)
+            managed_root = self.root / relative_root
             if managed_root.is_symlink() or not managed_root.is_dir():
                 continue
             manifest = managed_root / "project.md"
             if not manifest.is_symlink() and manifest.is_file():
                 continue
-            yield from _iter_markdown(managed_root, skip_originals=root_name == "sources")
+            yield from _iter_markdown(managed_root, skip_originals=relative_root == Path("sources"))
 
     def relative_id(self, path: Path) -> str:
         """Return a forward-slash identity for a path lexically inside this project."""

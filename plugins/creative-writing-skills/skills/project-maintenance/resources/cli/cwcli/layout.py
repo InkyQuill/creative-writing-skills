@@ -30,13 +30,31 @@ LAYOUT_FILE = ".cws-layout.json"
 
 def validate_role_path(project: Project, relative: str) -> str:
     """Accept only a plain, project-relative directory without linked components."""
+    _validate_role_path_syntax(relative)
+    project.resolve(relative + "/.layout-check", for_write=True)
+    return relative
+
+
+def _validate_role_path_syntax(relative: str) -> None:
     if not isinstance(relative, str) or not relative or "\\" in relative:
         raise ValueError("layout role path must be a project-relative folder")
     path = PurePosixPath(relative)
     if path.is_absolute() or any(part in {"", ".", ".."} for part in relative.split("/")):
         raise ValueError("layout role path must be a project-relative folder")
-    project.resolve(relative + "/.layout-check", for_write=True)
-    return relative
+
+
+def _validate_role_mapping(roles: dict[str, str]) -> None:
+    if not isinstance(roles, dict):
+        raise ValueError("layout roles must be an object")
+    owners: dict[str, str] = {}
+    for role, relative in roles.items():
+        if role not in ROLE_CANDIDATES:
+            raise ValueError(f"unknown layout role: {role}")
+        _validate_role_path_syntax(relative)
+        previous = owners.get(relative)
+        if previous is not None:
+            raise ValueError(f"layout roles {previous} and {role} cannot use the same folder: {relative}")
+        owners[relative] = role
 
 
 def load_layout(project: Project) -> dict[str, str]:
@@ -58,14 +76,14 @@ def load_layout(project: Project) -> dict[str, str]:
     if not isinstance(data, dict) or data.get("version") != 1 or not isinstance(data.get("roles"), dict):
         raise ValueError("invalid .cws-layout.json: expected version 1 and roles object")
     roles = data["roles"]
+    _validate_role_mapping(roles)
     for role, relative in roles.items():
-        if role not in ROLE_CANDIDATES:
-            raise ValueError(f"unknown layout role: {role}")
         validate_role_path(project, relative)
     return roles
 
 
 def render_layout(roles: dict[str, str]) -> bytes:
+    _validate_role_mapping(roles)
     return (json.dumps({"version": 1, "roles": roles}, ensure_ascii=False, indent=2) + "\n").encode("utf-8")
 
 

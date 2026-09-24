@@ -264,8 +264,9 @@ def check_prose(project: Project, *, draft_typography: bool = False) -> list[Fin
     configured_language = project.manifest.metadata.get("language")
     language = configured_language if isinstance(configured_language, str) else ""
     findings: list[Finding] = []
-    manuscript_folders = {
-        role: role_directories(project, role) for role in ("chapters", "side-stories", "drafts")
+    role_folders = {
+        role: role_directories(project, role)
+        for role in ("chapters", "side-stories", "drafts", "characters", "world")
     }
 
     paths = [project.root / "project.md", *project.iter_managed_markdown()]
@@ -306,11 +307,11 @@ def check_prose(project: Project, *, draft_typography: bool = False) -> list[Fin
             )
         integrity = _integrity_lines(text)
         findings.extend(_tag_findings(relative_id, integrity))
-        findings.extend(_tag_policy_findings(relative_id, integrity, manuscript_folders))
+        findings.extend(_tag_policy_findings(relative_id, integrity, role_folders))
 
         from ..translation.contract import translation_kind
         translated = project.manifest.metadata.get("schema-version") == 2 and translation_kind(relative_id) in ("translation-drafts", "translation-accepted")
-        if not _is_prose_path(relative_id, project, manuscript_folders) and not translated:
+        if not _is_prose_path(relative_id, project, role_folders) and not translated:
             continue
 
         document_language = _prose_language(relative_id, source, language)
@@ -322,7 +323,7 @@ def check_prose(project: Project, *, draft_typography: bool = False) -> list[Fin
             except (OSError, ValueError, KeyError) as error:
                 findings.append(Finding(UNREADABLE_DOCUMENT, "warning", str(error), path=relative_id))
                 continue
-        is_working_draft = Path(relative_id).parent.as_posix() in role_directories(project, "drafts") or (
+        is_working_draft = Path(relative_id).parent.as_posix() in role_folders["drafts"] or (
             translated and translation_kind(relative_id) == "translation-drafts"
         )
         if _normalize_language(document_language) == "ru" and (
@@ -568,7 +569,7 @@ def _tag_finding(relative_id: str, line_number: int, message: str) -> Finding:
 def _tag_policy_findings(
     relative_id: str,
     lines: tuple[tuple[int, str], ...],
-    manuscript_folders: dict[str, tuple[str, ...]],
+    role_folders: dict[str, tuple[str, ...]],
 ) -> list[Finding]:
     findings: list[Finding] = []
     for line_number, line in lines:
@@ -577,7 +578,7 @@ def _tag_policy_findings(
             if token.startswith("</"):
                 continue
             name = "AI" if "AI" in token else "hidden"
-            message = _policy_message(relative_id, name, manuscript_folders)
+            message = _policy_message(relative_id, name, role_folders)
             if message is not None:
                 findings.append(
                     Finding(
@@ -593,16 +594,18 @@ def _tag_policy_findings(
 
 
 def _policy_message(
-    relative_id: str, name: str, manuscript_folders: dict[str, tuple[str, ...]]
+    relative_id: str, name: str, role_folders: dict[str, tuple[str, ...]]
 ) -> str | None:
     parts = Path(relative_id).parts
     parent = Path(relative_id).parent.as_posix()
-    if parent in manuscript_folders["drafts"]:
+    if parent in role_folders["drafts"]:
         if name == "AI":
             return "<AI> source tags are not allowed in working draft prose"
         return "<hidden> source tags require resolution before draft acceptance"
-    if any(parent in manuscript_folders[role] for role in ("chapters", "side-stories")):
+    if any(parent in role_folders[role] for role in ("chapters", "side-stories")):
         return f"<{name}> source tags are not allowed in accepted story documents"
+    if name == "AI" and any(parent in role_folders[role] for role in ("characters", "world")):
+        return "<AI> source tags are not allowed in durable KB documents"
     if parts and parts[0] == "story":
         return f"<{name}> source tags are not allowed in accepted story documents"
     if len(parts) >= 2 and parts[:2] == ("work", "drafts"):
@@ -786,7 +789,7 @@ def _opening_line(lines: tuple[tuple[int, str], ...], opening: str) -> int | Non
 def _is_prose_path(
     relative_id: str,
     project: Project | None = None,
-    manuscript_folders: dict[str, tuple[str, ...]] | None = None,
+    role_folders: dict[str, tuple[str, ...]] | None = None,
 ) -> bool:
     path = Path(relative_id)
     if path.name == "_index.md" or path.suffix.casefold() != ".md":
@@ -796,12 +799,12 @@ def _is_prose_path(
     if project is None:
         recognized.update(("story/chapters", "story/side-stories", "work/drafts"))
     else:
-        if manuscript_folders is None:
-            manuscript_folders = {
+        if role_folders is None:
+            role_folders = {
                 role: role_directories(project, role) for role in ("chapters", "side-stories", "drafts")
             }
-        for folders in manuscript_folders.values():
-            recognized.update(folders)
+        for role in ("chapters", "side-stories", "drafts"):
+            recognized.update(role_folders[role])
     return parent in recognized
 
 
