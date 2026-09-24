@@ -57,9 +57,16 @@ class Project:
     def iter_managed_markdown(self) -> Iterator[Path]:
         """Yield managed Markdown files without entering links or nested projects."""
 
-        roots = MANAGED_ROOTS
+        from .layout import ROLE_CANDIDATES, role_directories
+
+        roots = list(MANAGED_ROOTS)
+        for role in ROLE_CANDIDATES:
+            for directory in role_directories(self, role):
+                root_name = Path(directory).parts[0]
+                if root_name not in roots:
+                    roots.append(root_name)
         if self.manifest.metadata.get("schema-version") == 2 and self.manifest.metadata.get("translation-enabled") is True:
-            roots += ("sources", "translations")
+            roots.extend(("sources", "translations"))
         for root_name in roots:
             managed_root = self.root / root_name
             if managed_root.is_symlink() or not managed_root.is_dir():

@@ -17,6 +17,7 @@ from ..documents import parse_document
 from ..findings import Finding
 from ..markdown_links import closes_markdown_fence, markdown_fence_marker
 from ..project import Project
+from ..layout import role_directories
 
 
 UNREADABLE_DOCUMENT = "CW-PROSE-001"
@@ -306,7 +307,7 @@ def check_prose(project: Project, *, draft_typography: bool = False) -> list[Fin
 
         from ..translation.contract import translation_kind
         translated = project.manifest.metadata.get("schema-version") == 2 and translation_kind(relative_id) in ("translation-drafts", "translation-accepted")
-        if not _is_prose_path(relative_id) and not translated:
+        if not _is_prose_path(relative_id, project) and not translated:
             continue
 
         document_language = _prose_language(relative_id, source, language)
@@ -318,7 +319,7 @@ def check_prose(project: Project, *, draft_typography: bool = False) -> list[Fin
             except (OSError, ValueError, KeyError) as error:
                 findings.append(Finding(UNREADABLE_DOCUMENT, "warning", str(error), path=relative_id))
                 continue
-        is_working_draft = relative_id.startswith("work/drafts/") or (
+        is_working_draft = Path(relative_id).parent.as_posix() in role_directories(project, "drafts") or (
             translated and translation_kind(relative_id) == "translation-drafts"
         )
         if _normalize_language(document_language) == "ru" and (
@@ -744,12 +745,16 @@ def _opening_line(lines: tuple[tuple[int, str], ...], opening: str) -> int | Non
     return None
 
 
-def _is_prose_path(relative_id: str) -> bool:
+def _is_prose_path(relative_id: str, project: Project | None = None) -> bool:
     path = Path(relative_id)
     if path.name == "_index.md" or path.suffix.casefold() != ".md":
         return False
     parent = path.parent.as_posix()
-    return parent in {"story/chapters", "story/side-stories", "work/drafts", "kb/samples"}
+    recognized = {"story/chapters", "story/side-stories", "work/drafts", "kb/samples"}
+    if project is not None:
+        for role in ("chapters", "side-stories", "drafts"):
+            recognized.update(role_directories(project, role))
+    return parent in recognized
 
 
 def _read_regular(path: Path) -> bytes:

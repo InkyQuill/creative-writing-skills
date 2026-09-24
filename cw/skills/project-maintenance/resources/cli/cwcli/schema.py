@@ -124,14 +124,16 @@ def allowed_document_kind(relative_id: str, *, schema_version: int = 1) -> str |
     return None
 
 
-def validate_metadata(relative_id: str, document: Document) -> list[Finding]:
+def validate_metadata(
+    relative_id: str, document: Document, *, kind_override: str | None = None
+) -> list[Finding]:
     """Return findings for structurally defined schema-v1 metadata only.
 
     Artifact-specific semantic fields and Markdown table columns are deliberately
     unconstrained in schema v1. Tightening them requires a future schema version.
     """
 
-    kind = allowed_document_kind(relative_id)
+    kind = kind_override or allowed_document_kind(relative_id)
     if kind == "manifest":
         return _validate_manifest(document.metadata, relative_id)
 
