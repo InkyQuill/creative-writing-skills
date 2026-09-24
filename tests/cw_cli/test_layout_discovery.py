@@ -105,6 +105,19 @@ class LayoutDiscoveryTests(unittest.TestCase):
         self.assertNotIn("story/chapters", [item["path"] for item in findings])
         self.assertNotIn("chapters/one.md", [item["path"] for item in findings if item["code"] == "CW-STRUCT-060"])
 
+    def test_reindex_in_flat_project_does_not_create_canonical_folders(self):
+        target = self.root / "chapters"
+        target.mkdir()
+        (target / "one.md").write_text("# One\n", encoding="utf-8")
+        output, errors = io.StringIO(), io.StringIO()
+
+        status = app.run(["reindex", "--format", "json"], cwd=self.root, stdout=output, stderr=errors)
+
+        self.assertEqual(0, status, errors.getvalue())
+        changes = json.loads(output.getvalue()).get("changes", [])
+        self.assertFalse(any("story/chapters" in json.dumps(change) for change in changes))
+        self.assertFalse((self.root / "story").exists())
+
 
 if __name__ == "__main__":
     unittest.main()

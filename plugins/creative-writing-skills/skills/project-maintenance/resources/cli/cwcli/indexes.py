@@ -10,6 +10,7 @@ from pathlib import PurePosixPath
 from .documents import Document, parse_document, render_document
 from .project import Project
 from .schema import GENERATED_INDEX_FILES, allowed_document_kind
+from .layout import uses_flexible_layout
 from .transactions import Change, TransactionPlan
 
 
@@ -58,7 +59,14 @@ def plan_reindex(
         from .translation.indexes import plan_translation_indexes
         return plan_translation_indexes(project, overlay=overlay, index_ids=index_ids, skip_unparseable=skip_unparseable)
 
-    selected = tuple(GENERATED_INDEX_FILES if index_ids is None else index_ids)
+    overlay_changes = tuple(overlay)
+    if index_ids is None and not overlay_changes and uses_flexible_layout(project):
+        selected = tuple(
+            index_id for index_id in GENERATED_INDEX_FILES
+            if (project.root / index_id).is_file() and not (project.root / index_id).is_symlink()
+        )
+    else:
+        selected = tuple(GENERATED_INDEX_FILES if index_ids is None else index_ids)
     if len(set(selected)) != len(selected) or any(
         index_id not in GENERATED_INDEX_FILES for index_id in selected
     ):
@@ -88,7 +96,6 @@ def plan_reindex(
         if _is_indexable(relative_id, document):
             documents[relative_id] = document
 
-    overlay_changes = tuple(overlay)
     for change in overlay_changes:
         if not _is_relevant_to_indexes(change.path, selected):
             continue
