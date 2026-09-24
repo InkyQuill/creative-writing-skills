@@ -70,7 +70,7 @@ class Draft:
 def load_draft(project: Project, path: str) -> Draft:
     """Load a valid active draft without following filesystem links."""
 
-    _validate_draft_path(path)
+    _validate_draft_path(project, path)
     try:
         source = project.resolve(path, for_write=True)
     except (ProjectPathError, TypeError) as error:
@@ -107,11 +107,11 @@ def plan_create_draft(
     if store.project.root != project.root:
         raise DraftError("transaction store belongs to a different project")
     destination_id = (
-        f"work/drafts/{PurePosixPath(target).name}"
+        f"{_role_path(project, 'drafts')}/{PurePosixPath(target).name}"
         if draft_path is None
         else draft_path
     )
-    _validate_draft_path(destination_id)
+    _validate_draft_path(project, destination_id)
     try:
         destination = project.resolve(destination_id, for_write=True)
     except (ProjectPathError, TypeError) as error:
@@ -154,7 +154,15 @@ def plan_create_draft(
     return TransactionPlan(
         command=("draft", "create", target),
         changes=(Change(destination_id, None, rendered),),
-        metadata={"draft": destination_id, "target": target, "undoable": True},
+        metadata={
+            "draft": destination_id,
+            "target": target,
+            "undoable": True,
+            "directory-changes": {
+                "create": _created_directories(project, destination),
+                "remove": (),
+            },
+        },
     )
 
 
@@ -296,7 +304,7 @@ def plan_accept_draft(
         Change(draft_path, source, None),
     )
     derived = plan_reindex(
-        project, overlay=primary, index_ids=_ACCEPT_INDEXES
+        project, overlay=primary, index_ids=_relevant_indexes(project, _ACCEPT_INDEXES)
     ).changes
     return TransactionPlan(
         command=("draft", "accept", draft_path),
@@ -306,6 +314,10 @@ def plan_accept_draft(
             "target": draft.target,
             "archive": archive_id,
             "undoable": True,
+            "directory-changes": {
+                "create": _created_directories(project, project.root / archive_id, target_path),
+                "remove": (),
+            },
         },
     )
 
@@ -317,7 +329,7 @@ def plan_abandon_draft(
 ) -> TransactionPlan:
     """Plan abandonment without creating or changing manuscript content."""
 
-    _validate_draft_path(draft_path)
+    _validate_draft_path(project, draft_path)
     try:
         source_path = project.resolve(draft_path, for_write=True)
         source = _read_regular_file(source_path, f"draft {draft_path}")
@@ -335,7 +347,7 @@ def plan_abandon_draft(
     derived = plan_reindex(
         project,
         overlay=primary,
-        index_ids=_ABANDON_INDEXES,
+        index_ids=_relevant_indexes(project, _ABANDON_INDEXES),
         skip_unparseable=True,
     ).changes
     return TransactionPlan(
@@ -346,6 +358,10 @@ def plan_abandon_draft(
             "target": document.metadata.get("target"),
             "archive": archive_id,
             "undoable": True,
+            "directory-changes": {
+                "create": _created_directories(project, project.root / archive_id),
+                "remove": (),
+            },
         },
     )
 
@@ -407,7 +423,7 @@ def _archive_id(project: Project, draft_path: str, transaction_id: str) -> str:
     ):
         raise DraftError("transaction ID must be a safe ASCII identifier")
     stem = PurePosixPath(draft_path).stem
-    archive_id = f"work/archive/{stem}--{transaction_id}.md"
+    archive_id = f"{_role_path(project, 'archive')}/{stem}--{transaction_id}.md"
     try:
         archive = project.resolve(archive_id, for_write=True)
     except (ProjectPathError, TypeError) as error:
@@ -676,13 +692,13 @@ def _replace_base_revision_value(prefix: bytes, base_revision: str) -> bytes:
 
 
 def _reject_duplicate_target(project: Project, target: str) -> None:
-    directory = project.root / "work" / "drafts"
+    directory = project.root / _role_path(project, "drafts")
     if directory.is_symlink():
-        raise DraftError("work/drafts must be an ordinary directory without links")
+        raise DraftError("drafts folder must be an ordinary directory without links")
     if not directory.exists():
         return
     if not directory.is_dir():
-        raise DraftError("work/drafts must be an ordinary directory")
+        raise DraftError("drafts folder must be an ordinary directory")
     for path in sorted(directory.iterdir(), key=lambda candidate: candidate.name):
         if path.name == "_index.md" or path.suffix.casefold() != ".md":
             continue
@@ -704,9 +720,9 @@ def _reject_duplicate_target(project: Project, target: str) -> None:
 def _reject_other_duplicate_target(project: Project, draft: Draft) -> None:
     """Reject a portable target identity shared by another active draft."""
 
-    directory = project.root / "work" / "drafts"
+    directory = project.root / _role_path(project, "drafts")
     if directory.is_symlink() or not directory.is_dir():
-        raise DraftError("work/drafts must be an ordinary directory without links")
+        raise DraftError("drafts folder must be an ordinary directory without links")
     identity = _portable_identity(draft.target)
     duplicates: list[str] = []
     for path in sorted(directory.iterdir(), key=lambda candidate: candidate.name):
@@ -735,40 +751,75 @@ def _reject_other_duplicate_target(project: Project, draft: Draft) -> None:
 
 
 def _resolve_target(project: Project, target: str) -> Path:
-    _validate_target_path(target)
+    _validate_target_path(project, target)
     try:
         return project.resolve(target, for_write=True)
     except (ProjectPathError, TypeError) as error:
         raise DraftError(f"unsafe draft target {target!r}: {error}") from error
 
 
-def _validate_target_path(path: str) -> None:
+def _validate_target_path(project: Project, path: str) -> None:
     if not isinstance(path, str):
         raise DraftError("draft target must be a project-relative string")
     pure = PurePosixPath(path)
+    from .layout import role_directories
+
+    allowed_parents = {
+        PurePosixPath(directory)
+        for role in ("chapters", "side-stories")
+        for directory in role_directories(project, role)
+    }
     if (
         str(pure) != path
-        or pure.parent
-        not in {PurePosixPath("story/chapters"), PurePosixPath("story/side-stories")}
+        or pure.parent not in allowed_parents
         or pure.name == "_index.md"
         or pure.suffix.casefold() != ".md"
     ):
         raise DraftError(
-            "draft target must be story/chapters/<name>.md or story/side-stories/<name>.md"
+            "draft target must be directly within "
+            + " or ".join(f"{parent}/<name>.md" for parent in sorted(allowed_parents))
         )
 
 
-def _validate_draft_path(path: str) -> None:
+def _validate_draft_path(project: Project, path: str) -> None:
     if not isinstance(path, str):
         raise DraftError("draft path must be a project-relative string")
     pure = PurePosixPath(path)
     if (
         str(pure) != path
-        or pure.parent != PurePosixPath("work/drafts")
+        or pure.parent != PurePosixPath(_role_path(project, "drafts"))
         or pure.name == "_index.md"
         or pure.suffix.casefold() != ".md"
     ):
-        raise DraftError("draft path must be work/drafts/<name>.md")
+        raise DraftError(f"draft path must be {_role_path(project, 'drafts')}/<name>.md")
+
+
+def _role_path(project: Project, role: str) -> str:
+    from .layout import resolve_role
+
+    return resolve_role(project, role)
+
+
+def _relevant_indexes(project: Project, index_ids: tuple[str, ...]) -> tuple[str, ...]:
+    from .layout import uses_flexible_layout
+
+    if not uses_flexible_layout(project):
+        return index_ids
+    return tuple(
+        index_id for index_id in index_ids
+        if (project.root / index_id).is_file() and not (project.root / index_id).is_symlink()
+    )
+
+
+def _created_directories(project: Project, *targets: Path) -> tuple[str, ...]:
+    missing: set[str] = set()
+    for target in targets:
+        parent = target.parent
+        while parent != project.root and project.root in parent.parents:
+            if not parent.exists():
+                missing.add(parent.relative_to(project.root).as_posix())
+            parent = parent.parent
+    return tuple(sorted(missing, key=lambda path: (len(PurePosixPath(path).parts), path)))
 
 
 def _is_digest(value: object) -> bool:

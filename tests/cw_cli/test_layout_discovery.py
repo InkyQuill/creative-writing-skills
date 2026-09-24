@@ -8,6 +8,7 @@ from tests.cw_cli import helpers  # noqa: F401
 from cwcli import app
 from cwcli.layout import LayoutAmbiguity, resolve_role
 from cwcli.project import discover_project
+from cwcli import drafts, documents, transactions
 
 
 class LayoutDiscoveryTests(unittest.TestCase):
@@ -117,6 +118,79 @@ class LayoutDiscoveryTests(unittest.TestCase):
         changes = json.loads(output.getvalue()).get("changes", [])
         self.assertFalse(any("story/chapters" in json.dumps(change) for change in changes))
         self.assertFalse((self.root / "story").exists())
+
+    def test_draft_can_target_detected_flat_chapter_path(self):
+        (self.root / "chapters").mkdir()
+        (self.root / "chapters/existing.md").write_text("# Existing\n", encoding="utf-8")
+        output, errors = io.StringIO(), io.StringIO()
+
+        status = app.run(
+            ["draft", "create", "chapters/next.md", "--format", "json"],
+            cwd=self.root, stdout=output, stderr=errors,
+        )
+
+        self.assertEqual(0, status, errors.getvalue())
+        self.assertIn("work/drafts/next.md", json.dumps(json.loads(output.getvalue())))
+        self.assertFalse((self.root / "story").exists())
+
+    def test_draft_uses_explicit_draft_folder_without_default_work_tree(self):
+        (self.root / "project.md").write_text(
+            "---\nschema-version: 1\ntitle: Story\nlanguage: ru\nstatus: drafting\nrole-chapters: chapters\nrole-drafts: notes/drafts\n---\n",
+            encoding="utf-8",
+        )
+        output, errors = io.StringIO(), io.StringIO()
+        status = app.run(
+            ["draft", "create", "chapters/next.md", "--format", "json"],
+            cwd=self.root, stdout=output, stderr=errors,
+        )
+        self.assertEqual(0, status, errors.getvalue())
+        self.assertIn("notes/drafts/next.md", json.dumps(json.loads(output.getvalue())))
+        self.assertFalse((self.root / "work").exists())
+
+        applied_out, errors = io.StringIO(), io.StringIO()
+        self.assertEqual(0, app.run(
+            ["draft", "create", "chapters/next.md", "--apply", "--format", "json"],
+            cwd=self.root, stdout=applied_out, stderr=errors,
+        ), errors.getvalue() + applied_out.getvalue())
+        check_out, errors = io.StringIO(), io.StringIO()
+        self.assertEqual(0, app.run(
+            ["check", "drafts", ".", "--format", "json"],
+            cwd=self.root, stdout=check_out, stderr=errors,
+        ), errors.getvalue())
+        findings = json.loads(check_out.getvalue())["findings"]
+        self.assertTrue(any(item["path"] == "notes/drafts/next.md" for item in findings))
+        self.assertNotIn("CW-DRAFT-020", [item["code"] for item in findings])
+
+    def test_accept_from_flat_layout_does_not_plan_parallel_indexes(self):
+        (self.root / "project.md").write_text(
+            "---\nschema-version: 1\ntitle: Story\nlanguage: ru\nstatus: drafting\nrole-chapters: chapters\nrole-drafts: notes/drafts\nrole-archive: notes/archive\n---\n",
+            encoding="utf-8",
+        )
+        (self.root / "chapters").mkdir()
+        draft_folder = self.root / "notes/drafts"
+        draft_folder.mkdir(parents=True)
+        (draft_folder / "next.md").write_bytes(documents.render_document(documents.Document(
+            metadata={"target": "chapters/next.md", "status": "ready", "number": 1},
+            body="Новая глава.\n", newline="\n", bom=False,
+        )))
+        model = discover_project(self.root)
+        store = transactions.TransactionStore(model)
+
+        plan = drafts.plan_accept_draft(model, "notes/drafts/next.md", store, "tx-flat")
+
+        changed = {change.path for change in plan.changes}
+        self.assertIn("chapters/next.md", changed)
+        self.assertIn("notes/archive/next--tx-flat.md", changed)
+        self.assertFalse(any(path.startswith("story/") for path in changed))
+        engine = transactions.TransactionEngine(model)
+        record = engine.apply(plan, transaction_id="tx-flat")
+        self.assertEqual("committed", record.state)
+        self.assertTrue((self.root / "chapters/next.md").exists())
+        self.assertTrue((self.root / "notes/archive/next--tx-flat.md").exists())
+        inverse = engine.inverse("tx-flat")
+        engine.apply(inverse)
+        self.assertFalse((self.root / "chapters/next.md").exists())
+        self.assertTrue((self.root / "notes/drafts/next.md").exists())
 
 
 if __name__ == "__main__":
