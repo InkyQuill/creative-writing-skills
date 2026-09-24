@@ -18,6 +18,8 @@ check structure|links|kb|continuity|drafts|prose|journal|translation|all [projec
 check prose|all [project] --draft-typography
 doctor
 layout
+layout --capture [--apply]
+layout --set chapters=<folder> [--set drafts=<folder>] [--apply]
 context draft|chapter|kb <path> [--as trusted|reader|character:<id>] [--snapshot]
 clean-context
 reindex
@@ -25,9 +27,12 @@ reindex
 
 Use `check all` for the mechanical floor, or a focused checker while working
 in one domain. `layout` inventories populated common Markdown folders without
-creating paths or selecting between ambiguous locations. Use it as an internal
-discovery aid; do not make the author run it or treat a missing candidate as a
-setup failure. Context planning without `--snapshot` is read-only. A restricted
+creating paths or selecting between ambiguous locations. `.cws-layout.json`
+stores folder choices for this project, separate from `project.md`.
+`layout --capture` saves only unambiguous populated folders; `--set` records
+an explicit role path. Both preview changes before `--apply` and can be undone.
+Use these as internal setup aids; do not make the author run them or treat a
+missing candidate as a setup failure. Context planning without `--snapshot` is read-only. A restricted
 `context --snapshot` writes derived cache without `--apply`; trusted context
 can use the selected source paths directly. `clean-context` previews and
 applies derived-cache deletion with `--apply`, but it stays outside transaction

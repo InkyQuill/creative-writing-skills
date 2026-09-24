@@ -34,7 +34,7 @@ from .drafts import (
 from .edits import EditConflict, EditPlanError, load_operations, plan_edits
 from .findings import ExecutionError, Finding, Report
 from .indexes import plan_reindex
-from .layout import inventory_layout
+from .layout import LAYOUT_FILE, ROLE_CANDIDATES, inventory_layout, load_layout, render_layout, validate_role_path
 from .migration import (
     MigrationPlanError,
     load_migration_plan,
@@ -47,6 +47,7 @@ from .project import Project, ProjectDiscoveryError, ProjectPathError, discover_
 from .prose_fixes import ProseFixError, plan_safe_typography_fix
 from .scaffold import InitError, apply_init, preview_init
 from .transactions import (
+    Change,
     TransactionConflict,
     TransactionEngine,
     TransactionError,
@@ -134,13 +135,16 @@ def _parser(*, error_stream: TextIO) -> argparse.ArgumentParser:
     init.add_argument("--language", required=True)
     init.add_argument("--kind", choices=("authoring", "translation"), default="authoring")
     init.add_argument("--work-kind", choices=("book", "series"), default="book")
+    init.add_argument("--template", choices=("compact", "full"), default="compact")
     _mutation_options(init)
 
     reindex = commands.add_parser("reindex", error_stream=error_stream)
     _mutation_options(reindex)
 
     layout = commands.add_parser("layout", error_stream=error_stream)
-    _format_option(layout)
+    layout.add_argument("--set", dest="role_selections", action="append", default=[], metavar="ROLE=FOLDER")
+    layout.add_argument("--capture", action="store_true")
+    _mutation_options(layout)
 
     fix_typography = commands.add_parser("fix-prose-typography", error_stream=error_stream)
     fix_typography.add_argument("path")
@@ -272,13 +276,34 @@ def run(argv: list[str], *, cwd: Path, stdout: TextIO, stderr: TextIO) -> int:
 
     if args.command == "layout":
         try:
-            result = inventory_layout(discover_project(cwd))
-        except (DocumentError, OSError, ProjectDiscoveryError, ValueError) as error:
+            project = discover_project(cwd)
+            if not args.role_selections and not args.capture:
+                _write_command_data(inventory_layout(project), output_format=args.format, stdout=stdout)
+                return 0
+            roles = dict(load_layout(project))
+            if args.capture:
+                for role, details in inventory_layout(project)["roles"].items():
+                    if role not in roles and len(details["candidates"]) == 1:
+                        roles[role] = details["candidates"][0]
+            for selection in args.role_selections:
+                if "=" not in selection:
+                    raise ValueError("--set expects ROLE=FOLDER")
+                role, relative = selection.split("=", 1)
+                if role not in ROLE_CANDIDATES:
+                    raise ValueError(f"unknown layout role: {role}")
+                roles[role] = validate_role_path(project, relative)
+            path = project.root / LAYOUT_FILE
+            before = path.read_bytes() if path.exists() else None
+            after = render_layout(roles)
+            if before == after:
+                _write_command_data({"status": "unchanged", "roles": roles}, output_format=args.format, stdout=stdout)
+                return 0
+            plan = TransactionPlan(command=("layout",), changes=(Change(LAYOUT_FILE, before, after),), metadata={"undoable": True})
+            return _preview_or_apply(TransactionEngine(project), plan, apply=args.apply, output_format=args.format, stdout=stdout)
+        except (DocumentError, OSError, ProjectDiscoveryError, ProjectPathError, TransactionError, ValueError) as error:
             return _write_command_error(
                 error, conflict=False, output_format=args.format, stdout=stdout, stderr=stderr,
             )
-        _write_command_data(result, output_format=args.format, stdout=stdout)
-        return 0
 
     if args.command == "draft":
         return _run_draft(args, cwd=cwd, stdout=stdout, stderr=stderr)
@@ -526,13 +551,13 @@ def _run_recover(args: argparse.Namespace, *, cwd: Path, stdout: TextIO, stderr:
 def _run_init(args: argparse.Namespace, *, cwd: Path, stdout: TextIO, stderr: TextIO) -> int:
     target = _from_cwd(cwd, args.path)
     try:
-        plan = preview_init(target, args.title, args.language, kind=args.kind, work_kind=args.work_kind)
+        plan = preview_init(target, args.title, args.language, kind=args.kind, work_kind=args.work_kind, template=args.template)
         if not args.apply:
             json.dump(_init_preview(plan), stdout)
             stdout.write("\n")
             return 0
 
-        applied = apply_init(target, args.title, args.language, kind=args.kind, work_kind=args.work_kind)
+        applied = apply_init(target, args.title, args.language, kind=args.kind, work_kind=args.work_kind, template=args.template)
         record = applied.record
         _write_command_data(
             {

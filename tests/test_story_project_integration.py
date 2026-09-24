@@ -31,7 +31,7 @@ class StoryProjectIntegrationTests(unittest.TestCase):
         self.assertNotIn("Layout A", text)
         self.assertNotIn("Layout B", text)
         self.assertIn("cw init", text)
-        for path in ("project.md", "story/chapters/", "work/drafts/", "kb/continuity/"):
+        for path in ("project.md", ".cws-layout.json", "cw layout"):
             self.assertIn(path, text)
         self.assertRegex(text, r"(?is)body of.{0,80}`project\.md`.{0,180}(durable|writing contract)")
         self.assertRegex(text, r"(?is)resolved project instructions.{0,180}(unmanaged|optional)")

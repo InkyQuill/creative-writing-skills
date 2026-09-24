@@ -60,6 +60,12 @@ index, calculate a hash, copy a tag, or maintain a base revision.
 
 ## Manuscript roles and reading order
 
+`.cws-layout.json` stores the selected project-relative folder for each role.
+Read it before choosing chapter, side-story, draft, plan, review, archive, or
+knowledge folders. Existing projects without this file are discovered from
+populated folders; record unambiguous choices without moving author files.
+The paths below are defaults for the full scaffold, not required author paths.
+
 Numbered main chapters are direct Markdown children of `story/chapters/` and
 use unique positive integer `number` metadata. Accepted bonus prose is a direct
 Markdown child of `story/side-stories/`; it uses required `after` metadata that

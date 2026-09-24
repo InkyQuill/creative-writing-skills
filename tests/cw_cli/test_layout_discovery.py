@@ -28,6 +28,12 @@ class LayoutDiscoveryTests(unittest.TestCase):
         self.assertEqual(0, status, errors.getvalue())
         return json.loads(output.getvalue())
 
+    def write_layout(self, roles):
+        (self.root / ".cws-layout.json").write_text(
+            json.dumps({"version": 1, "roles": roles}, ensure_ascii=False) + "\n",
+            encoding="utf-8",
+        )
+
     def test_flat_chapters_are_detected_without_creating_canonical_tree(self):
         (self.root / "chapters").mkdir()
         (self.root / "chapters/first.md").write_text("# First\n", encoding="utf-8")
@@ -66,12 +72,30 @@ class LayoutDiscoveryTests(unittest.TestCase):
         self.assertEqual([], result["roles"]["chapters"]["candidates"])
 
     def test_explicit_role_path_wins_without_moving_content(self):
-        (self.root / "project.md").write_text(
-            "---\nschema-version: 1\ntitle: Story\nlanguage: ru\nstatus: drafting\nrole-chapters: manuscript/book-one\n---\n",
-            encoding="utf-8",
-        )
+        self.write_layout({"chapters": "manuscript/book-one"})
         self.assertEqual("manuscript/book-one", resolve_role(discover_project(self.root), "chapters"))
         self.assertFalse((self.root / "manuscript").exists())
+
+    def test_layout_choice_is_previewed_then_saved_separately(self):
+        output, errors = io.StringIO(), io.StringIO()
+        args = ["layout", "--set", "chapters=manuscript/book-one", "--format", "json"]
+        self.assertEqual(0, app.run(args, cwd=self.root, stdout=output, stderr=errors))
+        self.assertFalse((self.root / ".cws-layout.json").exists())
+        self.assertEqual(0, app.run(args + ["--apply"], cwd=self.root, stdout=io.StringIO(), stderr=errors), errors.getvalue())
+        self.assertEqual("manuscript/book-one", resolve_role(discover_project(self.root), "chapters"))
+        self.assertNotIn("role-chapters", (self.root / "project.md").read_text())
+
+    def test_capture_saves_only_unambiguous_existing_folders(self):
+        (self.root / "chapters").mkdir()
+        (self.root / "chapters/one.md").write_text("# One\n")
+        for relative in ("work/drafts", "drafts"):
+            directory = self.root / relative
+            directory.mkdir(parents=True)
+            (directory / "one.md").write_text("# One\n")
+        output, errors = io.StringIO(), io.StringIO()
+        self.assertEqual(0, app.run(["layout", "--capture", "--apply"], cwd=self.root, stdout=output, stderr=errors), errors.getvalue())
+        roles = json.loads((self.root / ".cws-layout.json").read_text())["roles"]
+        self.assertEqual({"chapters": "chapters"}, roles)
 
     def test_ambiguous_populated_role_needs_explicit_choice(self):
         for directory in ("chapters", "story/chapters"):
@@ -135,10 +159,7 @@ class LayoutDiscoveryTests(unittest.TestCase):
         self.assertFalse((self.root / "story").exists())
 
     def test_draft_uses_explicit_draft_folder_without_default_work_tree(self):
-        (self.root / "project.md").write_text(
-            "---\nschema-version: 1\ntitle: Story\nlanguage: ru\nstatus: drafting\nrole-chapters: chapters\nrole-drafts: notes/drafts\n---\n",
-            encoding="utf-8",
-        )
+        self.write_layout({"chapters": "chapters", "drafts": "notes/drafts"})
         output, errors = io.StringIO(), io.StringIO()
         status = app.run(
             ["draft", "create", "chapters/next.md", "--format", "json"],
@@ -163,10 +184,7 @@ class LayoutDiscoveryTests(unittest.TestCase):
         self.assertNotIn("CW-DRAFT-020", [item["code"] for item in findings])
 
     def test_accept_from_flat_layout_does_not_plan_parallel_indexes(self):
-        (self.root / "project.md").write_text(
-            "---\nschema-version: 1\ntitle: Story\nlanguage: ru\nstatus: drafting\nrole-chapters: chapters\nrole-drafts: notes/drafts\nrole-archive: notes/archive\n---\n",
-            encoding="utf-8",
-        )
+        self.write_layout({"chapters": "chapters", "drafts": "notes/drafts", "archive": "notes/archive"})
         (self.root / "chapters").mkdir()
         draft_folder = self.root / "notes/drafts"
         draft_folder.mkdir(parents=True)
@@ -204,6 +222,23 @@ class LayoutDiscoveryTests(unittest.TestCase):
 
         self.assertIn("chapters/2.md", packet.required)
         self.assertIn("chapters/1.md", (*packet.required, *packet.suggested))
+
+    def test_init_defaults_to_compact_tree_with_optional_full_template(self):
+        for template, expected_index in (("compact", False), ("full", True)):
+            with self.subTest(template=template):
+                root = self.root / template
+                output, errors = io.StringIO(), io.StringIO()
+                argv = ["init", str(root), "--title", "New", "--language", "ru", "--apply", "--format", "json"]
+                if template == "full":
+                    argv.extend(("--template", "full"))
+                status = app.run(argv, cwd=self.root, stdout=output, stderr=errors)
+                self.assertEqual(0, status, errors.getvalue() + output.getvalue())
+                self.assertTrue((root / "project.md").is_file())
+                if template == "compact":
+                    self.assertTrue((root / ".cws-layout.json").is_file())
+                self.assertTrue((root / "story/chapters").is_dir())
+                self.assertEqual(expected_index, (root / "story/chapters/_index.md").exists())
+                self.assertEqual(expected_index, (root / "kb/issues").exists())
 
 
 if __name__ == "__main__":

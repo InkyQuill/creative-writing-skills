@@ -336,6 +336,11 @@ __all__ = [
 def required_paths(metadata):
     from .translation.contract import project_settings
     kind, _, enabled = project_settings(metadata)
+    if not enabled and metadata.get("scaffold-template") == "compact":
+        return (
+            ".creative-writing", ".creative-writing/context",
+            ".creative-writing/transactions", "story", "story/chapters",
+        ), ("project.md", ".cws-layout.json")
     if not enabled:
         return SCAFFOLD_DIRECTORIES, SCAFFOLD_FILES
     extra_dirs = ('sources', 'translations', 'kb/entities', 'kb/source-comparisons')

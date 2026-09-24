@@ -53,12 +53,13 @@ Editor `.pocket-editor.json` and `*.review.json`, images, documents, hidden
 metadata, and unknown service files. Preserve its relative tree and exact bytes
 in place; do not classify those files by extension or promote them into the KB.
 
-The canonical layout is rooted by `project.md`. Numbered manuscript chapters
-live in `story/chapters/`; accepted bonus prose with explicit `after` placement
-lives in `story/side-stories/`; draft work lives in `work/drafts/`; durable
-knowledge in `kb/`; and machine-checkable story state in `kb/continuity/`. The scaffold also owns
-its generated indexes and `.creative-writing/` maintenance state. There is no
-alternative layout choice.
+`project.md` identifies the project. Folder roles are saved separately in
+`.cws-layout.json`; `cw layout` detects existing folders and `cw layout
+--set chapters=<folder> --apply` records a chosen path. Use the author's
+existing folders without moving prose or demanding a canonical tree. The
+agent can capture unambiguous existing choices with `cw layout --capture
+--apply`; ask only when two populated folders have the same role and the
+choice affects the requested work.
 
 The optional `prose-profile` frontmatter selector is independent of manuscript
 language. A missing selector means `general`; do not ask the author merely to

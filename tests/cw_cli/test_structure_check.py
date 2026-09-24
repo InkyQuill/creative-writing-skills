@@ -349,7 +349,7 @@ class StructureCheckTests(unittest.TestCase):
             stdout = io.StringIO()
 
             status = app.run(
-                ["init", str(target), "--title", "Second Light", "--language", "ru"],
+                ["init", str(target), "--title", "Second Light", "--language", "ru", "--template", "full"],
                 cwd=target.parent,
                 stdout=stdout,
                 stderr=io.StringIO(),
