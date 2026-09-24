@@ -113,7 +113,7 @@ values between commands without asking the author to maintain them.
 ## Guarded edits and transaction history
 
 ```text
-edit replace|insert-before|insert-after|delete ...
+edit replace|insert-before|insert-after|delete|append ...
 edit apply <operations.json>
 history
 history show <transaction-id>
@@ -121,7 +121,12 @@ undo <transaction-id>
 recover <transaction-id>
 ```
 
-Put large anchors and replacement bodies in files. Preview edit, undo, and
+Put large anchors and replacement bodies in files. Text anchors match only the
+Markdown body, never YAML frontmatter. Do not use a copy of the entire
+physical file as `--old-file`; use a `frontmatter-set` operation in `edit apply` for ordinary metadata
+or the relevant lifecycle command for protected metadata. In `edit apply`,
+match counts are checked independently for each operation's `path`; conflicts
+identify the operation number and path. Preview edit, undo, and
 recover operations before `--apply`. `history` is append-only evidence: undo
 creates a new inverse transaction and refuses diverged targets. Recovery rolls
 an interrupted transaction back only when journal evidence still proves the
@@ -131,6 +136,14 @@ safe before-state.
 equivalent to any other non-empty whitespace run in the target. This includes
 ordinary spaces, indentation, tabs, non-breaking spaces, and line breaks.
 Match-count guards apply to all whitespace-equivalent matches.
+At the end of an anchor, whitespace matches the shortest non-empty run, so a
+trailing newline from `--old-file` does not consume a following blank line.
+
+`edit append <path> --new-file <file>` adds a block after the existing Markdown
+body without an anchor. It leaves frontmatter untouched and inserts a blank
+line when needed to separate the block. It previews by default and is useful
+for an explicitly requested addition to one known file; use a targeted edit
+when placement within the file matters.
 
 ## Exit status
 

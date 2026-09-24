@@ -183,18 +183,19 @@ def _parser(*, error_stream: TextIO) -> argparse.ArgumentParser:
 
     edit = commands.add_parser("edit", error_stream=error_stream)
     edit_commands = edit.add_subparsers(dest="edit_command", required=True, parser_class=_Parser)
-    for kind in ("replace", "insert-before", "insert-after", "delete"):
+    for kind in ("replace", "insert-before", "insert-after", "delete", "append"):
         command = edit_commands.add_parser(kind, error_stream=error_stream)
         command.add_argument("path")
         if kind in {"replace", "delete"}:
-            command.add_argument("--old-file", required=True)
-        else:
-            command.add_argument("--anchor-file", required=True)
+            command.add_argument("--old-file", required=True, help="UTF-8 anchor from the Markdown body only; excludes YAML frontmatter")
+        elif kind != "append":
+            command.add_argument("--anchor-file", required=True, help="UTF-8 anchor from the Markdown body only; excludes YAML frontmatter")
         if kind != "delete":
             command.add_argument("--new-file", required=True)
-        count = command.add_mutually_exclusive_group()
-        count.add_argument("--expect-count", type=int)
-        count.add_argument("--all", action="store_true")
+        if kind != "append":
+            count = command.add_mutually_exclusive_group()
+            count.add_argument("--expect-count", type=int)
+            count.add_argument("--all", action="store_true")
         _mutation_options(command)
 
     batch = edit_commands.add_parser("apply", error_stream=error_stream)
@@ -475,14 +476,15 @@ def _run_edit(args: argparse.Namespace, *, cwd: Path, stdout: TextIO, stderr: Te
             operation: dict[str, object] = {"op": args.edit_command, "path": relative}
             if args.edit_command in {"replace", "delete"}:
                 operation["old"] = _read_content(cwd, args.old_file)
-            else:
+            elif args.edit_command != "append":
                 operation["anchor"] = _read_content(cwd, args.anchor_file)
             if args.edit_command != "delete":
                 operation["new"] = _read_content(cwd, args.new_file)
-            if args.expect_count is not None:
-                operation["expect-count"] = args.expect_count
-            elif args.all:
-                operation["all"] = True
+            if args.edit_command != "append":
+                if args.expect_count is not None:
+                    operation["expect-count"] = args.expect_count
+                elif args.all:
+                    operation["all"] = True
             operations = (operation,)
 
         planned = plan_edits(project, operations)
