@@ -10,7 +10,7 @@ from typing import Iterator
 from ..documents import DocumentError, parse_document
 from ..findings import Finding
 from ..project import MANAGED_ROOTS, Project
-from ..layout import role_directories, uses_flexible_layout
+from ..layout import ROLE_CANDIDATES, role_directories, uses_flexible_layout
 from ..schema import (
     SUPPORTED_SCHEMA_VERSIONS,
     required_paths,
@@ -53,6 +53,7 @@ def check_structure(project: Project) -> list[Finding]:
         ]
 
     findings: list[Finding] = []
+    role_folders = {role: role_directories(project, role) for role in ROLE_CANDIDATES}
     try:
         required_dirs, required_files = required_paths(project.manifest.metadata)
     except ValueError:
@@ -84,13 +85,17 @@ def check_structure(project: Project) -> list[Finding]:
         document_kind = allowed_document_kind(relative_id, schema_version=project.manifest.metadata.get("schema-version", 1))
         if document_kind is None:
             parent = Path(relative_id).parent.as_posix()
-            if parent in role_directories(project, "chapters"):
+            if Path(relative_id).name == "_index.md" and any(
+                parent in folders for folders in role_folders.values()
+            ):
+                document_kind = "generated-index"
+            elif parent in role_folders["chapters"]:
                 document_kind = "chapter"
-            elif parent in role_directories(project, "side-stories"):
+            elif parent in role_folders["side-stories"]:
                 document_kind = "side-story"
-            elif any(parent in role_directories(project, role) for role in ("drafts", "plans", "reviews", "archive")):
+            elif any(parent in role_folders[role] for role in ("drafts", "plans", "reviews", "archive")):
                 document_kind = "work-artifact"
-            elif any(parent in role_directories(project, role) for role in ("characters", "world")):
+            elif any(parent in role_folders[role] for role in ("characters", "world")):
                 document_kind = "kb-content"
         if document_kind is None:
             findings.append(
@@ -183,7 +188,7 @@ def check_structure(project: Project) -> list[Finding]:
                 )
             )
 
-    for path in _iter_unmanaged_markdown(project):
+    for path in _iter_unmanaged_markdown(project, role_folders):
         findings.append(
             Finding(
                 code=UNMANAGED_MARKDOWN,
@@ -299,22 +304,27 @@ def _missing_frontmatter_finding(relative_id: str) -> Finding:
     )
 
 
-def _iter_unmanaged_markdown(project: Project) -> Iterator[Path]:
-    yield from _iter_unmanaged_markdown_in(project.root, project.root)
+def _iter_unmanaged_markdown(
+    project: Project, role_folders: dict[str, tuple[str, ...]]
+) -> Iterator[Path]:
+    managed_roots = set(MANAGED_ROOTS)
+    for folders in role_folders.values():
+        managed_roots.update(Path(folder).parts[0] for folder in folders)
+    yield from _iter_unmanaged_markdown_in(project.root, project.root, managed_roots)
 
 
-def _iter_unmanaged_markdown_in(root: Path, directory: Path) -> Iterator[Path]:
+def _iter_unmanaged_markdown_in(root: Path, directory: Path, managed_roots: set[str]) -> Iterator[Path]:
     for path in _sorted_children(directory):
         if path.is_symlink():
             continue
         relative = path.relative_to(root)
         if path.is_dir():
-            if relative.parts[0] in (*MANAGED_ROOTS, ".creative-writing"):
+            if relative.parts[0] in managed_roots or relative.parts[0] == ".creative-writing":
                 continue
             manifest = path / "project.md"
             if path != root and not manifest.is_symlink() and manifest.is_file():
                 continue
-            yield from _iter_unmanaged_markdown_in(root, path)
+            yield from _iter_unmanaged_markdown_in(root, path, managed_roots)
         elif path.is_file() and path.suffix.casefold() == ".md" and relative.as_posix() != "project.md":
             yield path
 

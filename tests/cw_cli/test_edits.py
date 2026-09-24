@@ -295,6 +295,14 @@ class EditPlanningTests(unittest.TestCase):
         }])
         self.assertEqual(b"New paragraph.\n\n## Next\n", plan.changes[0].after)
 
+    def test_replace_trailing_newline_consumes_horizontal_space_before_first_newline(self):
+        self.make_file("story/chapters/ch-001.md", "Old paragraph.  \n\n## Next\n")
+        plan = edits.plan_edits(self.project, [{
+            "op": "replace", "path": "story/chapters/ch-001.md",
+            "old": "Old paragraph.\n", "new": "New paragraph.\n",
+        }])
+        self.assertEqual(b"New paragraph.\n\n## Next\n", plan.changes[0].after)
+
     def test_conflict_identifies_operation_and_path(self):
         self.make_file("kb/characters/antoine.md", "same source\n")
         self.make_file("kb/characters/supporting.md", "different source\n")

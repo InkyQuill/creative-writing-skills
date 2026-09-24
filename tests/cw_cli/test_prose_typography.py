@@ -205,7 +205,7 @@ class TypographyProseCheckTests(unittest.TestCase):
             cwd=self.root, stdout=preview_out, stderr=errors,
         )
         self.assertEqual(0, status, errors.getvalue())
-        self.assertEqual(original, path.read_text())
+        self.assertEqual(original, path.read_text(encoding="utf-8"))
         self.assertEqual("preview", json.loads(preview_out.getvalue())["status"])
 
         applied_out, errors = io.StringIO(), io.StringIO()
@@ -215,18 +215,20 @@ class TypographyProseCheckTests(unittest.TestCase):
         )
         self.assertEqual(0, status, errors.getvalue())
         applied = json.loads(applied_out.getvalue())
-        self.assertIn("Он шёл в\u00a0школу.\n```text\nОн шёл в школу.", path.read_text())
+        self.assertIn("Он шёл в\u00a0школу.\n```text\nОн шёл в школу.", path.read_text(encoding="utf-8"))
 
         undo_out, errors = io.StringIO(), io.StringIO()
         self.assertEqual(0, app.run(
             ["undo", applied["transaction_id"], "--apply", "--format", "json"],
             cwd=self.root, stdout=undo_out, stderr=errors,
         ), errors.getvalue())
-        self.assertEqual(original, path.read_text())
+        self.assertEqual(original, path.read_text(encoding="utf-8"))
 
     def test_safe_typography_fix_skips_inline_code_and_link_targets(self):
         original = "Он шёл в школу. `в школу` [в школу](путь в школу).\r\n"
-        path = self.write("story/chapters/ch-001.md", original)
+        path = self.root / "story/chapters/ch-001.md"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(original.encode("utf-8"))
         output, errors = io.StringIO(), io.StringIO()
         status = app.run(
             ["fix-prose-typography", "story/chapters/ch-001.md", "--apply", "--format", "json"],
@@ -236,6 +238,17 @@ class TypographyProseCheckTests(unittest.TestCase):
         self.assertEqual(original.encode(), path.read_bytes())
         self.assertEqual("no-op", json.loads(output.getvalue())["status"])
         self.assertFalse((self.root / ".creative-writing/transactions").exists())
+
+    def test_safe_typography_fix_skips_multiline_html_comment(self):
+        original = "<!--\nв школу\n-->\nОн шёл в школу.\n"
+        path = self.write("story/chapters/ch-001.md", original)
+        output, errors = io.StringIO(), io.StringIO()
+        status = app.run(
+            ["fix-prose-typography", "story/chapters/ch-001.md", "--apply", "--format", "json"],
+            cwd=self.root, stdout=output, stderr=errors,
+        )
+        self.assertEqual(0, status, errors.getvalue())
+        self.assertEqual("<!--\nв школу\n-->\nОн шёл в\u00a0школу.\n", path.read_text(encoding="utf-8"))
 
 
 if __name__ == "__main__":

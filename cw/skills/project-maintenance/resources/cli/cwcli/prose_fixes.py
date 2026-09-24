@@ -37,11 +37,11 @@ def plan_safe_typography_fix(project: Project, relative_id: str) -> TransactionP
     if str(project.manifest.metadata.get("language", "")).split("-")[0].lower() != "ru":
         raise ProseFixError("automatic typography spacing is available only for Russian projects")
 
-    visible_lines = {number for number, visible in _visible_document(decoded).lines if visible}
+    visible_lines = {number for number, visible in _visible_document(decoded).lines if visible.strip()}
     lines = decoded.splitlines(keepends=True)
     changed = False
     for number, line in enumerate(lines, 1):
-        if number not in visible_lines or "`" in line or "](" in line or "<!--" in line:
+        if number not in visible_lines or "`" in line or "](" in line or "<!--" in line or "-->" in line:
             continue
         repaired = _BREAKABLE_SINGLE_RE.sub(lambda match: match.group().replace(" ", "\u00a0"), line)
         repaired = _DASH_SPACE_RE.sub("\u00a0— ", repaired)

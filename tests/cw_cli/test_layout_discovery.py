@@ -6,7 +6,7 @@ from pathlib import Path
 
 from tests.cw_cli import helpers  # noqa: F401
 from cwcli import app
-from cwcli.layout import LayoutAmbiguity, resolve_role
+from cwcli.layout import LayoutAmbiguity, resolve_role, uses_flexible_layout
 from cwcli.project import discover_project
 from cwcli import drafts, documents, transactions
 from cwcli import context
@@ -75,6 +75,18 @@ class LayoutDiscoveryTests(unittest.TestCase):
         self.write_layout({"chapters": "manuscript/book-one"})
         self.assertEqual("manuscript/book-one", resolve_role(discover_project(self.root), "chapters"))
         self.assertFalse((self.root / "manuscript").exists())
+
+    def test_compact_or_explicit_layout_avoids_full_scaffold_assumption(self):
+        project = discover_project(self.root)
+        self.assertFalse(uses_flexible_layout(project))
+        self.write_layout({"chapters": "story/chapters"})
+        self.assertTrue(uses_flexible_layout(discover_project(self.root)))
+        (self.root / ".cws-layout.json").unlink()
+        (self.root / "project.md").write_text(
+            "---\nschema-version: 1\ntitle: Story\nlanguage: ru\nstatus: drafting\nscaffold-template: compact\n---\n",
+            encoding="utf-8",
+        )
+        self.assertTrue(uses_flexible_layout(discover_project(self.root)))
 
     def test_get_folder_returns_saved_relative_path_without_creating_it(self):
         self.write_layout({"characters": "notes/people"})

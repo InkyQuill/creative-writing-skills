@@ -305,6 +305,7 @@ class ProseCheckTests(unittest.TestCase):
             "story/chapters/ch-001.md",
             "---\nnumber: 1\n---\n<AI>Accepted</AI> <hidden>Secret</hidden>\n",
         )
+
         self.write("work/drafts/ch-002.md", "---\nstatus: working\n---\n<AI>Draft</AI>\n")
         self.write("kb/world/rules.md", "<AI>Unconfirmed</AI> <hidden>Allowed</hidden>\n")
 
@@ -318,6 +319,17 @@ class ProseCheckTests(unittest.TestCase):
                 ("work/drafts/ch-002.md", "<AI> source tags are not allowed in working draft prose"),
             ],
         )
+
+    def test_selected_manuscript_folders_obey_source_tag_policy(self):
+        (self.root / ".cws-layout.json").write_text(
+            '{"version":1,"roles":{"chapters":"manuscript/chapters","drafts":"manuscript/drafts"}}\n',
+            encoding="utf-8",
+        )
+        self.write("manuscript/chapters/one.md", "<AI>Accepted</AI>\n")
+        self.write("manuscript/drafts/two.md", "<AI>Draft</AI>\n")
+        messages = {item.path: item.message for item in self.findings() if item.code == prose.SOURCE_TAG_POLICY}
+        self.assertIn("accepted story documents", messages["manuscript/chapters/one.md"])
+        self.assertIn("working draft prose", messages["manuscript/drafts/two.md"])
 
     def test_integrity_scans_non_prose_managed_markdown_but_metrics_do_not(self):
         self.write("kb/canon/fact.md", "<hidden>Unclosed boundary\n")

@@ -146,7 +146,9 @@ concepts.
 ## What Belongs in KB vs Work
 
 - Finalized knowledge → `kb/`
-- Draft iterations, brainstorm captures, critique reports → `work/`
+- Draft iterations, brainstorm captures, critique reports → the selected
+  drafts, brainstorm, and reviews folders (`cw get-folder <role>`); `work/`
+  is the full-scaffold default
 - Promoted facts after a draft completes → `kb/canon/` or relevant wiki page
 
 Use `/story-memory` for routine fact extraction from completed chapters.

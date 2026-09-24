@@ -320,10 +320,17 @@ def _text_matcher(anchor: str, *, flexible_whitespace: bool) -> re.Pattern[str]:
         return re.compile(re.escape(anchor))
 
     parts = re.split(r"(\s+)", anchor)
-    pattern = "".join(
-        (r"\s+?" if not any(parts[index + 1:]) else r"\s+") if part.isspace() else re.escape(part)
-        for index, part in enumerate(parts)
-    )
+    pattern_parts: list[str] = []
+    for index, part in enumerate(parts):
+        if not part.isspace():
+            pattern_parts.append(re.escape(part))
+        elif any(parts[index + 1:]):
+            pattern_parts.append(r"\s+")
+        elif "\n" in part:
+            pattern_parts.append(r"[^\S\n]*\n")
+        else:
+            pattern_parts.append(r"\s+?")
+    pattern = "".join(pattern_parts)
     return re.compile(pattern)
 
 

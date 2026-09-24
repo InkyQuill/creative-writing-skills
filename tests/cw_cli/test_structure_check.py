@@ -66,6 +66,39 @@ class StructureCheckTests(unittest.TestCase):
 
             self.assertNotIn("invalid-chapter-status", {finding.code for finding in findings})
 
+    def test_selected_folder_index_is_generated_and_not_unmanaged(self):
+        directory, root = self.make_project()
+        with directory:
+            (root / ".cws-layout.json").write_text(
+                '{"version":1,"roles":{"chapters":"manuscript/chapters"}}\n', encoding="utf-8"
+            )
+            selected = root / "manuscript/chapters"
+            selected.mkdir(parents=True)
+            (selected / "_index.md").write_text("---\ngenerated: false\n---\n# Chapters\n", encoding="utf-8")
+            (selected / "one.md").write_text("---\nnumber: 1\n---\nText\n", encoding="utf-8")
+            findings = self.findings_for(root)
+            self.assertIn((schema.INVALID_GENERATED_MARKER, "manuscript/chapters/_index.md"),
+                          {(item.code, item.path) for item in findings})
+            self.assertNotIn((structure.UNMANAGED_MARKDOWN, "manuscript/chapters/one.md"),
+                             {(item.code, item.path) for item in findings})
+
+    def test_selected_side_story_can_anchor_selected_chapter(self):
+        directory, root = self.make_project()
+        with directory:
+            (root / ".cws-layout.json").write_text(
+                '{"version":1,"roles":{"chapters":"manuscript/chapters","side-stories":"manuscript/bonus"}}\n',
+                encoding="utf-8",
+            )
+            chapter = root / "manuscript/chapters/one.md"
+            chapter.parent.mkdir(parents=True)
+            chapter.write_text("---\nnumber: 1\n---\nText\n", encoding="utf-8")
+            bonus = root / "manuscript/bonus/extra.md"
+            bonus.parent.mkdir(parents=True)
+            bonus.write_text("---\nafter: manuscript/chapters/one.md\n---\nBonus\n", encoding="utf-8")
+            findings = self.findings_for(root)
+            self.assertNotIn(schema.INVALID_SIDE_STORY_AFTER,
+                             {item.code for item in findings if item.path == "manuscript/bonus/extra.md"})
+
     def test_duplicate_chapter_numbers_are_errors(self):
         directory, root = self.make_project()
         with directory:

@@ -75,19 +75,8 @@ def inventory_layout(project: Project) -> dict[str, object]:
     selected_roles = load_layout(project)
     roles: dict[str, dict[str, object]] = {}
     ambiguous: list[str] = []
-    for role, options in ROLE_CANDIDATES.items():
-        populated: list[str] = []
-        for relative in options:
-            directory = project.root / relative
-            if not _safe_directory(project.root, directory):
-                continue
-            if any(
-                child.is_file() and not child.is_symlink()
-                and child.suffix.casefold() == ".md" and child.name != "_index.md"
-                for child in directory.iterdir()
-            ):
-                populated.append(relative)
-        populated.sort()
+    for role in ROLE_CANDIDATES:
+        populated = _populated_candidates(project, role)
         if len(populated) > 1 and role not in selected_roles:
             ambiguous.append(role)
         explicit = selected_roles.get(role)
@@ -109,7 +98,7 @@ def resolve_role(project: Project, role: str) -> str:
     if explicit is not None:
         return explicit
 
-    candidates = inventory_layout(project)["roles"][role]["candidates"]
+    candidates = _populated_candidates(project, role)
     if len(candidates) > 1:
         raise LayoutAmbiguity(f"multiple populated folders for {role}: {', '.join(candidates)}")
     if candidates:
@@ -120,20 +109,41 @@ def resolve_role(project: Project, role: str) -> str:
 def role_directories(project: Project, role: str) -> tuple[str, ...]:
     """Folders to read for a role, retaining evidence when selection is ambiguous."""
 
-    try:
-        return (resolve_role(project, role),)
-    except LayoutAmbiguity:
-        candidates = inventory_layout(project)["roles"][role]["candidates"]
+    if role not in ROLE_CANDIDATES:
+        raise ValueError(f"unknown folder role: {role}")
+    explicit = load_layout(project).get(role)
+    if explicit is not None:
+        return (explicit,)
+    candidates = _populated_candidates(project, role)
+    if candidates:
         return tuple(candidates)
+    return (ROLE_CANDIDATES[role][-1],)
 
 
 def uses_flexible_layout(project: Project) -> bool:
-    """Whether existing content or an explicit choice differs from v1 paths."""
+    """Whether the project should avoid assuming the full v1 scaffold."""
 
+    if project.manifest.metadata.get("scaffold-template") == "compact" or load_layout(project):
+        return True
     return any(
         any(path != ROLE_CANDIDATES[role][-1] for path in role_directories(project, role))
         for role in ROLE_CANDIDATES
     )
+
+
+def _populated_candidates(project: Project, role: str) -> list[str]:
+    populated: list[str] = []
+    for relative in ROLE_CANDIDATES[role]:
+        directory = project.root / relative
+        if not _safe_directory(project.root, directory):
+            continue
+        if any(
+            child.is_file() and not child.is_symlink()
+            and child.suffix.casefold() == ".md" and child.name != "_index.md"
+            for child in directory.iterdir()
+        ):
+            populated.append(relative)
+    return sorted(populated)
 
 
 def _safe_directory(root: Path, directory: Path) -> bool:

@@ -9,8 +9,10 @@ description: >
 - Durable project knowledge lives in canonical `kb/`. Continuity records —
   timeline, promises, questions, state snapshot, and scene records — live only
   under `kb/continuity/`; see `resources/continuity-records.md` for formats.
-- Work scratch lives in canonical `work/`, scoped to the current task and
-  archived on completion.
+- Work scratch uses the selected plans, drafts, reviews, brainstorm, and
+  archive folders when those roles are configured or discovered. `work/` is
+  the default for the full scaffold. Keep scratch scoped to the current task
+  and archive it on completion.
 - Project-specific semantic conventions live in the body of `project.md`, but
   they do not replace the project's folder choices in `.cws-layout.json`.
 

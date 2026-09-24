@@ -161,7 +161,7 @@ def validate_metadata(
             )
     elif kind == "side-story":
         after = document.metadata.get("after")
-        if not _is_manuscript_reference(after):
+        if not _is_manuscript_reference(after, allow_selected_parent=kind_override is not None):
             findings.append(
                 _warning(
                     INVALID_SIDE_STORY_AFTER,
@@ -186,13 +186,16 @@ def validate_metadata(
     return findings
 
 
-def _is_manuscript_reference(value: object) -> bool:
+def _is_manuscript_reference(value: object, *, allow_selected_parent: bool = False) -> bool:
     if not isinstance(value, str):
         return False
     path = PurePosixPath(value)
     return (
         str(path) == value
-        and path.parent.as_posix() in {"story/chapters", "story/side-stories"}
+        and not path.is_absolute()
+        and ".." not in path.parts
+        and (allow_selected_parent or path.parent.as_posix() in {"story/chapters", "story/side-stories"})
+        and path.parent.as_posix() != "."
         and path.name != "_index.md"
         and path.suffix.casefold() == ".md"
     )

@@ -136,8 +136,10 @@ safe before-state.
 equivalent to any other non-empty whitespace run in the target. This includes
 ordinary spaces, indentation, tabs, non-breaking spaces, and line breaks.
 Match-count guards apply to all whitespace-equivalent matches.
-At the end of an anchor, whitespace matches the shortest non-empty run, so a
-trailing newline from `--old-file` does not consume a following blank line.
+At the end of an anchor, a newline matches through the first target newline,
+including any preceding horizontal space, but leaves following blank lines
+untouched. This prevents a trailing newline in `--old-file` from deleting a
+Markdown block separator.
 
 `edit append <path> --new-file <file>` adds a block after the existing Markdown
 body without an anchor. It leaves frontmatter untouched and inserts a blank

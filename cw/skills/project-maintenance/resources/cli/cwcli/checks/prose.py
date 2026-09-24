@@ -264,6 +264,9 @@ def check_prose(project: Project, *, draft_typography: bool = False) -> list[Fin
     configured_language = project.manifest.metadata.get("language")
     language = configured_language if isinstance(configured_language, str) else ""
     findings: list[Finding] = []
+    manuscript_folders = {
+        role: role_directories(project, role) for role in ("chapters", "side-stories", "drafts")
+    }
 
     paths = [project.root / "project.md", *project.iter_managed_markdown()]
     seen: set[str] = set()
@@ -303,11 +306,11 @@ def check_prose(project: Project, *, draft_typography: bool = False) -> list[Fin
             )
         integrity = _integrity_lines(text)
         findings.extend(_tag_findings(relative_id, integrity))
-        findings.extend(_tag_policy_findings(relative_id, integrity))
+        findings.extend(_tag_policy_findings(relative_id, integrity, manuscript_folders))
 
         from ..translation.contract import translation_kind
         translated = project.manifest.metadata.get("schema-version") == 2 and translation_kind(relative_id) in ("translation-drafts", "translation-accepted")
-        if not _is_prose_path(relative_id, project) and not translated:
+        if not _is_prose_path(relative_id, project, manuscript_folders) and not translated:
             continue
 
         document_language = _prose_language(relative_id, source, language)
@@ -434,19 +437,22 @@ def _visible_document(text: str) -> _VisibleDocument:
     fence_character: str | None = None
     fence_length = 0
     fence_line = 0
+    in_comment = False
 
     for line_number, line in numbered_lines[body_start:]:
-        marker = markdown_fence_marker(line)
         if fence_character is None:
+            marker = markdown_fence_marker(line) if not in_comment else None
             if marker is not None:
                 fence_character = marker[0]
                 fence_length = marker[1]
                 fence_line = line_number
                 visible.append((line_number, ""))
             else:
-                visible.append((line_number, _strip_inline_code(line)))
+                uncommented, in_comment = _mask_html_comments(_strip_inline_code(line), in_comment)
+                visible.append((line_number, uncommented))
             continue
 
+        marker = markdown_fence_marker(line)
         if marker is not None:
             if closes_markdown_fence(marker, (fence_character, fence_length)):
                 fence_character = None
@@ -461,6 +467,25 @@ def _visible_document(text: str) -> _VisibleDocument:
         lines=tuple(visible),
         fence_findings=tuple(fence_findings),
     )
+
+
+def _mask_html_comments(line: str, in_comment: bool) -> tuple[str, bool]:
+    visible = list(line)
+    cursor = 0
+    while cursor < len(line):
+        if in_comment:
+            end = line.find("-->", cursor)
+            stop = len(line) if end < 0 else end + 3
+            visible[cursor:stop] = " " * (stop - cursor)
+            cursor = stop
+            in_comment = end < 0
+        else:
+            start = line.find("<!--", cursor)
+            if start < 0:
+                break
+            cursor = start
+            in_comment = True
+    return "".join(visible), in_comment
 
 
 def _frontmatter_end(lines: list[tuple[int, str]]) -> int:
@@ -540,7 +565,11 @@ def _tag_finding(relative_id: str, line_number: int, message: str) -> Finding:
     )
 
 
-def _tag_policy_findings(relative_id: str, lines: tuple[tuple[int, str], ...]) -> list[Finding]:
+def _tag_policy_findings(
+    relative_id: str,
+    lines: tuple[tuple[int, str], ...],
+    manuscript_folders: dict[str, tuple[str, ...]],
+) -> list[Finding]:
     findings: list[Finding] = []
     for line_number, line in lines:
         for match in _TAG_RE.finditer(line):
@@ -548,7 +577,7 @@ def _tag_policy_findings(relative_id: str, lines: tuple[tuple[int, str], ...]) -
             if token.startswith("</"):
                 continue
             name = "AI" if "AI" in token else "hidden"
-            message = _policy_message(relative_id, name)
+            message = _policy_message(relative_id, name, manuscript_folders)
             if message is not None:
                 findings.append(
                     Finding(
@@ -563,8 +592,17 @@ def _tag_policy_findings(relative_id: str, lines: tuple[tuple[int, str], ...]) -
     return findings
 
 
-def _policy_message(relative_id: str, name: str) -> str | None:
+def _policy_message(
+    relative_id: str, name: str, manuscript_folders: dict[str, tuple[str, ...]]
+) -> str | None:
     parts = Path(relative_id).parts
+    parent = Path(relative_id).parent.as_posix()
+    if parent in manuscript_folders["drafts"]:
+        if name == "AI":
+            return "<AI> source tags are not allowed in working draft prose"
+        return "<hidden> source tags require resolution before draft acceptance"
+    if any(parent in manuscript_folders[role] for role in ("chapters", "side-stories")):
+        return f"<{name}> source tags are not allowed in accepted story documents"
     if parts and parts[0] == "story":
         return f"<{name}> source tags are not allowed in accepted story documents"
     if len(parts) >= 2 and parts[:2] == ("work", "drafts"):
@@ -745,7 +783,11 @@ def _opening_line(lines: tuple[tuple[int, str], ...], opening: str) -> int | Non
     return None
 
 
-def _is_prose_path(relative_id: str, project: Project | None = None) -> bool:
+def _is_prose_path(
+    relative_id: str,
+    project: Project | None = None,
+    manuscript_folders: dict[str, tuple[str, ...]] | None = None,
+) -> bool:
     path = Path(relative_id)
     if path.name == "_index.md" or path.suffix.casefold() != ".md":
         return False
@@ -754,8 +796,12 @@ def _is_prose_path(relative_id: str, project: Project | None = None) -> bool:
     if project is None:
         recognized.update(("story/chapters", "story/side-stories", "work/drafts"))
     else:
-        for role in ("chapters", "side-stories", "drafts"):
-            recognized.update(role_directories(project, role))
+        if manuscript_folders is None:
+            manuscript_folders = {
+                role: role_directories(project, role) for role in ("chapters", "side-stories", "drafts")
+            }
+        for folders in manuscript_folders.values():
+            recognized.update(folders)
     return parent in recognized
 
 

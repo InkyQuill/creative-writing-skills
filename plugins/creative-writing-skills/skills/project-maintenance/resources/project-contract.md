@@ -9,8 +9,11 @@ For author control over agent assistance, edit scope, and canon promotion, use
 `cws.md` is human-readable guidance, not a CLI discovery or schema requirement.
 
 The nearest ancestor containing `project.md` is the project root. Nested
-projects are independent boundaries. The managed roots are `project.md`,
-`story/`, `work/`, `kb/`, and `.creative-writing/`.
+projects are independent boundaries. The default managed roots are
+`project.md`, `story/`, `work/`, `kb/`, and `.creative-writing/`. Role folders
+selected in `.cws-layout.json` or discovered from populated folders are also
+managed for applicable checks and existing generated indexes, even when they
+sit outside those default roots.
 
 Other root entries are allowed. Leave unknown files untouched: initialization,
 migration, repair, and reindexing must preserve them. Markdown outside managed
