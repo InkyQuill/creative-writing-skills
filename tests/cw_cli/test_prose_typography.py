@@ -234,6 +234,8 @@ class TypographyProseCheckTests(unittest.TestCase):
         )
         self.assertEqual(0, status, errors.getvalue())
         self.assertEqual(original.encode(), path.read_bytes())
+        self.assertEqual("no-op", json.loads(output.getvalue())["status"])
+        self.assertFalse((self.root / ".creative-writing/transactions").exists())
 
 
 if __name__ == "__main__":

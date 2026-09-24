@@ -273,6 +273,12 @@ def run(argv: list[str], *, cwd: Path, stdout: TextIO, stderr: TextIO) -> int:
         try:
             project, relative = _single_edit_target(cwd, args.path)
             plan = plan_safe_typography_fix(project, relative)
+            if not plan.changes:
+                _write_command_data(
+                    {"status": "no-op", "changes": []},
+                    output_format=args.format, stdout=stdout,
+                )
+                return 0
             return _preview_or_apply(
                 TransactionEngine(project), plan, apply=args.apply,
                 output_format=args.format, stdout=stdout,
