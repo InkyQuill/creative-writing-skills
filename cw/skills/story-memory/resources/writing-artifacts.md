@@ -12,17 +12,13 @@ description: >
 - Work scratch lives in canonical `work/`, scoped to the current task and
   archived on completion.
 - Project-specific semantic conventions live in the body of `project.md`, but
-  they do not replace or customize the schema-v1 managed roots.
+  they do not replace the project's folder choices in `.cws-layout.json`.
 
 ## Work Layout
 
-```text
-work/plans/              # outlines and current plans
-work/drafts/             # draft iterations
-work/reviews/            # critique and review reports
-work/brainstorm/         # brainstorm captures and synthesis
-work/archive/            # completed or abandoned work artifacts
-```
+Resolve plans, drafts, reviews, brainstorm, and archive with `cw get-folder <role>`
+before reading or assigning an artifact path. Do not create a folder
+merely because this list mentions one.
 
 ## Shared Workspace
 

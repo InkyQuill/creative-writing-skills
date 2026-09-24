@@ -76,6 +76,51 @@ class LayoutDiscoveryTests(unittest.TestCase):
         self.assertEqual("manuscript/book-one", resolve_role(discover_project(self.root), "chapters"))
         self.assertFalse((self.root / "manuscript").exists())
 
+    def test_get_folder_returns_saved_relative_path_without_creating_it(self):
+        self.write_layout({"characters": "notes/people"})
+        output, errors = io.StringIO(), io.StringIO()
+        status = app.run(["get-folder", "characters"], cwd=self.root, stdout=output, stderr=errors)
+        self.assertEqual(0, status, errors.getvalue())
+        self.assertEqual("notes/people\n", output.getvalue())
+        self.assertFalse((self.root / "notes").exists())
+
+    def test_get_folder_json_uses_detected_legacy_folder(self):
+        (self.root / "characters").mkdir()
+        (self.root / "characters/mara.md").write_text("# Mara\n")
+        output, errors = io.StringIO(), io.StringIO()
+        status = app.run(["get-folder", "characters", "--format", "json"], cwd=self.root, stdout=output, stderr=errors)
+        self.assertEqual(0, status, errors.getvalue())
+        self.assertEqual({"role": "characters", "path": "characters"}, json.loads(output.getvalue()))
+
+    def test_get_folder_rejects_unsafe_saved_path(self):
+        self.write_layout({"characters": "../outside"})
+        output, errors = io.StringIO(), io.StringIO()
+        status = app.run(["get-folder", "characters", "--format", "json"], cwd=self.root, stdout=output, stderr=errors)
+        self.assertEqual(2, status)
+        self.assertIn("project-relative", json.loads(output.getvalue())["message"])
+
+    def test_get_folder_reports_ambiguous_role_without_guessing(self):
+        for relative in ("chapters", "story/chapters"):
+            directory = self.root / relative
+            directory.mkdir(parents=True)
+            (directory / "one.md").write_text("# One\n")
+        output, errors = io.StringIO(), io.StringIO()
+        status = app.run(["get-folder", "chapters", "--format", "json"], cwd=self.root, stdout=output, stderr=errors)
+        self.assertEqual(2, status)
+        self.assertIn("multiple populated folders", json.loads(output.getvalue())["message"])
+
+    def test_typography_fix_accepts_selected_manuscript_folder(self):
+        self.write_layout({"chapters": "manuscript"})
+        (self.root / "manuscript").mkdir()
+        (self.root / "manuscript/one.md").write_text("И в школе.\n", encoding="utf-8")
+        output, errors = io.StringIO(), io.StringIO()
+        status = app.run(
+            ["fix-prose-typography", "manuscript/one.md", "--format", "json"],
+            cwd=self.root, stdout=output, stderr=errors,
+        )
+        self.assertEqual(0, status, errors.getvalue() + output.getvalue())
+        self.assertIn("manuscript/one.md", output.getvalue())
+
     def test_layout_choice_is_previewed_then_saved_separately(self):
         output, errors = io.StringIO(), io.StringIO()
         args = ["layout", "--set", "chapters=manuscript/book-one", "--format", "json"]
@@ -142,6 +187,18 @@ class LayoutDiscoveryTests(unittest.TestCase):
         self.assertEqual(0, status, errors.getvalue())
         changes = json.loads(output.getvalue()).get("changes", [])
         self.assertFalse(any("story/chapters" in json.dumps(change) for change in changes))
+        self.assertFalse((self.root / "story").exists())
+
+    def test_reindex_updates_existing_index_in_selected_folder(self):
+        self.write_layout({"chapters": "manuscript"})
+        directory = self.root / "manuscript"
+        directory.mkdir()
+        (directory / "one.md").write_text("---\nnumber: 1\nstatus: accepted\n---\n# One\n")
+        (directory / "_index.md").write_text("---\ngenerated: true\n---\n# Old\n")
+        output, errors = io.StringIO(), io.StringIO()
+        status = app.run(["reindex", "--apply", "--format", "json"], cwd=self.root, stdout=output, stderr=errors)
+        self.assertEqual(0, status, errors.getvalue() + output.getvalue())
+        self.assertIn("manuscript/one.md", (directory / "_index.md").read_text())
         self.assertFalse((self.root / "story").exists())
 
     def test_draft_can_target_detected_flat_chapter_path(self):
@@ -211,6 +268,22 @@ class LayoutDiscoveryTests(unittest.TestCase):
         self.assertFalse((self.root / "chapters/next.md").exists())
         self.assertTrue((self.root / "notes/drafts/next.md").exists())
 
+    def test_accept_updates_existing_index_in_selected_chapters_folder(self):
+        self.write_layout({"chapters": "manuscript", "drafts": "working", "archive": "old"})
+        (self.root / "manuscript").mkdir()
+        (self.root / "working").mkdir()
+        (self.root / "manuscript/_index.md").write_text("---\ngenerated: true\n---\n# Chapters\n")
+        (self.root / "working/new.md").write_bytes(documents.render_document(documents.Document(
+            metadata={"target": "manuscript/new.md", "status": "ready", "number": 1},
+            body="Новая глава.\n", newline="\n", bom=False,
+        )))
+        model = discover_project(self.root)
+        engine = transactions.TransactionEngine(model)
+        plan = drafts.plan_accept_draft(model, "working/new.md", engine.store, "tx-index")
+        self.assertIn("manuscript/_index.md", {change.path for change in plan.changes})
+        engine.apply(plan, transaction_id="tx-index")
+        self.assertIn("manuscript/new.md", (self.root / "manuscript/_index.md").read_text())
+
     def test_context_reads_neighboring_flat_chapters(self):
         (self.root / "chapters").mkdir()
         for number in (1, 2):
@@ -222,6 +295,32 @@ class LayoutDiscoveryTests(unittest.TestCase):
 
         self.assertIn("chapters/2.md", packet.required)
         self.assertIn("chapters/1.md", (*packet.required, *packet.suggested))
+
+    def test_context_uses_selected_plans_and_characters_folders(self):
+        self.write_layout({"chapters": "manuscript", "plans": "notes/outlines", "characters": "notes/people"})
+        for directory in ("manuscript", "notes/outlines", "notes/people"):
+            (self.root / directory).mkdir(parents=True, exist_ok=True)
+        (self.root / "manuscript/one.md").write_text("---\nnumber: 1\n---\n# One\n")
+        (self.root / "notes/outlines/one.md").write_text(
+            "---\nstatus: active\nrelated: manuscript/one.md\n---\n# Plan\n"
+        )
+        (self.root / "notes/people/mara.md").write_text("---\ntitle: Mara\n---\n# Mara\n")
+        packet = context.plan_context(discover_project(self.root), "chapter", "manuscript/one.md", "character:mara")
+        self.assertIn("notes/outlines/one.md", packet.suggested)
+        self.assertNotIn("character:mara", packet.unresolved)
+
+    def test_snapshot_status_accepts_selected_chapter_folder(self):
+        self.write_layout({"chapters": "manuscript"})
+        (self.root / "manuscript").mkdir()
+        (self.root / "manuscript/one.md").write_text("---\nnumber: 1\n---\n# One\n")
+        output, errors = io.StringIO(), io.StringIO()
+        status = app.run(
+            ["context", "chapter", "manuscript/one.md", "--as", "reader", "--snapshot", "--format", "json"],
+            cwd=self.root, stdout=output, stderr=errors,
+        )
+        self.assertEqual(0, status, errors.getvalue() + output.getvalue())
+        findings = context.snapshot_status(discover_project(self.root))
+        self.assertEqual([], findings)
 
     def test_init_defaults_to_compact_tree_with_optional_full_template(self):
         for template, expected_index in (("compact", False), ("full", True)):

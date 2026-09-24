@@ -339,14 +339,17 @@ def _load_scenes(project_root: Path, directory: Path, character_ids: set[str], f
 
 
 def _character_ids(project: Project, findings: list[Finding]) -> set[str]:
-    directory = project.root / "kb" / "characters"
-    if _path_kind(directory) != "directory" or _nested_project_boundary(project.root, directory) is not None:
-        return set()
+    from ..layout import role_directories
+
     identities: set[str] = set()
-    for path in directory.iterdir():
-        if path.name == "_index.md" or path.suffix.casefold() != ".md" or _path_kind(path) != "file":
+    for folder in role_directories(project, "characters"):
+        directory = project.root / folder
+        if _path_kind(directory) != "directory" or _nested_project_boundary(project.root, directory) is not None:
             continue
-        identities.add(_identity(path.stem))
+        for path in directory.iterdir():
+            if path.name == "_index.md" or path.suffix.casefold() != ".md" or _path_kind(path) != "file":
+                continue
+            identities.add(_identity(path.stem))
     return identities
 
 
@@ -456,7 +459,7 @@ def _check_character(value: str, path: str, line: int, known: set[str], findings
     if not identity or identity in known:
         return
     if _safe_character_stem(value):
-        action = f"Create kb/characters/{value.strip()}.md or correct the explicit character ID."
+        action = f"Create {value.strip()}.md in the selected characters folder or correct the explicit character ID."
     else:
         action = "Correct the explicit character ID to one safe portable file stem."
     findings.append(_finding(UNKNOWN_CHARACTER, "warning", f"unknown character ID {value!r}", path, line, action))

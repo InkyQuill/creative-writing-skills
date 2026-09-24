@@ -66,9 +66,11 @@ knowledge folders. Existing projects without this file are discovered from
 populated folders; record unambiguous choices without moving author files.
 The paths below are defaults for the full scaffold, not required author paths.
 
-Numbered main chapters are direct Markdown children of `story/chapters/` and
+Numbered main chapters are direct Markdown children of the selected chapters
+folder (`cw get-folder chapters`) and
 use unique positive integer `number` metadata. Accepted bonus prose is a direct
-Markdown child of `story/side-stories/`; it uses required `after` metadata that
+Markdown child of the selected side-stories folder (`cw get-folder
+side-stories`); it uses required `after` metadata that
 names an accepted chapter or side story, plus an optional lower-case `subtype`
 such as `omake` or `interlude`. Side stories do not take chapter numbers.
 

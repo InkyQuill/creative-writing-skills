@@ -100,7 +100,8 @@ creation fails, record that specific failure once. Do not request or prompt for
 a login, repeatedly retry creation, or enter a retry loop.
 
 Keep the complete title and body in an already established writable task/report
-area. In a canonical story project, prefer its existing `work/reviews/` area;
+area. In a story project, prefer its existing selected reviews folder
+(`cw get-folder reviews`);
 otherwise use an existing active task/report area. Never invent or create
 either directory only to hold feedback. If no safe durable area already exists,
 return the complete draft inline.

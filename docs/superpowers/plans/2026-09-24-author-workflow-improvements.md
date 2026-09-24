@@ -73,6 +73,15 @@ Tasks 1 and 2 can ship independently. Tasks 3–5 change the structural contract
 
 ### Task 3: Introduce configurable layout roles (P1)
 
+**Implementation note (2026-09-24):** `.cws-layout.json` now stores each
+project's selected folders. `cw get-folder <role>` is the read-only lookup for
+skills; `cw layout --capture` and `--set` save choices through previewed,
+undoable transactions. Chapter, draft, context, prose, structure, and existing
+folder indexes use selected paths. Remaining fixed locations, especially
+legacy migration destinations and continuity records, need separate review
+before claiming complete structure independence. Timeline Helper remains
+deferred.
+
 **Files:** Modify canonical `resources/project-contract.md`, `external-project-contract.md`, `cli/cwcli/schema.py`, `project.py`, `drafts.py`, `context.py`, `indexes.py`, `migration.py`, and `checks/structure.py` under `project-maintenance`. Add one layout-resolution module instead of repeating path interpretation. Extend `tests/cw_cli/test_schema.py`, `test_context_plan.py`, `test_indexes.py`, `test_draft_lifecycle.py`, `test_migration_plan.py`, and `tests/test_external_project_contract.py`.
 
 **Contract:** Resolve semantic roles for manuscript chapters, side stories, plans, drafts, characters, world notes, reviews, and archive from project configuration. Defaults preserve schema-v1 behavior. A project may use `chapters/` directly or nested folders. Unknown paths remain author-owned. Discovering an existing layout is read-only and reports ambiguous matches for author choice; it does not infer a migration destination.

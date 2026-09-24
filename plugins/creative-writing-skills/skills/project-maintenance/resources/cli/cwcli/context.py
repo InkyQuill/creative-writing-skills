@@ -22,6 +22,7 @@ from .documents import Document, canonical_text, logical_hash, parse_document
 from .findings import Finding, finding_json
 from .markdown_tables import malformed_table_headers, malformed_table_lines, parse_tables, table_header_lines
 from .markdown_links import extract_links
+from .layout import role_directories
 from .project import Project
 from .schema import allowed_document_kind
 
@@ -261,7 +262,7 @@ def plan_context(project: Project, kind: str, path: str, role: str) -> ContextPl
 
     documents = _scan_documents(project, warnings)
     for relative, document in documents:
-        if relative.startswith("work/plans/") and _explicitly_active(document, _ACTIVE_PLAN):
+        if _in_role(project, relative, "plans") and _explicitly_active(document, _ACTIVE_PLAN):
             if _document_points_to(project, relative, document, anchors, warnings, restricted=role != "trusted"):
                 _add_selected_path(
                     project, relative, suggested, catalog=catalog,
@@ -271,7 +272,7 @@ def plan_context(project: Project, kind: str, path: str, role: str) -> ContextPl
     for relative, document in documents:
         if relative in anchors:
             continue
-        if relative.startswith("work/plans/") or relative.startswith("kb/issues/"):
+        if _in_role(project, relative, "plans") or relative.startswith("kb/issues/"):
             continue
         if _document_points_to(project, relative, document, anchors, warnings, restricted=role != "trusted"):
             _add_selected_path(
@@ -303,9 +304,11 @@ def plan_context(project: Project, kind: str, path: str, role: str) -> ContextPl
                 warnings.add(f"{finding.code}: structured continuity issue at {location}")
 
     if character is not None:
-        character_path = f"kb/characters/{character}.md"
-        if catalog.collision(character_path) is not None:
-            _record_collision(character_path, catalog, unresolved, warnings)
+        character_paths = tuple(f"{folder}/{character}.md" for folder in role_directories(project, "characters"))
+        collisions = tuple(path for path in character_paths if catalog.collision(path) is not None)
+        if collisions:
+            for character_path in collisions:
+                _record_collision(character_path, catalog, unresolved, warnings)
             unresolved.add(f"character:{character}")
             warnings.add(f"ambiguous character role: {character}")
         elif not _known_character(project, character):
@@ -970,8 +973,13 @@ def _load_snapshot_manifest(directory: _HeldDirectory, directory_name: str) -> d
     if created_at.tzinfo is None:
         raise ContextSnapshotError("snapshot manifest created_at must include a timezone")
     subject = _normalize_relative(str(payload["subject"]))
-    if allowed_document_kind(subject) not in _SELECTABLE_KINDS:
-        raise ContextSnapshotError("snapshot manifest subject is outside selectable roots")
+    subject_path = PurePosixPath(subject)
+    if (
+        subject_path.suffix.casefold() != ".md"
+        or subject_path.name in {"project.md", "_index.md"}
+        or subject_path.parts[0].startswith(".")
+    ):
+        raise ContextSnapshotError("snapshot manifest subject is not a selectable document path")
     if not isinstance(payload.get("boundary_warning"), bool):
         raise ContextSnapshotError("snapshot boundary_warning must be boolean")
     for key in ("required", "suggested", "unresolved", "warnings"):
@@ -1737,21 +1745,26 @@ def _markdown_points_to(project: Project, relative: str, body: str, anchors: set
 
 
 def _known_character(project: Project, character: str) -> bool:
-    directory = project.root / "kb/characters"
-    if not directory.is_dir() or directory.is_symlink():
-        return False
     expected = _identity(character)
-    for path in directory.iterdir():
-        relative = f"kb/characters/{path.name}"
-        if (
-            path.name != "_index.md"
-            and path.suffix.casefold() == ".md"
-            and _safe_character_stem(path.stem)
-            and _safe_regular(project, relative)
-        ):
-            if _identity(path.stem) == expected:
+    for folder in role_directories(project, "characters"):
+        directory = project.root / folder
+        if not directory.is_dir() or directory.is_symlink():
+            continue
+        for path in directory.iterdir():
+            relative = f"{folder}/{path.name}"
+            if (
+                path.name != "_index.md"
+                and path.suffix.casefold() == ".md"
+                and _safe_character_stem(path.stem)
+                and _safe_regular(project, relative)
+                and _identity(path.stem) == expected
+            ):
                 return True
     return False
+
+
+def _in_role(project: Project, relative: str, role: str) -> bool:
+    return PurePosixPath(relative).parent.as_posix() in role_directories(project, role)
 
 
 def _safe_regular(project: Project, relative: str) -> bool:

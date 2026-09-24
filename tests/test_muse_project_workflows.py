@@ -164,19 +164,16 @@ class MuseProjectWorkflowTests(unittest.TestCase):
                     r"only.{0,80}(?:proposal|work output))",
                 )
                 self.assertRegex(lower, r"caller-assigned.{0,60}paths?")
-                self.assertRegex(lower, r"`work/[^`]*`|work/report")
+                self.assertRegex(lower, r"selected (?:plans|drafts|reviews|brainstorm) folder|work/report")
                 self.assertIn("never directly mutate accepted manuscript or kb", lower)
                 self.assertIn("never make unjournaled changes", lower)
 
-    def test_report_workers_write_only_direct_files_under_work_reviews(self):
+    def test_report_workers_write_only_direct_files_under_selected_reviews(self):
         for name in ("style-creator", "web-researcher"):
             prompt = self.all_prompts[name]
             lower = re.sub(r"\s+", " ", prompt.lower())
             with self.subTest(worker=name):
-                self.assertEqual(
-                    re.findall(r"`(work/[^`]*)`", prompt),
-                    ["work/reviews/"],
-                )
+                self.assertIn("cw get-folder reviews", prompt)
                 self.assertRegex(
                     lower,
                     r"caller-assigned paths.{0,100}assigned exact path.{0,100}direct file",
@@ -190,13 +187,10 @@ class MuseProjectWorkflowTests(unittest.TestCase):
         self.assertNotIn("continuity_check.py", prompt)
         self.assertNotIn("analyze.py", prompt)
 
-    def test_write_workers_use_canonical_work_paths(self):
-        self.assertIn("`work/plans/`", self.prompts["outliner"])
-        self.assertNotIn("`work/outlines/`", self.prompts["outliner"])
-        self.assertIn("`work/drafts/`", self.prompts["writer"])
-        self.assertIn("`story/chapters/`", self.prompts["writer"])
-        for prompt in self.prompts.values():
-            self.assertNotRegex(prompt, r"(?<!story/)chapters/")
+    def test_write_workers_use_selected_work_paths(self):
+        self.assertIn("cw get-folder plans", self.prompts["outliner"])
+        self.assertIn("cw get-folder", self.prompts["writer"])
+        self.assertIn("selected drafts folder", self.prompts["writer"])
 
     def test_final_memory_pressure_reuses_exact_prompt_and_strongest_output(self):
         revised_prompt = re.search(

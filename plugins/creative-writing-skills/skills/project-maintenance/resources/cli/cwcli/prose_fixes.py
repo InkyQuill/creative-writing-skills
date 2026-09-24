@@ -7,6 +7,7 @@ from pathlib import Path
 
 from .checks.prose import _visible_document
 from .checks.prose_typography import _BREAKABLE_SINGLE_RE
+from .layout import role_directories
 from .project import Project
 from .transactions import Change, TransactionPlan
 
@@ -22,7 +23,8 @@ def plan_safe_typography_fix(project: Project, relative_id: str) -> TransactionP
     """Fix spacing only in visible prose lines of one managed manuscript file."""
 
     path = Path(relative_id)
-    if path.parent.as_posix() not in {"story/chapters", "story/side-stories", "work/drafts"} or path.suffix.casefold() != ".md":
+    allowed = {folder for role in ("chapters", "side-stories", "drafts") for folder in role_directories(project, role)}
+    if path.parent.as_posix() not in allowed or path.suffix.casefold() != ".md":
         raise ProseFixError("typography fix requires a chapter, side story, or draft Markdown file")
     source_path = project.resolve(relative_id, for_write=True)
     if not source_path.is_file() or source_path.is_symlink():

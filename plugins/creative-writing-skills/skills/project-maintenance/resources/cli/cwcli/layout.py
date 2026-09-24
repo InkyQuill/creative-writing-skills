@@ -21,6 +21,7 @@ ROLE_CANDIDATES = {
     "characters": ("characters", "kb/characters"),
     "world": ("world", "kb/world"),
     "plans": ("plans", "work/plans"),
+    "brainstorm": ("brainstorm", "work/brainstorm"),
     "reviews": ("reviews", "work/reviews"),
     "archive": ("archive", "work/archive"),
 }

@@ -750,8 +750,10 @@ def _is_prose_path(relative_id: str, project: Project | None = None) -> bool:
     if path.name == "_index.md" or path.suffix.casefold() != ".md":
         return False
     parent = path.parent.as_posix()
-    recognized = {"story/chapters", "story/side-stories", "work/drafts", "kb/samples"}
-    if project is not None:
+    recognized = {"kb/samples"}
+    if project is None:
+        recognized.update(("story/chapters", "story/side-stories", "work/drafts"))
+    else:
         for role in ("chapters", "side-stories", "drafts"):
             recognized.update(role_directories(project, role))
     return parent in recognized

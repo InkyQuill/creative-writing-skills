@@ -5,6 +5,14 @@ project that another tool may recognize without installing or importing CWS.
 Contract version 1 describes both existing project schema versions 1 and 2.
 The contract version and the manifest's `schema-version` are independent.
 
+For authoring projects, `.cws-layout.json` can select project-relative folders
+by role. It has `version: 1` and a `roles` object, for example
+`{"version":1,"roles":{"chapters":"manuscript","characters":"notes/people"}}`.
+The fixed folder paths listed below describe legacy defaults. Consumers that
+support author-selected layouts should read this file first and use its role
+paths for direct Markdown children; reject unsafe paths and unresolved
+ambiguity rather than guessing or moving files.
+
 The portable executable examples are
 [`compatibility/cws-project-v1.json`](compatibility/cws-project-v1.json). Paths
 in that file use `/`, are relative to the fixture directory, and map to complete

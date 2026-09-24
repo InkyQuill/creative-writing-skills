@@ -802,13 +802,13 @@ def _role_path(project: Project, role: str) -> str:
 
 def _relevant_indexes(project: Project, index_ids: tuple[str, ...]) -> tuple[str, ...]:
     from .layout import uses_flexible_layout
+    from .indexes import selected_index_id
 
     if not uses_flexible_layout(project):
         return index_ids
-    return tuple(
-        index_id for index_id in index_ids
-        if (project.root / index_id).is_file() and not (project.root / index_id).is_symlink()
-    )
+    selected = tuple(dict.fromkeys(selected_index_id(project, index_id) for index_id in index_ids))
+    return tuple(index_id for index_id in selected
+                 if (project.root / index_id).is_file() and not (project.root / index_id).is_symlink())
 
 
 def _created_directories(project: Project, *targets: Path) -> tuple[str, ...]:

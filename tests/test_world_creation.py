@@ -14,31 +14,13 @@ class WorldCreationContractTests(unittest.TestCase):
             / "world-file-format.md"
         ).read_text()
 
-    def test_uses_only_canonical_schema_v1_artifact_roots(self):
-        for path in (
-            "kb/world/",
-            "kb/characters/",
-            "story/chapters/",
-            "work/drafts/",
-            "work/plans/",
-        ):
-            with self.subTest(path=path):
-                self.assertIn(f"`{path}`", self.skill)
-        for legacy_path in (
-            "worldbuilding/",
-            "characters/",
-            "chapters/",
-            "drafts/",
-            "plot/",
-            "work/outline/",
-        ):
-            with self.subTest(legacy_path=legacy_path):
-                self.assertNotIn(f"`{legacy_path}`", self.skill)
-        self.assertNotRegex(self.skill, r"(?is)(equal|equivalent).{0,80}(layout|convention)")
+    def test_resolves_project_folder_roles(self):
+        self.assertIn("cw get-folder world", self.skill)
+        for role in ("characters", "plans", "chapters", "side-stories", "drafts"):
+            self.assertIn(f"`{role}`", self.skill)
 
     def test_prose_is_read_only_and_direct_answers_persist_incrementally(self):
-        self.assertRegex(self.skill, r"(?is)`story/chapters/`.{0,120}read-only")
-        self.assertRegex(self.skill, r"(?is)`work/drafts/`.{0,120}read-only")
+        self.assertRegex(self.skill, r"(?is)accepted chapter.{0,100}draft prose.{0,100}read-only")
         self.assertIn("$project-maintenance", self.skill)
         self.assertRegex(
             self.skill,

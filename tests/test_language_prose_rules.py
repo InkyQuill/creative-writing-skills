@@ -195,7 +195,7 @@ class LanguageProseRulesTests(unittest.TestCase):
         ):
             self.assertIn(field, combined)
         self.assertRegex(combined, r"evidence.{0,120}not.{0,120}(imitat|mechanical)")
-        self.assertIn("work/reviews/", combined)
+        self.assertIn("cw get-folder reviews", combined)
         self.assertRegex(combined, r"style-creator[\s\S]{0,100}proposal")
         self.assertRegex(combined, r"previewed.{0,100}recoverable")
 

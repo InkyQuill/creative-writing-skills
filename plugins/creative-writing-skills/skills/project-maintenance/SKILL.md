@@ -30,6 +30,14 @@ performs the deterministic mechanics the agent requests. The agent owns hashes,
 tags, indexes, base revisions, repair-command selection and execution, and
 runtime setup.
 
+Before reading or writing a role folder, resolve it with `cw get-folder
+<role>` from the project root. Roles are `chapters`, `side-stories`, `drafts`,
+`characters`, `world`, `plans`, `brainstorm`, `reviews`, and `archive`. The command returns
+a project-relative path without creating it. Never assume a default folder
+when a project selected another one. If the role is ambiguous, inspect
+`cw layout` and save the actual choice with `cw layout --set ROLE=FOLDER
+--apply` only when the author's intent or existing evidence settles it.
+
 Interpret results agent-first: exit 0 continues; exit 1 means inspect the
 findings, repair what is safe, and continue unrelated creative work; exit 2
 means follow `$cli-doctor`. Mechanical warnings never block prose review or

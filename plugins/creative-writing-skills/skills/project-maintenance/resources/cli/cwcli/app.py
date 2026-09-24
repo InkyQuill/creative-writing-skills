@@ -34,7 +34,7 @@ from .drafts import (
 from .edits import EditConflict, EditPlanError, load_operations, plan_edits
 from .findings import ExecutionError, Finding, Report
 from .indexes import plan_reindex
-from .layout import LAYOUT_FILE, ROLE_CANDIDATES, inventory_layout, load_layout, render_layout, validate_role_path
+from .layout import LAYOUT_FILE, ROLE_CANDIDATES, inventory_layout, load_layout, render_layout, resolve_role, validate_role_path
 from .migration import (
     MigrationPlanError,
     load_migration_plan,
@@ -145,6 +145,10 @@ def _parser(*, error_stream: TextIO) -> argparse.ArgumentParser:
     layout.add_argument("--set", dest="role_selections", action="append", default=[], metavar="ROLE=FOLDER")
     layout.add_argument("--capture", action="store_true")
     _mutation_options(layout)
+
+    get_folder = commands.add_parser("get-folder", error_stream=error_stream)
+    get_folder.add_argument("role", choices=tuple(ROLE_CANDIDATES))
+    _format_option(get_folder)
 
     fix_typography = commands.add_parser("fix-prose-typography", error_stream=error_stream)
     fix_typography.add_argument("path")
@@ -304,6 +308,17 @@ def run(argv: list[str], *, cwd: Path, stdout: TextIO, stderr: TextIO) -> int:
             return _write_command_error(
                 error, conflict=False, output_format=args.format, stdout=stdout, stderr=stderr,
             )
+
+    if args.command == "get-folder":
+        try:
+            relative = resolve_role(discover_project(cwd), args.role)
+        except (DocumentError, OSError, ProjectDiscoveryError, ProjectPathError, UnicodeError, ValueError) as error:
+            return _write_command_error(error, conflict=False, output_format=args.format, stdout=stdout, stderr=stderr)
+        if args.format == "json":
+            _write_command_data({"role": args.role, "path": relative}, output_format="json", stdout=stdout)
+        else:
+            stdout.write(relative + "\n")
+        return 0
 
     if args.command == "draft":
         return _run_draft(args, cwd=cwd, stdout=stdout, stderr=stderr)

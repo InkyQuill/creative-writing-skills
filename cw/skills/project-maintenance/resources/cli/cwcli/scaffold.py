@@ -270,10 +270,9 @@ def _render_manifest(title: str, language: str, *, compact: bool = False) -> byt
     body = (
         f"# {title}\n\n"
         "## Project instructions\n\n"
-        "Keep numbered manuscript prose in `story/chapters/` and ordered bonus prose in "
-        "`story/side-stories/`. Keep plans, drafts, reviews, and brainstorming "
-        "in `work/`. Record durable story knowledge in `kb/`, and keep project-specific conventions "
-        "and decisions in this manifest.\n"
+        "Use `cw get-folder` for the project's chapter, side-story, "
+        "drafts, plans, reviews, characters, and world notes. Keep project-specific "
+        "conventions and decisions in this manifest.\n"
     )
     return _render_document(
         {

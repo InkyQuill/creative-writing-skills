@@ -96,7 +96,8 @@ settles them without a second confirmation; ask only about material ambiguity
 or conflicting evidence. Preserve unrelated instructions and unknown files.
 Approval of the core project does not imply approval for optional samples,
 style files, vocabulary pages, or other auxiliary artifacts. Style analysis is
-first proposed as a direct file under `work/reviews/`, then promoted through a
+first proposed as a direct file under the selected reviews folder (`cw
+get-folder reviews`), then promoted through a
 separate previewed, recoverable transaction after it is approved.
 
 ## Apply Safely

@@ -18,6 +18,7 @@ check structure|links|kb|continuity|drafts|prose|journal|translation|all [projec
 check prose|all [project] --draft-typography
 doctor
 layout
+get-folder chapters|side-stories|drafts|characters|world|plans|brainstorm|reviews|archive
 layout --capture [--apply]
 layout --set chapters=<folder> [--set drafts=<folder>] [--apply]
 context draft|chapter|kb <path> [--as trusted|reader|character:<id>] [--snapshot]
@@ -31,7 +32,10 @@ creating paths or selecting between ambiguous locations. `.cws-layout.json`
 stores folder choices for this project, separate from `project.md`.
 `layout --capture` saves only unambiguous populated folders; `--set` records
 an explicit role path. Both preview changes before `--apply` and can be undone.
-Use these as internal setup aids; do not make the author run them or treat a
+`get-folder <role>` prints the selected project-relative path (or returns it
+as `path` with `--format json`) without creating a folder. Resolve roles this
+way before constructing artifact paths in skills and worker tasks. Use these
+as internal setup aids; do not make the author run them or treat a
 missing candidate as a setup failure. Context planning without `--snapshot` is read-only. A restricted
 `context --snapshot` writes derived cache without `--apply`; trusted context
 can use the selected source paths directly. `clean-context` previews and
@@ -87,8 +91,9 @@ New projects receive `prose-profile: general`. Existing schema-v1 projects
 without the optional field behave the same way, and valid custom profile slugs
 are preserved by migration, rebase, and exact document edits.
 
-Draft targets may be numbered chapters under `story/chapters/` or ordered side
-stories under `story/side-stories/`. A side story requires an `after` path to an
+Draft targets may be numbered chapters in the selected chapters folder or
+ordered side stories in the selected side-stories folder. Resolve those paths
+with `cw get-folder` first. A side story requires an `after` path to an
 accepted manuscript document and may declare a lower-case `subtype`. Use
 `context chapter` for either accepted manuscript role; it follows their
 aggregate reading order when selecting neighbors.
