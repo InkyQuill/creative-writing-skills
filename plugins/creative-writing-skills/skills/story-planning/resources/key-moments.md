@@ -16,7 +16,8 @@ outline, this reference produces the emotional skeleton that
 scenes.
 
 Everything this method produces is a provisional planning artifact for
-`work/plans/` (or `work/brainstorm/` during exploration), subject to author
+the selected plans folder (`cw get-folder plans`; use existing exploration
+space during brainstorming), subject to author
 confirmation. Selecting a moment does not make it canon: proposed beats
 follow the capture conventions in `resources/brainstorming.md` — author
 statements stay untagged, AI-suggested moments stay wrapped in
@@ -349,8 +350,8 @@ open questions with the proposal.
 
 ## Output
 
-Write the moment set as a proposal under the caller-assigned path in
-`work/plans/` (the muse's outliner worker owns such paths) or return it in
+Write the moment set as a proposal under the caller-assigned path in the
+selected plans folder (the muse's outliner worker owns such paths) or return it in
 the requested response shape. Before generating fresh, check for prior
 key-moment proposals for this story and keep them consistent with any
 changes the author has since confirmed; beats that failed in earlier

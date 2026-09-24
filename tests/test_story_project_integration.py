@@ -31,7 +31,7 @@ class StoryProjectIntegrationTests(unittest.TestCase):
         self.assertNotIn("Layout A", text)
         self.assertNotIn("Layout B", text)
         self.assertIn("cw init", text)
-        for path in ("project.md", "story/chapters/", "work/drafts/", "kb/continuity/"):
+        for path in ("project.md", ".cws-layout.json", "cw layout"):
             self.assertIn(path, text)
         self.assertRegex(text, r"(?is)body of.{0,80}`project\.md`.{0,180}(durable|writing contract)")
         self.assertRegex(text, r"(?is)resolved project instructions.{0,180}(unmanaged|optional)")
@@ -66,12 +66,10 @@ class StoryProjectIntegrationTests(unittest.TestCase):
         self.assertIn("cw check continuity", text)
         self.assertRegex(text, r"(?is)(author|direct).{0,80}edits?.{0,120}(valid|tolerat|preserv)")
 
-    def test_story_memory_tree_uses_only_canonical_artifact_roots(self):
+    def test_story_memory_tree_uses_selected_artifact_roots(self):
         text = all_runtime_markdown("story-memory")
-        for path in ("kb/continuity/", "work/plans/", "work/reviews/"):
+        for path in ("kb/continuity/", "cw get-folder <role>", ".cws-layout.json"):
             self.assertIn(path, text)
-        for rejected in ("plot/", "work/outline/", "work/critique-reports/"):
-            self.assertNotIn(rejected, text)
         self.assertNotRegex(text, r"(?is)(selected|configured|swappable).{0,100}continuity root")
 
     def test_story_memory_tree_proposes_then_transacts_kb_promotion(self):

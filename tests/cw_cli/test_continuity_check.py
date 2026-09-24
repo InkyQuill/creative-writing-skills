@@ -400,7 +400,7 @@ class ContinuityParityTests(unittest.TestCase):
         }
         self.assertNotIn("Create", actions["unknown character ID '../mara'"])
         self.assertNotIn("Create", actions["unknown character ID 'CON'"])
-        self.assertIn("Create kb/characters/valid-id.md", actions["unknown character ID 'valid-id'"])
+        self.assertIn("Create valid-id.md in the selected characters folder", actions["unknown character ID 'valid-id'"])
 
     def test_malformed_record_warns_and_other_records_complete(self):
         self.write_records(promises="| Promise | Status |\n| -- | --- |\n| x | planted |\n")

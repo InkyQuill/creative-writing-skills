@@ -63,8 +63,7 @@ class ScaffoldTests(unittest.TestCase):
         }
         self.assertEqual(expected_indexes, {path for path in rendered if path.endswith("/_index.md")})
         self.assertIn("Project instructions", manifest.body)
-        self.assertIn("story/chapters/", manifest.body)
-        self.assertIn("story/side-stories/", manifest.body)
+        self.assertIn("cw get-folder", manifest.body)
         self.assertNotIn("AGENTS.md", manifest.body)
         self.assertNotIn("CLAUDE.md", manifest.body)
 

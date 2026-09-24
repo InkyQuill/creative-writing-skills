@@ -123,8 +123,8 @@ Analyze one declared language/profile scope at a time. Never merge
 cross-language samples into one baseline: a repeated surface pattern can have a
 different function or grammatical status in another language.
 
-The style-creator writes only a proposal as a direct file under
-`work/reviews/`. Muse or the orchestrator promotes approved sample and style
+The style-creator writes only a proposal as a direct file in the selected
+reviews folder (`cw get-folder reviews`). Muse or the orchestrator promotes approved sample and style
 artifacts into the flat KB paths through a previewed, recoverable transaction.
 An explicit author choice or directly settled answer needs no redundant second
 confirmation; ambiguity, conflicting evidence, source-boundary uncertainty,

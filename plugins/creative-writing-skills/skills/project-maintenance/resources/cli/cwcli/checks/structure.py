@@ -10,6 +10,7 @@ from typing import Iterator
 from ..documents import DocumentError, parse_document
 from ..findings import Finding
 from ..project import MANAGED_ROOTS, Project
+from ..layout import ROLE_CANDIDATES, role_directories, uses_flexible_layout
 from ..schema import (
     SUPPORTED_SCHEMA_VERSIONS,
     required_paths,
@@ -52,10 +53,13 @@ def check_structure(project: Project) -> list[Finding]:
         ]
 
     findings: list[Finding] = []
+    role_folders = {role: role_directories(project, role) for role in ROLE_CANDIDATES}
     try:
         required_dirs, required_files = required_paths(project.manifest.metadata)
     except ValueError:
         required_dirs, required_files = SCAFFOLD_DIRECTORIES, SCAFFOLD_FILES
+    if uses_flexible_layout(project):
+        required_dirs, required_files = (), ("project.md",)
     for relative_id in required_dirs:
         finding = _expected_path_finding(project, relative_id, expected_kind="directory")
         if finding is not None:
@@ -79,6 +83,20 @@ def check_structure(project: Project) -> list[Finding]:
     for path in project.iter_managed_markdown():
         relative_id = project.relative_id(path)
         document_kind = allowed_document_kind(relative_id, schema_version=project.manifest.metadata.get("schema-version", 1))
+        if document_kind is None:
+            parent = Path(relative_id).parent.as_posix()
+            if Path(relative_id).name == "_index.md" and any(
+                parent in folders for folders in role_folders.values()
+            ):
+                document_kind = "generated-index"
+            elif parent in role_folders["chapters"]:
+                document_kind = "chapter"
+            elif parent in role_folders["side-stories"]:
+                document_kind = "side-story"
+            elif any(parent in role_folders[role] for role in ("drafts", "plans", "reviews", "archive")):
+                document_kind = "work-artifact"
+            elif any(parent in role_folders[role] for role in ("characters", "world")):
+                document_kind = "kb-content"
         if document_kind is None:
             findings.append(
                 Finding(
@@ -111,14 +129,14 @@ def check_structure(project: Project) -> list[Finding]:
         if not _has_frontmatter(data):
             findings.append(_missing_frontmatter_finding(relative_id))
             continue
-        findings.extend(validate_metadata(relative_id, document))
+        findings.extend(validate_metadata(relative_id, document, kind_override=document_kind))
         if document_kind in {"chapter", "side-story"}:
             manuscript_paths.add(relative_id)
         if document_kind == "side-story" and isinstance(document.metadata.get("after"), str):
             side_story_anchors[relative_id] = str(document.metadata["after"])
         number = document.metadata.get("number")
         if (
-            allowed_document_kind(relative_id, schema_version=project.manifest.metadata.get("schema-version", 1)) == "chapter"
+            document_kind == "chapter"
             and isinstance(number, int)
             and not isinstance(number, bool)
             and number >= 1
@@ -170,7 +188,7 @@ def check_structure(project: Project) -> list[Finding]:
                 )
             )
 
-    for path in _iter_unmanaged_markdown(project):
+    for path in _iter_unmanaged_markdown(project, role_folders):
         findings.append(
             Finding(
                 code=UNMANAGED_MARKDOWN,
@@ -286,22 +304,29 @@ def _missing_frontmatter_finding(relative_id: str) -> Finding:
     )
 
 
-def _iter_unmanaged_markdown(project: Project) -> Iterator[Path]:
-    yield from _iter_unmanaged_markdown_in(project.root, project.root)
+def _iter_unmanaged_markdown(
+    project: Project, role_folders: dict[str, tuple[str, ...]]
+) -> Iterator[Path]:
+    managed_folders = set(MANAGED_ROOTS)
+    for folders in role_folders.values():
+        managed_folders.update(folders)
+    if project.manifest.metadata.get("schema-version") == 2 and project.manifest.metadata.get("translation-enabled") is True:
+        managed_folders.update(("sources", "translations"))
+    yield from _iter_unmanaged_markdown_in(project.root, project.root, managed_folders)
 
 
-def _iter_unmanaged_markdown_in(root: Path, directory: Path) -> Iterator[Path]:
+def _iter_unmanaged_markdown_in(root: Path, directory: Path, managed_folders: set[str]) -> Iterator[Path]:
     for path in _sorted_children(directory):
         if path.is_symlink():
             continue
         relative = path.relative_to(root)
         if path.is_dir():
-            if relative.parts[0] in (*MANAGED_ROOTS, ".creative-writing"):
+            if relative.as_posix() in managed_folders or relative.parts[0] == ".creative-writing":
                 continue
             manifest = path / "project.md"
             if path != root and not manifest.is_symlink() and manifest.is_file():
                 continue
-            yield from _iter_unmanaged_markdown_in(root, path)
+            yield from _iter_unmanaged_markdown_in(root, path, managed_folders)
         elif path.is_file() and path.suffix.casefold() == ".md" and relative.as_posix() != "project.md":
             yield path
 

@@ -6,8 +6,19 @@ description: "Report a suspected bug, regression, confusing behavior, broken scr
 # Project Feedback
 
 Continue safe diagnosis and the user's primary task while handling feedback.
-Feedback must never replace or unnecessarily block the actual work. A report is
-useful only for a problem owned by this repository: its canonical Creative
+Feedback must never replace or unnecessarily block the actual work. Route a
+report by the component that failed, not by the repository currently open or
+the skill that noticed the failure. A defect in `cw`, its launcher or bundled
+CLI, CWS skill instructions or orchestration, or a CWS integration wrapper
+belongs in `InkyQuill/creative-writing-skills`. A defect in the Hieronymus
+service, `hiero`, its MCP tools, or its own skills belongs in
+`InkyQuill/hieronymus`; use the available Hieronymus issue workflow for that
+report.
+When a cross-project failure has unclear ownership, identify the failing
+component before filing. Create separate linked reports only if both projects
+need distinct changes.
+
+A report through this skill is useful only for a problem owned by this repository: its canonical Creative
 Writing Skills plugin skills, bundled `cw` CLI, generated Claude or ZCode
 distribution, or repository docs and contracts that define or ship those
 Creative Writing Skills components.

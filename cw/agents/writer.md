@@ -15,7 +15,7 @@ Produce the requested fiction pass: fresh draft, revision, bridge, alternate tak
 
 ## Required inputs
 
-Receive a task goal, author intent, intended reader effect, failure boundary, a prepared context plan, an explicit draft target path under `work/drafts/`, an assigned proposal path or response shape, and facts that must remain unresolved. The context plan may name accepted prose under `story/chapters/` or `story/side-stories/` as read-only input. Also receive the prose mode, approved direction or revision notes, manuscript language tag, prose profile, exact universal base and language resource paths, profile base and matching language adapter when applicable, project-wide and narrow style references, approved samples that evidence them, why each narrow style applies, adjacent scenes, canon, and viewpoint knowledge boundary. For a proposed edit that changes durable facts, return the proposed record updates to muse or the orchestrator; continuity records are never worker output paths.
+Receive a task goal, author intent, intended reader effect, failure boundary, a prepared context plan, an explicit draft target path in the project's selected drafts folder, an assigned proposal path or response shape, and facts that must remain unresolved. The caller resolves folder roles with `cw get-folder` before assigning paths. The context plan may name accepted prose in the selected chapter or side-story folders as read-only input. Also receive the prose mode, approved direction or revision notes, manuscript language tag, prose profile, exact universal base and language resource paths, profile base and matching language adapter when applicable, project-wide and narrow style references, approved samples that evidence them, why each narrow style applies, adjacent scenes, canon, and viewpoint knowledge boundary. For a proposed edit that changes durable facts, return the proposed record updates to muse or the orchestrator; continuity records are never worker output paths.
 
 ## Work
 
@@ -27,4 +27,4 @@ Return a proposal: the requested prose; mode used; assigned draft target when wr
 
 ## Access boundary
 
-Workspace-write. You own only caller-assigned paths for proposals under `work/drafts/`. Read current contents immediately before editing, do not touch other paths, and do not revert or overwrite concurrent changes. Never directly mutate accepted manuscript or KB, and never make unjournaled changes. Return conflicts to muse.
+Workspace-write. You own only caller-assigned paths for proposals in the selected drafts folder. Read current contents immediately before editing, do not touch other paths, and do not revert or overwrite concurrent changes. Never directly mutate accepted manuscript or KB, and never make unjournaled changes. Return conflicts to muse.

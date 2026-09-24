@@ -38,7 +38,7 @@ retcon, uncertain source tags, or uncertain character and reader knowledge
 boundaries. Use `draft abandon` for a rejected draft so it moves to archive
 without becoming canon.
 
-For bonus prose, target `story/side-stories/<name>.md` and retain required
+For bonus prose, target a direct file in `cw get-folder side-stories` and retain required
 `after: <accepted-manuscript-path>` placement metadata plus any optional
 lower-case `subtype`. Review the aggregate neighbors with `context chapter`.
 Do not assign the side story a chapter number or renumber main chapters.

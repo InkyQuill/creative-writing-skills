@@ -10,6 +10,7 @@ from pathlib import Path
 
 from .documents import Document, parse_document, render_document
 from .indexes import render_index
+from .layout import ROLE_CANDIDATES, LAYOUT_FILE, render_layout
 from .project import MANAGED_ROOTS, Project
 from .schema import GENERATED_INDEX_FILES, SCHEMA_VERSION, SCAFFOLD_DIRECTORIES, SCAFFOLD_FILES, required_paths
 from .transactions import Change, TransactionEngine, TransactionPlan, TransactionRecord, _fsync_directory
@@ -38,7 +39,7 @@ _STARTER_DOCUMENTS = {
 }
 
 
-def render_scaffold(title: str, language: str, *, kind: str = "authoring", work_kind: str = "book") -> dict[str, bytes]:
+def render_scaffold(title: str, language: str, *, kind: str = "authoring", work_kind: str = "book", template: str = "full") -> dict[str, bytes]:
     """Render every authored file in a new project in stable path order."""
 
     if kind == "translation":
@@ -46,6 +47,13 @@ def render_scaffold(title: str, language: str, *, kind: str = "authoring", work_
         metadata = {"schema-version": 2, "title": title, "language": language, "status": "planning", "project-kind": kind, "work-kind": work_kind, "translation-enabled": True}
         _, files = required_paths(metadata)
         return {p: _render_document(metadata, f"# {title}\n\nTranslation project. Sources and directions define text languages.\n") if p == "project.md" else render_translation_index() for p in files}
+    if template == "compact":
+        return {
+            "project.md": _render_manifest(title, language, compact=True),
+            LAYOUT_FILE: render_layout({role: paths[-1] for role, paths in ROLE_CANDIDATES.items()}),
+        }
+    if template != "full":
+        raise InitError(f"unknown scaffold template: {template}")
     rendered: dict[str, bytes] = {}
     for relative_id in SCAFFOLD_FILES:
         if relative_id == "project.md":
@@ -76,12 +84,12 @@ class AppliedInit:
     diagnostics: tuple[str, ...] = ()
 
 
-def plan_init(target: Path, title: str, language: str, *, kind: str = "authoring", work_kind: str = "book") -> TransactionPlan:
+def plan_init(target: Path, title: str, language: str, *, kind: str = "authoring", work_kind: str = "book", template: str = "full") -> TransactionPlan:
     """Plan missing scaffold files for an absent or existing ordinary folder."""
 
     root = Path(target).absolute()
     _validate_init_target(root)
-    rendered = render_scaffold(title, language, kind=kind, work_kind=work_kind)
+    rendered = render_scaffold(title, language, kind=kind, work_kind=work_kind, template=template)
     directories, _ = required_paths(parse_document(rendered["project.md"]).metadata)
     created_directories = tuple(
         relative for relative in directories if not (root / relative).is_dir()
@@ -109,21 +117,21 @@ def plan_init(target: Path, title: str, language: str, *, kind: str = "authoring
     )
 
 
-def apply_init(target: Path, title: str, language: str, *, kind: str = "authoring", work_kind: str = "book") -> AppliedInit:
+def apply_init(target: Path, title: str, language: str, *, kind: str = "authoring", work_kind: str = "book", template: str = "full") -> AppliedInit:
     """Apply bootstrap atomically for an absent target or transactionally in-place."""
 
     root = Path(target).absolute()
     if root.exists() or root.is_symlink():
-        plan = plan_init(root, title, language, kind=kind, work_kind=work_kind)
-        _create_scaffold_directories(root, kind=kind, work_kind=work_kind)
-        return AppliedInit(TransactionEngine(_bootstrap_project(root, title, language, kind=kind, work_kind=work_kind)).apply(plan))
-    return _apply_absent_init(root, title, language, kind=kind, work_kind=work_kind)
+        plan = plan_init(root, title, language, kind=kind, work_kind=work_kind, template=template)
+        _create_scaffold_directories(root, kind=kind, work_kind=work_kind, template=template)
+        return AppliedInit(TransactionEngine(_bootstrap_project(root, title, language, kind=kind, work_kind=work_kind, template=template)).apply(plan))
+    return _apply_absent_init(root, title, language, kind=kind, work_kind=work_kind, template=template)
 
 
-def preview_init(target: Path, title: str, language: str, *, kind: str = "authoring", work_kind: str = "book") -> TransactionPlan:
+def preview_init(target: Path, title: str, language: str, *, kind: str = "authoring", work_kind: str = "book", template: str = "full") -> TransactionPlan:
     """Return the bootstrap plan without creating the target or any parent."""
 
-    return plan_init(Path(target).absolute(), title, language, kind=kind, work_kind=work_kind)
+    return plan_init(Path(target).absolute(), title, language, kind=kind, work_kind=work_kind, template=template)
 
 
 def _validate_init_target(root: Path) -> None:
@@ -198,18 +206,18 @@ def _migration_message(reason: str) -> str:
     return f"{reason}; use cw migrate --plan instead of init to preserve managed content"
 
 
-def _bootstrap_project(root: Path, title: str, language: str, *, kind: str = "authoring", work_kind: str = "book") -> Project:
+def _bootstrap_project(root: Path, title: str, language: str, *, kind: str = "authoring", work_kind: str = "book", template: str = "full") -> Project:
     manifest_path = root / "project.md"
     manifest_bytes = (
         manifest_path.read_bytes()
         if manifest_path.is_file() and not manifest_path.is_symlink()
-        else render_scaffold(title, language, kind=kind, work_kind=work_kind)["project.md"]
+        else render_scaffold(title, language, kind=kind, work_kind=work_kind, template=template)["project.md"]
     )
     return Project(root=root.resolve(), manifest=parse_document(manifest_bytes))
 
 
-def _create_scaffold_directories(root: Path, *, kind="authoring", work_kind="book") -> None:
-    directories, _ = required_paths(parse_document(render_scaffold("Project", "en", kind=kind, work_kind=work_kind)["project.md"]).metadata)
+def _create_scaffold_directories(root: Path, *, kind="authoring", work_kind="book", template="full") -> None:
+    directories, _ = required_paths(parse_document(render_scaffold("Project", "en", kind=kind, work_kind=work_kind, template=template)["project.md"]).metadata)
     for relative in directories:
         directory = root / relative
         if directory.is_symlink() or (directory.exists() and not directory.is_dir()):
@@ -218,13 +226,13 @@ def _create_scaffold_directories(root: Path, *, kind="authoring", work_kind="boo
         _fsync_directory(directory.parent)
 
 
-def _apply_absent_init(root: Path, title: str, language: str, *, kind: str = "authoring", work_kind: str = "book") -> AppliedInit:
+def _apply_absent_init(root: Path, title: str, language: str, *, kind: str = "authoring", work_kind: str = "book", template: str = "full") -> AppliedInit:
     temporary = Path(tempfile.mkdtemp(prefix=f".{root.name}.cw-init-", dir=root.parent))
     installed = False
     try:
-        plan = plan_init(temporary, title, language, kind=kind, work_kind=work_kind)
-        _create_scaffold_directories(temporary, kind=kind, work_kind=work_kind)
-        record = TransactionEngine(_bootstrap_project(temporary, title, language, kind=kind, work_kind=work_kind)).apply(plan)
+        plan = plan_init(temporary, title, language, kind=kind, work_kind=work_kind, template=template)
+        _create_scaffold_directories(temporary, kind=kind, work_kind=work_kind, template=template)
+        record = TransactionEngine(_bootstrap_project(temporary, title, language, kind=kind, work_kind=work_kind, template=template)).apply(plan)
         _fsync_tree(temporary)
         if root.exists() or root.is_symlink():
             raise InitError("initialization target appeared while bootstrap was being prepared")
@@ -258,14 +266,13 @@ def _fsync_tree(root: Path) -> None:
         _fsync_directory(Path(directory))
 
 
-def _render_manifest(title: str, language: str) -> bytes:
+def _render_manifest(title: str, language: str, *, compact: bool = False) -> bytes:
     body = (
         f"# {title}\n\n"
         "## Project instructions\n\n"
-        "Keep numbered manuscript prose in `story/chapters/` and ordered bonus prose in "
-        "`story/side-stories/`. Keep plans, drafts, reviews, and brainstorming "
-        "in `work/`. Record durable story knowledge in `kb/`, and keep project-specific conventions "
-        "and decisions in this manifest.\n"
+        "Use `cw get-folder` for the project's chapter, side-story, "
+        "drafts, plans, reviews, characters, and world notes. Keep project-specific "
+        "conventions and decisions in this manifest.\n"
     )
     return _render_document(
         {
@@ -274,6 +281,7 @@ def _render_manifest(title: str, language: str) -> bytes:
             "language": language,
             "prose-profile": "general",
             "status": "planning",
+            **({"scaffold-template": "compact"} if compact else {}),
         },
         body,
     )

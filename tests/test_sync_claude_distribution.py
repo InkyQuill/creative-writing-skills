@@ -497,13 +497,11 @@ class ClaudeDistributionRenderTests(unittest.TestCase):
             self.assertNotIn("Use `$md-validation` for link checking", bootstrap)
             for path in (
                 "`project.md`",
-                "`story/chapters/`",
-                "`kb/`",
-                "`work/drafts/`",
-                "`.creative-writing/`",
+                "`.cws-layout.json`",
+                "cw layout",
             ):
                 self.assertIn(path, project_setup)
-            self.assertIn("There is no\nalternative layout choice", project_setup)
+            self.assertIn("existing folders without moving prose", project_setup)
             self.assertIn("Use `/project-maintenance`", project_setup)
             generated_cards = (
                 output_root

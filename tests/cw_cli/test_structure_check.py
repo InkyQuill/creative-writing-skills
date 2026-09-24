@@ -66,6 +66,57 @@ class StructureCheckTests(unittest.TestCase):
 
             self.assertNotIn("invalid-chapter-status", {finding.code for finding in findings})
 
+    def test_selected_folder_index_is_generated_and_not_unmanaged(self):
+        directory, root = self.make_project()
+        with directory:
+            (root / ".cws-layout.json").write_text(
+                '{"version":1,"roles":{"chapters":"manuscript/chapters"}}\n', encoding="utf-8"
+            )
+            selected = root / "manuscript/chapters"
+            selected.mkdir(parents=True)
+            (selected / "_index.md").write_text("---\ngenerated: false\n---\n# Chapters\n", encoding="utf-8")
+            (selected / "one.md").write_text("---\nnumber: 1\n---\nText\n", encoding="utf-8")
+            findings = self.findings_for(root)
+            self.assertIn((schema.INVALID_GENERATED_MARKER, "manuscript/chapters/_index.md"),
+                          {(item.code, item.path) for item in findings})
+            self.assertNotIn((structure.UNMANAGED_MARKDOWN, "manuscript/chapters/one.md"),
+                             {(item.code, item.path) for item in findings})
+
+    def test_selected_nested_folder_does_not_manage_sibling_markdown(self):
+        directory, root = self.make_project()
+        with directory:
+            (root / ".cws-layout.json").write_text(
+                '{"version":1,"roles":{"characters":"notes/people"}}\n', encoding="utf-8"
+            )
+            selected = root / "notes/people"
+            selected.mkdir(parents=True)
+            (selected / "aria.md").write_text("---\ntitle: Aria\n---\nText\n", encoding="utf-8")
+            (root / "notes/todo.md").write_text("# Personal note\n", encoding="utf-8")
+            model = project.discover_project(root)
+            managed = {model.relative_id(path) for path in model.iter_managed_markdown()}
+            self.assertIn("notes/people/aria.md", managed)
+            self.assertNotIn("notes/todo.md", managed)
+            findings = self.findings_for(root)
+            sibling = [item for item in findings if item.path == "notes/todo.md"]
+            self.assertEqual([structure.UNMANAGED_MARKDOWN], [item.code for item in sibling])
+
+    def test_selected_side_story_can_anchor_selected_chapter(self):
+        directory, root = self.make_project()
+        with directory:
+            (root / ".cws-layout.json").write_text(
+                '{"version":1,"roles":{"chapters":"manuscript/chapters","side-stories":"manuscript/bonus"}}\n',
+                encoding="utf-8",
+            )
+            chapter = root / "manuscript/chapters/one.md"
+            chapter.parent.mkdir(parents=True)
+            chapter.write_text("---\nnumber: 1\n---\nText\n", encoding="utf-8")
+            bonus = root / "manuscript/bonus/extra.md"
+            bonus.parent.mkdir(parents=True)
+            bonus.write_text("---\nafter: manuscript/chapters/one.md\n---\nBonus\n", encoding="utf-8")
+            findings = self.findings_for(root)
+            self.assertNotIn(schema.INVALID_SIDE_STORY_AFTER,
+                             {item.code for item in findings if item.path == "manuscript/bonus/extra.md"})
+
     def test_duplicate_chapter_numbers_are_errors(self):
         directory, root = self.make_project()
         with directory:
@@ -349,7 +400,7 @@ class StructureCheckTests(unittest.TestCase):
             stdout = io.StringIO()
 
             status = app.run(
-                ["init", str(target), "--title", "Second Light", "--language", "ru"],
+                ["init", str(target), "--title", "Second Light", "--language", "ru", "--template", "full"],
                 cwd=target.parent,
                 stdout=stdout,
                 stderr=io.StringIO(),

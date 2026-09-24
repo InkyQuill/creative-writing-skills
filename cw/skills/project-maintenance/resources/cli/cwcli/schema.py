@@ -124,14 +124,16 @@ def allowed_document_kind(relative_id: str, *, schema_version: int = 1) -> str |
     return None
 
 
-def validate_metadata(relative_id: str, document: Document) -> list[Finding]:
+def validate_metadata(
+    relative_id: str, document: Document, *, kind_override: str | None = None
+) -> list[Finding]:
     """Return findings for structurally defined schema-v1 metadata only.
 
     Artifact-specific semantic fields and Markdown table columns are deliberately
     unconstrained in schema v1. Tightening them requires a future schema version.
     """
 
-    kind = allowed_document_kind(relative_id)
+    kind = kind_override or allowed_document_kind(relative_id)
     if kind == "manifest":
         return _validate_manifest(document.metadata, relative_id)
 
@@ -159,7 +161,7 @@ def validate_metadata(relative_id: str, document: Document) -> list[Finding]:
             )
     elif kind == "side-story":
         after = document.metadata.get("after")
-        if not _is_manuscript_reference(after):
+        if not _is_manuscript_reference(after, allow_selected_parent=kind_override is not None):
             findings.append(
                 _warning(
                     INVALID_SIDE_STORY_AFTER,
@@ -184,13 +186,16 @@ def validate_metadata(relative_id: str, document: Document) -> list[Finding]:
     return findings
 
 
-def _is_manuscript_reference(value: object) -> bool:
+def _is_manuscript_reference(value: object, *, allow_selected_parent: bool = False) -> bool:
     if not isinstance(value, str):
         return False
     path = PurePosixPath(value)
     return (
         str(path) == value
-        and path.parent.as_posix() in {"story/chapters", "story/side-stories"}
+        and not path.is_absolute()
+        and ".." not in path.parts
+        and (allow_selected_parent or path.parent.as_posix() in {"story/chapters", "story/side-stories"})
+        and path.parent.as_posix() != "."
         and path.name != "_index.md"
         and path.suffix.casefold() == ".md"
     )
@@ -334,6 +339,11 @@ __all__ = [
 def required_paths(metadata):
     from .translation.contract import project_settings
     kind, _, enabled = project_settings(metadata)
+    if not enabled and metadata.get("scaffold-template") == "compact":
+        return (
+            ".creative-writing", ".creative-writing/context",
+            ".creative-writing/transactions",
+        ), ("project.md", ".cws-layout.json")
     if not enabled:
         return SCAFFOLD_DIRECTORIES, SCAFFOLD_FILES
     extra_dirs = ('sources', 'translations', 'kb/entities', 'kb/source-comparisons')

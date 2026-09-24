@@ -34,6 +34,7 @@ from .drafts import (
 from .edits import EditConflict, EditPlanError, load_operations, plan_edits
 from .findings import ExecutionError, Finding, Report
 from .indexes import plan_reindex
+from .layout import LAYOUT_FILE, ROLE_CANDIDATES, inventory_layout, load_layout, render_layout, resolve_role, validate_role_path
 from .migration import (
     MigrationPlanError,
     load_migration_plan,
@@ -43,8 +44,10 @@ from .migration import (
     _read_regular_file_no_follow,
 )
 from .project import Project, ProjectDiscoveryError, ProjectPathError, discover_project
+from .prose_fixes import ProseFixError, plan_safe_typography_fix
 from .scaffold import InitError, apply_init, preview_init
 from .transactions import (
+    Change,
     TransactionConflict,
     TransactionEngine,
     TransactionError,
@@ -106,6 +109,8 @@ def _parser(*, error_stream: TextIO) -> argparse.ArgumentParser:
     for name in (*sorted(CHECKERS), "all"):
         check_command = check_commands.add_parser(name, error_stream=error_stream)
         check_command.add_argument("path", nargs="?", default=".")
+        if name in {"prose", "all"}:
+            check_command.add_argument("--draft-typography", action="store_true")
         _report_options(check_command)
 
     context = commands.add_parser("context", error_stream=error_stream)
@@ -130,10 +135,24 @@ def _parser(*, error_stream: TextIO) -> argparse.ArgumentParser:
     init.add_argument("--language", required=True)
     init.add_argument("--kind", choices=("authoring", "translation"), default="authoring")
     init.add_argument("--work-kind", choices=("book", "series"), default="book")
+    init.add_argument("--template", choices=("compact", "full"), default="compact")
     _mutation_options(init)
 
     reindex = commands.add_parser("reindex", error_stream=error_stream)
     _mutation_options(reindex)
+
+    layout = commands.add_parser("layout", error_stream=error_stream)
+    layout.add_argument("--set", dest="role_selections", action="append", default=[], metavar="ROLE=FOLDER")
+    layout.add_argument("--capture", action="store_true")
+    _mutation_options(layout)
+
+    get_folder = commands.add_parser("get-folder", error_stream=error_stream)
+    get_folder.add_argument("role", choices=tuple(ROLE_CANDIDATES))
+    _format_option(get_folder)
+
+    fix_typography = commands.add_parser("fix-prose-typography", error_stream=error_stream)
+    fix_typography.add_argument("path")
+    _mutation_options(fix_typography)
 
     draft = commands.add_parser("draft", error_stream=error_stream)
     draft_commands = draft.add_subparsers(dest="draft_command", required=True, parser_class=_Parser)
@@ -164,18 +183,19 @@ def _parser(*, error_stream: TextIO) -> argparse.ArgumentParser:
 
     edit = commands.add_parser("edit", error_stream=error_stream)
     edit_commands = edit.add_subparsers(dest="edit_command", required=True, parser_class=_Parser)
-    for kind in ("replace", "insert-before", "insert-after", "delete"):
+    for kind in ("replace", "insert-before", "insert-after", "delete", "append"):
         command = edit_commands.add_parser(kind, error_stream=error_stream)
         command.add_argument("path")
         if kind in {"replace", "delete"}:
-            command.add_argument("--old-file", required=True)
-        else:
-            command.add_argument("--anchor-file", required=True)
+            command.add_argument("--old-file", required=True, help="UTF-8 anchor from the Markdown body only; excludes YAML frontmatter")
+        elif kind != "append":
+            command.add_argument("--anchor-file", required=True, help="UTF-8 anchor from the Markdown body only; excludes YAML frontmatter")
         if kind != "delete":
             command.add_argument("--new-file", required=True)
-        count = command.add_mutually_exclusive_group()
-        count.add_argument("--expect-count", type=int)
-        count.add_argument("--all", action="store_true")
+        if kind != "append":
+            count = command.add_mutually_exclusive_group()
+            count.add_argument("--expect-count", type=int)
+            count.add_argument("--all", action="store_true")
         _mutation_options(command)
 
     batch = edit_commands.add_parser("apply", error_stream=error_stream)
@@ -259,8 +279,70 @@ def run(argv: list[str], *, cwd: Path, stdout: TextIO, stderr: TextIO) -> int:
             stdout.write(result.as_text() + "\n")
         return result.exit_status()
 
+    if args.command == "layout":
+        try:
+            project = discover_project(cwd)
+            if not args.role_selections and not args.capture:
+                _write_command_data(inventory_layout(project), output_format=args.format, stdout=stdout)
+                return 0
+            roles = dict(load_layout(project))
+            if args.capture:
+                for role, details in inventory_layout(project)["roles"].items():
+                    if role not in roles and len(details["candidates"]) == 1:
+                        roles[role] = details["candidates"][0]
+            for selection in args.role_selections:
+                if "=" not in selection:
+                    raise ValueError("--set expects ROLE=FOLDER")
+                role, relative = selection.split("=", 1)
+                if role not in ROLE_CANDIDATES:
+                    raise ValueError(f"unknown layout role: {role}")
+                roles[role] = validate_role_path(project, relative)
+            path = project.root / LAYOUT_FILE
+            before = path.read_bytes() if path.exists() else None
+            after = render_layout(roles)
+            if before == after:
+                _write_command_data({"status": "unchanged", "roles": roles}, output_format=args.format, stdout=stdout)
+                return 0
+            plan = TransactionPlan(command=("layout",), changes=(Change(LAYOUT_FILE, before, after),), metadata={"undoable": True})
+            return _preview_or_apply(TransactionEngine(project), plan, apply=args.apply, output_format=args.format, stdout=stdout)
+        except (DocumentError, OSError, ProjectDiscoveryError, ProjectPathError, TransactionError, ValueError) as error:
+            return _write_command_error(
+                error, conflict=False, output_format=args.format, stdout=stdout, stderr=stderr,
+            )
+
+    if args.command == "get-folder":
+        try:
+            relative = resolve_role(discover_project(cwd), args.role)
+        except (DocumentError, OSError, ProjectDiscoveryError, ProjectPathError, UnicodeError, ValueError) as error:
+            return _write_command_error(error, conflict=False, output_format=args.format, stdout=stdout, stderr=stderr)
+        if args.format == "json":
+            _write_command_data({"role": args.role, "path": relative}, output_format="json", stdout=stdout)
+        else:
+            stdout.write(relative + "\n")
+        return 0
+
     if args.command == "draft":
         return _run_draft(args, cwd=cwd, stdout=stdout, stderr=stderr)
+
+    if args.command == "fix-prose-typography":
+        try:
+            project, relative = _single_edit_target(cwd, args.path)
+            plan = plan_safe_typography_fix(project, relative)
+            if not plan.changes:
+                _write_command_data(
+                    {"status": "no-op", "changes": []},
+                    output_format=args.format, stdout=stdout,
+                )
+                return 0
+            return _preview_or_apply(
+                TransactionEngine(project), plan, apply=args.apply,
+                output_format=args.format, stdout=stdout,
+            )
+        except (DocumentError, OSError, ProjectDiscoveryError, ProjectPathError, ProseFixError, TransactionError, ValueError) as error:
+            return _write_command_error(
+                error, conflict=isinstance(error, TransactionConflict),
+                output_format=args.format, stdout=stdout, stderr=stderr,
+            )
 
     if args.command == "migrate":
         return _run_migrate(args, cwd=cwd, stdout=stdout, stderr=stderr)
@@ -285,7 +367,9 @@ def run(argv: list[str], *, cwd: Path, stdout: TextIO, stderr: TextIO) -> int:
                 execution_errors=[ExecutionError(check=name, message=str(error)) for name in names],
             )
         else:
-            report = run_checks(project, names)
+            report = run_checks(
+                project, names, draft_typography=getattr(args, "draft_typography", False)
+            )
         return _write_report(report, output_format=args.format, strict=args.strict, stdout=stdout)
 
     if args.command == "edit":
@@ -392,14 +476,15 @@ def _run_edit(args: argparse.Namespace, *, cwd: Path, stdout: TextIO, stderr: Te
             operation: dict[str, object] = {"op": args.edit_command, "path": relative}
             if args.edit_command in {"replace", "delete"}:
                 operation["old"] = _read_content(cwd, args.old_file)
-            else:
+            elif args.edit_command != "append":
                 operation["anchor"] = _read_content(cwd, args.anchor_file)
             if args.edit_command != "delete":
                 operation["new"] = _read_content(cwd, args.new_file)
-            if args.expect_count is not None:
-                operation["expect-count"] = args.expect_count
-            elif args.all:
-                operation["all"] = True
+            if args.edit_command != "append":
+                if args.expect_count is not None:
+                    operation["expect-count"] = args.expect_count
+                elif args.all:
+                    operation["all"] = True
             operations = (operation,)
 
         planned = plan_edits(project, operations)
@@ -483,13 +568,13 @@ def _run_recover(args: argparse.Namespace, *, cwd: Path, stdout: TextIO, stderr:
 def _run_init(args: argparse.Namespace, *, cwd: Path, stdout: TextIO, stderr: TextIO) -> int:
     target = _from_cwd(cwd, args.path)
     try:
-        plan = preview_init(target, args.title, args.language, kind=args.kind, work_kind=args.work_kind)
+        plan = preview_init(target, args.title, args.language, kind=args.kind, work_kind=args.work_kind, template=args.template)
         if not args.apply:
             json.dump(_init_preview(plan), stdout)
             stdout.write("\n")
             return 0
 
-        applied = apply_init(target, args.title, args.language, kind=args.kind, work_kind=args.work_kind)
+        applied = apply_init(target, args.title, args.language, kind=args.kind, work_kind=args.work_kind, template=args.template)
         record = applied.record
         _write_command_data(
             {

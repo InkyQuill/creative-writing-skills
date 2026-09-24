@@ -33,7 +33,7 @@ class TranslationSetupTests(unittest.TestCase):
         self.assertEqual('translation', discover_project(self.root).manifest.metadata['project-kind'])
 
     def test_enable_preserves_manuscript_and_is_undoable(self):
-        self.assertEqual(0, self.run_cli(['init', str(self.root), '--title', 'A', '--language', 'ja', '--apply'])[0])
+        self.assertEqual(0, self.run_cli(['init', str(self.root), '--title', 'A', '--language', 'ja', '--template', 'full', '--apply'])[0])
         story = self.root / 'story/chapters/one.md'
         story.write_text('my prose')
         before = (self.root / 'project.md').read_bytes()

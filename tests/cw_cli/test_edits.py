@@ -137,6 +137,44 @@ class EditPlanningTests(unittest.TestCase):
         self.assertEqual(b"\xd0\x94\xd0\xbe.\n\xd0\xaf\xd0\xba\xd0\xbe\xd1\x80\xd1\x8c.\n\xd0\x9f\xd0\xbe\xd1\x81\xd0\xbb\xd0\xb5.\n\xd0\x9a\xd0\xbe\xd0\xbd\xd0\xb5\xd1\x86.\n", plan.changes[0].after)
         self.assertEqual(1, len(plan.changes))
 
+    def test_append_adds_block_after_body_without_anchor_and_preserves_frontmatter(self):
+        target = self.make_file("story/chapters/ch-001.md", b"---\r\nnumber: 1\r\n---\r\nFirst.")
+        plan = edits.plan_edits(self.project, [{
+            "op": "append", "path": "story/chapters/ch-001.md", "new": "## Next\nSecond.\n",
+        }])
+        self.assertEqual(b"---\r\nnumber: 1\r\n---\r\nFirst.\r\n\r\n## Next\r\nSecond.\r\n", plan.changes[0].after)
+        self.assertEqual(b"---\r\nnumber: 1\r\n---\r\nFirst.", target.read_bytes())
+
+    def test_append_rejects_empty_block_and_anchor_options(self):
+        self.make_file("story/chapters/ch-001.md", "First.\n")
+        for operation in (
+            {"op": "append", "path": "story/chapters/ch-001.md", "new": ""},
+            {"op": "append", "path": "story/chapters/ch-001.md", "new": "Next", "anchor": "First"},
+        ):
+            with self.subTest(operation=operation), self.assertRaises(edits.EditPlanError):
+                edits.plan_edits(self.project, [operation])
+
+    def test_same_anchor_in_two_files_is_scoped_to_each_target(self):
+        self.make_file("story/chapters/one.md", "---\nnumber: 1\n---\n## Notes\nOld one.\n")
+        self.make_file("story/chapters/two.md", "---\nnumber: 2\n---\n## Notes\nOld two.\n")
+        plan = edits.plan_edits(self.project, [
+            {"op": "insert-after", "path": "story/chapters/one.md", "anchor": "## Notes", "new": "\nFirst"},
+            {"op": "insert-after", "path": "story/chapters/two.md", "anchor": "## Notes", "new": "\nSecond"},
+        ])
+        self.assertEqual({"story/chapters/one.md", "story/chapters/two.md"}, {change.path for change in plan.changes})
+        self.assertIn(b"## Notes\nFirst", next(c.after for c in plan.changes if c.path.endswith("one.md")))
+        self.assertIn(b"## Notes\nSecond", next(c.after for c in plan.changes if c.path.endswith("two.md")))
+
+    def test_same_replace_text_in_two_character_files(self):
+        self.make_file("kb/characters/antoine.md", '  - "same source"\n')
+        self.make_file("kb/characters/supporting.md", '  - "same source"\n')
+        plan = edits.plan_edits(self.project, [
+            {"op": "replace", "path": "kb/characters/antoine.md", "old": '  - "same source"', "new": '  - "updated source"'},
+            {"op": "replace", "path": "kb/characters/supporting.md", "old": '  - "same source"', "new": '  - "updated source"'},
+        ])
+        self.assertEqual(2, len(plan.changes))
+        self.assertTrue(all(b'  - "updated source"\n' == change.after for change in plan.changes))
+
     def test_crlf_is_normalized_for_matching_and_preserved_for_rendering(self):
         target = self.make_file(
             "story/chapters/ch-001.md",
@@ -249,6 +287,30 @@ class EditPlanningTests(unittest.TestCase):
         with self.assertRaisesRegex(edits.EditPlanError, "field names must be strings"):
             edits.plan_edits(self.project, [{"op": "delete", "path": "story/a.md", "old": "x", 1: "bad"}])
 
+    def test_replace_trailing_newline_does_not_consume_blank_line(self):
+        self.make_file("story/chapters/ch-001.md", "Old paragraph.\n\n## Next\n")
+        plan = edits.plan_edits(self.project, [{
+            "op": "replace", "path": "story/chapters/ch-001.md",
+            "old": "Old paragraph.\n", "new": "New paragraph.\n",
+        }])
+        self.assertEqual(b"New paragraph.\n\n## Next\n", plan.changes[0].after)
+
+    def test_replace_trailing_newline_consumes_horizontal_space_before_first_newline(self):
+        self.make_file("story/chapters/ch-001.md", "Old paragraph.  \n\n## Next\n")
+        plan = edits.plan_edits(self.project, [{
+            "op": "replace", "path": "story/chapters/ch-001.md",
+            "old": "Old paragraph.\n", "new": "New paragraph.\n",
+        }])
+        self.assertEqual(b"New paragraph.\n\n## Next\n", plan.changes[0].after)
+
+    def test_conflict_identifies_operation_and_path(self):
+        self.make_file("kb/characters/antoine.md", "same source\n")
+        self.make_file("kb/characters/supporting.md", "different source\n")
+        with self.assertRaisesRegex(edits.EditConflict, r"operation 2.*kb/characters/supporting.md.*found 0"):
+            edits.plan_edits(self.project, [
+                {"op": "replace", "path": "kb/characters/antoine.md", "old": "same source", "new": "updated"},
+                {"op": "replace", "path": "kb/characters/supporting.md", "old": "same source", "new": "updated"},
+            ])
     def test_lone_surrogate_is_rejected_before_any_target_is_read(self):
         self.make_file("story/chapters/ch-001.md", "Rain.\n")
         original_read_bytes = Path.read_bytes

@@ -26,7 +26,8 @@ Return or write: scope; evidence base; observed style patterns with examples; ac
 ## Access boundary
 
 Workspace-write. Produce proposal/work output only at caller-assigned paths:
-the assigned exact path must be a direct file under canonical `work/reviews/`.
+the assigned exact path must be a direct file in the project's selected reviews
+folder, resolved by the caller with `cw get-folder reviews`.
 The file must be an immediate child of that directory, not a nested directory;
 never choose a generic work, report, research, or durable style root. Read
 current contents before editing, do not touch other paths, and do not revert or

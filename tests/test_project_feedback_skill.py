@@ -36,6 +36,14 @@ class ProjectFeedbackSkillTests(unittest.TestCase):
         self.assertRegex(text, r"(?is)(never|do not).{0,120}(replace|unnecessarily block).{0,100}(primary|actual)")
         self.assertRegex(text, r"(?is)do not file feedback.{0,160}(ordinary story-content ambiguity|author preference)")
 
+    def test_routes_cw_and_hieronymus_defects_by_owner(self):
+        text = SKILL.read_text(encoding="utf-8")
+        self.assertIn("not by the repository currently open", text)
+        self.assertIn("`cw`, its launcher or bundled", text)
+        self.assertIn("`InkyQuill/creative-writing-skills`", text)
+        self.assertIn("Hieronymus", text)
+        self.assertIn("`InkyQuill/hieronymus`", text)
+
     def test_scope_includes_all_local_canonical_skills_but_excludes_upstream_tools(self):
         text = all_runtime_markdown()
         lowered = re.sub(r"\s+", " ", text.lower().replace("`", ""))

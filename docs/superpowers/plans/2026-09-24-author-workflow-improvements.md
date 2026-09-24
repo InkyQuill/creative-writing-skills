@@ -4,6 +4,8 @@
 
 **Goal:** Make Creative Writing Skills adapt to an author's chosen agent role and Markdown layout while keeping everyday writing simple and multi-file changes reviewable.
 
+**Experience rule:** The author can start writing without configuring roles, folders, or checks. Agents quietly resolve applicable rules, repair deterministic recoverable mechanical blockers, and surface only decisions that change prose, meaning, or canon. Reports summarize useful results instead of dumping routine warnings.
+
 **Architecture:** The canonical runtime is `plugins/creative-writing-skills/`; `cw/` is generated distribution output. Keep project authority rules in skill guidance, structural roles in the project contract and CLI, and author content in ordinary Markdown. Reuse the existing transaction engine for preview, apply, and undo.
 
 **Tech Stack:** Markdown skills and contracts; Python `cw` CLI; `unittest`; distribution sync scripts.
@@ -17,6 +19,7 @@
 - `AGENTS.md` is the shared harness instruction source. A task-specific direct author request can narrow or extend project defaults for that task, without silently changing project files.
 - `project.md` remains the CLI's project-discovery manifest. An optional `cws.md` must not become a required second manifest.
 - Do not hand-edit `cw/`; regenerate it after canonical source changes.
+- No mandatory setup interview, new role switch, or warning inventory before routine writing. Safe repairs should be automatic within the requested scope; an ambiguous or semantic change needs a focused author decision.
 - Treat proposals, assistant inferences, drafts, and approved facts as distinct. Checks report evidence and uncertainty rather than inventing a resolution.
 
 ## Priority and dependencies
@@ -69,6 +72,15 @@ Tasks 1 and 2 can ship independently. Tasks 3–5 change the structural contract
 - [ ] Implement the fixer as a transaction plan and run focused tests, followed by the full CLI suite. Commit when the report and diff are stable.
 
 ### Task 3: Introduce configurable layout roles (P1)
+
+**Implementation note (2026-09-24):** `.cws-layout.json` now stores each
+project's selected folders. `cw get-folder <role>` is the read-only lookup for
+skills; `cw layout --capture` and `--set` save choices through previewed,
+undoable transactions. Chapter, draft, context, prose, structure, and existing
+folder indexes use selected paths. Remaining fixed locations, especially
+legacy migration destinations and continuity records, need separate review
+before claiming complete structure independence. Timeline Helper remains
+deferred.
 
 **Files:** Modify canonical `resources/project-contract.md`, `external-project-contract.md`, `cli/cwcli/schema.py`, `project.py`, `drafts.py`, `context.py`, `indexes.py`, `migration.py`, and `checks/structure.py` under `project-maintenance`. Add one layout-resolution module instead of repeating path interpretation. Extend `tests/cw_cli/test_schema.py`, `test_context_plan.py`, `test_indexes.py`, `test_draft_lifecycle.py`, `test_migration_plan.py`, and `tests/test_external_project_contract.py`.
 

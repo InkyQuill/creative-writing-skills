@@ -61,6 +61,10 @@ when they were written (`session-3-notes.md`).
 
 ### Organization
 
+Resolve the `characters` and `world` folders with `cw get-folder <role>`
+before reading or creating pages. The examples below show default paths;
+the project's saved choices take precedence.
+
 ```text
 kb/vocab.md                              # canonical terms
 kb/characters/<name>.md                  # character pages
@@ -146,7 +150,9 @@ concepts.
 ## What Belongs in KB vs Work
 
 - Finalized knowledge → `kb/`
-- Draft iterations, brainstorm captures, critique reports → `work/`
+- Draft iterations, brainstorm captures, critique reports → the selected
+  drafts, brainstorm, and reviews folders (`cw get-folder <role>`); `work/`
+  is the full-scaffold default
 - Promoted facts after a draft completes → `kb/canon/` or relevant wiki page
 
 Use `$story-memory` for routine fact extraction from completed chapters.
@@ -168,7 +174,8 @@ separate confirmation. Include exact destination pages and provenance back to
 the accepted passage or prior direct author answer.
 
 This promotion boundary also applies to voice artifacts. The style-creator
-writes only a proposal under `work/reviews/`; muse or the orchestrator promotes
+writes only a proposal under the selected reviews folder (`cw get-folder reviews`);
+muse or the orchestrator promotes
 an approved sample or style through a separate previewed, recoverable
 transaction. A direct author designation of a sample's role or an explicit
 approval of a style proposal is already confirmation.

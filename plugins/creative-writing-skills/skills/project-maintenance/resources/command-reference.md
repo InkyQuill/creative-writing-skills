@@ -15,20 +15,37 @@ exceptions described below.
 
 ```text
 check structure|links|kb|continuity|drafts|prose|journal|translation|all [project]
+check prose|all [project] --draft-typography
 doctor
+layout
+get-folder chapters|side-stories|drafts|characters|world|plans|brainstorm|reviews|archive
+layout --capture [--apply]
+layout --set chapters=<folder> [--set drafts=<folder>] [--apply]
 context draft|chapter|kb <path> [--as trusted|reader|character:<id>] [--snapshot]
 clean-context
 reindex
 ```
 
 Use `check all` for the mechanical floor, or a focused checker while working
-in one domain. Context planning without `--snapshot` is read-only. A restricted
+in one domain. `layout` inventories populated common Markdown folders without
+creating paths or selecting between ambiguous locations. `.cws-layout.json`
+stores folder choices for this project, separate from `project.md`.
+`layout --capture` saves only unambiguous populated folders; `--set` records
+an explicit role path. Both preview changes before `--apply` and can be undone.
+`get-folder <role>` prints the selected project-relative path (or returns it
+as `path` with `--format json`) without creating a folder. Resolve roles this
+way before constructing artifact paths in skills and worker tasks. Use these
+as internal setup aids; do not make the author run them or treat a
+missing candidate as a setup failure. Context planning without `--snapshot` is read-only. A restricted
 `context --snapshot` writes derived cache without `--apply`; trusted context
 can use the selected source paths directly. `clean-context` previews and
 applies derived-cache deletion with `--apply`, but it stays outside transaction
 history. `reindex` is transactional: preview it, then apply the reviewed diff.
 
 `check prose` always reports universal Unicode counts and integrity signals.
+Routine checks omit typography findings for working drafts; use
+`--draft-typography` only when that draft is ready for a surface pass. Draft
+source-tag and Markdown integrity findings remain visible in ordinary checks.
 Russian and English capabilities additionally measure their own pronoun,
 opener, quote, punctuation, and dialogue conventions. For an unsupported
 language, the check explicitly omits those language-sensitive metrics, reports their
@@ -42,6 +59,12 @@ single-letter words; `CW-PROSE-110`…`CW-PROSE-114` info findings for digit
 grouping, decimal points, `№`, ordinals, and abbreviation spacing). They
 report typographic norms as warnings the project's `project.md`
 conventions may override; they never fail `check all` without `--strict`.
+For safe Russian spacing fixes on one manuscript file, use
+`fix-prose-typography <path>` to inspect the transaction diff and repeat with
+`--apply` to write it. The command repairs single-letter-word spaces and a
+breakable space before an existing em dash. It skips fenced code, inline code,
+and lines with Markdown link targets; it does not rewrite words or punctuation.
+The transaction can be undone with `undo <transaction-id> --apply`.
 
 ## Project and draft lifecycle
 
@@ -68,8 +91,9 @@ New projects receive `prose-profile: general`. Existing schema-v1 projects
 without the optional field behave the same way, and valid custom profile slugs
 are preserved by migration, rebase, and exact document edits.
 
-Draft targets may be numbered chapters under `story/chapters/` or ordered side
-stories under `story/side-stories/`. A side story requires an `after` path to an
+Draft targets may be numbered chapters in the selected chapters folder or
+ordered side stories in the selected side-stories folder. Resolve those paths
+with `cw get-folder` first. A side story requires an `after` path to an
 accepted manuscript document and may declare a lower-case `subtype`. Use
 `context chapter` for either accepted manuscript role; it follows their
 aggregate reading order when selecting neighbors.
@@ -89,7 +113,7 @@ values between commands without asking the author to maintain them.
 ## Guarded edits and transaction history
 
 ```text
-edit replace|insert-before|insert-after|delete ...
+edit replace|insert-before|insert-after|delete|append ...
 edit apply <operations.json>
 history
 history show <transaction-id>
@@ -97,7 +121,12 @@ undo <transaction-id>
 recover <transaction-id>
 ```
 
-Put large anchors and replacement bodies in files. Preview edit, undo, and
+Put large anchors and replacement bodies in files. Text anchors match only the
+Markdown body, never YAML frontmatter. Do not use a copy of the entire
+physical file as `--old-file`; use a `frontmatter-set` operation in `edit apply` for ordinary metadata
+or the relevant lifecycle command for protected metadata. In `edit apply`,
+match counts are checked independently for each operation's `path`; conflicts
+identify the operation number and path. Preview edit, undo, and
 recover operations before `--apply`. `history` is append-only evidence: undo
 creates a new inverse transaction and refuses diverged targets. Recovery rolls
 an interrupted transaction back only when journal evidence still proves the
@@ -107,6 +136,16 @@ safe before-state.
 equivalent to any other non-empty whitespace run in the target. This includes
 ordinary spaces, indentation, tabs, non-breaking spaces, and line breaks.
 Match-count guards apply to all whitespace-equivalent matches.
+At the end of an anchor, a newline matches through the first target newline,
+including any preceding horizontal space, but leaves following blank lines
+untouched. This prevents a trailing newline in `--old-file` from deleting a
+Markdown block separator.
+
+`edit append <path> --new-file <file>` adds a block after the existing Markdown
+body without an anchor. It leaves frontmatter untouched and inserts a blank
+line when needed to separate the block. It previews by default and is useful
+for an explicitly requested addition to one known file; use a targeted edit
+when placement within the file matters.
 
 ## Exit status
 
