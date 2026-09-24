@@ -31,6 +31,13 @@ LAYOUT_FILE = ".cws-layout.json"
 def validate_role_path(project: Project, relative: str) -> str:
     """Accept only a plain, project-relative directory without linked components."""
     _validate_role_path_syntax(relative)
+    current = project.root
+    for part in PurePosixPath(relative).parts:
+        current /= part
+        if current.exists() and not current.is_dir():
+            raise ValueError(
+                f"layout role path component is not a directory: {current.relative_to(project.root).as_posix()}"
+            )
     project.resolve(relative + "/.layout-check", for_write=True)
     return relative
 

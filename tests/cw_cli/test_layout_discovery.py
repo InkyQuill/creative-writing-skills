@@ -111,6 +111,19 @@ class LayoutDiscoveryTests(unittest.TestCase):
         self.assertEqual(2, status)
         self.assertIn("project-relative", json.loads(output.getvalue())["message"])
 
+    def test_role_path_rejects_existing_file_at_folder_or_parent(self):
+        (self.root / "notes").write_text("Author notes\n", encoding="utf-8")
+        for relative in ("notes", "notes/people"):
+            with self.subTest(relative=relative):
+                self.write_layout({"characters": relative})
+                output, errors = io.StringIO(), io.StringIO()
+                status = app.run(
+                    ["get-folder", "characters", "--format", "json"],
+                    cwd=self.root, stdout=output, stderr=errors,
+                )
+                self.assertEqual(2, status, errors.getvalue())
+                self.assertIn("directory", json.loads(output.getvalue())["message"])
+
     def test_roles_cannot_share_the_same_folder(self):
         shared = {"characters": "notes/shared", "world": "notes/shared"}
         self.write_layout(shared)
