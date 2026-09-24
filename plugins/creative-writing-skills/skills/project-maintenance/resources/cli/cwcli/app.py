@@ -43,6 +43,7 @@ from .migration import (
     _read_regular_file_no_follow,
 )
 from .project import Project, ProjectDiscoveryError, ProjectPathError, discover_project
+from .prose_fixes import ProseFixError, plan_safe_typography_fix
 from .scaffold import InitError, apply_init, preview_init
 from .transactions import (
     TransactionConflict,
@@ -106,6 +107,8 @@ def _parser(*, error_stream: TextIO) -> argparse.ArgumentParser:
     for name in (*sorted(CHECKERS), "all"):
         check_command = check_commands.add_parser(name, error_stream=error_stream)
         check_command.add_argument("path", nargs="?", default=".")
+        if name in {"prose", "all"}:
+            check_command.add_argument("--draft-typography", action="store_true")
         _report_options(check_command)
 
     context = commands.add_parser("context", error_stream=error_stream)
@@ -134,6 +137,10 @@ def _parser(*, error_stream: TextIO) -> argparse.ArgumentParser:
 
     reindex = commands.add_parser("reindex", error_stream=error_stream)
     _mutation_options(reindex)
+
+    fix_typography = commands.add_parser("fix-prose-typography", error_stream=error_stream)
+    fix_typography.add_argument("path")
+    _mutation_options(fix_typography)
 
     draft = commands.add_parser("draft", error_stream=error_stream)
     draft_commands = draft.add_subparsers(dest="draft_command", required=True, parser_class=_Parser)
@@ -262,6 +269,20 @@ def run(argv: list[str], *, cwd: Path, stdout: TextIO, stderr: TextIO) -> int:
     if args.command == "draft":
         return _run_draft(args, cwd=cwd, stdout=stdout, stderr=stderr)
 
+    if args.command == "fix-prose-typography":
+        try:
+            project, relative = _single_edit_target(cwd, args.path)
+            plan = plan_safe_typography_fix(project, relative)
+            return _preview_or_apply(
+                TransactionEngine(project), plan, apply=args.apply,
+                output_format=args.format, stdout=stdout,
+            )
+        except (DocumentError, OSError, ProjectDiscoveryError, ProjectPathError, ProseFixError, TransactionError, ValueError) as error:
+            return _write_command_error(
+                error, conflict=isinstance(error, TransactionConflict),
+                output_format=args.format, stdout=stdout, stderr=stderr,
+            )
+
     if args.command == "migrate":
         return _run_migrate(args, cwd=cwd, stdout=stdout, stderr=stderr)
 
@@ -285,7 +306,9 @@ def run(argv: list[str], *, cwd: Path, stdout: TextIO, stderr: TextIO) -> int:
                 execution_errors=[ExecutionError(check=name, message=str(error)) for name in names],
             )
         else:
-            report = run_checks(project, names)
+            report = run_checks(
+                project, names, draft_typography=getattr(args, "draft_typography", False)
+            )
         return _write_report(report, output_format=args.format, strict=args.strict, stdout=stdout)
 
     if args.command == "edit":

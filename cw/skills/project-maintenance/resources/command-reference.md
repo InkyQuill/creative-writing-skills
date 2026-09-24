@@ -15,6 +15,7 @@ exceptions described below.
 
 ```text
 check structure|links|kb|continuity|drafts|prose|journal|translation|all [project]
+check prose|all [project] --draft-typography
 doctor
 context draft|chapter|kb <path> [--as trusted|reader|character:<id>] [--snapshot]
 clean-context
@@ -29,6 +30,9 @@ applies derived-cache deletion with `--apply`, but it stays outside transaction
 history. `reindex` is transactional: preview it, then apply the reviewed diff.
 
 `check prose` always reports universal Unicode counts and integrity signals.
+Routine checks omit typography findings for working drafts; use
+`--draft-typography` only when that draft is ready for a surface pass. Draft
+source-tag and Markdown integrity findings remain visible in ordinary checks.
 Russian and English capabilities additionally measure their own pronoun,
 opener, quote, punctuation, and dialogue conventions. For an unsupported
 language, the check explicitly omits those language-sensitive metrics, reports their
@@ -42,6 +46,12 @@ single-letter words; `CW-PROSE-110`…`CW-PROSE-114` info findings for digit
 grouping, decimal points, `№`, ordinals, and abbreviation spacing). They
 report typographic norms as warnings the project's `project.md`
 conventions may override; they never fail `check all` without `--strict`.
+For safe Russian spacing fixes on one manuscript file, use
+`fix-prose-typography <path>` to inspect the transaction diff and repeat with
+`--apply` to write it. The command repairs single-letter-word spaces and a
+breakable space before an existing em dash. It skips fenced code, inline code,
+and lines with Markdown link targets; it does not rewrite words or punctuation.
+The transaction can be undone with `undo <transaction-id> --apply`.
 
 ## Project and draft lifecycle
 

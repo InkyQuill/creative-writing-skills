@@ -29,3 +29,6 @@ not ask for redundant confirmation.
 
 Return the resolved project-instruction path to the calling skill. Other skills
 must work with that resolution and must not independently guess a filename.
+The resolved path is one input to the author workflow described in
+`resources/author-workflow-contract.md`; resolving
+entrypoints alone does not grant permission to write story prose.

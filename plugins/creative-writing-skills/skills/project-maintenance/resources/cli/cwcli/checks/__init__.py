@@ -38,7 +38,7 @@ CHECKERS: dict[str, Checker] = {
 }
 
 
-def run_checks(project: Project, names: Iterable[str]) -> Report:
+def run_checks(project: Project, names: Iterable[str], *, draft_typography: bool = False) -> Report:
     """Run selected checks independently and return one deterministic report."""
 
     selected = sorted(set(names))
@@ -50,7 +50,10 @@ def run_checks(project: Project, names: Iterable[str]) -> Report:
     execution_errors: list[ExecutionError] = []
     for name in selected:
         try:
-            findings.extend(CHECKERS[name](project))
+            if name == "prose":
+                findings.extend(check_prose(project, draft_typography=draft_typography))
+            else:
+                findings.extend(CHECKERS[name](project))
         except Exception as error:
             execution_errors.append(ExecutionError(check=name, message=str(error)))
 

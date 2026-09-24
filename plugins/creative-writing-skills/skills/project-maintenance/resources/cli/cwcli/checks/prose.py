@@ -257,7 +257,7 @@ def analyze_prose(text: str, *, language: str) -> ProseMetrics:
     )
 
 
-def check_prose(project: Project) -> list[Finding]:
+def check_prose(project: Project, *, draft_typography: bool = False) -> list[Finding]:
     """Inspect managed Markdown independently without changing the project."""
 
     configured_language = project.manifest.metadata.get("language")
@@ -318,7 +318,12 @@ def check_prose(project: Project) -> list[Finding]:
             except (OSError, ValueError, KeyError) as error:
                 findings.append(Finding(UNREADABLE_DOCUMENT, "warning", str(error), path=relative_id))
                 continue
-        if _normalize_language(document_language) == "ru":
+        is_working_draft = relative_id.startswith("work/drafts/") or (
+            translated and translation_kind(relative_id) == "translation-drafts"
+        )
+        if _normalize_language(document_language) == "ru" and (
+            draft_typography or not is_working_draft
+        ):
             for hit in scan_lines(_typography_lines(visible.lines)):
                 findings.append(
                     Finding(

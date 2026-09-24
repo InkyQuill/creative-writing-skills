@@ -11,6 +11,10 @@ do not duplicate its command reference or construct managed files by hand.
 Load `/project-bootstrap` to resolve or reconcile project instruction
 entrypoints. Those instructions are harness guidance; `project.md` remains the
 durable story-writing contract.
+Read `../project-bootstrap/resources/author-workflow-contract.md` before
+proposing the agent's role or any prose edits. Offer ordinary-language examples
+of allowed assistance, scope, initiative, and output form; do not require an
+agent-role profile or a `cws.md` file.
 
 If the author wants Hieronymus or existing project evidence refers to it, load
 `/hieronymus-integration`. Keep any memory agreement as narrow free-text in the

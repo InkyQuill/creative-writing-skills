@@ -133,11 +133,13 @@ class TypographyProseCheckTests(unittest.TestCase):
         path.write_text(text, encoding="utf-8")
         return path
 
-    def run_cli(self, *, strict: bool = False):
+    def run_cli(self, *, strict: bool = False, draft_typography: bool = False):
         stdout, stderr = io.StringIO(), io.StringIO()
         argv = ["check", "prose", ".", "--format", "json"]
         if strict:
             argv.append("--strict")
+        if draft_typography:
+            argv.append("--draft-typography")
         status = app.run(argv, cwd=self.root, stdout=stdout, stderr=stderr)
         self.assertEqual("", stderr.getvalue())
         return status, json.loads(stdout.getvalue())
@@ -181,6 +183,57 @@ class TypographyProseCheckTests(unittest.TestCase):
         self.assertEqual(0, default_status)
         self.assertEqual(1, strict_status)
         self.assertTrue(strict_payload["strict_failure"])
+
+    def test_draft_typography_is_opt_in_but_draft_integrity_is_not(self):
+        self.write("work/drafts/ch-001.md", "Он шёл в школу. <AI>\n")
+        _, ordinary = self.run_cli()
+        draft_codes = [item["code"] for item in ordinary["findings"] if item["path"] == "work/drafts/ch-001.md"]
+        self.assertNotIn("CW-PROSE-103", draft_codes)
+        self.assertIn("CW-PROSE-010", draft_codes)
+
+        _, opted_in = self.run_cli(draft_typography=True)
+        opted_codes = [item["code"] for item in opted_in["findings"] if item["path"] == "work/drafts/ch-001.md"]
+        self.assertIn("CW-PROSE-103", opted_codes)
+
+    def test_safe_typography_fix_previews_applies_and_undoes(self):
+        original = "---\ntype: chapter\nnumber: 1\nstatus: accepted\n---\nОн шёл в школу.\n```text\nОн шёл в школу.\n```\n"
+        path = self.write("story/chapters/ch-001.md", original)
+
+        preview_out, errors = io.StringIO(), io.StringIO()
+        status = app.run(
+            ["fix-prose-typography", "story/chapters/ch-001.md", "--format", "json"],
+            cwd=self.root, stdout=preview_out, stderr=errors,
+        )
+        self.assertEqual(0, status, errors.getvalue())
+        self.assertEqual(original, path.read_text())
+        self.assertEqual("preview", json.loads(preview_out.getvalue())["status"])
+
+        applied_out, errors = io.StringIO(), io.StringIO()
+        status = app.run(
+            ["fix-prose-typography", "story/chapters/ch-001.md", "--apply", "--format", "json"],
+            cwd=self.root, stdout=applied_out, stderr=errors,
+        )
+        self.assertEqual(0, status, errors.getvalue())
+        applied = json.loads(applied_out.getvalue())
+        self.assertIn("Он шёл в\u00a0школу.\n```text\nОн шёл в школу.", path.read_text())
+
+        undo_out, errors = io.StringIO(), io.StringIO()
+        self.assertEqual(0, app.run(
+            ["undo", applied["transaction_id"], "--apply", "--format", "json"],
+            cwd=self.root, stdout=undo_out, stderr=errors,
+        ), errors.getvalue())
+        self.assertEqual(original, path.read_text())
+
+    def test_safe_typography_fix_skips_inline_code_and_link_targets(self):
+        original = "Он шёл в школу. `в школу` [в школу](путь в школу).\r\n"
+        path = self.write("story/chapters/ch-001.md", original)
+        output, errors = io.StringIO(), io.StringIO()
+        status = app.run(
+            ["fix-prose-typography", "story/chapters/ch-001.md", "--apply", "--format", "json"],
+            cwd=self.root, stdout=output, stderr=errors,
+        )
+        self.assertEqual(0, status, errors.getvalue())
+        self.assertEqual(original.encode(), path.read_bytes())
 
 
 if __name__ == "__main__":

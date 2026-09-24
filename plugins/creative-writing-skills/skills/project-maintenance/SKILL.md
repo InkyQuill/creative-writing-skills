@@ -5,6 +5,13 @@ description: Deterministic maintenance for canonical creative-writing projects. 
 
 # Project Maintenance
 
+Keep mechanical maintenance out of the author's writing flow. If a safe,
+deterministic, recoverable repair is needed to finish the requested work,
+preview and apply it within the authorized scope, then summarize the repair
+briefly. Do not hand the author a list of routine lint findings or ask them to
+perform CLI steps. Working-draft typography is opt-in; accepted-prose spacing
+can be normalized with `fix-prose-typography` after inspecting its preview.
+
 Use the bundled CLI for mechanical story-project work. Resolve the nearest
 ancestor containing `project.md`, resolve this installed skill directory, and
 run its entrypoint directly before considering optional launcher setup:

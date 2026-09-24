@@ -4,6 +4,9 @@ For independent tools that need a stable, versioned description of discovery
 and document roles, use the [external project contract](external-project-contract.md)
 and its executable compatibility examples. Those structural roles do not decide
 authority or permission.
+For author control over agent assistance, edit scope, and canon promotion, use
+`/project-bootstrap`'s `author-workflow-contract.md`. Its optional
+`cws.md` is human-readable guidance, not a CLI discovery or schema requirement.
 
 The nearest ancestor containing `project.md` is the project root. Nested
 projects are independent boundaries. The managed roots are `project.md`,
