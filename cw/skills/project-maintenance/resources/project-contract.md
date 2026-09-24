@@ -4,10 +4,16 @@ For independent tools that need a stable, versioned description of discovery
 and document roles, use the [external project contract](external-project-contract.md)
 and its executable compatibility examples. Those structural roles do not decide
 authority or permission.
+For author control over agent assistance, edit scope, and canon promotion, use
+`/project-bootstrap`'s `author-workflow-contract.md`. Its optional
+`cws.md` is human-readable guidance, not a CLI discovery or schema requirement.
 
 The nearest ancestor containing `project.md` is the project root. Nested
-projects are independent boundaries. The managed roots are `project.md`,
-`story/`, `work/`, `kb/`, and `.creative-writing/`.
+projects are independent boundaries. The default managed roots are
+`project.md`, `story/`, `work/`, `kb/`, and `.creative-writing/`. Role folders
+selected in `.cws-layout.json` or discovered from populated folders are also
+managed for applicable checks and existing generated indexes, even when they
+sit outside those default roots.
 
 Other root entries are allowed. Leave unknown files untouched: initialization,
 migration, repair, and reindexing must preserve them. Markdown outside managed
@@ -57,9 +63,17 @@ index, calculate a hash, copy a tag, or maintain a base revision.
 
 ## Manuscript roles and reading order
 
-Numbered main chapters are direct Markdown children of `story/chapters/` and
+`.cws-layout.json` stores the selected project-relative folder for each role.
+Read it before choosing chapter, side-story, draft, plan, review, archive, or
+knowledge folders. Existing projects without this file are discovered from
+populated folders; record unambiguous choices without moving author files.
+The paths below are defaults for the full scaffold, not required author paths.
+
+Numbered main chapters are direct Markdown children of the selected chapters
+folder (`cw get-folder chapters`) and
 use unique positive integer `number` metadata. Accepted bonus prose is a direct
-Markdown child of `story/side-stories/`; it uses required `after` metadata that
+Markdown child of the selected side-stories folder (`cw get-folder
+side-stories`); it uses required `after` metadata that
 names an accepted chapter or side story, plus an optional lower-case `subtype`
 such as `omake` or `interlude`. Side stories do not take chapter numbers.
 

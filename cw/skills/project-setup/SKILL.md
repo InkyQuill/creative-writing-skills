@@ -11,6 +11,10 @@ do not duplicate its command reference or construct managed files by hand.
 Load `/project-bootstrap` to resolve or reconcile project instruction
 entrypoints. Those instructions are harness guidance; `project.md` remains the
 durable story-writing contract.
+Read `../project-bootstrap/resources/author-workflow-contract.md` before
+proposing the agent's role or any prose edits. Offer ordinary-language examples
+of allowed assistance, scope, initiative, and output form; do not require an
+agent-role profile or a `cws.md` file.
 
 If the author wants Hieronymus or existing project evidence refers to it, load
 `/hieronymus-integration`. Keep any memory agreement as narrow free-text in the
@@ -48,12 +52,13 @@ Editor `.pocket-editor.json` and `*.review.json`, images, documents, hidden
 metadata, and unknown service files. Preserve its relative tree and exact bytes
 in place; do not classify those files by extension or promote them into the KB.
 
-The canonical layout is rooted by `project.md`. Numbered manuscript chapters
-live in `story/chapters/`; accepted bonus prose with explicit `after` placement
-lives in `story/side-stories/`; draft work lives in `work/drafts/`; durable
-knowledge in `kb/`; and machine-checkable story state in `kb/continuity/`. The scaffold also owns
-its generated indexes and `.creative-writing/` maintenance state. There is no
-alternative layout choice.
+`project.md` identifies the project. Folder roles are saved separately in
+`.cws-layout.json`; `cw layout` detects existing folders and `cw layout
+--set chapters=<folder> --apply` records a chosen path. Use the author's
+existing folders without moving prose or demanding a canonical tree. The
+agent can capture unambiguous existing choices with `cw layout --capture
+--apply`; ask only when two populated folders have the same role and the
+choice affects the requested work.
 
 The optional `prose-profile` frontmatter selector is independent of manuscript
 language. A missing selector means `general`; do not ask the author merely to
@@ -91,7 +96,8 @@ settles them without a second confirmation; ask only about material ambiguity
 or conflicting evidence. Preserve unrelated instructions and unknown files.
 Approval of the core project does not imply approval for optional samples,
 style files, vocabulary pages, or other auxiliary artifacts. Style analysis is
-first proposed as a direct file under `work/reviews/`, then promoted through a
+first proposed as a direct file under the selected reviews folder (`cw
+get-folder reviews`), then promoted through a
 separate previewed, recoverable transaction after it is approved.
 
 ## Apply Safely

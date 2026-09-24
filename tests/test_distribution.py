@@ -308,11 +308,8 @@ class DistributionScaffoldTests(unittest.TestCase):
         self.assertIn("construct managed files by hand", text)
         for path in (
             "`project.md`",
-            "`story/chapters/`",
-            "`work/drafts/`",
-            "`kb/`",
-            "`kb/continuity/`",
-            "`.creative-writing/`",
+            "`.cws-layout.json`",
+            "cw layout",
         ):
             self.assertIn(path, text)
         self.assertRegex(text, r"(?is)body of.{0,80}`project\.md`.{0,180}(durable|writing contract)")

@@ -11,6 +11,7 @@ from ..documents import logical_hash, parse_document
 from ..drafts import ACTIVE_STATUSES
 from ..findings import Finding
 from ..project import Project, ProjectPathError
+from ..layout import resolve_role, role_directories
 from ..transactions import TransactionError, TransactionStore
 
 
@@ -33,7 +34,7 @@ def check_drafts(project: Project, store: TransactionStore) -> list[Finding]:
     as repairable warnings and continues after malformed files.
     """
 
-    directory = project.root / "work" / "drafts"
+    directory = project.root / resolve_role(project, "drafts")
     if store.project.root != project.root:
         return [_warning(MALFORMED_DRAFT, "transaction store belongs to another project", None)]
     if directory.is_symlink() or not directory.is_dir():
@@ -88,11 +89,11 @@ def check_drafts(project: Project, store: TransactionStore) -> list[Finding]:
 
         target = document.metadata.get("target")
         target_path: Path | None = None
-        if not isinstance(target, str) or not _valid_target(target):
+        if not isinstance(target, str) or not _valid_target(project, target):
             findings.append(
                 _warning(
                     INVALID_TARGET,
-                    "draft target must be story/chapters/<name>.md or story/side-stories/<name>.md",
+                    "draft target must be in a configured chapter or side-story folder",
                     relative,
                 )
             )
@@ -200,12 +201,16 @@ def _warning(code: str, message: str, path: str | None) -> Finding:
     )
 
 
-def _valid_target(value: str) -> bool:
+def _valid_target(project: Project, value: str) -> bool:
     path = Path(value)
+    parents = {
+        directory for role in ("chapters", "side-stories")
+        for directory in role_directories(project, role)
+    }
     return (
         "\\" not in value
         and path.as_posix() == value
-        and path.parent.as_posix() in {"story/chapters", "story/side-stories"}
+        and path.parent.as_posix() in parents
         and path.name != "_index.md"
         and path.suffix.casefold() == ".md"
     )

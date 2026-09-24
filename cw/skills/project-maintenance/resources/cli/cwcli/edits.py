@@ -26,6 +26,7 @@ class EditConflict(EditPlanError):
 
 
 _TEXT_OPERATION_FIELDS = {
+    "append": (frozenset({"op", "path", "new"}), frozenset()),
     "replace": (frozenset({"op", "path", "old", "new"}), frozenset({"expect-count", "all"})),
     "insert-before": (frozenset({"op", "path", "anchor", "new"}), frozenset({"expect-count", "all"})),
     "insert-after": (frozenset({"op", "path", "anchor", "new"}), frozenset({"expect-count", "all"})),
@@ -89,10 +90,13 @@ def plan_edits(project: Project, operations: Iterable[EditOperation]) -> Transac
         originals[relative] = source
 
     working = dict(originals)
-    for operation in validated:
+    for index, operation in enumerate(validated, 1):
         relative = operation["path"]
         assert isinstance(relative, str)
-        working[relative] = _apply_operation(working[relative], operation, relative)
+        try:
+            working[relative] = _apply_operation(working[relative], operation, relative)
+        except EditConflict as error:
+            raise EditConflict(f"operation {index} ({relative}): {error}") from error
 
     changes = tuple(
         Change(relative, originals[relative], working[relative])
@@ -169,6 +173,10 @@ def _validate_relative_path(value: object, index: int) -> None:
 
 def _validate_text_operation(operation: dict[str, object], index: int) -> None:
     kind = operation["op"]
+    if kind == "append":
+        if not isinstance(operation["new"], str) or not operation["new"]:
+            raise EditPlanError(f"operation {index} new must be a non-empty string")
+        return
     anchor_key = "anchor" if kind in {"insert-before", "insert-after"} else "old"
     anchor = operation[anchor_key]
     if not isinstance(anchor, str) or not anchor:
@@ -216,24 +224,30 @@ def _apply_operation(source: bytes, operation: EditOperation, relative: str) -> 
         return render_document(replace(document, metadata=metadata))
 
     normalized_body = _normalize_newlines(document.body)
-    anchor_key = "anchor" if kind in {"insert-before", "insert-after"} else "old"
-    anchor = operation[anchor_key]
-    assert isinstance(anchor, str)
-    normalized_anchor = _normalize_newlines(anchor)
-    matcher = _text_matcher(normalized_anchor, flexible_whitespace=kind == "replace")
-    actual = sum(1 for _ in matcher.finditer(normalized_body))
-    _require_count(actual, operation)
-
-    if kind == "replace":
-        replacement = operation["new"]
-    elif kind == "insert-before":
-        replacement = str(operation["new"]) + normalized_anchor
-    elif kind == "insert-after":
-        replacement = normalized_anchor + str(operation["new"])
+    if kind == "append":
+        separator = "" if not normalized_body or normalized_body.endswith("\n\n") else (
+            "\n" if normalized_body.endswith("\n") else "\n\n"
+        )
+        edited = normalized_body + separator + _normalize_newlines(str(operation["new"]))
     else:
-        replacement = ""
-    normalized_replacement = _normalize_newlines(str(replacement))
-    edited = matcher.sub(lambda _match: normalized_replacement, normalized_body)
+        anchor_key = "anchor" if kind in {"insert-before", "insert-after"} else "old"
+        anchor = operation[anchor_key]
+        assert isinstance(anchor, str)
+        normalized_anchor = _normalize_newlines(anchor)
+        matcher = _text_matcher(normalized_anchor, flexible_whitespace=kind == "replace")
+        actual = sum(1 for _ in matcher.finditer(normalized_body))
+        _require_count(actual, operation)
+
+        if kind == "replace":
+            replacement = operation["new"]
+        elif kind == "insert-before":
+            replacement = str(operation["new"]) + normalized_anchor
+        elif kind == "insert-after":
+            replacement = normalized_anchor + str(operation["new"])
+        else:
+            replacement = ""
+        normalized_replacement = _normalize_newlines(str(replacement))
+        edited = matcher.sub(lambda _match: normalized_replacement, normalized_body)
     rendered_body = edited.replace("\n", document.newline).encode("utf-8")
     prefix = _raw_document_prefix(source, document)
     rendered = prefix + rendered_body
@@ -306,7 +320,17 @@ def _text_matcher(anchor: str, *, flexible_whitespace: bool) -> re.Pattern[str]:
         return re.compile(re.escape(anchor))
 
     parts = re.split(r"(\s+)", anchor)
-    pattern = "".join(r"\s+" if part.isspace() else re.escape(part) for part in parts)
+    pattern_parts: list[str] = []
+    for index, part in enumerate(parts):
+        if not part.isspace():
+            pattern_parts.append(re.escape(part))
+        elif any(parts[index + 1:]):
+            pattern_parts.append(r"\s+")
+        elif "\n" in part:
+            pattern_parts.append(r"[^\S\n]*\n")
+        else:
+            pattern_parts.append(r"\s+?")
+    pattern = "".join(pattern_parts)
     return re.compile(pattern)
 
 

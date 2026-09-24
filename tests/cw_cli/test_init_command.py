@@ -20,7 +20,7 @@ class InitCommandTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             parent = Path(directory)
             root = parent / "story-project"
-            arguments = ["init", str(root), "--title", "Mine", "--language", "ru"]
+            arguments = ["init", str(root), "--title", "Mine", "--language", "ru", "--template", "full"]
 
             status, output, error = self.run_cli(parent, arguments)
             self.assertEqual(0, status)
@@ -76,7 +76,7 @@ class InitCommandTests(unittest.TestCase):
 
             status, _output, error = self.run_cli(
                 parent,
-                ["init", str(root), "--title", "Mine", "--language", "ru", "--apply"],
+                ["init", str(root), "--title", "Mine", "--language", "ru", "--template", "full", "--apply"],
             )
 
             self.assertEqual(0, status)

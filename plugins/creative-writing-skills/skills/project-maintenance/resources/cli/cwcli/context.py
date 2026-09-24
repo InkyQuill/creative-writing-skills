@@ -22,6 +22,7 @@ from .documents import Document, canonical_text, logical_hash, parse_document
 from .findings import Finding, finding_json
 from .markdown_tables import malformed_table_headers, malformed_table_lines, parse_tables, table_header_lines
 from .markdown_links import extract_links
+from .layout import role_directories
 from .project import Project
 from .schema import allowed_document_kind
 
@@ -261,7 +262,7 @@ def plan_context(project: Project, kind: str, path: str, role: str) -> ContextPl
 
     documents = _scan_documents(project, warnings)
     for relative, document in documents:
-        if relative.startswith("work/plans/") and _explicitly_active(document, _ACTIVE_PLAN):
+        if _in_role(project, relative, "plans") and _explicitly_active(document, _ACTIVE_PLAN):
             if _document_points_to(project, relative, document, anchors, warnings, restricted=role != "trusted"):
                 _add_selected_path(
                     project, relative, suggested, catalog=catalog,
@@ -271,7 +272,7 @@ def plan_context(project: Project, kind: str, path: str, role: str) -> ContextPl
     for relative, document in documents:
         if relative in anchors:
             continue
-        if relative.startswith("work/plans/") or relative.startswith("kb/issues/"):
+        if _in_role(project, relative, "plans") or relative.startswith("kb/issues/"):
             continue
         if _document_points_to(project, relative, document, anchors, warnings, restricted=role != "trusted"):
             _add_selected_path(
@@ -303,9 +304,11 @@ def plan_context(project: Project, kind: str, path: str, role: str) -> ContextPl
                 warnings.add(f"{finding.code}: structured continuity issue at {location}")
 
     if character is not None:
-        character_path = f"kb/characters/{character}.md"
-        if catalog.collision(character_path) is not None:
-            _record_collision(character_path, catalog, unresolved, warnings)
+        character_paths = tuple(f"{folder}/{character}.md" for folder in role_directories(project, "characters"))
+        collisions = tuple(path for path in character_paths if catalog.collision(path) is not None)
+        if collisions:
+            for character_path in collisions:
+                _record_collision(character_path, catalog, unresolved, warnings)
             unresolved.add(f"character:{character}")
             warnings.add(f"ambiguous character role: {character}")
         elif not _known_character(project, character):
@@ -970,8 +973,13 @@ def _load_snapshot_manifest(directory: _HeldDirectory, directory_name: str) -> d
     if created_at.tzinfo is None:
         raise ContextSnapshotError("snapshot manifest created_at must include a timezone")
     subject = _normalize_relative(str(payload["subject"]))
-    if allowed_document_kind(subject) not in _SELECTABLE_KINDS:
-        raise ContextSnapshotError("snapshot manifest subject is outside selectable roots")
+    subject_path = PurePosixPath(subject)
+    if (
+        subject_path.suffix.casefold() != ".md"
+        or subject_path.name in {"project.md", "_index.md"}
+        or subject_path.parts[0].startswith(".")
+    ):
+        raise ContextSnapshotError("snapshot manifest subject is not a selectable document path")
     if not isinstance(payload.get("boundary_warning"), bool):
         raise ContextSnapshotError("snapshot boundary_warning must be boolean")
     for key in ("required", "suggested", "unresolved", "warnings"):
@@ -1463,10 +1471,14 @@ def _validate_role(project: Project, role: str) -> str | None:
 
 def _validate_subject(project: Project, kind: str, value: str) -> str:
     relative = _normalize_relative(value)
-    expected = {"draft": "work/drafts", "chapter": "story", "kb": "kb"}[kind]
-    inferred = allowed_document_kind(relative)
-    if kind == "draft" and not (PurePosixPath(relative).parent.as_posix() == expected and inferred == "work-artifact"):
-        raise ContextPlanError("draft context subject must be a direct work/drafts Markdown file")
+    from .layout import role_directories
+
+    inferred = _document_kind(project, relative)
+    if kind == "draft" and not (
+        PurePosixPath(relative).parent.as_posix() in role_directories(project, "drafts")
+        and inferred == "work-artifact"
+    ):
+        raise ContextPlanError("draft context subject must be a direct draft Markdown file")
     if kind == "chapter" and inferred not in {"chapter", "side-story"}:
         raise ContextPlanError(
             "chapter context subject must be a direct chapter or side-story Markdown file"
@@ -1518,12 +1530,12 @@ def _add_reference(
         return None
     if relative is None:
         return None
-    if not _selectable_context_path(relative):
+    if not _selectable_context_path(project, relative):
         unresolved.add(relative)
         warnings.add(f"explicit reference is outside managed context roots: {relative}")
         return None
     expected_kinds = (expected_kind,) if isinstance(expected_kind, str) else expected_kind
-    if expected_kinds is not None and allowed_document_kind(relative) not in expected_kinds:
+    if expected_kinds is not None and _document_kind(project, relative) not in expected_kinds:
         unresolved.add(relative)
         warnings.add(f"explicit reference has the wrong document kind: {relative}")
         return None
@@ -1603,9 +1615,11 @@ def _manuscript_neighbors(
 ) -> tuple[str, ...]:
     numbered: dict[int, list[str]] = {}
     side_stories: dict[str, str] = {}
+    from .layout import role_directories
+
     for directory_id, kind in (
-        ("story/chapters", "chapter"),
-        ("story/side-stories", "side-story"),
+        *((directory, "chapter") for directory in role_directories(project, "chapters")),
+        *((directory, "side-story") for directory in role_directories(project, "side-stories")),
     ):
         directory = project.root / directory_id
         if not directory.is_dir() or directory.is_symlink():
@@ -1665,7 +1679,7 @@ def _manuscript_neighbors(
         unresolved.add(f"side-story-placement:{relative}")
 
     if chapter not in ordered:
-        if chapter.startswith("story/chapters/"):
+        if PurePosixPath(chapter).parent.as_posix() in role_directories(project, "chapters"):
             unresolved.add(f"chapter-number:{chapter}")
         else:
             unresolved.add(f"side-story-placement:{chapter}")
@@ -1731,21 +1745,26 @@ def _markdown_points_to(project: Project, relative: str, body: str, anchors: set
 
 
 def _known_character(project: Project, character: str) -> bool:
-    directory = project.root / "kb/characters"
-    if not directory.is_dir() or directory.is_symlink():
-        return False
     expected = _identity(character)
-    for path in directory.iterdir():
-        relative = f"kb/characters/{path.name}"
-        if (
-            path.name != "_index.md"
-            and path.suffix.casefold() == ".md"
-            and _safe_character_stem(path.stem)
-            and _safe_regular(project, relative)
-        ):
-            if _identity(path.stem) == expected:
+    for folder in role_directories(project, "characters"):
+        directory = project.root / folder
+        if not directory.is_dir() or directory.is_symlink():
+            continue
+        for path in directory.iterdir():
+            relative = f"{folder}/{path.name}"
+            if (
+                path.name != "_index.md"
+                and path.suffix.casefold() == ".md"
+                and _safe_character_stem(path.stem)
+                and _safe_regular(project, relative)
+                and _identity(path.stem) == expected
+            ):
                 return True
     return False
+
+
+def _in_role(project: Project, relative: str, role: str) -> bool:
+    return PurePosixPath(relative).parent.as_posix() in role_directories(project, role)
 
 
 def _safe_regular(project: Project, relative: str) -> bool:
@@ -1808,8 +1827,26 @@ def _safe_character_stem(value: str) -> bool:
     )
 
 
-def _selectable_context_path(relative: str) -> bool:
-    return allowed_document_kind(relative) in _SELECTABLE_KINDS
+def _document_kind(project: Project, relative: str) -> str | None:
+    from .layout import role_directories
+
+    kind = allowed_document_kind(relative)
+    if kind is not None:
+        return kind
+    parent = PurePosixPath(relative).parent.as_posix()
+    for role, candidate_kind in (
+        ("chapters", "chapter"), ("side-stories", "side-story"),
+        ("drafts", "work-artifact"), ("plans", "work-artifact"),
+        ("reviews", "work-artifact"), ("archive", "work-artifact"),
+        ("characters", "kb-content"), ("world", "kb-content"),
+    ):
+        if parent in role_directories(project, role):
+            return candidate_kind
+    return None
+
+
+def _selectable_context_path(project: Project, relative: str) -> bool:
+    return _document_kind(project, relative) in _SELECTABLE_KINDS
 
 
 def _add_selected_path(
@@ -1822,7 +1859,7 @@ def _add_selected_path(
     warnings: "_OrderedStrings",
     dependency: bool = False,
 ) -> bool:
-    if not _selectable_context_path(relative):
+    if not _selectable_context_path(project, relative):
         unresolved.add(relative)
         warnings.add(f"context source is outside managed story/work/kb roots: {relative}")
         return False
@@ -1878,7 +1915,7 @@ class _PathCatalog:
         identities: dict[str, list[str]] = {}
         for path in project.iter_managed_markdown():
             relative = project.relative_id(path)
-            if _selectable_context_path(relative):
+            if _selectable_context_path(project, relative):
                 identities.setdefault(_identity(relative), []).append(relative)
         return cls(
             collisions={

@@ -29,6 +29,11 @@ Own the author-facing story session. Interpret what the author wants, route boun
 
 ## Discover the Project
 
+Resolve the author's allowed assistance and edit scope using
+`../project-bootstrap/resources/author-workflow-contract.md` before choosing
+a writer, editor, or read-only reviewer. A requested fragment authorizes only
+that fragment; do not broaden it to accepted chapters or durable KB.
+
 Before completing the working contract, find and read the project's instruction files and the smallest relevant set of story artifacts: current brief or outline, adjacent prose, canon and character state, timeline, vocabulary, style references, and tracked issues as the task requires. Prefer targeted discovery over loading the whole project.
 
 If targeted discovery leaves one material gap, ask the author one focused question that would resolve it. Do not replace discoverable project context with a broad questionnaire or invention.

@@ -15,8 +15,8 @@ Direct author answers that settle durable lore are confirmation; persist them
 incrementally without asking for redundant confirmation. Suggestions, inferred
 implications, and unresolved options remain provisional and are not canonized.
 
-Treat canonical prose under `story/chapters/` and `story/side-stories/`, and draft prose under
-`work/drafts/` as read-only evidence. Never rewrite, patch, or directly edit
+Treat accepted chapter and side-story prose, and draft prose, as read-only
+evidence wherever their selected folders are. Never rewrite, patch, or directly edit
 prose or scene text in this workflow, regardless of location.
 
 </what-to-do>
@@ -25,17 +25,17 @@ prose or scene text in this workflow, regardless of location.
 
 ## Project awareness
 
-Use the canonical schema-v1 roots: `kb/world/` for setting lore,
-`kb/characters/` for character facts, `work/plans/` for planning artifacts,
-`story/chapters/` and `story/side-stories/` for accepted prose, and `work/drafts/` for draft prose. Use
+From the project root, run `cw get-folder world`, `characters`, `plans`,
+`chapters`, `side-stories`, and `drafts` for the folders needed in this task.
+Use those selected paths for setting lore, character facts, plans, accepted
+prose, and drafts. Use
 `/project-maintenance` for schema checks, previewed recoverable mutations,
-indexes, and reindexing. If a project needs scaffold or migration before these
-roots are writable, route that preparation through `/project-maintenance`;
-never establish an alternate writable layout from local folder names.
+indexes, and reindexing. If a selected destination needs safe mechanical
+preparation, route it through `/project-maintenance` without moving author files.
 
 Use folder index files first when they exist, then search filenames and file
 contents, then read the relevant files faithfully before asking substantive
-questions. Files under `story/chapters/`, `story/side-stories/`, and `work/drafts/` may be read to
+questions. Files in the selected prose folders may be read to
 understand on-page evidence but remain read-only. This skill may point out that
 lore decisions require later prose edits, but it must not perform those edits.
 
@@ -44,24 +44,24 @@ lore decisions require later prose edits, but it must not perform those edits.
 Before asking substantive lore questions:
 
 1. Identify the likely project root from the user's working directory and nearby folders.
-2. Inspect existing indexes and the canonical schema-v1 directories. Look for:
+2. Resolve relevant folder roles with `cw get-folder`, then inspect existing indexes. Look for:
    - `_index.md`
    - `index.md`
    - `INDEX.md`
    - `README.md`
-3. If required canonical roots are missing, use `/project-maintenance` to
-   prepare or diagnose them rather than selecting a local alternative.
+3. If a needed selected folder is absent, use `/project-maintenance` to
+   prepare it only when this task needs to write there.
 4. Read the most relevant indexes in this order when present:
    - project-level index or README
-   - `kb/world/` index
-   - `kb/characters/` index
+   - selected world folder index
+   - selected characters folder index
    - indexes in relevant subfolders such as systems, locations, or factions, or equivalent local categories
 5. Use the indexes to choose targeted files to read. Do not treat an index summary as a substitute for the linked source file when the exact canon matters.
 6. If no index exists, fall back to filename discovery and content search
-   within the canonical roots. The agent handles reindexing when a durable
+   within the selected folders. The agent handles reindexing when a durable
    transaction changes discoverability.
-7. If the topic touches story events, search `story/chapters/`,
-   `story/side-stories/`, and `work/drafts/` for evidence only after reading
+7. If the topic touches story events, search the selected chapter,
+   side-story, and draft folders for evidence only after reading
    lore and character files.
    Keep all prose read-only.
 
@@ -69,8 +69,8 @@ Index files are maps, not canon by themselves unless they explicitly contain can
 
 ### File structure
 
-Keep durable world and character facts in their canonical KB roots. Put
-planning proposals in `work/plans/`. Use other schema-v1 KB destinations only
+Keep durable world and character facts in their selected folders. Put
+planning proposals in the selected plans folder. Use other KB destinations only
 when their declared document kind matches the fact. If the current topic
 crosses several files or directories, read all relevant material before
 challenging the idea.
@@ -87,7 +87,7 @@ If a folder has an index file, preserve its role:
   make it useful; ask only when its scope or taxonomy is materially ambiguous.
 
 Create files lazily—only when a direct settled answer has no existing canonical
-home. The settled answer authorizes the smallest unambiguous canonical
+home. The settled answer authorizes the smallest unambiguous selected
 destination; preview the creation through `/project-maintenance` without a
 second confirmation. Ask when competing destinations would materially change
 canon, provenance, or a knowledge boundary.
@@ -96,16 +96,16 @@ canon, provenance, or a knowledge boundary.
 
 Editable through previewed, recoverable `/project-maintenance` transactions:
 
-- `kb/world/` for durable setting facts
-- `kb/characters/` for settled character facts, relationships, constraints, or backstory
-- `work/plans/` for planning context that is not durable canon
+- selected world folder for durable setting facts
+- selected characters folder for settled character facts, relationships, constraints, or backstory
+- selected plans folder for planning context that is not durable canon
 - another schema-v1 KB path only when its document kind is the unambiguous home
 
 Read-only in this workflow:
 
-- `story/chapters/` canonical prose
-- `story/side-stories/` canonical bonus prose
-- `work/drafts/` draft prose
+- selected chapters folder for accepted prose
+- selected side-stories folder for accepted bonus prose
+- selected drafts folder for draft prose
 - any other prose or scene text, regardless of location
 
 If a confirmed worldbuilding change affects existing prose, record the lore decision in the smallest appropriate non-story file and tell the user which prose files may need a separate revision pass. Do not rewrite prose here.
@@ -143,7 +143,7 @@ encyclopedia entry, or multi-file rewrite. Build from settled decisions.
 When the user proposes something that conflicts with existing files, call it out immediately. "The current `Elves.md` says X, but this idea implies Y — should we revise X, narrow Y, or make this an in-world contradiction?"
 
 Also challenge against character files and story evidence. "The story has
-already shown X in `story/chapters/chapter-01.md`, but this lore change implies
+already shown X in the cited chapter, but this lore change implies
 Y. Should the lore be narrowed, or should that scene be flagged for a later
 rewrite?"
 

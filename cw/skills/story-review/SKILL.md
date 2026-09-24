@@ -8,6 +8,10 @@ description: "Review work after prose exists: editorial review, craft critique, 
 Analytical review of existing prose. This skill is for diagnosis, not
 rewriting. Keep `/reader-sim` separate when the task needs a felt first-time
 reader experience rather than analytical critique.
+Resolve project preferences through
+`../project-bootstrap/resources/author-workflow-contract.md` before reviewing.
+If the author requests in-place edits, route the agreed depth and exact file
+scope to the editing workflow; this review skill still returns findings.
 
 ## Prepare the Review
 

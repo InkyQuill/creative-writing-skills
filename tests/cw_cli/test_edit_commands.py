@@ -133,6 +133,35 @@ class EditCommandTests(unittest.TestCase):
         self.assertEqual(["edit", "apply"], json.loads(output)["command"])
         self.assertIn(b"Warm rain.", self.target.read_bytes())
 
+    def test_append_preview_apply_and_undo(self):
+        addition = self.content_file("section.txt", "## Later\nNew passage.\n")
+        argv = ["edit", "append", "story/chapters/ch-001.md", "--new-file", addition, "--format", "json"]
+        before = self.target.read_bytes()
+        status, output, error = self.run_cli(argv)
+        self.assertEqual(0, status, error + output)
+        self.assertEqual(before, self.target.read_bytes())
+        self.assertIn("Later", output)
+        status, output, error = self.run_cli(argv + ["--apply"])
+        self.assertEqual(0, status, error + output)
+        transaction_id = json.loads(output)["transaction_id"]
+        self.assertIn(b"Rain.\n\n## Later", self.target.read_bytes())
+        status, output, error = self.run_cli(["undo", transaction_id, "--apply", "--format", "json"])
+        self.assertEqual(0, status, error + output)
+        self.assertEqual(before, self.target.read_bytes())
+
+    def test_batch_allows_same_anchor_in_two_distinct_files(self):
+        second = self.target.with_name("ch-002.md")
+        second.write_text("---\nnumber: 2\n---\nRain.\n", encoding="utf-8")
+        operations = self.caller / "same-anchor.json"
+        operations.write_text(json.dumps([
+            {"op": "insert-after", "path": "story/chapters/ch-001.md", "anchor": "Rain.", "new": "\nOne."},
+            {"op": "insert-after", "path": "story/chapters/ch-002.md", "anchor": "Rain.", "new": "\nTwo."},
+        ]), encoding="utf-8")
+        status, output, error = self.run_cli(["edit", "apply", str(operations), "--apply", "--format", "json"])
+        self.assertEqual(0, status, error + output)
+        self.assertIn(b"Rain.\nOne.", self.target.read_bytes())
+        self.assertIn(b"Rain.\nTwo.", second.read_bytes())
+
     def test_conflict_is_status_one_and_runtime_plan_error_is_status_two(self):
         missing = self.content_file("missing-anchor.txt", "Sun.")
         replacement = self.content_file("replacement.txt", "Snow.")
