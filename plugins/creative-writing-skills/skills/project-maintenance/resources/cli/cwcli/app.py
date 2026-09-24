@@ -34,6 +34,7 @@ from .drafts import (
 from .edits import EditConflict, EditPlanError, load_operations, plan_edits
 from .findings import ExecutionError, Finding, Report
 from .indexes import plan_reindex
+from .layout import inventory_layout
 from .migration import (
     MigrationPlanError,
     load_migration_plan,
@@ -137,6 +138,9 @@ def _parser(*, error_stream: TextIO) -> argparse.ArgumentParser:
 
     reindex = commands.add_parser("reindex", error_stream=error_stream)
     _mutation_options(reindex)
+
+    layout = commands.add_parser("layout", error_stream=error_stream)
+    _format_option(layout)
 
     fix_typography = commands.add_parser("fix-prose-typography", error_stream=error_stream)
     fix_typography.add_argument("path")
@@ -265,6 +269,16 @@ def run(argv: list[str], *, cwd: Path, stdout: TextIO, stderr: TextIO) -> int:
         else:
             stdout.write(result.as_text() + "\n")
         return result.exit_status()
+
+    if args.command == "layout":
+        try:
+            result = inventory_layout(discover_project(cwd))
+        except (DocumentError, OSError, ProjectDiscoveryError, ValueError) as error:
+            return _write_command_error(
+                error, conflict=False, output_format=args.format, stdout=stdout, stderr=stderr,
+            )
+        _write_command_data(result, output_format=args.format, stdout=stdout)
+        return 0
 
     if args.command == "draft":
         return _run_draft(args, cwd=cwd, stdout=stdout, stderr=stderr)
