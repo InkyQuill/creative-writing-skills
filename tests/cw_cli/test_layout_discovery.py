@@ -236,7 +236,9 @@ class LayoutDiscoveryTests(unittest.TestCase):
                 self.assertTrue((root / "project.md").is_file())
                 if template == "compact":
                     self.assertTrue((root / ".cws-layout.json").is_file())
-                self.assertTrue((root / "story/chapters").is_dir())
+                    self.assertFalse((root / "story/chapters").exists())
+                else:
+                    self.assertTrue((root / "story/chapters").is_dir())
                 self.assertEqual(expected_index, (root / "story/chapters/_index.md").exists())
                 self.assertEqual(expected_index, (root / "kb/issues").exists())
 

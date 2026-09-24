@@ -339,7 +339,7 @@ def required_paths(metadata):
     if not enabled and metadata.get("scaffold-template") == "compact":
         return (
             ".creative-writing", ".creative-writing/context",
-            ".creative-writing/transactions", "story", "story/chapters",
+            ".creative-writing/transactions",
         ), ("project.md", ".cws-layout.json")
     if not enabled:
         return SCAFFOLD_DIRECTORIES, SCAFFOLD_FILES
