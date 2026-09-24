@@ -9,6 +9,7 @@ from cwcli import app
 from cwcli.layout import LayoutAmbiguity, resolve_role
 from cwcli.project import discover_project
 from cwcli import drafts, documents, transactions
+from cwcli import context
 
 
 class LayoutDiscoveryTests(unittest.TestCase):
@@ -191,6 +192,18 @@ class LayoutDiscoveryTests(unittest.TestCase):
         engine.apply(inverse)
         self.assertFalse((self.root / "chapters/next.md").exists())
         self.assertTrue((self.root / "notes/drafts/next.md").exists())
+
+    def test_context_reads_neighboring_flat_chapters(self):
+        (self.root / "chapters").mkdir()
+        for number in (1, 2):
+            (self.root / f"chapters/{number}.md").write_text(
+                f"---\nnumber: {number}\n---\nChapter {number}.\n", encoding="utf-8",
+            )
+
+        packet = context.plan_context(discover_project(self.root), "chapter", "chapters/2.md", "trusted")
+
+        self.assertIn("chapters/2.md", packet.required)
+        self.assertIn("chapters/1.md", (*packet.required, *packet.suggested))
 
 
 if __name__ == "__main__":
