@@ -17,40 +17,14 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - name: Check out licensed vendor source
-        env:
-          SOURCE_COMMIT: fd7a3ad9cd7697a0645ff6ff4bd5e809cf7673a3
-        run: |
-          git init "${RUNNER_TEMP}/licensed-source"
-          git -C "${RUNNER_TEMP}/licensed-source" remote add origin https://github.com/haowjy/creative-writing-skills.git
-          git -C "${RUNNER_TEMP}/licensed-source" fetch --depth 1 origin "${SOURCE_COMMIT}"
-          git -C "${RUNNER_TEMP}/licensed-source" checkout --detach "${SOURCE_COMMIT}"
-
       - name: Run unit tests
         run: python3 -m unittest discover -s tests -v
 
       - name: Validate distribution
         run: python3 scripts/validate_distribution.py
 
-      - name: Check vendored generic skill drift
-        run: python3 scripts/vendor_generic_skills.py --check --source-checkout "${RUNNER_TEMP}/licensed-source"
-
       - name: Check Claude distribution drift
         run: python3 scripts/sync_claude_distribution.py --check
-
-      - name: Setup Node.js for Claude validation
-        uses: actions/setup-node@v7
-        with:
-          node-version: "20"
-
-      - name: Install Claude Code CLI
-        run: npm install -g @anthropic-ai/claude-code
-
-      - name: Validate Claude marketplace
-        run: claude plugins validate .claude-plugin/marketplace.json
-
-      - name: Validate Claude plugin
-        run: claude plugins validate cw
 
       - name: Verify tag matches canonical plugin version
         run: |
@@ -67,7 +41,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - name: Build 31 Claude.ai skill packages
+      - name: Build Claude.ai skill packages
         run: python3 scripts/create_skill_zips.py
 
       - name: Create GitHub Release

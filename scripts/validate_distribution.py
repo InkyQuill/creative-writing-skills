@@ -43,16 +43,6 @@ EXPECTED_SKILLS = {
     "targeted-editing", "world-creation", "writing-principles",
     "writing-staffing", "zoom-out",
 }
-AUTHORED_SKILLS = {
-    "literary-translation", "translation-memory", "translation-review",
-    "character-sim", "cli-doctor", "creative-research", "creative-writing-craft",
-    "creative-writing-modes", "creative-writing-muse", "hieronymus-integration", "kb-management",
-    "pocket-editor-review", "project-bootstrap", "project-doctor", "project-feedback", "project-maintenance", "project-setup",
-    "reader-sim", "shared-dao", "story-memory",
-    "story-planning", "story-review", "targeted-editing", "world-creation",
-    "writing-principles", "writing-staffing",
-}
-VENDORED_SKILLS = EXPECTED_SKILLS - AUTHORED_SKILLS
 CLAUDE_DISABLE_MODEL_INVOCATION = (
     "reflect",
     "structured-artifact",
@@ -714,18 +704,15 @@ def _validate_config(repo_root: Path, problems: list[str]) -> dict[str, object] 
     if config is None:
         return None
     expected_keys = {
-        "canonical_skills", "authored_skills", "vendored_skills", "workers",
+        "canonical_skills", "workers",
         "claude", "zcode",
     }
     if set(config) != expected_keys:
         problems.append(
-            "distribution config keys must be canonical_skills, authored_skills, "
-            "vendored_skills, workers, claude, zcode"
+            "distribution config keys must be canonical_skills, workers, claude, zcode"
         )
     inventories = (
         ("canonical skill registry", "canonical_skills", EXPECTED_SKILLS),
-        ("authored skill registry", "authored_skills", AUTHORED_SKILLS),
-        ("vendored skill registry", "vendored_skills", VENDORED_SKILLS),
     )
     for label, field, expected in inventories:
         value = config.get(field)

@@ -10,7 +10,8 @@ is [Delapouite](https://delapouite.com/). This plugin uses a recolored version
 of the original artwork. The supplied recolored SVG and PNG were committed
 without further modification.
 
-The following skill snapshots are imported from the Apache-2.0 distribution at
+The following locally maintained skills began as adaptations of material from
+the Apache-2.0 distribution at
 [`haowjy/creative-writing-skills@fd7a3ad9cd7697a0645ff6ff4bd5e809cf7673a3`](https://github.com/haowjy/creative-writing-skills/tree/fd7a3ad9cd7697a0645ff6ff4bd5e809cf7673a3):
 
 - `decision-grill` (distributed name; the pinned upstream snapshot is named
@@ -25,10 +26,11 @@ The following skill snapshots are imported from the Apache-2.0 distribution at
 - `structured-artifact`
 - `zoom-out`
 
-Their immediate development provenance is
-`haowjy/meridian-base@d3c4b3313d38e18dd7970f1db34af15c25dbf238`. Refreshes from that repository are
-prohibited until it declares a compatible license. These skills are not
-original InkyQuill work.
+The historical source also records
+`haowjy/meridian-base@d3c4b3313d38e18dd7970f1db34af15c25dbf238`.
+The local versions have been rewritten for this plugin and are maintained
+independently. This notice preserves attribution; no build or release step
+downloads either source repository.
 
 ## `world-creation`
 

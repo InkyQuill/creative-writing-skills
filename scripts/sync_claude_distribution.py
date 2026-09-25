@@ -17,7 +17,6 @@ if __package__:
         extract_skill_references,
         load_json,
         map_outside_fences,
-        replace_exactly_once,
         skill_directories,
         split_frontmatter,
     )
@@ -27,7 +26,6 @@ else:
         extract_skill_references,
         load_json,
         map_outside_fences,
-        replace_exactly_once,
         skill_directories,
         split_frontmatter,
     )
@@ -52,8 +50,6 @@ _DOLLAR_REFERENCE_RE = re.compile(r"\$([a-z][a-z0-9-]*)")
 _SKILL_NAME_RE = re.compile(r"[a-z][a-z0-9-]*\Z")
 _CONFIG_KEYS = {
     "canonical_skills",
-    "authored_skills",
-    "vendored_skills",
     "workers",
     "claude",
     "zcode",
@@ -79,14 +75,6 @@ _ZCODE_CONFIG_KEYS = {
     "icon",
 }
 _ZCODE_PLUGIN_NAME_RE = re.compile(r"[a-z0-9][a-z0-9._-]{0,127}\Z")
-_KNOWLEDGE_BOOTSTRAP_CANONICAL_VALIDATION = (
-    "Use `$md-validation` for link checking and diagram validation before\n"
-    "committing."
-)
-_KNOWLEDGE_BOOTSTRAP_CLAUDE_VALIDATION = (
-    "Use `/md-validation` for link checking and diagram validation before\n"
-    "committing."
-)
 _EXCLUDED_RUNTIME_PARTS = frozenset({"__pycache__"})
 _EXCLUDED_RUNTIME_SUFFIXES = frozenset({".pyc"})
 
@@ -374,26 +362,6 @@ def _load_context(repo_root: Path) -> DistributionContext:
         raise ValueError(
             "distribution Claude disable_model_invocation must be a subset of canonical_skills"
         )
-    partition: dict[str, set[str]] = {}
-    for key in ("authored_skills", "vendored_skills"):
-        values = config.get(key)
-        if not isinstance(values, list) or any(
-            not isinstance(item, str) or _SKILL_NAME_RE.fullmatch(item) is None
-            for item in values
-        ):
-            raise ValueError(f"distribution {key} must be a list of strings")
-        if len(values) != len(set(values)):
-            raise ValueError(f"distribution {key} must not contain duplicates")
-        partition[key] = set(values)
-    if partition["authored_skills"] & partition["vendored_skills"]:
-        raise ValueError("distribution authored and vendored skills must be disjoint")
-    if partition["authored_skills"] | partition["vendored_skills"] != set(
-        skill_values
-    ):
-        raise ValueError(
-            "distribution authored and vendored skills must partition canonical skills"
-        )
-
     plugin_root = _require_contained_path(
         repo_root / "plugins" / "creative-writing-skills",
         repo_root,
@@ -594,23 +562,6 @@ def _transform_resource_markdown(
         f"{skill_name}/{relative_path.as_posix()}",
         known_skills,
     )
-    if (
-        skill_name == "knowledge-layers"
-        and relative_path == Path("resources/bootstrap.md")
-    ):
-        rendered = replace_exactly_once(
-            rendered,
-            _KNOWLEDGE_BOOTSTRAP_CANONICAL_VALIDATION,
-            _KNOWLEDGE_BOOTSTRAP_CLAUDE_VALIDATION,
-            "knowledge-layers/resources/bootstrap.md: expected canonical fenced "
-            "validation instruction",
-            UnsupportedTransformError,
-        )
-        if "md-validation" not in known_skills:
-            raise UnsupportedTransformError(
-                "knowledge-layers/resources/bootstrap.md: unknown Claude skill "
-                "reference /md-validation"
-            )
     return rendered
 
 

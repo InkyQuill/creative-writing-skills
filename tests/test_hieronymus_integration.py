@@ -210,27 +210,10 @@ class HieronymusIntegrationTests(unittest.TestCase):
         ):
             self.assertIn(phrase, delivery)
 
-    def test_inventory_adds_one_authored_skill_without_vendor_change(self):
+    def test_inventory_contains_hieronymus_integration(self):
         config = json.loads((ROOT / "config" / "distribution.json").read_text())
         self.assertEqual(36, len(config["canonical_skills"]))
-        self.assertEqual(26, len(config["authored_skills"]))
         self.assertIn("hieronymus-integration", config["canonical_skills"])
-        self.assertIn("hieronymus-integration", config["authored_skills"])
-        self.assertEqual(
-            {
-                "decision-grill",
-                "information-hierarchy",
-                "intent-modeling",
-                "knowledge-layers",
-                "llm-writing",
-                "md-validation",
-                "qi-layer",
-                "reflect",
-                "structured-artifact",
-                "zoom-out",
-            },
-            set(config["vendored_skills"]),
-        )
 
     def test_plugin_manifest_has_no_required_hieronymus_server(self):
         manifest = json.loads((PLUGIN / ".codex-plugin" / "plugin.json").read_text())

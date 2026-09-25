@@ -4,51 +4,51 @@
   "resources": [
     {
       "path": "SKILL.md",
-      "sha256": "a94b0c1eda9bae77f2234ce461d9e2d2da3a7fbd6f0adb0916b612a88c588bbf"
+      "sha256": "1ed4dc9af8ab6325cb2fab019aeff6c685b17f676446fc0c477492c5cee92cce"
     },
     {
       "path": "resources/card-grid.md",
-      "sha256": "9500f9f248aa957388e7bb5bd491223dccf403c2c00b3fb99820c63657f036bf"
+      "sha256": "d46bad478c25abeaaa56dd454c7c33f3c4603aaa2ebbc80b1bee0d192a82330f"
     },
     {
       "path": "resources/data-chart.md",
-      "sha256": "6a49b4336a9e3b4592231443b7452026f89e19067599fea63008264b830efea6"
+      "sha256": "4323b5d49eac522027c4c9539d38e2078279fa13d08ebf25cfe28f97b15b83e1"
     },
     {
       "path": "resources/data-table.md",
-      "sha256": "af7ad6c2adc55dbf07b49f2258ec962617a8da5446a0d5fe897c8f9f3f6def2a"
+      "sha256": "a0c0842f34dda243e440c60da25b42a9d7ede3caacb6a31b657cdc6f14f5df09"
     },
     {
       "path": "resources/diagrams.md",
-      "sha256": "2850544e2befd9496ea0440275e192a07d47b3d89514575edeab056e1dd637dc"
+      "sha256": "99021cbe3762429c522292dd6e5ed69e9a43e4e78e4b7ac9cdd12258e6482748"
     },
     {
       "path": "resources/diff-view.md",
-      "sha256": "72b49f7e576d67236045a12d70961719c5951016506302f68ffc9b2f5b8164e1"
+      "sha256": "f06b33d61dc8c24771c160a1d81a9de420bfe09129bac4c0ea9b4816b8709459"
     },
     {
       "path": "resources/experimental-react-flow.md",
-      "sha256": "14932f87f14370f59e76a9dd571da14e7fa2096548f9c162fbe88665abcbfd36"
+      "sha256": "f5a2c0fb9d3b6bc666773347ea7c70e9b17529e7e9fd53f676aabce909eca288"
     },
     {
       "path": "resources/layout-and-theme.md",
-      "sha256": "7efa1bdde6d9c290d4cc17525f3e05b01e4654b2e70b2533f63f0182119aca1d"
+      "sha256": "9e04769a4f406e46d6b05d66165b1ca36e3c71e33b98309e3fc7a746acdda6c9"
     },
     {
       "path": "resources/mockups.md",
-      "sha256": "edfa9e155e3aef01c5bdf0daf08821bba6f8b25665c9af33a42589fc4864f618"
+      "sha256": "d61cf4c268eb0c30256f0e8f1464631e05c9329af4a58b762cded78c5c071e6a"
     },
     {
       "path": "resources/multi-page-site.md",
-      "sha256": "d24b8a4e6b408c1a633ec9e09ba49f6a9ddfc96ef79a6f34c8b19b65a9978b68"
+      "sha256": "62e023619089c2ff7cd2a93ddb074013a74c59a27fe1f25bbf30cbb9e055a6a2"
     },
     {
       "path": "resources/timeline.md",
-      "sha256": "e97331773eaaf5a09fadf0c5b5c416e8c49319ac397b492911d2def6c570c598"
+      "sha256": "269afe2c63edb85054cd544e6c855ec6834495b5240485b84766bddf5d1f918e"
     },
     {
       "path": "resources/tree-and-toc.md",
-      "sha256": "375c57152bf7394a3a549d064c22287d27ac388400cc0567119f37c056f5dc48"
+      "sha256": "e856f7f87608408aa6e794fa2e73c7bc1619903bdb48e0431a1ec9a00c31c3b2"
     }
   ]
 }

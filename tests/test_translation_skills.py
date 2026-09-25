@@ -12,7 +12,7 @@ class TranslationDistributionTests(unittest.TestCase):
     def test_translation_skills_are_installable_in_all_generated_runtimes(self):
         config = json.loads((ROOT / 'config/distribution.json').read_text())
         expected = {'literary-translation', 'translation-memory', 'translation-review'}
-        self.assertTrue(expected <= set(config['authored_skills']))
+        self.assertTrue(expected <= set(config['canonical_skills']))
         self.assertEqual(36, len(config['canonical_skills']))
         with tempfile.TemporaryDirectory() as directory:
             output = Path(directory) / 'cw'

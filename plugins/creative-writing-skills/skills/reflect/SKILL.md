@@ -1,16 +1,16 @@
 ---
 name: reflect
-description: User-invoked pause before reporting to check intent vs literal completion, surface adjacent wins, and route knowledge capture.
+description: User-invoked pause to check whether the work served the author's goal and whether a small follow-up is warranted.
 argument-hint: Optional focus for the check
 ---
 
 # Reflect
 
-Load `$intent-modeling` if it isn't already loaded.
+Compare the requested outcome with what was delivered. Name any concrete gap
+and fix it when the task authorizes the fix. Mention an adjacent improvement
+only when it is small and directly relevant; do not create a new checklist for
+the author.
 
-Did you deliver what they actually needed? Given what you changed, is there anything adjacent worth improving now while context is fresh, without opening a new project?
-
-If something should survive this session, put it in the right layer:
-`$knowledge-layers` for placement (project instructions, `.context/`, KB,
-docs), `$project-bootstrap` for resolving instruction entrypoints, and
-`$qi-layer` for writing project instructions and `.context/CONTEXT.md`.
+Record reusable knowledge only when the active task needs a durable record.
+Use `$knowledge-layers` to place it in the existing project, without creating
+folders merely to satisfy a template.

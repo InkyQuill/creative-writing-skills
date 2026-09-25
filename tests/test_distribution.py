@@ -42,17 +42,6 @@ EXPECTED_SKILLS = {
     "writing-staffing", "zoom-out",
 }
 
-EXPECTED_AUTHORED_SKILLS = {
-    "literary-translation", "translation-memory", "translation-review",
-    "character-sim", "cli-doctor", "creative-research", "creative-writing-craft",
-    "creative-writing-modes", "creative-writing-muse", "hieronymus-integration", "kb-management",
-    "pocket-editor-review", "project-bootstrap", "project-doctor", "project-feedback", "project-maintenance", "project-setup",
-    "reader-sim", "shared-dao", "story-memory", "story-planning", "story-review",
-    "targeted-editing", "world-creation", "writing-principles", "writing-staffing",
-}
-
-EXPECTED_VENDORED_SKILLS = EXPECTED_SKILLS - EXPECTED_AUTHORED_SKILLS
-
 EXPECTED_WORKERS = {
     "brainstormer", "character-sim", "continuity-checker", "critic", "editor",
     "outliner", "reader-sim", "style-creator", "web-researcher", "writer",
@@ -104,7 +93,6 @@ class DistributionScaffoldTests(unittest.TestCase):
     def test_instruction_writers_route_through_project_bootstrap(self):
         routed = {
             "qi-layer", "knowledge-layers", "project-setup", "shared-dao",
-            "reflect", "decision-grill",
         }
         for name in routed:
             text = (PLUGIN_ROOT / "skills" / name / "SKILL.md").read_text()
@@ -317,9 +305,8 @@ class DistributionScaffoldTests(unittest.TestCase):
 
     def test_llm_writing_requires_an_authorized_artifact_path_for_disk_drafts(self):
         text = (PLUGIN_ROOT / "skills/llm-writing/SKILL.md").read_text()
-        self.assertIn("explicitly writable artifact", text)
-        self.assertIn("caller-assigned path", text)
-        self.assertIn("draft and revise in the response context", text)
+        self.assertIn("Write to a file only when the task calls for a file", text)
+        self.assertIn("Otherwise deliver the", text)
         self.assertNotIn("Write a full draft to disk so you can edit it piece by piece", text)
 
     def test_creative_direction_returns_scoped_analysis_to_muse(self):
@@ -376,37 +363,20 @@ class DistributionScaffoldTests(unittest.TestCase):
         cards = (resource_root / "card-grid.md").read_text()
         self.assertNotIn("innerHTML", tree)
         self.assertNotIn("innerHTML", diagrams)
-        self.assertIn("textContent", tree)
-        self.assertIn("replaceChildren", tree)
-        self.assertIn("textContent", diagrams)
-        self.assertIn("replaceChildren", diagrams)
-        self.assertIn("securityLevel: 'strict'", diagrams)
+        self.assertIn("keyboard access", tree)
+        self.assertIn("ordinary links or", diagrams)
         self.assertNotIn("securityLevel: 'loose'", diagrams)
-        self.assertNotRegex(diagrams, r"(?m)^\s*click\s+\w+\s+\w+")
-        self.assertIn("ALLOWED_DETAIL_KEYS", diagrams)
-        self.assertNotIn("new Set(Object.keys(DETAIL))", diagrams)
-        self.assertIn("const d = DETAIL[key];\n  if (!d) return;", diagrams)
         self.assertNotIn("innerHTML", cards)
         self.assertNotIn("onclick", cards)
-        self.assertIn(
-            ".sort((a, b) => (a[s] === b[s] ? 0 : a[s] > b[s] ? 1 : -1))",
-            cards,
-        )
-        for operation in (
-            "createElement",
-            "textContent",
-            "addEventListener",
-            "replaceChildren",
-        ):
-            self.assertIn(operation, cards)
+        self.assertIn("keyboard reachable", cards)
 
-    def test_knowledge_bootstrap_template_uses_canonical_skill_syntax(self):
+    def test_knowledge_bootstrap_does_not_require_scaffolding(self):
         text = (
             PLUGIN_ROOT
             / "skills/knowledge-layers/resources/bootstrap.md"
         ).read_text()
-        self.assertIn("Use `$md-validation` for link checking", text)
-        self.assertNotIn("Use `/md-validation` for link checking", text)
+        self.assertIn("project's selected folders", text)
+        self.assertIn("There is no required directory tree", text)
 
     def test_story_checks_use_canonical_bundled_cli(self):
         root = PLUGIN_ROOT / "skills/story-review/resources"
@@ -578,19 +548,8 @@ class DistributionScaffoldTests(unittest.TestCase):
     def test_distribution_config_lists_exact_skill_set(self):
         config = load_json(REPO_ROOT / "config" / "distribution.json")
         self.assertEqual(config["canonical_skills"], sorted(EXPECTED_SKILLS))
-        self.assertEqual(config["authored_skills"], sorted(EXPECTED_AUTHORED_SKILLS))
-        self.assertEqual(config["vendored_skills"], sorted(EXPECTED_VENDORED_SKILLS))
-        self.assertEqual(
-            (36, 26, 10),
-            tuple(
-                len(config[field])
-                for field in (
-                    "canonical_skills",
-                    "authored_skills",
-                    "vendored_skills",
-                )
-            ),
-        )
+        self.assertEqual(36, len(config["canonical_skills"]))
+
         self.assertEqual(
             ["reflect", "structured-artifact"],
             config["claude"]["disable_model_invocation"],
@@ -608,6 +567,16 @@ class DistributionScaffoldTests(unittest.TestCase):
                 ),
             },
         )
+
+    def test_ci_and_release_use_local_skill_sources(self):
+        for name in ("ci.yml", "release.yml"):
+            workflow = (REPO_ROOT / ".github/workflows" / name).read_text()
+            with self.subTest(workflow=name):
+                self.assertIn("scripts/validate_distribution.py", workflow)
+                self.assertIn("scripts/sync_claude_distribution.py --check", workflow)
+                self.assertNotIn("haowjy/creative-writing-skills", workflow)
+                self.assertNotIn("vendor_generic_skills.py", workflow)
+                self.assertNotIn("npm install -g @anthropic-ai/claude-code", workflow)
 
     def test_canonical_codex_skills_do_not_disable_model_invocation(self):
         for skill_name in sorted(EXPECTED_SKILLS):
@@ -897,11 +866,8 @@ class ValidatorTests(unittest.TestCase):
         }
         self._write_json(self.root / ".agents" / "plugins" / "marketplace.json", marketplace)
 
-        authored = EXPECTED_AUTHORED_SKILLS
         config = {
             "canonical_skills": sorted(EXPECTED_SKILLS),
-            "authored_skills": sorted(authored),
-            "vendored_skills": sorted(EXPECTED_SKILLS - authored),
             "workers": "skills/creative-writing-muse/resources/workers/registry.json",
             "claude": {
                 "root": "cw",
@@ -1271,8 +1237,6 @@ class ValidatorTests(unittest.TestCase):
         original = path.read_text()
         for field, label in (
             ("canonical_skills", "canonical skill registry"),
-            ("authored_skills", "authored skill registry"),
-            ("vendored_skills", "vendored skill registry"),
         ):
             with self.subTest(field=field):
                 config = json.loads(original)

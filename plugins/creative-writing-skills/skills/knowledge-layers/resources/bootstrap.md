@@ -1,83 +1,10 @@
-# KB Bootstrap
+# Optional knowledge base start
 
-Starter layout for a new project KB. Load `$project-bootstrap` to resolve the
-project instruction entrypoints, then follow `$qi-layer`: intent in project
-instructions, governance depth in `.context/`.
+Use the project's selected folders. If no knowledge base exists and the
+author wants one, start with one index and the first useful page. Add a
+vocabulary page only when terms need a shared definition; add topic folders
+when several pages make navigation difficult.
 
-## Directory Layout
-
-```
-kb/
-  {project-instructions} # resolved project instructions: intent and key rules
-  .context/
-    CONTEXT.md         # governance depth: writing conventions, structure, validation
-  index.md             # catalog of pages with one-line summaries
-  vocab.md             # project-wide terminology
-```
-
-Add directories as the KB grows: a topic earns a directory when it has
-multiple related pages.
-
-## Content Types
-
-A KB holds four kinds of content.
-
-**Wiki pages**: synthesized knowledge. How things work, concepts,
-architecture, patterns. Agents create pages, update them, and maintain
-cross-references.
-
-**Decision records**: what was chosen, what was rejected, and why. Wiki
-pages link to decisions for rationale; decisions link to wiki pages for
-context. Separate from wiki pages because the reasoning behind a choice
-outlives the description of the current system: when the system changes,
-the old decision record still explains why it was built that way.
-
-**Sources**: raw material: articles, research, transcripts, data. Immutable.
-Agents read from sources but never modify them.
-
-## Starter project instructions
-
-```markdown
-# KB Guide
-
-Big-picture knowledge that spans components and outlives sessions:
-decisions, domain concepts, architectural rationale, patterns. Pages
-record the system's current settled intent — what it should be —
-independent of any checkout.
-
-Raw research dumps and conversation transcripts don't belong here;
-synthesize them first. Active task plans live in work directories.
-Knowledge that depends on one subsystem stays colocated with it.
-
-When content is superseded, delete it or move it to `archive/`. Pages
-read as current truth, never narrate their own evolution.
-
-- `index.md`: catalog. Update when you create or modify a page.
-- `.context/CONTEXT.md`: writing conventions, structure, validation.
-```
-
-## Starter .context/CONTEXT.md
-
-```markdown
-# KB Working Conventions
-
-## Writing
-
-- One concept per page. Split when a page covers two unrelated topics.
-- Cross-reference, don't re-explain. Each concept has one source of truth.
-- Name files by what they describe (`token-validation.md`), not when
-  (`auth-redesign-notes.md`).
-- Calibrate depth to importance. Reference material is terse and scannable.
-  Architecture pages walk through reasoning.
-- Decision records capture what was chosen, what was rejected, and why.
-  Wiki pages link to them for rationale.
-
-## Structure
-
-- Directories emerge organically as topics accumulate related pages.
-
-## Validation
-
-Use `$md-validation` for link checking and diagram validation before
-committing.
-```
+Keep confirmed concepts and decisions here. Leave raw source material and
+unsettled ideas in their existing locations. Link the new page from the
+project's current entrypoint, then stop. There is no required directory tree.
