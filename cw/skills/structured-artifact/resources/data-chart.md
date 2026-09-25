@@ -1,37 +1,7 @@
-# Data Chart
+# Data chart
 
-Interactive chart with hover tooltips and click callbacks. Use for quantities,
-trends, or distributions. A handful of values reads faster as a sentence or
-small table — reach for a chart when the *shape* of the data carries the point.
-
-## Library
-
-**Chart.js** — ~70 KB gzipped.
-
-```html
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
-```
-
-## Minimal Example
-
-```html
-<canvas id="chart" height="120"></canvas>
-<script>
-new Chart(document.getElementById("chart"), {
-  type: "bar",  // bar, line, scatter, pie, doughnut, radar
-  data: {
-    labels: ["Docs", "Code", "Tests"],
-    datasets: [{ label: "Items", data: [12, 19, 7] }],
-  },
-  options: {
-    plugins: { tooltip: { enabled: true } },
-    onClick: (evt, points) => {
-      if (!points.length) return;
-      showDetail(points[0].index);  // wire to detail panel
-    },
-  },
-});
-</script>
-```
-
-Supports bar, line, scatter, pie, doughnut, and radar out of the box.
+Use a chart when the shape of quantities matters. State its takeaway in text,
+label axes and units, and provide the underlying values nearby as a small
+table or accessible text. Use SVG or a verified local library when the chart
+needs complexity; do not add a chart library for a few values that prose or a
+table explains more clearly. Check that labels remain readable on a phone.

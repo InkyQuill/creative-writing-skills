@@ -492,12 +492,11 @@
       "decision-grill": {
         "name": "decision-grill",
         "path": "plugins/creative-writing-skills/skills/decision-grill/SKILL.md",
-        "description": "Use when challenging a plan — grills the author against documented decisions and sharpens terminology.",
+        "description": "Clarify a consequential creative or project decision through a focused dialogue grounded in the author's notes.",
         "type": "canonical skill",
         "modelInvocable": true,
         "loads": [
-          "intent-modeling",
-          "project-bootstrap"
+          "kb-management"
         ],
         "resources": [],
         "source": "canonical plugin"
@@ -505,7 +504,7 @@
       "information-hierarchy": {
         "name": "information-hierarchy",
         "path": "plugins/creative-writing-skills/skills/information-hierarchy/SKILL.md",
-        "description": "Load for large human-facing outputs: reports, docs, multi-section\nexplanations, artifacts. Choose the right form for each beat (prose, diagram,\ntable, mockup) and put the answer first, depth behind it. If the medium allows, use progressive disclosure.",
+        "description": "Structure a long explanation, report, or artifact so readers find the answer and supporting detail quickly.",
         "type": "canonical skill",
         "modelInvocable": true,
         "loads": [],
@@ -515,7 +514,7 @@
       "intent-modeling": {
         "name": "intent-modeling",
         "path": "plugins/creative-writing-skills/skills/intent-modeling/SKILL.md",
-        "description": "Use before acting on human instructions: separate what they said from what they meant.",
+        "description": "Interpret an author's request or correction when the literal wording leaves the intended outcome unclear.",
         "type": "canonical skill",
         "modelInvocable": true,
         "loads": [],
@@ -535,14 +534,13 @@
       "knowledge-layers": {
         "name": "knowledge-layers",
         "path": "plugins/creative-writing-skills/skills/knowledge-layers/SKILL.md",
-        "description": "Use when deciding where knowledge goes or reading/writing durable docs: project instructions, .context/, KB, docs/, and work directories.",
+        "description": "Place durable project knowledge in the existing instructions, reference docs, knowledge base, or active work notes.",
         "type": "canonical skill",
         "modelInvocable": true,
         "loads": [
           "project-bootstrap",
           "qi-layer",
-          "llm-writing",
-          "shared-dao"
+          "kb-management"
         ],
         "resources": [
           "resources/bootstrap.md"
@@ -552,12 +550,12 @@
       "llm-writing": {
         "name": "llm-writing",
         "path": "plugins/creative-writing-skills/skills/llm-writing/SKILL.md",
-        "description": "Load before writing or revising human-facing text. Choose words deliberately, ground the piece in the reader's context, and remove default LLM phrasing before the final draft.",
+        "description": "Draft or revise explanatory text for a reader; remove filler and check that claims follow the available evidence.",
         "type": "canonical skill",
         "modelInvocable": true,
         "loads": [
-          "intent-modeling",
-          "information-hierarchy"
+          "information-hierarchy",
+          "creative-writing-craft"
         ],
         "resources": [],
         "source": "canonical plugin"
@@ -565,7 +563,7 @@
       "md-validation": {
         "name": "md-validation",
         "path": "plugins/creative-writing-skills/skills/md-validation/SKILL.md",
-        "description": "Use when validating markdown links or Mermaid diagrams.",
+        "description": "Check links and diagrams in Markdown that is being delivered or changed.",
         "type": "canonical skill",
         "modelInvocable": true,
         "loads": [],
@@ -652,12 +650,10 @@
       "qi-layer": {
         "name": "qi-layer",
         "path": "plugins/creative-writing-skills/skills/qi-layer/SKILL.md",
-        "description": "Use when writing or maintaining harness instruction files and .context/CONTEXT.md: keep intent docs minimal and load-bearing.",
+        "description": "Write concise project instructions and nearby reference context when an existing area needs durable agent guidance.",
         "type": "canonical skill",
         "modelInvocable": true,
         "loads": [
-          "knowledge-layers",
-          "llm-writing",
           "project-bootstrap"
         ],
         "resources": [
@@ -668,12 +664,11 @@
       "reflect": {
         "name": "reflect",
         "path": "plugins/creative-writing-skills/skills/reflect/SKILL.md",
-        "description": "User-invoked pause before reporting to check intent vs literal completion, surface adjacent wins, and route knowledge capture.",
+        "description": "User-invoked pause to check whether the work served the author's goal and whether a small follow-up is warranted.",
         "type": "canonical skill",
         "modelInvocable": true,
         "loads": [
-          "intent-modeling",
-          "project-bootstrap"
+          "knowledge-layers"
         ],
         "resources": [],
         "source": "canonical plugin"
@@ -693,7 +688,7 @@
       "structured-artifact": {
         "name": "structured-artifact",
         "path": "plugins/creative-writing-skills/skills/structured-artifact/SKILL.md",
-        "description": "Load when building a static HTML artifact — single page or multi-page site —\nto make structured information explorable through layout and navigation.",
+        "description": "Build a navigable static HTML page when a reader needs to explore structured information.",
         "type": "canonical skill",
         "modelInvocable": true,
         "loads": [
@@ -717,12 +712,10 @@
       "zoom-out": {
         "name": "zoom-out",
         "path": "plugins/creative-writing-skills/skills/zoom-out/SKILL.md",
-        "description": "Use when orienting in an unfamiliar area — fans out exploration across structure, knowledge, and history, then synthesizes one orientation map.",
+        "description": "Orient an agent or author in an unfamiliar project area before deciding where to work.",
         "type": "canonical skill",
         "modelInvocable": true,
-        "loads": [
-          "qi-layer"
-        ],
+        "loads": [],
         "resources": [],
         "source": "canonical plugin"
       },

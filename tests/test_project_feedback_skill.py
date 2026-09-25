@@ -52,9 +52,7 @@ class ProjectFeedbackSkillTests(unittest.TestCase):
             "bundled cw cli",
             "generated claude or zcode distribution",
             "repository docs and contracts that define or ship those creative writing skills components",
-            "authored and internal skills such as story-memory",
-            "pinned or adapted vendored copy of a skill such as llm-writing",
-            "packaging or distribution of that local copy",
+            "including story-memory, llm-writing, and their packaging or distribution",
         ):
             self.assertIn(owned, lowered)
         for excluded in (
@@ -64,13 +62,8 @@ class ProjectFeedbackSkillTests(unittest.TestCase):
             "zcode",
             "github cli (`gh`)",
             "skill or plugin not shipped by this repository",
-            "upstream defect in the original project from which a skill was vendored",
         ):
             self.assertIn(excluded.replace("`", ""), lowered)
-        self.assertRegex(
-            text,
-            r"(?is)upstream defect.{0,240}out of scope.{0,220}(pinned copy|adaptation|packaging|distribution)",
-        )
         self.assertRegex(
             text,
             r"(?is)unrelated repository process.{0,120}planning.{0,120}superpowers plan documents.{0,120}out of scope.{0,220}do not.{0,80}define or ship",

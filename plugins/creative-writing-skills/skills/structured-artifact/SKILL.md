@@ -1,69 +1,28 @@
 ---
 name: structured-artifact
-description: |
-  Load when building a static HTML artifact — single page or multi-page site —
-  to make structured information explorable through layout and navigation.
+description: Build a navigable static HTML page when a reader needs to explore structured information.
 ---
 
 # Structured Artifact
 
-A structured artifact is plain HTML that opens from `file://` and works on a
-phone. Load `$information-hierarchy` first — it decides what each page shows
-and in what order; this skill builds it.
+Use `$information-hierarchy` to decide what the reader should see first.
+Build a static page that opens directly in a browser; add child pages only
+when a single page becomes hard to navigate. Prefer native HTML and CSS for
+simple interactions. Use external libraries only for a feature the artifact
+actually needs, and bundle them when offline use is required.
 
-## One page or several
+Check the rendered page at a narrow width, follow its links, and try every
+control. Keep the main finding visible without interaction. For a specific
+pattern, read only the relevant resource:
 
-Start from one `index.html`. Its first viewport carries the answer, and depth
-discloses in place — `<details>`, popovers, a collapsible detail panel. Grow
-into a folder (`index.html` + child pages + `shared.css`) when readers need
-whole pages per branch: the index becomes a map with links, and each child
-page stands alone with its own lede. `resources/multi-page-site.md` has the
-folder mechanics.
+- `resources/layout-and-theme.md` for layout and color.
+- `resources/multi-page-site.md` for child pages and navigation.
+- `resources/diagrams.md` for relationship diagrams.
+- `resources/data-table.md` or `resources/data-chart.md` for data.
+- `resources/timeline.md`, `resources/tree-and-toc.md`, or
+  `resources/card-grid.md` for browsing sequences or collections.
+- `resources/diff-view.md` for comparing two versions.
+- `resources/mockups.md` for a layout proposal.
 
-## Build so it keeps working
-
-Everything ships static — plain `<script>` tags, zero build step — so the
-artifact opens anywhere, years later, with nothing installed. CDN tags are
-the default; vendor the scripts into the folder when the artifact must work
-offline (`resources/layout-and-theme.md`). Resource snippets show the shape
-of each library's use, pinned only to a major version — before building,
-web-search the library's current version and syntax when anything looks
-dated, rather than trusting the snippet as frozen truth. Design for a
-narrow viewport and let wider layouts be enhancements; touch targets stay
-≥ 44px and diagrams pan and pinch. Drive colors from CSS custom properties on
-`:root`, default light, with a ☀/🌙 toggle that adds `.dark` to `<html>` —
-readers get a readable page in daylight and a choice at night.
-
-`resources/layout-and-theme.md` has the concrete layout, theme, and mobile
-patterns shared across everything below.
-
-## Verify the end state
-
-Open the artifact in a browser before calling it done — a snippet that
-looked right in the editor still fails at runtime (a CDN URL 404s, a library
-changed its API, a diagram overflows). Check what a reader meets: the first
-viewport carries the answer, every page renders at ~375px width, the theme
-toggle flips both text and embedded content, links between pages resolve,
-and Mermaid diagrams render correctly.
-
-## Enrichments
-
-Mix and match resources and patterns as needed, starting with the simplest
-pattern and adding complexity only when information hierarchy calls for it.
-
-Load a resource when a beat calls for its pattern:
-
-| Pattern | When a beat needs | Resource |
-|---|---|---|
-| Multi-page site | Index + child pages, nav, cross-links | `resources/multi-page-site.md` |
-| Mockup | Wireframe or annotated plan the reader must see | `resources/mockups.md` |
-| Diagram | Dependencies, flow, system maps | `resources/diagrams.md` |
-| Data table | Records with sortable/filterable columns | `resources/data-table.md` |
-| Data chart | Quantities, trends, distributions | `resources/data-chart.md` |
-| Timeline | Chronological events with detail | `resources/timeline.md` |
-| Tree / TOC | Hierarchy navigation, document outline | `resources/tree-and-toc.md` |
-| Card grid | Items with summary + expandable detail | `resources/card-grid.md` |
-| Diff / comparison | Before/after, version diff | `resources/diff-view.md` |
-
-For custom node rendering, drag, or live filtering on graphs beyond what
-Mermaid offers, see `resources/experimental-react-flow.md`.
+Use `resources/experimental-react-flow.md` only when direct node interaction
+is essential and static diagrams cannot serve the task.

@@ -378,24 +378,6 @@ class ClaudeTransformTests(unittest.TestCase):
         self.assertIn("Use $md-validation before committing.", rendered)
         self.assertNotIn("Use /md-validation before committing.", rendered)
 
-    def test_bootstrap_transform_rejects_duplicate_canonical_instruction(self):
-        instruction = (
-            "Use `$md-validation` for link checking and diagram validation before\n"
-            "committing."
-        )
-
-        with self.assertRaisesRegex(
-            UnsupportedTransformError,
-            "fenced validation instruction.*exactly once; found 2",
-        ):
-            _transform_resource_markdown(
-                f"```markdown\n{instruction}\n\n{instruction}\n```\n",
-                "knowledge-layers",
-                Path("resources/bootstrap.md"),
-                frozenset({"knowledge-layers", "md-validation"}),
-            )
-
-
 class ClaudeDistributionRenderTests(unittest.TestCase):
     def test_zcode_marketplace_uses_caller_supplied_icon(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -474,7 +456,7 @@ class ClaudeDistributionRenderTests(unittest.TestCase):
                 project_setup,
             )
             self.assertIn("remain unmanaged", project_setup)
-            self.assertIn("Resolved project instructions", grill)
+            self.assertIn("focused dialogue", grill)
             self.assertNotIn("AGENTS.md", grill)
             self.assertNotIn("CLAUDE.md", grill)
             for resource in (
@@ -485,16 +467,13 @@ class ClaudeDistributionRenderTests(unittest.TestCase):
                 self.assertIn(f"`resources/{resource}`", story_planning)
             self.assertNotIn("AGENTS.md", qi_layer)
             self.assertNotIn("CLAUDE.md", qi_layer)
-            self.assertIn("`/project-bootstrap` owns filenames", qi_layer)
-            self.assertIn("{project-instructions}", bootstrap)
-            self.assertIn("## Starter project instructions", bootstrap)
+            self.assertIn("/project-bootstrap", qi_layer)
+            self.assertIn("There is no required directory tree", bootstrap)
             self.assertNotIn("AGENTS.md", bootstrap)
             self.assertNotIn("CLAUDE.md", bootstrap)
             self.assertIn("AGENTS.md", project_bootstrap)
             self.assertIn("CLAUDE.md", project_bootstrap)
             self.assertIn("ZCode does not expand", project_bootstrap)
-            self.assertIn("Use `/md-validation` for link checking", bootstrap)
-            self.assertNotIn("Use `$md-validation` for link checking", bootstrap)
             for path in (
                 "`project.md`",
                 "`.cws-layout.json`",
@@ -509,11 +488,7 @@ class ClaudeDistributionRenderTests(unittest.TestCase):
             ).read_text()
             self.assertNotIn("innerHTML", generated_cards)
             self.assertNotIn("onclick", generated_cards)
-            self.assertIn("replaceChildren", generated_cards)
-            self.assertIn(
-                ".sort((a, b) => (a[s] === b[s] ? 0 : a[s] > b[s] ? 1 : -1))",
-                generated_cards,
-            )
+            self.assertIn("keyboard reachable", generated_cards)
             self.assertIn("/story-review", worker_resource)
             self.assertNotIn("$story-review", worker_resource)
 
@@ -584,13 +559,15 @@ class ClaudeDistributionRenderTests(unittest.TestCase):
                 (output_root / "skills/creative-writing-muse/SKILL.md").read_text()
             )
             self.assertEqual(
-                "Use before acting on human instructions: separate what they said "
-                "from what they meant.",
+                split_frontmatter(
+                    (Path("plugins/creative-writing-skills/skills/intent-modeling/SKILL.md")).read_text()
+                )[0]["description"],
                 intent_metadata["description"],
             )
             self.assertEqual(
-                "Use when writing or maintaining harness instruction files and "
-                ".context/CONTEXT.md: keep intent docs minimal and load-bearing.",
+                split_frontmatter(
+                    (Path("plugins/creative-writing-skills/skills/qi-layer/SKILL.md")).read_text()
+                )[0]["description"],
                 qi_metadata["description"],
             )
             self.assertEqual(
@@ -634,39 +611,6 @@ class ClaudeDistributionCliTests(unittest.TestCase):
             generated_cli = repo_root / "cw/skills/project-maintenance/resources/cli/cwcli"
             self.assertFalse((generated_cli / "__pycache__").exists())
             self.assertFalse((generated_cli / "local.pyc").exists())
-
-    def test_apply_rejects_duplicate_bootstrap_instruction_without_mutation(self):
-        with tempfile.TemporaryDirectory() as temporary:
-            repo_root = Path(temporary) / "repo"
-            repo_root.mkdir()
-            self._copy_canonical_inputs(repo_root)
-            bootstrap = (
-                repo_root
-                / "plugins/creative-writing-skills/skills/knowledge-layers/"
-                "resources/bootstrap.md"
-            )
-            instruction = (
-                "Use `$md-validation` for link checking and diagram validation before\n"
-                "committing."
-            )
-            bootstrap.write_text(
-                bootstrap.read_text().replace(
-                    instruction,
-                    instruction + "\n\n" + instruction,
-                )
-            )
-            cw_root = repo_root / "cw"
-            cw_root.mkdir()
-            sentinel = cw_root / "sentinel.txt"
-            sentinel.write_text("original cw\n")
-            stdout = io.StringIO()
-
-            with redirect_stdout(stdout):
-                status = main(["--apply"], repo_root=repo_root)
-
-            self.assertEqual(1, status)
-            self.assertIn("exactly once; found 2", stdout.getvalue())
-            self.assertEqual("original cw\n", sentinel.read_text())
 
     def test_apply_rejects_noncanonical_claude_config_without_mutation(self):
         cases = {
@@ -782,17 +726,14 @@ class ClaudeDistributionCliTests(unittest.TestCase):
                 self.assertIn(expected, stdout.getvalue())
                 self.assertEqual("original cw\n", sentinel.read_text())
 
-    def test_apply_rejects_nonpartitioned_skill_inventories_without_mutation(self):
+    def test_apply_rejects_duplicate_or_invalid_skill_inventory_without_mutation(self):
         cases = {
-            "duplicate authored skill": lambda config: config[
-                "authored_skills"
-            ].append(config["authored_skills"][0]),
-            "overlapping inventories": lambda config: config[
-                "authored_skills"
-            ].append(config["vendored_skills"][0]),
-            "incomplete inventories": lambda config: config[
-                "authored_skills"
-            ].pop(),
+            "duplicate skill": lambda config: config[
+                "canonical_skills"
+            ].append(config["canonical_skills"][0]),
+            "invalid name": lambda config: config[
+                "canonical_skills"
+            ].append("../outside"),
         }
         for label, mutate in cases.items():
             with self.subTest(label=label), tempfile.TemporaryDirectory() as temporary:
@@ -1068,12 +1009,9 @@ class ClaudeDistributionCliTests(unittest.TestCase):
                 self._copy_canonical_inputs(repo_root)
                 self._write_config(
                     repo_root,
-                    lambda config: [
-                        config[key].__setitem__(
-                            config[key].index("zoom-out"), "local-demo"
-                        )
-                        for key in ("canonical_skills", "vendored_skills")
-                    ],
+                    lambda config: config["canonical_skills"].__setitem__(
+                        config["canonical_skills"].index("zoom-out"), "local-demo"
+                    ),
                 )
                 skills_root = repo_root / "plugins/creative-writing-skills/skills"
                 source = skills_root / "zoom-out"

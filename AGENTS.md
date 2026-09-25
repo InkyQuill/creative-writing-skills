@@ -16,7 +16,7 @@ verify that the generated distribution matches those reviewed sources.
 Make every runtime change in the canonical plugin first, then regenerate `cw/`.
 
 The repository marketplace is `.agents/plugins/marketplace.json`. The exact
-36-skill inventory and authored/vendored partition are declared in
+36-skill inventory is declared in
 `config/distribution.json`.
 
 ## Canonical Content
@@ -31,10 +31,9 @@ The repository marketplace is `.agents/plugins/marketplace.json`. The exact
 - `agents/openai.yaml` is Codex UI metadata and is excluded from generated
   Claude runtime and Claude.ai archives.
 
-Vendored generic skills are pinned snapshots with attribution in
-[`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md).
-Use `python3 scripts/vendor_generic_skills.py --check` to verify them and the
-script's apply mode only when intentionally updating the pinned inputs.
+All skills are maintained in this repository. Some began as adaptations;
+their provenance remains in [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md).
+Do not refresh them from an external checkout.
 
 ## Generated Claude and ZCode Distribution
 
@@ -61,7 +60,6 @@ Use repository-local Python entry points:
 ```bash
 PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tests -v
 python3 scripts/validate_distribution.py
-python3 scripts/vendor_generic_skills.py --check
 python3 scripts/sync_claude_distribution.py --check
 python3 scripts/create_skill_zips.py
 ```

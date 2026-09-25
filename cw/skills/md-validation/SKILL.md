@@ -1,27 +1,14 @@
 ---
 name: md-validation
-description: "Use when validating markdown links or Mermaid diagrams."
+description: "Check links and diagrams in Markdown that is being delivered or changed."
 ---
 
-# md-validation
+# Markdown Validation
 
-## Mermaid Diagrams
+For changed Markdown, check relative links against the files they should
+reach. If a diagram is present, validate it with an available Mermaid parser
+or renderer and inspect the result when layout matters. Report the specific
+broken link or diagram; do not demand a new documentation structure.
 
-Validate Mermaid diagrams render correctly before shipping. Open the HTML
-artifact in a browser and check every diagram visually — syntax errors show
-as broken renders, not error messages.
-
-Common failure modes:
-- Unquoted labels with punctuation break the parse
-- Bare lowercase `end` collides with subgraph terminator
-- Node IDs starting with `o` or `x` after edge markers get misparsed
-- Custom fills without matching text color make labels unreadable
-
-See `resources/mermaid-authoring.md` for the full authoring rules (quoting,
-line breaks, reserved words, themes).
-
-## Markdown Links
-
-Check that relative links between pages resolve. When building a multi-page
-artifact or KB, broken cross-references silently rot — verify each link
-target exists before committing.
+For Mermaid syntax pitfalls, read `resources/mermaid-authoring.md` only when
+writing or fixing a diagram.

@@ -215,4 +215,4 @@ Without `--push`, the release commit and tag remain local.
 
 Apache License 2.0. See [LICENSE](LICENSE) and
 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) for inherited work and
-vendored-skill attribution.
+attribution for adapted material.
