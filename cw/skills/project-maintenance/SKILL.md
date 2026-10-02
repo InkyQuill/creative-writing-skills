@@ -69,3 +69,9 @@ of its output. Build context with relevant entities and relationships and keep
 its exact snapshot with the draft. The CLI never performs literary translation
 or decides whether a proposed rule is true; /literary-translation,
 /translation-memory and /translation-review supply that judgment.
+
+For an existing authoring project whose role folders need to move, preview
+`cw layout --relocate --set ROLE=FOLDER --format json`. Review the concrete
+semantic file map with the author before `--apply`; use the transaction ID for
+undo. See [command reference](resources/command-reference.md) for supported
+references, opaque sidecars and relocation boundaries.

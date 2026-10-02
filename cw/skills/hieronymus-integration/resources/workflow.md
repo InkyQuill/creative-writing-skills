@@ -117,3 +117,12 @@ materially change the output, explain the unavailable dependency and ask one
 focused question. Do not silently substitute a lower-trust source, request an
 installation, create a binding, or repair/start a service as part of the
 status check.
+
+
+## Implementation feedback
+
+Before reporting a tool failure, choose ownership from the failed component.
+A `cw layout` or migration failure in a Hieronymus-enabled project uses
+/project-feedback and `InkyQuill/creative-writing-skills`. A Hieronymus service
+failure uses `InkyQuill/hieronymus`. Project bindings and memory destinations
+do not override these routes. Follow the integration skill's tracker links.
