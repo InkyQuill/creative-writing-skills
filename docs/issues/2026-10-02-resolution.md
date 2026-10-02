@@ -36,3 +36,14 @@ draft status/target preservation, relative/encoded/external links, occupied
 paths, overlap, symlinks, nested projects, stale content, and injected failure
 rollback. Distribution validation, generation synchronization, `git diff
 --check`, and generation of all 36 deterministic archives passed.
+
+## PR #18 review follow-up
+
+Validated CodeRabbit's path-token finding: single-segment role names could match
+ordinary prose words. Generic rewriting now requires a following slash for such
+sources; folder-only Markdown links are resolved by the link handler. Added
+exact-byte prose preservation and multi-segment delimiter regressions, explicit
+UTF-8 for routing tests, and helper docstrings. The final full suite passes 905
+tests, with distribution/synchronization/36-archive checks passing as well.
+The scope warning is not applicable: the PR intentionally addresses both #16
+and #17, as requested, and its title/description state both changes.

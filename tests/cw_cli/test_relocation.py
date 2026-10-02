@@ -8,7 +8,7 @@ from pathlib import Path
 from tests.cw_cli import helpers  # noqa: F401
 from cwcli import app
 from cwcli.project import discover_project
-from cwcli.relocation import plan_relocation
+from cwcli.relocation import plan_relocation, _rewrite_paths
 from cwcli.transactions import TransactionEngine, TransactionConflict, TransactionError
 
 
@@ -119,3 +119,19 @@ class RelocationTests(unittest.TestCase):
         self.write('notes.md', b'[Local](kb/characters/mara%20image.png#detail)\n[Web](https://example.com/kb/characters/mara.md)\n')
         TransactionEngine(discover_project(self.root)).apply(self.plan())
         self.assertEqual(b'[Local](characters/mara%20image.png#detail)\n[Web](https://example.com/kb/characters/mara.md)\n', (self.root / 'notes.md').read_bytes())
+
+    def test_single_segment_folder_words_in_prose_remain_exact(self):
+        prose = b'The characters meet. "characters" and `characters` are words.\r\n'
+        self.assertEqual(prose, _rewrite_paths(prose, {'characters': 'people'}))
+        self.write('characters/mara.md', b'---\ntitle: Mara\nstatus: active\n---\n' + prose)
+        self.write('notes.md', prose + b'[Mara](characters/mara.md)\n[Folder](characters)\n`characters/mara.md`\n')
+        self.write('.cws-layout.json', b'{"version":1,"roles":{"characters":"characters"}}\n')
+        plan = plan_relocation(discover_project(self.root), {'characters': 'people'})
+        TransactionEngine(discover_project(self.root)).apply(plan)
+        self.assertTrue((self.root / 'people/mara.md').read_bytes().endswith(prose))
+        self.assertEqual(prose + b'[Mara](people/mara.md)\n[Folder](people)\n`people/mara.md`\n', (self.root / 'notes.md').read_bytes())
+
+    def test_multi_segment_folder_tokens_keep_end_delimiters(self):
+        before = b'`work/drafts` "work/drafts" <work/drafts> (work/drafts)\nwork/drafts'
+        self.assertEqual(b'`drafts` "drafts" <drafts> (drafts)\ndrafts',
+                         _rewrite_paths(before, {'work/drafts': 'drafts'}))

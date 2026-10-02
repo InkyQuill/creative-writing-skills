@@ -183,7 +183,7 @@ class IntegrationFeedbackRoutingTests(unittest.TestCase):
     def test_layout_and_service_scenarios_have_explicit_owners_in_both_runtimes(self):
         for runtime in ('plugins/creative-writing-skills', 'cw'):
             for relative in ('SKILL.md', 'resources/workflow.md'):
-                text = (ROOT / runtime / 'skills/hieronymus-integration' / relative).read_text()
+                text = (ROOT / runtime / 'skills/hieronymus-integration' / relative).read_text(encoding="utf-8")
                 self.assertRegex(text, r'(?s)cw layout.{0,350}InkyQuill/creative-writing-skills')
                 self.assertRegex(text, r'(?s)Hieronymus service.{0,250}InkyQuill/hieronymus')
                 self.assertIn('project-feedback', text)

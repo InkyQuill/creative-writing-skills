@@ -15,6 +15,7 @@ from .transactions import Change, TransactionPlan
 
 
 def plan_relocation(project: Project, selections: dict[str, str]) -> TransactionPlan:
+    """Build guarded file, reference and directory changes for selected roles."""
     if not selections:
         raise ValueError("--relocate requires --set ROLE=FOLDER")
     if project.manifest.metadata.get("schema-version") != 1:
@@ -56,6 +57,7 @@ def plan_relocation(project: Project, selections: dict[str, str]) -> Transaction
     # Include project-level references and binder JSON, but never enter journals,
     # VCS metadata, links, or nested projects. Reject unsafe entries in moved trees.
     def scan(directory: Path):
+        """Inventory regular content without entering protected or nested trees."""
         relative = directory.relative_to(project.root).as_posix()
         moving = any(relative == source or relative.startswith(source + "/") for source in moves)
         for entry in sorted(directory.iterdir()):
@@ -81,6 +83,7 @@ def plan_relocation(project: Project, selections: dict[str, str]) -> Transaction
     scan(project.root)
 
     def mapped(path: str) -> str:
+        """Map one project-relative identity through the disjoint role moves."""
         for source, destination in moves.items():
             if path == source or path.startswith(source + "/"):
                 return destination + path[len(source):]
@@ -136,17 +139,24 @@ def plan_relocation(project: Project, selections: dict[str, str]) -> Transaction
 
 
 def _rewrite_paths(data: bytes, moves: dict[str, str]) -> bytes:
+    """Rewrite explicit path prefixes without treating bare folder words as paths."""
     # Work on UTF-8 path tokens only; retain formatting, BOM and line endings.
     text = data.decode("utf-8")
     for source, destination in sorted(moves.items(), key=lambda item: -len(item[0])):
-        text = re.sub(r"(?<![\w./-])" + re.escape(source) + r"(?=/|[\s`\"'<>)]|$)",
+        # A bare single-segment folder name is also an ordinary prose word.
+        # Folder-only Markdown links are handled by the link resolver below;
+        # generic path tokens must carry a slash when their source is one word.
+        ending = r"(?=/|[\s`\"'<>)]|$)" if "/" in source else r"(?=/)"
+        text = re.sub(r"(?<![\w./-])" + re.escape(source) + ending,
                       lambda match: destination, text)
     return text.encode("utf-8")
 
 
 def _rewrite_markdown(data: bytes, old: str, new: str, mapped, moves) -> bytes:
+    """Rebase local Markdown links and explicit project path tokens."""
     text = data.decode("utf-8")
     def link(match):
+        """Preserve remote links and rewrite local paths relative to the new file."""
         value = match.group("url")
         parsed = urlsplit(value)
         if parsed.scheme or parsed.netloc or value.startswith(("/", "#")):
@@ -169,6 +179,7 @@ def _rewrite_markdown(data: bytes, old: str, new: str, mapped, moves) -> bytes:
 
 
 def _reference_link(match, old, new, mapped):
+    """Rebase a Markdown reference definition while retaining its suffix."""
     value = match.group("ref")
     if urlsplit(value).scheme or value.startswith(("/", "#")):
         return match.group(0)
