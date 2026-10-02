@@ -144,6 +144,7 @@ def _parser(*, error_stream: TextIO) -> argparse.ArgumentParser:
     layout = commands.add_parser("layout", error_stream=error_stream)
     layout.add_argument("--set", dest="role_selections", action="append", default=[], metavar="ROLE=FOLDER")
     layout.add_argument("--capture", action="store_true")
+    layout.add_argument("--relocate", action="store_true")
     _mutation_options(layout)
 
     get_folder = commands.add_parser("get-folder", error_stream=error_stream)
@@ -282,6 +283,21 @@ def run(argv: list[str], *, cwd: Path, stdout: TextIO, stderr: TextIO) -> int:
     if args.command == "layout":
         try:
             project = discover_project(cwd)
+            if args.relocate:
+                from .relocation import plan_relocation
+                if args.capture:
+                    raise ValueError("--relocate cannot be combined with --capture")
+                selections = {}
+                for selection in args.role_selections:
+                    if "=" not in selection:
+                        raise ValueError("--set expects ROLE=FOLDER")
+                    role, relative = selection.split("=", 1)
+                    if role not in ROLE_CANDIDATES or role in selections:
+                        raise ValueError(f"unknown or duplicate layout role: {role}")
+                    selections[role] = relative
+                plan = plan_relocation(project, selections)
+                return _preview_or_apply(TransactionEngine(project), plan, apply=args.apply,
+                                         output_format=args.format, stdout=stdout)
             if not args.role_selections and not args.capture:
                 _write_command_data(inventory_layout(project), output_format=args.format, stdout=stdout)
                 return 0

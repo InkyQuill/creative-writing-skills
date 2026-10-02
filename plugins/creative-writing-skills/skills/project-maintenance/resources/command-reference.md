@@ -20,6 +20,7 @@ doctor
 layout
 get-folder chapters|side-stories|drafts|characters|world|plans|brainstorm|reviews|archive
 layout --capture [--apply]
+layout --relocate --set drafts=<folder> [--set characters=<folder>] [--apply]
 layout --set chapters=<folder> [--set drafts=<folder>] [--apply]
 context draft|chapter|kb <path> [--as trusted|reader|character:<id>] [--snapshot]
 clean-context
@@ -341,3 +342,23 @@ style, and shared entity. Use generic exact edits for draft prose; use domain
 commands for protected lifecycle metadata. `history`, `undo`, and `recover`
 apply to translation transactions too. A changed base or input requires a
 fresh reviewed draft, never a forced accept.
+
+
+### Relocate existing authoring folders
+
+For a schema-version 1 project, `cw layout --relocate --set drafts=drafts
+--set characters=characters --format json` previews a semantic role/file map,
+reference changes, layout choices and derived indexes. Obtain the author's
+approval of that concrete map before running the same command with `--apply`.
+Plain `--set` still records a choice without moving files.
+
+Relocation rejects existing destinations, overlapping move trees, symlinks and
+nested projects. It preserves non-Markdown assets and Pocket Editor review
+sidecars as exact bytes, updates Markdown relative links and project-relative
+path tokens (including draft targets), and updates path tokens in binder-named
+JSON files. Review sidecar anchors/hashes are not rewritten: validate them again
+before consuming feedback if source Markdown changed. Other opaque files are
+not interpreted; inspect preview and reconcile any application-specific refs.
+The operation uses the ordinary transaction journal and `cw undo <id> --apply`
+restores original content, layout, indexes and moved directories. No legacy
+scaffold is created. Translation/schema-version 2 relocation is not supported.

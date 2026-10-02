@@ -30,3 +30,18 @@ reader knowledge boundaries, and unresolved conflicts. Use only public
 Hieronymus surfaces discovered in the current host. Do not read a raw database,
 ingest a whole project, start background synchronization, or create a new
 memory store or transport inside CWS.
+
+## Route implementation defects by ownership
+
+A Hieronymus-enabled project or binding does not select an issue tracker.
+For `cw layout`, migration, relocation, bundled CLI, or CWS integration-wrapper
+defects, use $project-feedback and the
+[CWS tracker](https://github.com/InkyQuill/creative-writing-skills/issues).
+For Hieronymus service, `hiero`, MCP, or Hieronymus-owned skill defects, use
+the [Hieronymus tracker](https://github.com/InkyQuill/hieronymus/issues).
+Resolve the failed component before choosing either workflow; memory relevance
+feedback is not an implementation bug report.
+
+Regression scenarios: missing journaled relocation in `cw layout` inside a
+Hieronymus-enabled literary project routes to `InkyQuill/creative-writing-skills`;
+a failure of the Hieronymus service itself routes to `InkyQuill/hieronymus`.
