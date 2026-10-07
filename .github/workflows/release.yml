@@ -1,52 +1,102 @@
 name: Release
 
 on:
-  push:
-    tags:
-      - "v*"
+  workflow_call:
+    inputs:
+      release_tag:
+        type: string
+        required: true
+      release_sha:
+        type: string
+        required: true
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: "Stable tag, e.g. v0.12.0"
+        type: string
+        required: true
+      release_sha:
+        description: "Full SHA of the merged release PR (also used for retries)"
+        type: string
+        required: true
 
 permissions:
-  contents: write
+  contents: read
+
+concurrency:
+  group: release-${{ inputs.release_tag }}
+  cancel-in-progress: false
 
 env:
   PYTHONDONTWRITEBYTECODE: "1"
 
 jobs:
-  validate:
-    runs-on: ubuntu-latest
+  publish:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+      actions: write
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      RELEASE_TAG: ${{ inputs.release_tag }}
+      RELEASE_SHA: ${{ inputs.release_sha }}
     steps:
-      - uses: actions/checkout@v7
-
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.release_sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Verify immutable source and canonical version
+        run: python3 scripts/automatic_release.py verify --tag "$RELEASE_TAG" --sha "$RELEASE_SHA"
       - name: Run unit tests
         run: python3 -m unittest discover -s tests -v
-
       - name: Validate distribution
         run: python3 scripts/validate_distribution.py
-
-      - name: Check Claude distribution drift
+      - name: Check generated distribution drift
         run: python3 scripts/sync_claude_distribution.py --check
-
-      - name: Verify tag matches canonical plugin version
+      - name: Build the complete skill inventory once
         run: |
-          tag="${GITHUB_REF#refs/tags/}"
-          version="$(python3 -c 'import json; print(json.load(open("plugins/creative-writing-skills/.codex-plugin/plugin.json"))["version"])')"
-          if [ "${tag}" != "v${version}" ]; then
-            echo "::error::Tag ${tag} does not match canonical plugin version ${version}"
-            exit 1
+          python3 scripts/create_skill_zips.py
+          python3 scripts/automatic_release.py prepare-assets --tag "$RELEASE_TAG"
+      - name: Create the immutable tag after verification
+        run: |
+          if ! git show-ref --verify --quiet "refs/tags/$RELEASE_TAG"; then
+            gh api --method POST "repos/$GITHUB_REPOSITORY/git/refs" -f "ref=refs/tags/$RELEASE_TAG" -f "sha=$RELEASE_SHA"
           fi
-
-  release:
-    needs: validate
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v7
-
-      - name: Build Claude.ai skill packages
-        run: python3 scripts/create_skill_zips.py
-
-      - name: Create GitHub Release
-        uses: softprops/action-gh-release@v3
+      - name: Detect an already published release
+        id: existing
+        run: |
+          published=false
+          if draft=$(gh release view "$RELEASE_TAG" --json isDraft --jq .isDraft); then
+            if [ "$draft" = false ]; then published=true; fi
+          fi
+          echo "published=$published" >> "$GITHUB_OUTPUT"
+      - name: Upload verified packages to a draft release
+        if: steps.existing.outputs.published != 'true'
+        uses: softprops/action-gh-release@5113cdc90fd4d541c801c55356214017bf5ae34b # v3
         with:
-          generate_release_notes: true
+          tag_name: ${{ inputs.release_tag }}
+          target_commitish: ${{ inputs.release_sha }}
+          draft: true
+          body_path: zips/RELEASE_NOTES.md
           fail_on_unmatched_files: true
-          files: zips/*.skill
+          files: |
+            zips/*.skill
+            zips/SHA256SUMS
+      - name: Publish only after every asset has uploaded
+        if: steps.existing.outputs.published != 'true'
+        run: gh release edit "$RELEASE_TAG" --draft=false
+      - name: Reconcile release-please labels after publication
+        run: |
+          numbers=$(gh api "repos/$GITHUB_REPOSITORY/commits/$RELEASE_SHA/pulls" --jq '.[] | select(.merged_at != null and .base.ref == "main" and (.head.ref | startswith("release-please--branches--main"))) | .number')
+          if [ -n "$numbers" ]; then
+            gh label create 'autorelease: tagged' --repo "$GITHUB_REPOSITORY" --color 0E8A16 --force
+          fi
+          for number in $numbers; do
+            gh issue edit "$number" --repo "$GITHUB_REPOSITORY" --remove-label 'autorelease: pending' --add-label 'autorelease: tagged'
+          done
+      - name: Reconcile commits that arrived during publication
+        run: gh workflow run release-please.yml --ref main
