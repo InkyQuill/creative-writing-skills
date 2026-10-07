@@ -255,6 +255,11 @@ def run_release(
     runner: Runner = run_command,
 ) -> str:
     repo_root = Path(repo_root).resolve()
+    if (repo_root / "release-please-config.json").exists():
+        raise ReleaseError(
+            "releases are managed by release-please; merge its release PR instead "
+            "of creating a competing local version/tag"
+        )
     manifest_path = repo_root / MANIFEST_RELATIVE
     if manifest_path.is_symlink() or not manifest_path.is_file():
         raise ReleaseError(f"canonical manifest must be a regular file: {manifest_path}")

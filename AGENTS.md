@@ -70,17 +70,16 @@ archives under `zips/`.
 
 ## Releases
 
-The version in the canonical Codex plugin manifest is the only version source.
-Use:
+The canonical Codex plugin manifest remains the runtime version source.
+Release-please updates it alongside its bookkeeping mirrors (`version.txt` and
+`.release-please-manifest.json`) in one release PR; CI checks that they agree.
+Use Conventional Commit titles for merged work. Do not manually bump versions,
+create release tags, or use `scripts/release.py` while automation is configured.
 
-```bash
-python3 scripts/release.py patch
-python3 scripts/release.py minor --push
-```
-
-The release command requires a clean `main` branch, regenerates derived Claude
-and ZCode metadata, runs tests and distribution checks, then commits and tags.
-It pushes only when `--push` is explicit.
+The release workflow runs the ordinary generator on the release PR, explicitly
+dispatches CI, and publishes verified skill archives after that PR merges. Never
+patch generated release metadata directly. See [`docs/releases.md`](docs/releases.md)
+for repository setup and retries against an exact commit/tag.
 
 ## Writing Conventions
 

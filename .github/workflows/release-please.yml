@@ -1,0 +1,90 @@
+name: release-please
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  PYTHONDONTWRITEBYTECODE: "1"
+
+jobs:
+  identity:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      tag: ${{ steps.version-change.outputs.tag }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - name: Detect a merged version change
+        id: version-change
+        env:
+          BEFORE: ${{ github.event.before }}
+        run: python3 scripts/automatic_release.py version-change --before "$BEFORE" >> "$GITHUB_OUTPUT"
+
+  release-pr:
+    needs: identity
+    if: needs.identity.outputs.tag == ''
+    concurrency:
+      group: release-please-pr
+      cancel-in-progress: false
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+      actions: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - name: Create or update the release PR
+        id: release
+        uses: googleapis/release-please-action@8b8fd2cc23b2e18957157a9d923d75aa0c6f6ad5 # v4
+        with:
+          skip-github-release: true
+          target-branch: main
+      - name: Synchronize distributions and explicitly dispatch PR checks
+        if: steps.release.outputs.pr != ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_PR: ${{ steps.release.outputs.pr }}
+        run: |
+          number=$(python3 -c 'import json, os; n=json.loads(os.environ["RELEASE_PR"])["number"]; assert type(n) is int and n > 0; print(n)')
+          head=$(gh pr view "$number" --json headRefName --jq .headRefName)
+          case "$head" in release-please--branches--main*) ;; *) echo 'Unexpected release branch' >&2; exit 1;; esac
+          gh auth setup-git
+          git fetch origin "$head"
+          git switch -c "$head" "origin/$head"
+          python3 scripts/automatic_release.py sync
+          git add cw .claude-plugin/marketplace.json marketplace.json
+          if ! git diff --cached --quiet; then
+            git config user.name 'Pavel Obruchnikov'
+            git config user.email 'me@inkyquill.net'
+            git commit -m 'chore(release): synchronize plugin distributions'
+            git push origin "$head"
+          fi
+          # GITHUB_TOKEN commits do not trigger pull_request workflows.
+          gh workflow run ci.yml --ref "$head"
+
+  # Release identity is not queued behind PR updates; publication is serialized per tag.
+  publish:
+    needs: identity
+    if: needs.identity.outputs.tag != ''
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+      actions: write
+    uses: ./.github/workflows/release.yml
+    with:
+      release_tag: ${{ needs.identity.outputs.tag }}
+      release_sha: ${{ github.sha }}

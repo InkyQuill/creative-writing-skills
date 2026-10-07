@@ -201,15 +201,11 @@ python3 scripts/sync_claude_distribution.py --check
 python3 scripts/validate_distribution.py
 ```
 
-Release versioning reads and updates only the canonical plugin manifest, then
-regenerates and verifies derived metadata:
-
-```bash
-python3 scripts/release.py patch
-python3 scripts/release.py minor --push
-```
-
-Without `--push`, the release commit and tag remain local.
+Releases use release-please: Conventional Commits produce a release PR with the
+version and changelog, the workflow regenerates compatibility metadata and runs
+CI, and merging the release PR publishes all skill archives and checksums.
+The canonical plugin manifest remains the runtime version source.
+See [release setup, publication, and retries](docs/releases.md).
 
 ## License and Attribution
 
