@@ -4,7 +4,8 @@ from cwcli.translation.directions import plan_direction
 from cwcli.translation.context import build_packet
 from cwcli.translation.drafts import plan_translation_draft, plan_translation_accept, plan_translation_status, translation_status
 from cwcli.translation.memory import plan_memory
-from cwcli.transactions import TransactionEngine
+from cwcli.transactions import TransactionEngine, TransactionPlan, TransactionError
+from cwcli.documents import parse_document
 
 
 class TranslationDraftTests(TranslationFixture):
@@ -59,3 +60,17 @@ class TranslationDraftTests(TranslationFixture):
         with self.assertRaises(ValueError):
             plan_translation_accept(self.project, self.path)
         self.assertEqual('User correction', self.target.read_text())
+
+    def test_translation_context_survives_expired_undo_history(self):
+        self.draft()
+        document = parse_document((self.root / self.path).read_bytes())
+        context_id = document.metadata['context-id']
+        engine = TransactionEngine(self.project)
+        for _ in range(51):
+            engine.apply(TransactionPlan(('test-history',), (), {}))
+        with self.assertRaises(TransactionError):
+            engine.store.manifest(context_id)
+        self.assertEqual('current', translation_status(self.project, self.path)['freshness'])
+        self.apply(plan_translation_status(self.project, self.path, 'reviewed'))
+        self.apply(plan_translation_accept(self.project, self.path))
+        self.assertIn('Перевод.', self.target.read_text())

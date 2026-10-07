@@ -6,7 +6,7 @@ from pathlib import Path
 from unittest import mock
 
 from .helpers import app
-from cwcli import scaffold, schema
+from cwcli import project, transactions, scaffold, schema
 
 
 class InitCommandTests(unittest.TestCase):
@@ -28,7 +28,7 @@ class InitCommandTests(unittest.TestCase):
             self.assertFalse(root.exists())
             self.assertEqual(
                 set(schema.SCAFFOLD_FILES)
-                | {".creative-writing/context", ".creative-writing/transactions"},
+                | {".creative-writing/context"},
                 {operation["path"] for operation in json.loads(output)},
             )
 
@@ -39,14 +39,14 @@ class InitCommandTests(unittest.TestCase):
             self.assertEqual("committed", result["status"])
             self.assertTrue((root / "project.md").is_file())
             self.assertTrue((root / ".creative-writing/context").is_dir())
-            self.assertTrue((root / ".creative-writing/transactions").is_dir())
+            self.assertTrue((root / ".creative-writing/transactions.sqlite3").is_file())
             self.assertIn("kb/vocab.md", (root / "kb/_index.md").read_text())
             self.assertIn(
                 "kb/continuity/timeline.md",
                 (root / "kb/continuity/_index.md").read_text(),
             )
-            manifest = root / ".creative-writing/transactions" / result["transaction_id"] / "manifest.json"
-            self.assertFalse(json.loads(manifest.read_text())["metadata"]["undoable"])
+            manifest = transactions.TransactionStore(project.discover_project(root)).manifest(result["transaction_id"])
+            self.assertFalse(manifest["metadata"]["undoable"])
 
     def test_existing_folder_preserves_every_unknown_entry(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -202,8 +202,8 @@ class InitCommandTests(unittest.TestCase):
             self.assertEqual("", error)
             self.assertEqual("committed", result["status"])
             self.assertIn("durability could not be confirmed", result["diagnostics"][0])
-            manifest = root / ".creative-writing/transactions" / result["transaction_id"] / "manifest.json"
-            self.assertEqual("committed", json.loads(manifest.read_text())["state"])
+            manifest = transactions.TransactionStore(project.discover_project(root)).manifest(result["transaction_id"])
+            self.assertEqual("committed", manifest["state"])
             project_bytes = (root / "project.md").read_bytes()
 
             retry_status, retry_output, retry_error = self.run_cli(
@@ -227,7 +227,7 @@ class InitCommandTests(unittest.TestCase):
             self.assertFalse(root.exists())
             self.assertFalse(plan.metadata["undoable"])
             self.assertEqual(
-                (".creative-writing/context", ".creative-writing/transactions"),
+                (".creative-writing/context",),
                 plan.metadata["protected-directories"],
             )
 
@@ -249,7 +249,7 @@ class InitCommandTests(unittest.TestCase):
                 for operation in json.loads(output)
                 if operation["op"] == "create-directory"
             }
-            self.assertEqual({".creative-writing/transactions"}, protected)
+            self.assertEqual(set(), protected)
             self.assertFalse((root / "project.md").exists())
 
     def test_preview_rejects_symlinked_target_ancestor(self):

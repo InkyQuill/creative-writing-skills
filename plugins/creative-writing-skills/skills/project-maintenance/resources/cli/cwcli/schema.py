@@ -49,7 +49,6 @@ SCAFFOLD_FILES: tuple[str, ...] = tuple(
 SCAFFOLD_DIRECTORIES: tuple[str, ...] = (
     ".creative-writing",
     ".creative-writing/context",
-    ".creative-writing/transactions",
     "kb",
     "kb/canon",
     "kb/characters",
@@ -342,7 +341,6 @@ def required_paths(metadata):
     if not enabled and metadata.get("scaffold-template") == "compact":
         return (
             ".creative-writing", ".creative-writing/context",
-            ".creative-writing/transactions",
         ), ("project.md", ".cws-layout.json")
     if not enabled:
         return SCAFFOLD_DIRECTORIES, SCAFFOLD_FILES
@@ -350,6 +348,6 @@ def required_paths(metadata):
     extra_files = tuple(p + '/_index.md' for p in extra_dirs)
     dirs, files = SCAFFOLD_DIRECTORIES, SCAFFOLD_FILES
     if kind == 'translation':
-        dirs = tuple(p for p in dirs if p in ('.creative-writing', '.creative-writing/context', '.creative-writing/transactions', 'kb'))
+        dirs = tuple(p for p in dirs if p in ('.creative-writing', '.creative-writing/context', 'kb'))
         files = ('project.md', 'kb/_index.md')
     return tuple(sorted(set(dirs + extra_dirs))), tuple(sorted(set(files + extra_files)))

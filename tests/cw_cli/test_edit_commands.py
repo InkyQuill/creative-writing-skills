@@ -6,7 +6,7 @@ from pathlib import Path
 from unittest import mock
 
 from . import helpers  # Adds the canonical CLI directory to sys.path.
-from cwcli import app, transactions
+from cwcli import project, app, transactions
 
 
 class EditCommandTests(unittest.TestCase):
@@ -74,9 +74,7 @@ class EditCommandTests(unittest.TestCase):
         self.assertEqual("committed", applied["status"])
         self.assertTrue(applied["transaction_id"])
         self.assertIn(b"Snow.", self.target.read_bytes())
-        manifests = list(
-            (self.root / ".creative-writing/transactions").glob("*/manifest.json")
-        )
+        manifests = transactions.TransactionStore(project.discover_project(self.root)).history()
         self.assertEqual(1, len(manifests))
 
     def test_replace_cli_tolerates_indentation_and_nbsp(self):

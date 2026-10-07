@@ -37,6 +37,12 @@ _WINDOWS_RESERVED = frozenset(
 def check_journal(project: Project) -> list[Finding]:
     """Validate journal records and snapshots without recovery or cleanup."""
 
+    store = TransactionStore(project)
+    try:
+        if store._ready():
+            return _check_databases(project, store)
+    except (OSError, TransactionError, ValueError) as error:
+        return [_finding(INVALID_LAYOUT, "error", str(error), ".creative-writing/transactions.sqlite3", "Restore the database from a trusted copy.")]
     root, boundary_finding = _journal_root(project)
     if boundary_finding is not None:
         return [boundary_finding]
@@ -96,6 +102,58 @@ def check_journal(project: Project) -> list[Finding]:
         findings.extend(_intent_findings(project, manifest, _journal_path(relative, "manifest.json")))
 
     findings.extend(_check_blobs(project, root / "blobs", referenced_blobs))
+    return sorted(findings, key=lambda item: (item.path or "", item.code, item.message))
+
+
+def _check_databases(project: Project, store: TransactionStore) -> list[Finding]:
+    findings = []
+    journal_path = ".creative-writing/transactions.sqlite3"
+    context_path = ".creative-writing/context.sqlite3"
+    action = "Preserve the databases and repair only from a trusted copy."
+    try:
+        for path in (store.database_path, store.context_path):
+            with store._read_database(path) as db:
+                for result, in db.execute('PRAGMA integrity_check'):
+                    if result != 'ok':
+                        findings.append(_finding(INVALID_LAYOUT, "error", result, path.relative_to(project.root).as_posix(), action))
+        for entry in store.history():
+            identifier = entry['id']
+            manifest = store._read_manifest(identifier)
+            errors, references = _validate_manifest(project, manifest)
+            findings.extend(_finding(INVALID_MANIFEST, "error", f"{identifier}: {message}", journal_path, action) for message in errors)
+            findings.extend(_intent_findings(project, manifest, journal_path))
+            for blob_id, logicals in references.items():
+                try:
+                    data = store.read_blob(blob_id)
+                    for expected in logicals:
+                        if expected is not None and logical_hash(data) != expected:
+                            raise TransactionError('transaction blob logical hash does not match')
+                except (OSError, ValueError, TransactionError) as error:
+                    findings.append(_finding(INVALID_BLOB, "error", str(error), journal_path, action))
+            if manifest['state'] in _ACTIVE_STATES:
+                try:
+                    TransactionEngine(project).preflight_recovery(identifier)
+                except (OSError, ValueError, TransactionError) as error:
+                    findings.append(_finding(INVALID_INTENT, "error", str(error), journal_path, action))
+                else:
+                    findings.append(_finding(INCOMPLETE_TRANSACTION, "warning", f"transaction {identifier} is incomplete in state {manifest['state']}", journal_path, _render_argv(('cw', 'recover', identifier, '--apply')), details={'transaction_id': identifier}))
+        with store._read_database(store.database_path) as db:
+            for identifier, data in db.execute('SELECT id, data FROM blobs'):
+                try:
+                    store._verify_blob(identifier, data)
+                except (ValueError, TransactionError) as error:
+                    findings.append(_finding(INVALID_BLOB, "error", str(error), journal_path, action))
+        with store._read_database(store.context_path) as db:
+            for identifier, byte_hash, data in db.execute('SELECT id, byte_hash, data FROM revisions'):
+                try:
+                    store._verify_revision(identifier, byte_hash, data)
+                except (ValueError, TransactionError) as error:
+                    findings.append(_finding(INVALID_REVISION, "error", str(error), context_path, action))
+            for identifier, raw in db.execute('SELECT id, packet FROM packets'):
+                if hashlib.sha256(raw.encode('utf-8')).hexdigest() != identifier or not isinstance(json.loads(raw), dict):
+                    findings.append(_finding(INVALID_MANIFEST, "error", f'invalid context packet: {identifier}', context_path, action))
+    except (OSError, ValueError, TypeError, KeyError, TransactionError) as error:
+        findings.append(_finding(INVALID_LAYOUT, "error", str(error), journal_path, action))
     return sorted(findings, key=lambda item: (item.path or "", item.code, item.message))
 
 
@@ -274,14 +332,16 @@ def is_committed_decision(project: Project, transaction_id: str) -> bool:
 
     if not _valid_transaction_id(transaction_id):
         return False
-    _root, boundary_finding = _journal_root(project)
-    if boundary_finding is not None:
-        return False
     store = TransactionStore(project)
     try:
-        transaction_dir = store._transaction_dir(transaction_id)
-        if _path_kind(transaction_dir) != "directory":
-            return False
+        if store._ready():
+            # Validate retained snapshots; use the receipt only after expiry.
+            if not any(entry['id'] == transaction_id for entry in store.history()):
+                return store.has_receipt(transaction_id)
+        else:
+            _root, boundary_finding = _journal_root(project)
+            if boundary_finding is not None:
+                return False
         manifest = store.manifest(transaction_id)
     except (OSError, TransactionError, TypeError, UnicodeError, ValueError):
         return False
@@ -405,8 +465,8 @@ def _render_argv(argv: tuple[str, ...], *, windows: bool | None = None) -> str:
     return subprocess.list2cmdline(list(argv)) if windows else shlex.join(argv)
 
 
-def _finding(code: str, severity: Severity, message: str, path: str, next_action: str) -> Finding:
-    return Finding(code=code, severity=severity, message=message, path=path, next_action=next_action)
+def _finding(code: str, severity: Severity, message: str, path: str, next_action: str, *, details=None) -> Finding:
+    return Finding(code=code, severity=severity, message=message, path=path, next_action=next_action, details=details)
 
 
 __all__ = ["INCOMPLETE_TRANSACTION", "INVALID_BLOB", "INVALID_INTENT", "INVALID_LAYOUT", "INVALID_MANIFEST", "INVALID_REVISION", "check_journal", "is_committed_decision"]

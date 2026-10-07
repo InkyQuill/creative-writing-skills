@@ -21,6 +21,7 @@ from types import MappingProxyType
 
 from .documents import logical_hash
 from .project import Project
+from .sqlite_store import SQLiteStoreMixin
 
 
 _DIRECTORY_TOKEN_PREFIX = "@directory:"
@@ -82,7 +83,7 @@ class TransactionRecord:
     completed: tuple[str, ...]
 
 
-class TransactionStore:
+class LegacyTransactionStore:
     """Persist transaction plans beneath a project's protected journal directory."""
 
     def __init__(self, project: Project):
@@ -487,6 +488,11 @@ class TransactionStore:
             raise
 
 
+
+class TransactionStore(SQLiteStoreMixin, LegacyTransactionStore):
+    """SQLite journal with a read-only fallback for pre-migration projects."""
+
+
 class TransactionEngine:
     """Guard, stage, apply, and recover multi-file project transactions."""
 
@@ -519,7 +525,12 @@ class TransactionEngine:
     ) -> TransactionRecord:
         """Serialize validation and installation across project writers."""
         with _project_transaction_lock(self.project.root):
-            return self._apply_locked(plan, transaction_id=transaction_id)
+            record = self._apply_locked(plan, transaction_id=transaction_id)
+            try:
+                self.store.prune(keep=record.id)
+            except (OSError, TransactionError, ValueError, TypeError, KeyError) as error:
+                warnings.warn(f"transaction committed; history cleanup deferred: {error}", RuntimeWarning)
+            return record
 
     def _apply_locked(
         self, plan: TransactionPlan, *, transaction_id: str | None = None
@@ -743,6 +754,9 @@ class TransactionEngine:
             return self._recover_locked(transaction_id)
 
     def _recover_locked(self, transaction_id: str) -> TransactionRecord:
+        # A write-authorized recovery may first let SQLite recover hot journals.
+        with self.store._write_database():
+            pass
         record = self.preflight_recovery(transaction_id)
 
         changes = self._persisted_changes(transaction_id)

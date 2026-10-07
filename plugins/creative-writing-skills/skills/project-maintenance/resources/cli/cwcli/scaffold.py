@@ -96,7 +96,7 @@ def plan_init(target: Path, title: str, language: str, *, kind: str = "authoring
     )
     protected_directories = tuple(
         relative
-        for relative in (".creative-writing/context", ".creative-writing/transactions")
+        for relative in (".creative-writing/context",)
         if not (root / relative).is_dir()
     )
     changes: list[Change] = []
@@ -169,6 +169,9 @@ def _validate_init_target(root: Path) -> None:
         if candidate.is_symlink() or (candidate.exists() and not candidate.is_dir()):
             raise InitError(_migration_message(f"scaffold path {relative} has an incompatible kind"))
 
+    for name in ("transactions.sqlite3", "context.sqlite3"):
+        if (root / ".creative-writing" / name).exists() or (root / ".creative-writing" / name).is_symlink():
+            raise InitError(_migration_message(f"protected database {name} already exists"))
     for relative in (".creative-writing/context", ".creative-writing/transactions"):
         protected = root / relative
         if protected.is_dir() and any(protected.iterdir()):

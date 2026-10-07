@@ -22,9 +22,8 @@ def _draft(project, path):
 
 
 def _packet(project, doc):
-    identifier = doc.metadata.get('packet-transaction')
-    manifest = TransactionStore(project).manifest(identifier)
-    packet = manifest['metadata'].get('translation-packet')
+    identifier = doc.metadata.get('context-id', doc.metadata.get('packet-transaction'))
+    packet = TransactionStore(project).packet(identifier)
     if not isinstance(packet, dict) or packet.get('direction') != doc.metadata.get('direction-id') or packet.get('units') != strings(doc.metadata, 'source-units'):
         raise ValueError('missing or mismatched translation packet')
     return packet
@@ -46,7 +45,7 @@ def plan_translation_draft(project, direction, draft_id, packet, content):
     target = _target(path)
     before = read_source(project, target) if (project.root / target).exists() else None
     transaction_id = uuid.uuid4().hex
-    metadata = {'direction-id': direction, 'draft-id': draft_id, 'source-units': packet['units'], 'packet-transaction': transaction_id, 'base-revision': digest(before) if before is not None else 'absent', 'status': 'draft'}
+    metadata = {'direction-id': direction, 'draft-id': draft_id, 'source-units': packet['units'], 'context-id': TransactionStore.packet_id(packet), 'base-revision': digest(before) if before is not None else 'absent', 'status': 'draft'}
     return make_plan(project, ('translation', 'draft'), [replacement(project, path, render(metadata, content.decode('utf-8-sig')))], {'transaction-id': transaction_id, 'translation-packet': packet, 'read-guards': packet['dependencies']})
 
 
