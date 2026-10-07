@@ -19,10 +19,10 @@ def make_project(root: Path) -> project.Project:
 
 
 class TransactionStoreTests(unittest.TestCase):
-    def make_store(self) -> transactions.TransactionStore:
+    def make_store(self) -> transactions.LegacyTransactionStore:
         self.directory = tempfile.TemporaryDirectory()
         self.addCleanup(self.directory.cleanup)
-        return transactions.TransactionStore(make_project(Path(self.directory.name) / "project"))
+        return transactions.LegacyTransactionStore(make_project(Path(self.directory.name) / "project"))
 
     def test_prepare_persists_immutable_manifest_with_deduplicated_before_after_blobs(self):
         store = self.make_store()

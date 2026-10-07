@@ -204,11 +204,7 @@ class TransactionEngineTests(unittest.TestCase):
         observed: list[tuple[str, list[str], list[str]]] = []
 
         def mutate_then_raise(source: os.PathLike[str], destination: os.PathLike[str]) -> None:
-            manifest = json.loads(
-                (engine.store.root / "tx-mutate-raise/manifest.json").read_text(
-                    encoding="utf-8"
-                )
-            )
+            manifest = engine.store.manifest("tx-mutate-raise")
             observed.append((manifest["state"], manifest["intents"], manifest["completed"]))
             os.replace(source, destination)
             raise OSError("raised after mutation")

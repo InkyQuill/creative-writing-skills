@@ -17,7 +17,7 @@ def materialize_scaffold(root: Path) -> None:
         path = root / relative_id
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_bytes(content)
-    for relative_id in (".creative-writing/context", ".creative-writing/transactions"):
+    for relative_id in (".creative-writing/context",):
         (root / relative_id).mkdir(parents=True, exist_ok=True)
 
 
@@ -411,7 +411,7 @@ class StructureCheckTests(unittest.TestCase):
             self.assertFalse(target.exists())
             self.assertEqual([operation["path"] for operation in operations], sorted(operation["path"] for operation in operations))
             self.assertEqual(
-                set(schema.SCAFFOLD_FILES) | {".creative-writing/context", ".creative-writing/transactions"},
+                set(schema.SCAFFOLD_FILES) | {".creative-writing/context"},
                 {operation["path"] for operation in operations},
             )
             self.assertEqual(

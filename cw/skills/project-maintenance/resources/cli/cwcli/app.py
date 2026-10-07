@@ -551,11 +551,11 @@ def _run_undo(args: argparse.Namespace, *, cwd: Path, stdout: TextIO, stderr: Te
 def _run_recover(args: argparse.Namespace, *, cwd: Path, stdout: TextIO, stderr: TextIO) -> int:
     try:
         engine = TransactionEngine(discover_project(cwd))
-        record = engine.preflight_recovery(args.transaction_id)
         if args.apply:
             record = engine.recover(args.transaction_id)
             status = record.state
         else:
+            record = engine.preflight_recovery(args.transaction_id)
             status = "preview"
         _write_command_data(
             {

@@ -1,4 +1,6 @@
 import tempfile
+import sqlite3
+from contextlib import closing
 import unittest
 from pathlib import Path
 
@@ -299,7 +301,8 @@ class DraftLifecycleTests(unittest.TestCase):
         revision = documents.parse_document(draft_path.read_bytes()).metadata[
             "base-revision"
         ]
-        (self.store.root / "revisions" / revision / "descriptor.json").unlink()
+        with closing(sqlite3.connect(self.store.context_path)) as db, db:
+            db.execute('DELETE FROM revisions WHERE id=?', (revision,))
 
         with self.assertRaisesRegex(drafts.DraftError, "unrecoverable"):
             drafts.plan_accept_draft(

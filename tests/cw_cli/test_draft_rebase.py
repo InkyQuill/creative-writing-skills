@@ -1,4 +1,6 @@
 import tempfile
+import sqlite3
+from contextlib import closing
 import unittest
 from pathlib import Path
 
@@ -291,24 +293,24 @@ class DraftRebasePlanTests(unittest.TestCase):
         revision = documents.parse_document(draft_path.read_bytes()).metadata[
             "base-revision"
         ]
-        revision_root = store.root / "revisions" / revision
-
+        with closing(sqlite3.connect(store.context_path)) as db, db:
+            held = db.execute('SELECT id, byte_hash, data FROM revisions WHERE id=?', (revision,)).fetchone()
         for corruption in ("missing", "corrupt"):
             with self.subTest(corruption=corruption):
-                if corruption == "missing":
-                    descriptor = revision_root / "descriptor.json"
-                    held = descriptor.read_bytes()
-                    descriptor.unlink()
-                else:
-                    descriptor = revision_root / "descriptor.json"
-                    descriptor.write_text("{}\n", encoding="utf-8")
+                with closing(sqlite3.connect(store.context_path)) as db, db:
+                    if corruption == "missing":
+                        db.execute('DELETE FROM revisions WHERE id=?', (revision,))
+                    else:
+                        db.execute('UPDATE revisions SET data=? WHERE id=?', (b'corrupt', revision))
                 before_draft = draft_path.read_bytes()
                 before_target = target.read_bytes()
                 with self.assertRaisesRegex(drafts.DraftError, "recoverable rebase inputs"):
                     drafts.plan_rebase_draft(model, "work/drafts/ch-001.md", store)
                 self.assertEqual(before_draft, draft_path.read_bytes())
                 self.assertEqual(before_target, target.read_bytes())
-                descriptor.write_bytes(held)
+                with closing(sqlite3.connect(store.context_path)) as db, db:
+                    db.execute('INSERT OR REPLACE INTO revisions VALUES (?, ?, ?)', held)
+
 
 
 if __name__ == "__main__":

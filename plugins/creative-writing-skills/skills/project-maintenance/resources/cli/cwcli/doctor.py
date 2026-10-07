@@ -210,6 +210,10 @@ def _commands(
 
 
 def _transaction_id(finding: Finding) -> str | None:
+    if finding.details is not None:
+        identifier = finding.details.get("transaction_id")
+        if isinstance(identifier, str) and identifier and "\x00" not in identifier:
+            return identifier
     if finding.path is None:
         return None
     parts = PurePosixPath(finding.path).parts

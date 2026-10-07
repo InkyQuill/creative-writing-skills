@@ -128,10 +128,35 @@ physical file as `--old-file`; use a `frontmatter-set` operation in `edit apply`
 or the relevant lifecycle command for protected metadata. In `edit apply`,
 match counts are checked independently for each operation's `path`; conflicts
 identify the operation number and path. Preview edit, undo, and
-recover operations before `--apply`. `history` is append-only evidence: undo
-creates a new inverse transaction and refuses diverged targets. Recovery rolls
-an interrupted transaction back only when journal evidence still proves the
-safe before-state.
+recover operations before `--apply`. Undo creates a new inverse transaction and
+refuses diverged targets; the inverse also occupies a history position. Recovery
+rolls an interrupted transaction back only when journal evidence still proves
+the safe before-state.
+
+The project keeps two protected SQLite databases:
+
+- `.creative-writing/transactions.sqlite3`: transaction states and deduplicated
+  exact-byte snapshots. After a successful operation, retain the latest 50
+  committed undoable transactions and every unfinished transaction. The operation
+  just completed remains visible even when it is not undoable (such as `init`).
+  Expired snapshots are deleted only when no retained transaction references them;
+  freed database pages are reclaimed automatically.
+- `.creative-writing/context.sqlite3`: translation packets, draft base revisions,
+  and compact commitment receipts for `decision:<id>` provenance. These survive
+  undo-history expiry. Context retention is independent and currently unbounded.
+
+New translation drafts use `context-id`; existing `packet-transaction` references
+remain readable. The first write imports the old `transactions/` journal,
+verifies snapshots and copied records, and removes the legacy files only after
+both databases commit. An interrupted import/cleanup resumes on the next write;
+changed or unknown legacy files are preserved and reported. Preview, history,
+checks, and doctor do not migrate or prune. After migration, use a current CLI;
+older versions cannot read the SQLite journal.
+
+SQLite protects the journal, while the existing durable-intent protocol still
+protects manuscript files. The databases use temporary rollback journals during
+writes and require no database server or extra Python package. Back up both
+SQLite files together while cw is idle, alongside the project content.
 
 `edit replace` treats every non-empty whitespace run in `--old-file` as
 equivalent to any other non-empty whitespace run in the target. This includes

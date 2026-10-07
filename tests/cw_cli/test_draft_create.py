@@ -166,6 +166,7 @@ class DraftCreateTests(unittest.TestCase):
 
     def test_revision_normalization_collision_keeps_first_exact_snapshot(self):
         _root, _model, store = self.make_project()
+        store = transactions.LegacyTransactionStore(store.project)
         first = b"\xef\xbb\xbf---\r\ntitle: Same\r\n---\r\nBody\r\n"
         equivalent = b"---\ntitle: Same\n---\nBody\n"
         revision = documents.logical_hash(first)
@@ -182,6 +183,7 @@ class DraftCreateTests(unittest.TestCase):
 
     def test_revision_store_rejects_mismatch_corruption_and_links(self):
         root, _model, store = self.make_project()
+        store = transactions.LegacyTransactionStore(store.project)
         data = b"---\ntitle: Base\n---\nBody\n"
         revision = documents.logical_hash(data)
         with self.assertRaisesRegex(ValueError, "does not match"):
@@ -225,6 +227,7 @@ class DraftCreateTests(unittest.TestCase):
 
     def test_revision_descriptor_corruption_and_digest_traversal_are_rejected(self):
         _root, _model, store = self.make_project()
+        store = transactions.LegacyTransactionStore(store.project)
         data = b"base\n"
         revision = documents.logical_hash(data)
         store.remember_revision(revision, data)

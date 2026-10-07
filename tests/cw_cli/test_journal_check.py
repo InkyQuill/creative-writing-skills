@@ -48,7 +48,7 @@ class JournalCheckTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory) / "project"
             model = make_project(root)
-            store = transactions.TransactionStore(model)
+            store = transactions.LegacyTransactionStore(model)
             plan = transactions.TransactionPlan(
                 command=("edit",),
                 changes=(transactions.Change("story/new.md", None, b"new\n"),),
@@ -122,7 +122,7 @@ class JournalCheckTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory) / "project"
             model = make_project(root)
-            store = transactions.TransactionStore(model)
+            store = transactions.LegacyTransactionStore(model)
             (store.root / "tx-missing").mkdir()
             data = b"chapter\n"
             revision = store.remember_revision(documents.logical_hash(data), data)
@@ -164,7 +164,7 @@ class JournalCheckTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory) / "project"
             model = make_project(root)
-            store = transactions.TransactionStore(model)
+            store = transactions.LegacyTransactionStore(model)
             plan = transactions.TransactionPlan(command=("edit",), changes=(transactions.Change("story/new.md", None, b"new\n"),), metadata={})
             store.prepare(plan, transaction_id="tx")
             manifest = json.loads((store.root / "tx/manifest.json").read_text(encoding="utf-8"))
@@ -180,7 +180,7 @@ class JournalCheckTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory) / "project"
             model = make_project(root)
-            store = transactions.TransactionStore(model)
+            store = transactions.LegacyTransactionStore(model)
             data = b"chapter\r\n"
             revision = store.remember_revision(documents.logical_hash(data), data)
             descriptor = store.root / "revisions" / revision / "descriptor.json"
