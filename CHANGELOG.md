@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.12.0](https://github.com/InkyQuill/creative-writing-skills/compare/v0.11.0...v0.12.0) (2026-10-08)
+
+
+### Features
+
+* store transaction history and context in SQLite ([47c03ed](https://github.com/InkyQuill/creative-writing-skills/commit/47c03ed85c0d01cf1e61faac12cdf2325b688c57))
+
+
+### Bug Fixes
+
+* clarify interrupted journal recovery and verify context retention ([03d6996](https://github.com/InkyQuill/creative-writing-skills/commit/03d6996e3fea373485c020cdf5435d6ea2eb5824))
+
 ## [Unreleased]
 
 ## [0.8.1] - 2026-08-29
