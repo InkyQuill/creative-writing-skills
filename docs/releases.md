@@ -61,6 +61,11 @@ gh workflow run release-please.yml
 Require the `validate` CI check on `main` if branch protection is desired. No
 branch-protection policy is changed by the release workflow.
 
+The workflow refuses to move an existing tag. To enforce this for manual pushes
+as well, configure a repository tag ruleset matching `v*` that blocks updates and
+deletions while allowing tag creation. This repository setting is separate from
+the workflow's source checks.
+
 ## Retry a failed publication
 
 Rerun the failed workflow, or dispatch `Release` from `main` with the original
