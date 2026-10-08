@@ -302,6 +302,32 @@ engine.apply(TransactionPlan(('edit',), (Change('story/a.md', None, b'new'),), {
         self.assertEqual("rolled-back", self.store.load("pending").state)
         self.assertFalse(legacy.root.exists())
 
+    def test_legacy_temporary_entries_are_preserved_with_actionable_paths(self):
+        legacy = tx.LegacyTransactionStore(self.project)
+        legacy.prepare(self.plan(), transaction_id="pending")
+        digest = "a" * 64
+        for relative in (
+            "pending/.manifest.json.random.tmp",
+            f"blobs/.{digest}.random.tmp",
+            f"revisions/.{digest}.random.tmp",
+        ):
+            with self.subTest(relative=relative):
+                path = legacy.root / relative
+                path.parent.mkdir(exist_ok=True)
+                if relative.startswith("revisions/"):
+                    path.mkdir()
+                    (path / "snapshot").write_bytes(b"partial")
+                else:
+                    path.write_bytes(b"partial")
+                with self.assertRaises(tx.TransactionError) as raised:
+                    self.engine.recover("pending")
+                self.assertIn(str(path), str(raised.exception))
+                self.assertIn("for safekeeping", str(raised.exception))
+                self.assertTrue(path.exists())
+                path.rename(self.root / ("saved-" + path.parent.name))
+        self.engine.recover("pending")
+        self.assertEqual("rolled-back", self.store.load("pending").state)
+
     def test_revision_logical_corruption_and_bad_digest_are_rejected(self):
         revision = documents.logical_hash(b"base")
         self.store.remember_revision(revision, b"base")
@@ -343,6 +369,17 @@ with store._write_database() as db:
             check=False,
         )
         self.assertEqual(74, result.returncode)
+        protected = self.store.database_path.parent
+        before = {p.name: p.read_bytes() for p in protected.iterdir() if p.is_file()}
+        with self.assertRaises(tx.InterruptedDatabaseWrite):
+            self.store.history()
+        findings = journal.check_journal(self.project)
+        self.assertEqual(
+            [journal.INTERRUPTED_DATABASE_WRITE], [f.code for f in findings]
+        )
+        self.assertIn("cw recover <transaction-id> --apply", findings[0].message)
+        after = {p.name: p.read_bytes() for p in protected.iterdir() if p.is_file()}
+        self.assertEqual(before, after)
         self.engine.recover("pending")
         self.assertEqual("rolled-back", self.store.load("pending").state)
         with closing(sqlite3.connect(self.store.database_path)) as db:

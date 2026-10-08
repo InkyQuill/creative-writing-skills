@@ -10,6 +10,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
 import shutil
 import sqlite3
 import uuid
@@ -84,6 +85,15 @@ class SQLiteStoreMixin:
                 raise tx.TransactionError(f"unsupported database version: {path.name}")
             yield connection
         except sqlite3.Error as error:
+            if (
+                getattr(error, "sqlite_errorcode", None)
+                == sqlite3.SQLITE_READONLY_ROLLBACK
+            ):
+                raise tx.InterruptedDatabaseWrite(
+                    f"interrupted SQLite write in {path.name}; preserve the database and journals. "
+                    "Run cw recover <transaction-id> --apply using the interrupted operation's ID, "
+                    "then repeat this command. Do not delete the journal or restore a backup."
+                ) from error
             raise tx.TransactionError(f"cannot read {path.name}: {error}") from error
         finally:
             if connection is not None:
@@ -176,6 +186,19 @@ class SQLiteStoreMixin:
         inventory = None
         if legacy._require_transactions_directory(allow_missing=True):
             inventory = self._legacy_inventory(legacy.root)
+            for relative in inventory:
+                path = Path(relative)
+                temporary = len(path.parts) == 2 and (
+                    re.fullmatch(r"\.manifest\.json\.[^.]+\.tmp", path.name)
+                    or path.parts[0] in {"blobs", "revisions"}
+                    and re.fullmatch(r"\.[0-9a-f]{64}\.[^.]+\.tmp", path.name)
+                )
+                if temporary:
+                    raise tx.TransactionError(
+                        f"unfinished legacy temporary entry: {legacy.root / path}; "
+                        "stop other cw processes, move this entry outside "
+                        "the transactions directory for safekeeping, then retry migration or recovery"
+                    )
             # Validate the complete tree, including otherwise orphaned blobs,
             # before making either database authoritative or deleting anything.
             from .checks.journal import _intent_errors, _validate_manifest

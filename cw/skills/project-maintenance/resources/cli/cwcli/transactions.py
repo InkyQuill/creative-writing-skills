@@ -31,6 +31,10 @@ class TransactionError(RuntimeError):
     """Raised when a guarded transaction cannot be completed safely."""
 
 
+class InterruptedDatabaseWrite(TransactionError):
+    """SQLite rollback requires an explicitly authorized recovery write."""
+
+
 class TransactionConflict(TransactionError):
     """Raised when current project bytes conflict with a requested transaction."""
 

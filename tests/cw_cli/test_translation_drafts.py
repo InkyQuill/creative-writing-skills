@@ -62,14 +62,18 @@ class TranslationDraftTests(TranslationFixture):
         self.assertEqual('User correction', self.target.read_text())
 
     def test_translation_context_survives_expired_undo_history(self):
-        self.draft()
+        packet = build_packet(self.project, 'ru', ('ja:u001',), {})
+        plan = plan_translation_draft(self.project, 'ru', 'first', packet, 'Перевод.'.encode())
+        self.apply(plan)
+        draft_transaction = plan.metadata['transaction-id']
         document = parse_document((self.root / self.path).read_bytes())
         context_id = document.metadata['context-id']
         engine = TransactionEngine(self.project)
         for _ in range(51):
             engine.apply(TransactionPlan(('test-history',), (), {}))
         with self.assertRaises(TransactionError):
-            engine.store.manifest(context_id)
+            engine.store.manifest(draft_transaction)
+        self.assertEqual(packet, engine.store.packet(context_id))
         self.assertEqual('current', translation_status(self.project, self.path)['freshness'])
         self.apply(plan_translation_status(self.project, self.path, 'reviewed'))
         self.apply(plan_translation_accept(self.project, self.path))

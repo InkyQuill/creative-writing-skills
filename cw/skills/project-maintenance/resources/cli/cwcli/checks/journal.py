@@ -14,9 +14,10 @@ from pathlib import Path, PurePosixPath, PureWindowsPath
 from ..documents import logical_hash
 from ..findings import Finding, Severity
 from ..project import Project
-from ..transactions import TransactionEngine, TransactionError, TransactionStore
+from ..transactions import InterruptedDatabaseWrite, TransactionEngine, TransactionError, TransactionStore
 
 
+INTERRUPTED_DATABASE_WRITE = "CW-JOURNAL-060"
 INVALID_LAYOUT = "CW-JOURNAL-001"
 INVALID_MANIFEST = "CW-JOURNAL-010"
 INVALID_BLOB = "CW-JOURNAL-020"
@@ -41,6 +42,8 @@ def check_journal(project: Project) -> list[Finding]:
     try:
         if store._ready():
             return _check_databases(project, store)
+    except InterruptedDatabaseWrite as error:
+        return [_finding(INTERRUPTED_DATABASE_WRITE, "error", str(error), ".creative-writing", str(error))]
     except (OSError, TransactionError, ValueError) as error:
         return [_finding(INVALID_LAYOUT, "error", str(error), ".creative-writing/transactions.sqlite3", "Restore the database from a trusted copy.")]
     root, boundary_finding = _journal_root(project)
@@ -152,6 +155,8 @@ def _check_databases(project: Project, store: TransactionStore) -> list[Finding]
             for identifier, raw in db.execute('SELECT id, packet FROM packets'):
                 if hashlib.sha256(raw.encode('utf-8')).hexdigest() != identifier or not isinstance(json.loads(raw), dict):
                     findings.append(_finding(INVALID_MANIFEST, "error", f'invalid context packet: {identifier}', context_path, action))
+    except InterruptedDatabaseWrite as error:
+        return [_finding(INTERRUPTED_DATABASE_WRITE, "error", str(error), ".creative-writing", str(error))]
     except (OSError, ValueError, TypeError, KeyError, TransactionError) as error:
         findings.append(_finding(INVALID_LAYOUT, "error", str(error), journal_path, action))
     return sorted(findings, key=lambda item: (item.path or "", item.code, item.message))
