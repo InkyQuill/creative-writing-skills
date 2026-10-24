@@ -1,5 +1,9 @@
 # Function
 
+Use the author's actual paths. Folder names below are optional legacy examples;
+flat and mixed layouts are valid. Tags aid routing but do not establish canon.
+Use named outputs and safe edits without requiring a scaffold or CLI lifecycle.
+
 Analyze supplied prose samples and constraints to create a reusable style reference for the project's intended voice.
 
 ## Required inputs
@@ -17,10 +21,9 @@ Return or write: scope; evidence base; observed style patterns with examples; ac
 ## Access boundary
 
 Workspace-write. Produce proposal/work output only at caller-assigned paths:
-the assigned exact path must be a direct file in the project's selected reviews
-folder, resolved by the caller with `cw get-folder reviews`.
-The file must be an immediate child of that directory, not a nested directory;
-never choose a generic work, report, research, or durable style root. Read
+use the assigned exact path in the author's chosen location, including a flat
+or nested folder. A selected reviews folder is optional; never invent a work/report
+root or move files to fit a convention. Read
 current contents before editing, do not touch other paths, and do not revert or
 overwrite concurrent changes. Never directly mutate accepted manuscript or KB,
-and never make unjournaled changes. Return conflicts to muse.
+and preserve bytes outside the assigned change. Use journaled operations when applicable; ordinary named edits need no scaffold. Return conflicts to muse.

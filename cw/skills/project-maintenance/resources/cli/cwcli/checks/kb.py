@@ -14,7 +14,8 @@ from ..findings import Finding, Severity
 from ..markdown_links import extract_links
 from ..markdown_tables import parse_tables, table_header_lines
 from ..project import Project
-from ..schema import allowed_document_kind
+from ..catalog import classify_document, KNOWLEDGE_TAGS
+from ..provenance import resolve_source
 from .journal import is_committed_decision
 
 
@@ -32,14 +33,15 @@ def check_kb(project: Project) -> list[Finding]:
     findings: list[Finding] = []
     for path in project.iter_managed_markdown():
         relative_id = project.relative_id(path)
-        if allowed_document_kind(relative_id) not in {"kb-content", "continuity-scene", "vocabulary"}:
+        classification = classify_document(project, relative_id)
+        if not classification.tags & KNOWLEDGE_TAGS:
             continue
         try:
             raw = _read_regular(path)
             document = parse_document(raw)
             text = raw.decode("utf-8-sig")
         except (DocumentError, OSError, UnicodeError) as error:
-            findings.append(_finding(UNREADABLE_PAGE, "warning", f"KB provenance cannot be read safely: {error}", relative_id, "Preserve the page body and repair its UTF-8 frontmatter before relying on provenance.", line=_error_line(error)))
+            findings.append(_finding(UNREADABLE_PAGE, "info" if project.unstructured else "warning", f"KB provenance cannot be read safely: {error}", relative_id, "Preserve the page body and repair its UTF-8 frontmatter before relying on provenance.", line=_error_line(error)))
             continue
 
         if document.metadata.get("status") != "archived":
@@ -47,8 +49,8 @@ def check_kb(project: Project) -> list[Finding]:
 
         rendered_sources = document.metadata.get("sources")
         if rendered_sources is None or rendered_sources == "":
-            findings.append(_finding(MISSING_SOURCES, "warning", "KB page declares no explicit provenance sources", relative_id, "Confirm provenance with the author, then record only explicit sources."))
-            if relative_id == "kb/vocab.md":
+            findings.append(_finding(MISSING_SOURCES, "info" if project.unstructured else "warning", "KB page declares no explicit provenance sources", relative_id, "Confirm provenance with the author, then record only explicit sources."))
+            if classification.managed_kind == "vocabulary":
                 findings.extend(_vocabulary_collisions(relative_id, text))
             continue
         sources = rendered_sources if isinstance(rendered_sources, list) else [rendered_sources]
@@ -56,13 +58,18 @@ def check_kb(project: Project) -> list[Finding]:
             findings.append(_finding(INVALID_SOURCE, "warning", "sources must contain non-empty explicit source strings", relative_id, "Repair sources as a flat list of explicit paths, URLs, or decision transaction IDs."))
             continue
 
-        kinds = [_source_kind(project, source.strip()) for source in sources]
-        for source, kind in zip(sources, kinds):
-            if kind == "invalid":
-                findings.append(_finding(INVALID_SOURCE, "warning", f"source is not a live durable reference: {source}", relative_id, "Correct the source or confirm and record a live story, KB, URL, or decision reference."))
-        if "work" in kinds and "durable" not in kinds:
-            findings.append(_finding(WORK_ONLY_SOURCE, "warning", "work artifacts are the only provenance and cannot alone establish durable knowledge", relative_id, "Ask the author to confirm this knowledge, then cite accepted story, live KB, an external source, or decision:<transaction-id>."))
-        if relative_id == "kb/vocab.md":
+        references = [resolve_source(project, source.strip()) for source in sources]
+        for source, reference in zip(sources, references):
+            if reference.resolution in {"missing", "unsafe", "malformed"}:
+                findings.append(_finding(INVALID_SOURCE, "warning", f"source is {reference.resolution}: {source}", relative_id, "Correct the explicit reference without moving author files or fabricating receipts."))
+            elif reference.authority == "archived":
+                findings.append(_finding(ARCHIVED_REFERENCE, "warning", f"source refers to archived evidence: {source}", relative_id, "Check whether this historical source applies to the current claim."))
+            elif reference.resolution == "unverified":
+                findings.append(_finding("CW-KB-031", "info", f"source is unverified: {source}", relative_id, "Assess this citation against the actual source or author statement."))
+        usable = [r for r in references if r.resolution in {"resolved", "unverified"}]
+        if document.metadata.get("status") == "accepted" and usable and all(r.authority == "provisional" for r in usable):
+            findings.append(_finding(WORK_ONLY_SOURCE, "warning", "accepted claim cites only explicitly provisional evidence", relative_id, "Confirm the claim with the author; do not infer acceptance from a folder or tag."))
+        if classification.managed_kind == "vocabulary":
             findings.extend(_vocabulary_collisions(relative_id, text))
     return sorted(findings, key=lambda item: (item.path or "", item.code, item.message))
 
@@ -108,7 +115,7 @@ def _archived_body_references(project: Project, source: str, body: str) -> list[
                 else:
                     parts.append(part)
             relative = Path(*parts).as_posix()
-            if not relative.startswith("kb/") or _source_kind(project, relative) != "invalid":
+            if resolve_source(project, relative).authority != "archived":
                 continue
             path = project.root / relative
             if _path_kind(path) != "file" or _contains_symlink(project.root, path) or _crosses_nested_project(project, path):
@@ -139,41 +146,11 @@ def _identity(value: str) -> str:
 
 
 def _source_kind(project: Project, source: str) -> str:
-    try:
-        parsed = urlsplit(source)
-        if parsed.scheme.casefold() in {"http", "https"} and parsed.netloc:
-            return "durable"
-        if source.startswith("decision:"):
-            return "durable" if is_committed_decision(project, source.removeprefix("decision:")) else "invalid"
-        if parsed.scheme or parsed.netloc:
-            return "invalid"
-
-        if "\x00" in source:
-            return "invalid"
-        decoded_path = _strict_unquote(parsed.path)
-        if "\x00" in decoded_path:
-            return "invalid"
-        if "\\" in decoded_path or decoded_path.startswith("/") or ".." in Path(decoded_path).parts:
-            return "invalid"
-        target = project.root / decoded_path
-        if _path_kind(target) != "file" or _contains_symlink(project.root, target) or _crosses_nested_project(project, target):
-            return "invalid"
-        relative_id = target.relative_to(project.root).as_posix()
-        if relative_id.startswith("work/"):
-            return "work" if allowed_document_kind(relative_id) == "work-artifact" else "invalid"
-        if relative_id.startswith("story/"):
-            if allowed_document_kind(relative_id) != "chapter":
-                return "invalid"
-            referenced = parse_document(_read_regular(target))
-            return "invalid" if referenced.metadata.get("status") == "archived" else "durable"
-        if relative_id.startswith("kb/"):
-            referenced = parse_document(_read_regular(target))
-            if allowed_document_kind(relative_id) not in {"kb-content", "continuity-scene", "continuity-record", "vocabulary"}:
-                return "invalid"
-            return "invalid" if referenced.metadata.get("status") == "archived" else "durable"
+    """Compatibility for older callers; new code uses independent reference facts."""
+    reference = resolve_source(project, source)
+    if reference.resolution in {"missing", "unsafe", "malformed"}:
         return "invalid"
-    except (DocumentError, OSError, TypeError, UnicodeError, ValueError):
-        return "invalid"
+    return "work" if reference.authority == "provisional" else "durable"
 
 
 def _path_kind(path: Path) -> str:

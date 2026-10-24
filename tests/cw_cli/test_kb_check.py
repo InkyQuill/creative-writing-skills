@@ -42,7 +42,7 @@ class KnowledgeCheckTests(unittest.TestCase):
             root = Path(directory) / "project"
             model = make_project(root)
             (root / "story/chapters/one.md").write_text("---\nnumber: 1\n---\nStory\n", encoding="utf-8")
-            (root / "work/brainstorm/idea.md").write_text("---\n---\nIdea\n", encoding="utf-8")
+            (root / "work/brainstorm/idea.md").write_text("---\nstatus: working\n---\nIdea\n", encoding="utf-8")
             store = transactions.TransactionStore(model)
             store.prepare(
                 transactions.TransactionPlan(command=("confirm",), changes=(), metadata={}),
@@ -58,7 +58,7 @@ class KnowledgeCheckTests(unittest.TestCase):
             }
             for name, sources in pages.items():
                 rendered = "\n".join(f"  - {source}" for source in sources)
-                (root / "kb/world" / name).write_text(f"---\nsources:\n{rendered}\n---\n", encoding="utf-8")
+                (root / "kb/world" / name).write_text(f"---\nstatus: accepted\nsources:\n{rendered}\n---\n", encoding="utf-8")
 
             findings = kb.check_kb(model)
 
@@ -113,15 +113,16 @@ class KnowledgeCheckTests(unittest.TestCase):
 
             invalid = [item for item in kb.check_kb(model) if item.code == kb.INVALID_SOURCE]
 
-            self.assertEqual(2, len(invalid))
+            self.assertEqual(1, len(invalid))
+            self.assertTrue(any(item.code == kb.ARCHIVED_REFERENCE for item in kb.check_kb(model)))
 
     def test_invalid_companions_do_not_hide_work_only_and_bad_paths_stay_contained(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory) / "project"
             model = make_project(root)
-            (root / "work/brainstorm/idea.md").write_text("---\n---\n", encoding="utf-8")
+            (root / "work/brainstorm/idea.md").write_text("---\nstatus: working\n---\n", encoding="utf-8")
             (root / "kb/world/ref.md").write_text(
-                "---\nsources:\n  - work/brainstorm/idea.md\n  - missing.md\n  - bad%00.md\n  - '%FF.md'\n---\n",
+                "---\nstatus: accepted\nsources:\n  - work/brainstorm/idea.md\n  - missing.md\n  - bad%00.md\n  - '%FF.md'\n---\n",
                 encoding="utf-8",
             )
 
@@ -130,7 +131,7 @@ class KnowledgeCheckTests(unittest.TestCase):
             self.assertEqual(1, sum(item.code == kb.WORK_ONLY_SOURCE for item in findings))
             self.assertEqual(3, sum(item.code == kb.INVALID_SOURCE for item in findings))
 
-    def test_generated_story_index_is_not_durable_provenance(self):
+    def test_generated_story_index_resolves_without_establishing_authority(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory) / "project"
             model = make_project(root)
@@ -141,7 +142,7 @@ class KnowledgeCheckTests(unittest.TestCase):
 
             findings = kb.check_kb(model)
 
-            self.assertEqual(1, sum(item.code == kb.INVALID_SOURCE for item in findings))
+            self.assertEqual(0, sum(item.code == kb.INVALID_SOURCE for item in findings))
 
     def test_decision_sources_require_safe_id_and_strict_committed_manifest(self):
         with tempfile.TemporaryDirectory() as directory:

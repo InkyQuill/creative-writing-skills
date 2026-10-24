@@ -32,7 +32,8 @@ def check_links(project: Project) -> list[Finding]:
     findings: list[Finding] = []
     inbound: set[str] = set()
     authored: set[str] = set()
-    sources = [project.root / "project.md", *project.iter_managed_markdown()]
+    from ..catalog import document_paths
+    sources = document_paths(project)
     for source in sources:
         relative_source = project.relative_id(source)
         if _is_authored_page(relative_source):
@@ -54,8 +55,12 @@ def check_links(project: Project) -> list[Finding]:
                 )
             )
 
-    for relative_id in sorted(authored - inbound):
-        findings.append(_finding(ORPHAN_PAGE, "info", "authored managed page has no inbound explicit Markdown link", relative_id, None, "Add an explicit link from a relevant authored page if this artifact should be discoverable."))
+    if project.selection is None:
+        for relative_id in sorted(authored - inbound):
+            findings.append(_finding(ORPHAN_PAGE, "info", "authored managed page has no inbound explicit Markdown link", relative_id, None, "Add an explicit link from a relevant authored page if this artifact should be discoverable."))
+
+    if project.unstructured or project.selection is not None:
+        return sorted(findings, key=_finding_key)
 
     try:
         reindex = plan_reindex(project, skip_unparseable=True)
@@ -63,7 +68,7 @@ def check_links(project: Project) -> list[Finding]:
         findings.append(_finding(INDEX_DRIFT, "warning", f"derived index drift could not be calculated safely: {error}", None, None, "Repair unreadable managed paths, then preview cw reindex."))
     else:
         for change in reindex.changes:
-            if change.path in GENERATED_INDEX_FILES or (project.manifest.metadata.get("schema-version") == 2 and change.path.endswith("/_index.md")):
+            if change.path in GENERATED_INDEX_FILES or (project.metadata.get("schema-version") == 2 and change.path.endswith("/_index.md")):
                 findings.append(_finding(INDEX_DRIFT, "warning", "generated registry differs from authored managed documents", change.path, None, "Preview cw reindex, review the diff, then apply it explicitly."))
     return sorted(findings, key=_finding_key)
 
@@ -146,7 +151,7 @@ def _boundary_kind(project: Project, target: Path) -> str | None:
         if _path_kind(current) == "symlink":
             return "filesystem link"
         manifest = current / "project.md"
-        if _path_kind(manifest) == "file":
+        if any(_path_kind(p) == "file" for p in (manifest, current / ".cws-layout.json")):
             return "nested project reference"
     return None
 

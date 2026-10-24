@@ -7,6 +7,33 @@ declaring a role, creating `cws.md`, or filling a project questionnaire.
 This contract describes the author's preferred help for this project; it is
 separate from the CLI's structural `project.md` manifest.
 
+## Author-owned layout
+
+Work with the author's actual files, including flat and mixed folders. No
+`project.md`, `.cws-layout.json`, `kb/`, `story/`, or `work/` is required before
+reading, writing, review, worldbuilding, or translation. Never initialize or
+migrate a project just to make a checker happy.
+
+Optional folder/file tags in `.cws-layout.json` describe purpose, not authority.
+Directory tags inherit recursively; exact file bindings can add/remove tags.
+Several folders may share a tag and one folder may have multiple tags. `.` is
+valid. Use tags when available, otherwise use instructions, explicit filenames,
+and actual content. Ask only when ambiguity changes the requested output.
+
+A draft file is not automatically a CLI-managed draft. Use managed lifecycle,
+indexes, context snapshots and translation commands only when their prerequisites
+are available and useful. Inspect coverage: skipped/unassessed is not verified.
+Use safe ordinary file tools for named edits when CLI mechanics do not apply;
+show reviewable changes, preserve unrelated bytes, and do not promise `cw undo`
+for edits outside its journal. Unsupported metadata is not an invitation to
+rewrite the author's format.
+
+A source path can resolve anywhere within the project. Free-text citations and
+`note:` citations are allowed but unverified by scripts. A `decision:` receipt
+proves a recorded transaction, not author approval. Never manufacture receipts
+or move sources to satisfy provenance. Keep provisional/accepted/archived status
+and `<AI>`/`<hidden>` boundaries separate from folder tags.
+
 ## Resolve the instructions
 
 1. Obey the current author's direct request within its stated task and scope.
@@ -15,7 +42,7 @@ separate from the CLI's structural `project.md` manifest.
 2. Resolve applicable `AGENTS.md` instructions through `/project-bootstrap`.
    These remain the harness instructions; never let `project.md` or `cws.md`
    override a higher-priority instruction.
-3. Read workflow preferences in the body of `project.md` and, if present,
+3. Read workflow preferences in existing author documents, including the body of `project.md` and, if present,
    `cws.md`. The latter is optional free text, not another required CLI
    manifest. Do not create it merely to run a skill.
 4. If two applicable project sources disagree about permission, edit depth,

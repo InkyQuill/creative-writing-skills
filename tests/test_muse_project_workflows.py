@@ -66,7 +66,7 @@ class MuseProjectWorkflowTests(unittest.TestCase):
         flat = re.sub(r"\s+", " ", lower)
         self.assertIn("$project-doctor", self.muse)
         self.assertIn("$cli-doctor", self.muse)
-        self.assertRegex(flat, r"safe scaffold.*index.*tag")
+        self.assertRegex(flat, r"do not create a scaffold.*index.*tags")
         self.assertRegex(flat, r"\$cli-doctor[^.]*actual cli execution failure")
         self.assertRegex(flat, r"content language")
         self.assertRegex(flat, r"not cli (?:commands|ceremony|terminology)")
@@ -99,7 +99,7 @@ class MuseProjectWorkflowTests(unittest.TestCase):
             r"directly and unambiguously established[^.]*accepted prose[^.]*"
             r"separate[^.]*previewed[^.]*recoverable[^.]*transaction",
         )
-        self.assertRegex(flat, r"separate transaction[^.]*does not[^.]*separate confirmation")
+        self.assertRegex(flat, r"separate (?:transaction|update)[^.]*does not[^.]*separate confirmation")
         self.assertRegex(
             flat,
             r"ask[^.]*only[^.]*(?:ambiguity|ambiguous)[^.]*inference[^.]*"
@@ -143,7 +143,8 @@ class MuseProjectWorkflowTests(unittest.TestCase):
             with self.subTest(worker=name):
                 self.assertRegex(lower, r"return(?:s|ed)? (?:a |only )?(?:proposal|findings)")
                 self.assertIn("never directly mutate accepted manuscript or kb", lower)
-                self.assertIn("never make unjournaled changes", lower)
+                if self.entries[name]["access"] == "workspace-write":
+                    self.assertIn("ordinary named edits need no scaffold", lower)
 
     def test_every_registry_workspace_write_worker_has_full_mutation_boundary(self):
         write_workers = {
@@ -164,22 +165,19 @@ class MuseProjectWorkflowTests(unittest.TestCase):
                     r"only.{0,80}(?:proposal|work output))",
                 )
                 self.assertRegex(lower, r"caller-assigned.{0,60}paths?")
-                self.assertRegex(lower, r"selected (?:plans|drafts|reviews|brainstorm) folder|work/report")
+                self.assertRegex(lower, r"selected (?:plans|drafts|reviews|brainstorm) folder|work/report|author.s chosen (?:layout|location)")
                 self.assertIn("never directly mutate accepted manuscript or kb", lower)
-                self.assertIn("never make unjournaled changes", lower)
+                if self.entries[name]["access"] == "workspace-write":
+                    self.assertIn("ordinary named edits need no scaffold", lower)
 
-    def test_report_workers_write_only_direct_files_under_selected_reviews(self):
+    def test_report_workers_preserve_named_write_scope_in_any_layout(self):
         for name in ("style-creator", "web-researcher"):
-            prompt = self.all_prompts[name]
-            lower = re.sub(r"\s+", " ", prompt.lower())
+            lower = re.sub(r"\s+", " ", self.all_prompts[name].lower())
             with self.subTest(worker=name):
-                self.assertIn("cw get-folder reviews", prompt)
-                self.assertRegex(
-                    lower,
-                    r"caller-assigned paths.{0,100}assigned exact path.{0,100}direct file",
-                )
-                self.assertRegex(lower, r"(?:no|not|never).{0,100}nested director")
-                self.assertNotIn("under canonical `work/`", lower)
+                self.assertIn("caller-assigned paths", lower)
+                self.assertIn("assigned exact path", lower)
+                self.assertIn("flat or nested folder", lower)
+                self.assertIn("do not touch other paths", lower)
 
     def test_continuity_worker_uses_canonical_bundled_check(self):
         prompt = self.prompts["continuity-checker"]
@@ -190,7 +188,7 @@ class MuseProjectWorkflowTests(unittest.TestCase):
     def test_write_workers_use_selected_work_paths(self):
         self.assertIn("cw get-folder plans", self.prompts["outliner"])
         self.assertIn("cw get-folder", self.prompts["writer"])
-        self.assertIn("selected drafts folder", self.prompts["writer"])
+        self.assertIn("author's chosen layout", self.prompts["writer"])
 
     def test_final_memory_pressure_reuses_exact_prompt_and_strongest_output(self):
         revised_prompt = re.search(

@@ -12,9 +12,9 @@ description: >
 Knowledge that must survive the current pass: canon facts, context handoffs,
 vocab/reference material, project layout, and persistent issues.
 
-Use `$project-maintenance` for deterministic project mechanics. Run the check
-relevant to the memory artifact before semantic reconciliation and interpret
-repairable warnings internally. Continue semantic work when the required
+Use `$project-maintenance` for applicable deterministic mechanics. Checks are
+optional aids; inspect coverage and reconcile the named author files directly
+when metadata/tags are absent. Keep flat and mixed layouts intact. Continue semantic work when the required
 sources are readable; a required target that cannot be read safely is the only
 mechanical reason to stop. Direct author edits remain valid input and must be
 re-read rather than overwritten from remembered state.
@@ -31,9 +31,9 @@ Load the resource needed:
 
 - `resources/story-context.md` — what context to pass into handoffs for writers, critics, brainstormers, and knowledge agents.
 - `resources/fact-extraction.md` — extract durable facts from chapters: character state, timeline, reveals, terminology.
-- `resources/continuity-records.md` — canonical `kb/continuity/` records consumed by `cw check continuity`: timeline, promises, questions, state snapshot, and scene records.
+- `resources/continuity-records.md` — optional legacy `kb/continuity/` records and tagged continuity evidence: timeline, promises, questions, state snapshot, and scene records.
 - `resources/story-reference-writing.md` — wiki pages, vocab, decisions, summaries, issue logs.
-- `resources/writing-artifacts.md` — where work and kb artifacts live.
+- `resources/writing-artifacts.md` — how to use the author's artifact locations.
 - `resources/writing-issues.md` — persistent writing issue tracking across chapters.
 
 The agent owns hashes, indexes, base revisions, migration mechanics, and repair

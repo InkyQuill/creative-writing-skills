@@ -26,7 +26,7 @@ def filter_catalog(catalog, excluded_memory):
 
 
 def load_catalog(project, *, strict=True, volume=None, skip_unparseable=False, excluded_memory=()):
-    _, work, enabled = project_settings(project.manifest.metadata)
+    _, work, enabled = project_settings(project.metadata)
     if not enabled:
         raise ValueError('enable translation before using translation commands')
     records, identities = {}, set()

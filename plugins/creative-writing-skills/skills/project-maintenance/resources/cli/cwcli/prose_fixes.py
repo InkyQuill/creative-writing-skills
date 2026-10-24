@@ -34,7 +34,7 @@ def plan_safe_typography_fix(project: Project, relative_id: str) -> TransactionP
         decoded = source.decode("utf-8-sig")
     except UnicodeError as error:
         raise ProseFixError("typography fix target is not UTF-8") from error
-    if str(project.manifest.metadata.get("language", "")).split("-")[0].lower() != "ru":
+    if str(project.metadata.get("language", "")).split("-")[0].lower() != "ru":
         raise ProseFixError("automatic typography spacing is available only for Russian projects")
 
     visible_lines = {number for number, visible in _visible_document(decoded).lines if visible.strip()}

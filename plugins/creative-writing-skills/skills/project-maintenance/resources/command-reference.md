@@ -11,6 +11,37 @@ not modify the project. Transactional mutations preview by default and write
 only when repeated with `--apply`; the derived context cache has the narrower
 exceptions described below.
 
+## Flat workspaces and optional purpose tags
+
+No initialization is needed for `cw check all .`, `cw check links chapter.md`,
+or `cw context chapter chapter.md`. Checks accept `--root PATH` for explicit
+scope. Read report `coverage`; unassessed metadata is not a writing blocker.
+
+```bash
+cw layout inspect
+cw layout tag . --kind directory --add drafts
+cw layout tag notes --kind directory --add kb --remove drafts
+cw layout tag world.md --kind file --add world --remove drafts
+cw layout destination reviews .
+cw draft create chapter.md --draft-path revision.md
+cw draft accept revision.md --archive-path old-revision.md
+cw reindex --index contents.md
+```
+
+Mutating examples preview by default; inspect then use `--apply` when authorized.
+Tagging is optional. `--archive-path` and `--index` name outputs without layout
+configuration. `layout tag` supports repeatable `--add`/`--remove`; directory
+inheritance is recursive. `layout destination TAG PATH` chooses an output
+folder without classifying existing files. Version-1 layouts remain readable;
+explicit tag mutations materialize existing roles into version 2. Version-2
+relocation requires a separately reviewed file map and is not automatic.
+
+`reindex` refreshes only owned generated files in unstructured/tagged workspaces;
+`--index` can create a named new index, never overwrite an author-owned page.
+Ordinary drafts need no lifecycle metadata; `draft create` opts a named copy
+into rebase/accept/undo mechanics. Generic exact body edits preserve opaque
+headers; frontmatter mutations require interpretable metadata.
+
 ## Inspect and prepare context
 
 ```text
@@ -35,7 +66,8 @@ stores folder choices for this project, separate from `project.md`.
 an explicit role path. Both preview changes before `--apply` and can be undone.
 `get-folder <role>` prints the selected project-relative path (or returns it
 as `path` with `--format json`) without creating a folder. Resolve roles this
-way before constructing artifact paths in skills and worker tasks. Use these
+way before constructing role-based artifact paths in skills and worker tasks;
+use explicit paths directly. Use these
 as internal setup aids; do not make the author run them or treat a
 missing candidate as a setup failure. Context planning without `--snapshot` is read-only. A restricted
 `context --snapshot` writes derived cache without `--apply`; trusted context
@@ -92,9 +124,9 @@ New projects receive `prose-profile: general`. Existing schema-v1 projects
 without the optional field behave the same way, and valid custom profile slugs
 are preserved by migration, rebase, and exact document edits.
 
-Draft targets may be numbered chapters in the selected chapters folder or
-ordered side stories in the selected side-stories folder. Resolve those paths
-with `cw get-folder` first. A side story requires an `after` path to an
+When a draft target uses the selected chapters or side-stories folder, resolve
+that role with `cw get-folder` first. Use explicit targets and `--draft-path`
+values directly. A side story requires an `after` path to an
 accepted manuscript document and may declare a lower-case `subtype`. Use
 `context chapter` for either accepted manuscript role; it follows their
 aggregate reading order when selecting neighbors.

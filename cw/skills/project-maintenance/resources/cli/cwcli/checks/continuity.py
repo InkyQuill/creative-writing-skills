@@ -48,6 +48,8 @@ _WINDOWS_RESERVED = frozenset(
 def check_continuity(project: Project) -> list[Finding]:
     """Check structured records independently and never infer facts from prose."""
 
+    if project.unstructured or project.selection is not None:
+        return _check_tagged_records(project)
     root = project.root / "kb" / "continuity"
     if _contains_symlink(project.root, root):
         return [_finding(RECORD, "warning", "kb/continuity is a symlink and was not inspected", "kb/continuity", None,
@@ -565,3 +567,50 @@ __all__ = [
     "DEATH", "MALFORMED", "PROMISE", "QUESTION", "RECORD", "SCENE", "STATE",
     "TIMELINE", "UNKNOWN_CHARACTER", "check_continuity",
 ]
+
+
+def _check_tagged_records(project: Project) -> list[Finding]:
+    """Check recognized explicit tables; never require a continuity directory."""
+    from ..catalog import has_tag
+    findings = []
+    anchors = {}
+    evidence = {}
+    for path in project.iter_managed_markdown():
+        relative = project.relative_id(path)
+        if not has_tag(project, relative, 'continuity'):
+            continue
+        record = _read_record(path, relative, findings, required=False)
+        if record is None:
+            continue
+        text, tables = record
+        recognized = set()
+        for index, table in enumerate(tables):
+            headers = _headers(table)
+            if _has_columns(headers, ('when', 'event', 'threads', 'anchor')):
+                recognized.add(index)
+                for row in table.rows:
+                    values = _row(table, row)
+                    _add_anchor(anchors, values.get('anchor', ''), values.get('when', ''),
+                                _parse_chapter(values.get('chapter', '')),
+                                evidence=evidence, path=relative, line=row.line)
+            elif _has_columns(headers, ('promise', 'status', 'planted', 'payoff', 'pov knows', 'evidence')):
+                recognized.add(index)
+                for row in table.rows:
+                    local = []
+                    _check_promise(_row(table, row), row.line, None, 0, 'draft', local)
+                    from dataclasses import replace
+                    findings.extend(replace(f, path=relative) for f in local)
+            elif _has_columns(headers, ('question', 'status', 'introduced', 'answered', 'evidence')):
+                recognized.add(index)
+                for row in table.rows:
+                    local = []
+                    _check_question(_row(table, row), row.line, None, 'draft', local)
+                    from dataclasses import replace
+                    findings.extend(replace(f, path=relative) for f in local)
+        if not recognized:
+            findings.append(_finding(MALFORMED, 'info', 'No supported continuity table; semantic continuity is unassessed', relative, None, 'Review the author record directly; no format conversion is required.'))
+    for anchor, (whens, chapters) in sorted(anchors.items()):
+        path, line = sorted(evidence[anchor])[0]
+        if len(whens) > 1 or len(chapters) > 1:
+            findings.append(_finding(TIMELINE, 'warning', f'anchor {anchor!r} has conflicting explicit chronology', path, line, 'Review the cited chronology with its source.'))
+    return sorted(findings, key=lambda f: (f.path or '', f.line or 0, f.code))

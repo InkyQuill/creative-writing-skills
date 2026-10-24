@@ -25,10 +25,9 @@ prose or scene text in this workflow, regardless of location.
 
 ## Project awareness
 
-From the project root, run `cw get-folder world`, `characters`, `plans`,
-`chapters`, `side-stories`, and `drafts` for the folders needed in this task.
-Use those selected paths for setting lore, character facts, plans, accepted
-prose, and drafts. Use
+Use existing author files for setting lore, character facts, plans, accepted
+prose, and drafts. Optional folder/file tags or `cw get-folder` can help
+locate them; flat files and missing configuration need no setup. Use
 `$project-maintenance` for schema checks, previewed recoverable mutations,
 indexes, and reindexing. If a selected destination needs safe mechanical
 preparation, route it through `$project-maintenance` without moving author files.
@@ -44,7 +43,7 @@ lore decisions require later prose edits, but it must not perform those edits.
 Before asking substantive lore questions:
 
 1. Identify the likely project root from the user's working directory and nearby folders.
-2. Resolve relevant folder roles with `cw get-folder`, then inspect existing indexes. Look for:
+2. Resolve relevant files from author instructions and optional tags, then inspect existing indexes when present. Look for:
    - `_index.md`
    - `index.md`
    - `INDEX.md`
@@ -88,13 +87,13 @@ If a folder has an index file, preserve its role:
 
 Create files lazily—only when a direct settled answer has no existing canonical
 home. The settled answer authorizes the smallest unambiguous selected
-destination; preview the creation through `$project-maintenance` without a
-second confirmation. Ask when competing destinations would materially change
+destination; preview a safe named edit or use `$project-maintenance` when
+managed mechanics apply, without a second confirmation. Ask when competing destinations would materially change
 canon, provenance, or a knowledge boundary.
 
 ### Editable vs read-only areas
 
-Editable through previewed, recoverable `$project-maintenance` transactions:
+Editable through safe named edits or previewed, recoverable `$project-maintenance` transactions:
 
 - selected world folder for durable setting facts
 - selected characters folder for settled character facts, relationships, constraints, or backstory
@@ -124,10 +123,12 @@ For each worldbuilding branch:
 3. Include your recommended answer and why it fits.
 4. Wait for the user's answer.
 5. When a direct author answer settles a durable fact or decision, persist it
-   immediately through a previewed, recoverable transaction via
-   `$project-maintenance` before asking the next question.
-6. Update the smallest canonical non-story file and any affected index in that
-   transaction; the agent performs reindexing.
+   immediately before asking the next question: use a reviewed named edit for
+   an ordinary author-owned non-story file, or a previewed, recoverable
+   `$project-maintenance` transaction when managed mechanics apply.
+6. Update the smallest canonical non-story file. Refresh affected tool-owned
+   indexes when applicable; preserve author-owned indexes and use a transaction
+   for managed reindexing.
 7. Continue to the next dependent question.
 
 Do not ask for redundant confirmation. Unless the author marks an answer
@@ -168,7 +169,8 @@ Use indexes to find adjacent files that might contradict or depend on the decisi
 ### Update non-story files inline
 
 When a fact is resolved by a direct author answer, update the relevant
-canonical non-story file right there through `$project-maintenance`. Do not
+author-owned non-story file right there using a safe named edit or an
+applicable `$project-maintenance` transaction. Do not
 batch settled lore until the end unless the user asks you to wait. Use the
 format in [world-file-format.md](./references/world-file-format.md) for
 worldbuilding files, and preserve compatible author formatting in character or

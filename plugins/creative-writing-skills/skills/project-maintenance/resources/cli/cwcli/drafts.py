@@ -107,7 +107,7 @@ def plan_create_draft(
     if store.project.root != project.root:
         raise DraftError("transaction store belongs to a different project")
     destination_id = (
-        f"{_role_path(project, 'drafts')}/{PurePosixPath(target).name}"
+        str(PurePosixPath(_role_path(project, 'drafts')) / PurePosixPath(target).name)
         if draft_path is None
         else draft_path
     )
@@ -251,6 +251,7 @@ def plan_accept_draft(
     draft_path: str,
     store: TransactionStore,
     transaction_id: str,
+    archive_path: str | None = None,
 ) -> TransactionPlan:
     """Plan acceptance of a ready draft and archival of its working artifact."""
 
@@ -260,7 +261,7 @@ def plan_accept_draft(
     _reject_hidden_material(source)
     if draft.status != "ready":
         raise DraftError(f"draft {draft_path} must have status ready before acceptance")
-    archive_id = _archive_id(project, draft_path, transaction_id)
+    archive_id = _archive_id(project, draft_path, transaction_id, archive_path)
     target_path = _resolve_target(project, draft.target)
     target_before = _validate_acceptance_base(
         draft, target_path, store, draft_path=draft_path
@@ -326,6 +327,7 @@ def plan_abandon_draft(
     project: Project,
     draft_path: str,
     transaction_id: str,
+    archive_path: str | None = None,
 ) -> TransactionPlan:
     """Plan abandonment without creating or changing manuscript content."""
 
@@ -336,7 +338,7 @@ def plan_abandon_draft(
         document = parse_document(source)
     except (OSError, UnicodeError, ValueError, ProjectPathError) as error:
         raise DraftError(f"cannot parse draft {draft_path}: {error}") from error
-    archive_id = _archive_id(project, draft_path, transaction_id)
+    archive_id = _archive_id(project, draft_path, transaction_id, archive_path)
     archive = _render_archive(
         document, status="abandoned", transaction_id=transaction_id
     )
@@ -416,14 +418,19 @@ def _validate_acceptance_base(
     return target
 
 
-def _archive_id(project: Project, draft_path: str, transaction_id: str) -> str:
+def _archive_id(project: Project, draft_path: str, transaction_id: str, explicit: str | None = None) -> str:
     if (
         not isinstance(transaction_id, str)
         or _TRANSACTION_ID.fullmatch(transaction_id) is None
     ):
         raise DraftError("transaction ID must be a safe ASCII identifier")
     stem = PurePosixPath(draft_path).stem
-    archive_id = f"{_role_path(project, 'archive')}/{stem}--{transaction_id}.md"
+    archive_id = explicit if explicit is not None else str(PurePosixPath(_role_path(project, 'archive')) / f"{stem}--{transaction_id}.md")
+    from .catalog import is_original
+    if is_original(project, archive_id):
+        raise DraftError('immutable translation originals cannot be archive destinations')
+    if PurePosixPath(archive_id).suffix.casefold() != '.md':
+        raise DraftError('archive path must be Markdown')
     try:
         archive = project.resolve(archive_id, for_write=True)
     except (ProjectPathError, TypeError) as error:
@@ -692,14 +699,17 @@ def _replace_base_revision_value(prefix: bytes, base_revision: str) -> bytes:
 
 
 def _reject_duplicate_target(project: Project, target: str) -> None:
-    directory = project.root / _role_path(project, "drafts")
-    if directory.is_symlink():
-        raise DraftError("drafts folder must be an ordinary directory without links")
-    if not directory.exists():
-        return
-    if not directory.is_dir():
-        raise DraftError("drafts folder must be an ordinary directory")
-    for path in sorted(directory.iterdir(), key=lambda candidate: candidate.name):
+    if project.unstructured:
+        from .catalog import lifecycle_drafts
+        paths = lifecycle_drafts(project)
+    else:
+        directory = project.root / _role_path(project, "drafts")
+        if not directory.exists():
+            return
+        if directory.is_symlink() or not directory.is_dir():
+            raise DraftError("drafts folder must be an ordinary directory")
+        paths = sorted(directory.iterdir(), key=lambda p: p.name)
+    for path in paths:
         if path.name == "_index.md" or path.suffix.casefold() != ".md":
             continue
         relative = project.relative_id(path)
@@ -720,12 +730,17 @@ def _reject_duplicate_target(project: Project, target: str) -> None:
 def _reject_other_duplicate_target(project: Project, draft: Draft) -> None:
     """Reject a portable target identity shared by another active draft."""
 
-    directory = project.root / _role_path(project, "drafts")
-    if directory.is_symlink() or not directory.is_dir():
-        raise DraftError("drafts folder must be an ordinary directory without links")
+    if project.unstructured:
+        from .catalog import lifecycle_drafts
+        paths = lifecycle_drafts(project)
+    else:
+        directory = project.root / _role_path(project, "drafts")
+        if directory.is_symlink() or not directory.is_dir():
+            raise DraftError("drafts folder must be an ordinary directory without links")
+        paths = sorted(directory.iterdir(), key=lambda p: p.name)
     identity = _portable_identity(draft.target)
     duplicates: list[str] = []
-    for path in sorted(directory.iterdir(), key=lambda candidate: candidate.name):
+    for path in paths:
         if path.name == "_index.md" or path.suffix.casefold() != ".md":
             continue
         relative = project.relative_id(path)
@@ -761,7 +776,15 @@ def _resolve_target(project: Project, target: str) -> Path:
 def _validate_target_path(project: Project, path: str) -> None:
     if not isinstance(path, str):
         raise DraftError("draft target must be a project-relative string")
+    from .catalog import is_original
+    if is_original(project, path):
+        raise DraftError('immutable translation originals cannot be draft paths or targets')
     pure = PurePosixPath(path)
+    if project.unstructured:
+        if str(pure) != path or pure.name == '_index.md' or pure.suffix.casefold() != '.md':
+            raise DraftError('draft and manuscript paths must name Markdown files')
+        project.resolve(path, for_write=True)
+        return
     from .layout import role_directories
 
     allowed_parents = {
@@ -784,7 +807,15 @@ def _validate_target_path(project: Project, path: str) -> None:
 def _validate_draft_path(project: Project, path: str) -> None:
     if not isinstance(path, str):
         raise DraftError("draft path must be a project-relative string")
+    from .catalog import is_original
+    if is_original(project, path):
+        raise DraftError('immutable translation originals cannot be draft paths or targets')
     pure = PurePosixPath(path)
+    if project.unstructured:
+        if str(pure) != path or pure.name == '_index.md' or pure.suffix.casefold() != '.md':
+            raise DraftError('draft and manuscript paths must name Markdown files')
+        project.resolve(path, for_write=True)
+        return
     if (
         str(pure) != path
         or pure.parent != PurePosixPath(_role_path(project, "drafts"))
@@ -804,6 +835,8 @@ def _relevant_indexes(project: Project, index_ids: tuple[str, ...]) -> tuple[str
     from .layout import uses_flexible_layout
     from .indexes import selected_index_id
 
+    if project.unstructured:
+        return ()
     if not uses_flexible_layout(project):
         return index_ids
     selected = tuple(dict.fromkeys(selected_index_id(project, index_id) for index_id in index_ids))

@@ -6,6 +6,10 @@ description: >
 
 # Continuity Records
 
+Use the author's actual paths. Folder names below are optional legacy examples;
+flat and mixed layouts are valid. Tags aid routing but do not establish canon.
+Use named outputs and safe edits without requiring a scaffold or CLI lifecycle.
+
 Free-form kb pages carry judgment; these five record types carry facts a
 script can check. They record what established prose and author-confirmed
 decisions made true — never speculation. Anything unresolved stays in the
@@ -13,7 +17,7 @@ issue log or brainstorm notes instead.
 
 ## Where They Live
 
-The canonical continuity root is `kb/continuity/`:
+The optional legacy managed continuity root is `kb/continuity/`:
 
 - `kb/continuity/timeline.md`
 - `kb/continuity/promises.md`
@@ -173,7 +177,7 @@ payoff. Once any continuity record exists, the full five-record set is
 required; a missing file or `scenes/` directory is an error. The checker also
 compares anchored timeline tables embedded in character and subplot entries
 with the master timeline. Exit is nonzero when it finds errors. Treat its
-output as the fixed floor: resolve or flag every finding, then apply reader
+output and coverage as mechanical evidence: resolve or flag every finding, then apply reader
 judgment for what a script cannot see. Deterministic findings are reported,
 not auto-repaired. Direct and unambiguous facts established by accepted prose
 follow the separate previewed, recoverable synchronization above without

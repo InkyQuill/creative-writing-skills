@@ -7,6 +7,7 @@ import unicodedata
 from pathlib import Path
 from typing import Iterator
 
+from ..catalog import classify_document
 from ..documents import DocumentError, parse_document
 from ..findings import Finding
 from ..project import MANAGED_ROOTS, Project
@@ -16,7 +17,6 @@ from ..schema import (
     required_paths,
     SCAFFOLD_DIRECTORIES,
     SCAFFOLD_FILES,
-    allowed_document_kind,
     validate_metadata,
 )
 
@@ -30,14 +30,42 @@ MISSING_SIDE_STORY_ANCHOR = "CW-STRUCT-031"
 CYCLIC_SIDE_STORY_ANCHOR = "CW-STRUCT-032"
 MIXED_NEWLINES = "CW-STRUCT-040"
 CASE_COLLISION = "CW-STRUCT-050"
-ILLEGAL_LOCATION = "CW-STRUCT-060"
 UNMANAGED_MARKDOWN = "CW-STRUCT-090"
 
 
 def check_structure(project: Project) -> list[Finding]:
     """Return deterministic findings without mutating or halting on bad files."""
 
-    schema_version = project.manifest.metadata.get("schema-version")
+    if project.unstructured or project.selection is not None:
+        from ..catalog import document_paths
+        from ..documents import read_document
+        findings = []
+        for path in document_paths(project):
+            relative = project.relative_id(path)
+            try:
+                data = path.read_bytes()
+                read = read_document(data)
+            except OSError as error:
+                findings.append(Finding(INVALID_FRONTMATTER, "info", f"Document could not be read: {error}", path=relative))
+                continue
+            if read.body is None:
+                findings.append(Finding(INVALID_FRONTMATTER, "info", "Document body/metadata could not be assessed", path=relative))
+            classification = classify_document(project, relative)
+            if (not project.unstructured and project.metadata.get('schema-version') == 1
+                    and classification.managed_kind is not None):
+                findings.extend(_newline_findings(path, relative, data=data))
+                if read.metadata_error:
+                    findings.append(Finding(INVALID_FRONTMATTER, "error", f"frontmatter could not be interpreted safely: {read.metadata_error}", path=relative))
+                elif not _has_frontmatter(data):
+                    findings.append(_missing_frontmatter_finding(relative))
+                elif read.document is not None:
+                    findings.extend(validate_metadata(relative, read.document, kind_override=classification.managed_kind))
+            if classification.conflicts:
+                findings.append(Finding("CW-STRUCT-095", "info", "Multiple purposes; single-purpose operations need an explicit target", path=relative))
+        if project.selection is None:
+            findings.extend(_case_collision_findings(project))
+        return findings
+    schema_version = project.metadata.get("schema-version")
     if isinstance(schema_version, int) and not isinstance(schema_version, bool) and schema_version > max(SUPPORTED_SCHEMA_VERSIONS):
         return [
             Finding(
@@ -55,7 +83,7 @@ def check_structure(project: Project) -> list[Finding]:
     findings: list[Finding] = []
     role_folders = {role: role_directories(project, role) for role in ROLE_CANDIDATES}
     try:
-        required_dirs, required_files = required_paths(project.manifest.metadata)
+        required_dirs, required_files = required_paths(project.metadata)
     except ValueError:
         required_dirs, required_files = SCAFFOLD_DIRECTORIES, SCAFFOLD_FILES
     if uses_flexible_layout(project):
@@ -82,34 +110,7 @@ def check_structure(project: Project) -> list[Finding]:
     side_story_anchors: dict[str, str] = {}
     for path in project.iter_managed_markdown():
         relative_id = project.relative_id(path)
-        document_kind = allowed_document_kind(relative_id, schema_version=project.manifest.metadata.get("schema-version", 1))
-        if document_kind is None:
-            parent = Path(relative_id).parent.as_posix()
-            if Path(relative_id).name == "_index.md" and any(
-                parent in folders for folders in role_folders.values()
-            ):
-                document_kind = "generated-index"
-            elif parent in role_folders["chapters"]:
-                document_kind = "chapter"
-            elif parent in role_folders["side-stories"]:
-                document_kind = "side-story"
-            elif any(parent in role_folders[role] for role in ("drafts", "plans", "reviews", "archive")):
-                document_kind = "work-artifact"
-            elif any(parent in role_folders[role] for role in ("characters", "world")):
-                document_kind = "kb-content"
-        if document_kind is None:
-            findings.append(
-                Finding(
-                    code=ILLEGAL_LOCATION,
-                    severity="warning",
-                    message="Markdown is not in an allowed managed location for this project schema",
-                    path=relative_id,
-                    next_action=(
-                        "Identify this artifact's role, then move it to an allowed managed directory "
-                        "without overwriting existing content."
-                    ),
-                )
-            )
+        document_kind = classify_document(project, relative_id).managed_kind
         try:
             data = path.read_bytes()
             document = parse_document(data)
@@ -310,7 +311,7 @@ def _iter_unmanaged_markdown(
     managed_folders = set(MANAGED_ROOTS)
     for folders in role_folders.values():
         managed_folders.update(folders)
-    if project.manifest.metadata.get("schema-version") == 2 and project.manifest.metadata.get("translation-enabled") is True:
+    if project.metadata.get("schema-version") == 2 and project.metadata.get("translation-enabled") is True:
         managed_folders.update(("sources", "translations"))
     yield from _iter_unmanaged_markdown_in(project.root, project.root, managed_folders)
 
@@ -336,7 +337,7 @@ def _case_collision_findings(project: Project) -> list[Finding]:
     for directory in _iter_directories(project.root, project.root):
         by_identity: dict[str, list[Path]] = {}
         for path in _sorted_children(directory):
-            if path.is_symlink():
+            if path.is_symlink() or path.name.startswith('.'):
                 continue
             by_identity.setdefault(_portable_identity(path.name), []).append(path)
         for paths in by_identity.values():
@@ -360,10 +361,9 @@ def _case_collision_findings(project: Project) -> list[Finding]:
 def _iter_directories(root: Path, directory: Path) -> Iterator[Path]:
     yield directory
     for path in _sorted_children(directory):
-        if path.is_symlink() or not path.is_dir():
+        if path.is_symlink() or not path.is_dir() or path.name.startswith('.') or path.name in {'node_modules', '__pycache__'}:
             continue
-        manifest = path / "project.md"
-        if path != root and not manifest.is_symlink() and manifest.is_file():
+        if path != root and any((path / marker).is_file() for marker in ("project.md", ".cws-layout.json")):
             continue
         yield from _iter_directories(root, path)
 
@@ -384,7 +384,6 @@ __all__ = [
     "CASE_COLLISION",
     "DUPLICATE_CHAPTER",
     "INVALID_FRONTMATTER",
-    "ILLEGAL_LOCATION",
     "MISSING_FRONTMATTER",
     "MISSING_PATH",
     "MIXED_NEWLINES",

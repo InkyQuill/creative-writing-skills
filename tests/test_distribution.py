@@ -265,43 +265,29 @@ class DistributionScaffoldTests(unittest.TestCase):
 
     def test_project_setup_keeps_discovery_material_provisional_until_approval(self):
         text = (PLUGIN_ROOT / "skills/project-setup/SKILL.md").read_text()
-        proposal, apply = text.split("## Apply Safely", 1)
-        self.assertRegex(proposal.lower(), r"keep writing samples and voice analysis provisional")
-        self.assertRegex(proposal.lower(), r"exact role and\s+destination are approved")
-        self.assertIn("approval of the core project does not imply approval", proposal.lower())
-        self.assertRegex(proposal.lower(), r"draft the project-specific writing contract.{0,120}body of `project\.md`")
-        self.assertNotIn("draft the project-specific `agents.md` guidance", proposal.lower())
-        self.assertIn("ask the author only", apply.lower())
+        self.assertIn("provisional until their role", text)
+        self.assertIn("destination are approved", text)
+        self.assertIn("source-tag", text)
+        self.assertIn("no redundant confirmation", text)
 
-    def test_project_setup_initializes_or_extends_the_canonical_layout(self):
+    def test_project_setup_preserves_author_layouts_without_initialization(self):
         text = (PLUGIN_ROOT / "skills/project-setup/SKILL.md").read_text()
-        self.assertIn("cw init", text)
-        self.assertIn("existing canonical project is extended in place", text)
-        self.assertRegex(text, r"Do not reinitialize or\s+reorganize")
-        self.assertIn("one canonical on-disk", text)
-        self.assertNotIn("Layout A", text)
-        self.assertNotIn("Layout B", text)
+        self.assertIn("ordinary folder is already usable", text)
+        self.assertIn("explicit output filename works without", text)
+        self.assertIn("Preserve flat, shared and nested layouts", text)
 
-    def test_project_setup_requires_reviewed_migration_for_legacy_content(self):
+    def test_project_setup_only_migrates_for_requested_reorganization(self):
         text = (PLUGIN_ROOT / "skills/project-setup/SKILL.md").read_text()
-        self.assertIn("recognized legacy content uses `cw migrate --plan`", text)
-        self.assertRegex(text, r"Preview the\s+completed migration plan")
-        self.assertRegex(text, r"author confirms the semantic mapping and approves\s+the reviewed preview")
-        self.assertRegex(text, r"unknown files or intentionally unmanaged material untouched")
+        self.assertIn("only for a requested reorganization", text)
+        self.assertIn("approval before applying", text)
+        self.assertIn("unknown files", text)
 
-    def test_project_setup_routes_canonical_creation_through_maintenance(self):
+    def test_project_setup_routes_optional_managed_creation_through_maintenance(self):
         text = (PLUGIN_ROOT / "skills/project-setup/SKILL.md").read_text()
         self.assertIn("$project-maintenance", text)
-        self.assertIn("do not duplicate its command reference", text)
-        self.assertIn("construct managed files by hand", text)
-        for path in (
-            "`project.md`",
-            "`.cws-layout.json`",
-            "cw layout",
-        ):
-            self.assertIn(path, text)
-        self.assertRegex(text, r"(?is)body of.{0,80}`project\.md`.{0,180}(durable|writing contract)")
-        self.assertRegex(text, r"(?is)resolved project instructions.{0,180}(unmanaged|optional)")
+        self.assertIn("author-requested new managed scaffold", text)
+        self.assertIn("project.md", text)
+        self.assertIn("its filename is not a prerequisite", text)
 
     def test_llm_writing_requires_an_authorized_artifact_path_for_disk_drafts(self):
         text = (PLUGIN_ROOT / "skills/llm-writing/SKILL.md").read_text()

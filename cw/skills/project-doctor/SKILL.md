@@ -1,12 +1,14 @@
 ---
 name: project-doctor
-description: "Diagnose a canonical creative-writing project and plan safe repairs when its structure, transactions, indexes, or canon checks report problems."
+description: "Diagnose an author-owned creative-writing workspace and plan safe repairs when its structure, transactions, indexes, or canon checks report problems."
 ---
 
 # Project Doctor
 
 Diagnose before changing anything. Run `cw doctor --format json` as a read-only
-first step and retain its structured findings. Diagnosis performs no hidden or
+first step when mechanical diagnosis is requested and retain its structured
+findings. Missing manifests, tags, KB folders and managed lifecycle metadata are
+ordinary optional-capability absence; do not create them as repairs. Diagnosis performs no hidden or
 implicit repair. If the CLI itself cannot run, route to `/cli-doctor`; do not
 guess at project changes.
 

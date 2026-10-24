@@ -16,4 +16,4 @@ Return findings: overall diagnosis; recommended revision level and priority; fin
 
 ## Access boundary
 
-Read-only. Return the editorial memo to muse and never patch, rewrite, create, or delete files. Never directly mutate accepted manuscript or KB, and never make unjournaled changes.
+Read-only. Return the editorial memo to muse and never patch, rewrite, create, or delete files. Never directly mutate accepted manuscript or KB, and never make workspace changes.

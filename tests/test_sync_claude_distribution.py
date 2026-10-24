@@ -448,14 +448,14 @@ class ClaudeDistributionRenderTests(unittest.TestCase):
                 output_root
                 / "skills/creative-writing-muse/resources/workers/critic.md"
             ).read_text()
-            self.assertIn("Resolved project instructions", project_setup)
+            self.assertIn("Existing files and the current request", project_setup)
             self.assertNotIn("AGENTS.md", project_setup)
             self.assertNotIn("CLAUDE.md", project_setup)
             self.assertIn(
-                "authored body is the durable writing contract",
+                "body can hold the durable writing contract",
                 project_setup,
             )
-            self.assertIn("remain unmanaged", project_setup)
+            self.assertIn("its filename is not a prerequisite", project_setup)
             self.assertIn("focused dialogue", grill)
             self.assertNotIn("AGENTS.md", grill)
             self.assertNotIn("CLAUDE.md", grill)
@@ -480,7 +480,7 @@ class ClaudeDistributionRenderTests(unittest.TestCase):
                 "cw layout",
             ):
                 self.assertIn(path, project_setup)
-            self.assertIn("existing folders without moving prose", project_setup)
+            self.assertIn("Preserve flat, shared and nested layouts", project_setup)
             self.assertIn("Use `/project-maintenance`", project_setup)
             generated_cards = (
                 output_root

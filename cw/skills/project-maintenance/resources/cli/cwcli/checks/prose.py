@@ -261,7 +261,7 @@ def analyze_prose(text: str, *, language: str) -> ProseMetrics:
 def check_prose(project: Project, *, draft_typography: bool = False) -> list[Finding]:
     """Inspect managed Markdown independently without changing the project."""
 
-    configured_language = project.manifest.metadata.get("language")
+    configured_language = project.metadata.get("language")
     language = configured_language if isinstance(configured_language, str) else ""
     findings: list[Finding] = []
     role_folders = {
@@ -269,11 +269,12 @@ def check_prose(project: Project, *, draft_typography: bool = False) -> list[Fin
         for role in ("chapters", "side-stories", "drafts", "characters", "world")
     }
 
-    paths = [project.root / "project.md", *project.iter_managed_markdown()]
+    from ..catalog import document_paths, has_tag
+    paths = document_paths(project)
     seen: set[str] = set()
     for path in paths:
         relative_id = project.relative_id(path)
-        if project.manifest.metadata.get("schema-version") == 2 and relative_id.startswith("sources/"):
+        if project.metadata.get("schema-version") == 2 and relative_id.startswith("sources/"):
             continue
         if relative_id in seen:
             continue
@@ -307,11 +308,15 @@ def check_prose(project: Project, *, draft_typography: bool = False) -> list[Fin
             )
         integrity = _integrity_lines(text)
         findings.extend(_tag_findings(relative_id, integrity))
-        findings.extend(_tag_policy_findings(relative_id, integrity, role_folders))
+        if not project.unstructured:
+            findings.extend(_tag_policy_findings(relative_id, integrity, role_folders))
 
         from ..translation.contract import translation_kind
-        translated = project.manifest.metadata.get("schema-version") == 2 and translation_kind(relative_id) in ("translation-drafts", "translation-accepted")
-        if not _is_prose_path(relative_id, project, role_folders) and not translated:
+        translated = project.metadata.get("schema-version") == 2 and translation_kind(relative_id) in ("translation-drafts", "translation-accepted")
+        if not (project.unstructured or project.selection is not None or _is_prose_path(relative_id, project, role_folders)) and not translated:
+            continue
+
+        if relative_id == "project.md" and project.manifest is not None:
             continue
 
         document_language = _prose_language(relative_id, source, language)
@@ -323,7 +328,7 @@ def check_prose(project: Project, *, draft_typography: bool = False) -> list[Fin
             except (OSError, ValueError, KeyError) as error:
                 findings.append(Finding(UNREADABLE_DOCUMENT, "warning", str(error), path=relative_id))
                 continue
-        is_working_draft = Path(relative_id).parent.as_posix() in role_folders["drafts"] or (
+        is_working_draft = has_tag(project, relative_id, "drafts") or (
             translated and translation_kind(relative_id) == "translation-drafts"
         )
         if _normalize_language(document_language) == "ru" and (
