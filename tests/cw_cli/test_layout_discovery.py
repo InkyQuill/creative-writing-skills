@@ -124,13 +124,11 @@ class LayoutDiscoveryTests(unittest.TestCase):
                 self.assertEqual(2, status, errors.getvalue())
                 self.assertIn("directory", json.loads(output.getvalue())["message"])
 
-    def test_roles_cannot_share_the_same_folder(self):
+    def test_roles_can_share_the_same_folder(self):
         shared = {"characters": "notes/shared", "world": "notes/shared"}
         self.write_layout(shared)
-        with self.assertRaisesRegex(ValueError, "same folder"):
-            load_layout(discover_project(self.root))
-        with self.assertRaisesRegex(ValueError, "same folder"):
-            render_layout(shared)
+        self.assertEqual(shared, load_layout(discover_project(self.root)))
+        self.assertEqual(shared, json.loads(render_layout(shared))["roles"])
 
     def test_get_folder_reports_ambiguous_role_without_guessing(self):
         for relative in ("chapters", "story/chapters"):

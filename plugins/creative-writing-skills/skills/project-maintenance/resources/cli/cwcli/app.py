@@ -146,6 +146,12 @@ def _parser(*, error_stream: TextIO) -> argparse.ArgumentParser:
     layout.add_argument("--capture", action="store_true")
     layout.add_argument("--relocate", action="store_true")
     _mutation_options(layout)
+    layout.add_argument("layout_action", nargs="?", choices=("tag", "destination", "inspect"))
+    layout.add_argument("layout_path", nargs="?")
+    layout.add_argument("destination_path", nargs="?")
+    layout.add_argument("--kind", choices=("directory", "file"))
+    layout.add_argument("--add", action="append", default=[])
+    layout.add_argument("--remove", action="append", default=[])
 
     get_folder = commands.add_parser("get-folder", error_stream=error_stream)
     get_folder.add_argument("role", choices=tuple(ROLE_CANDIDATES))
@@ -283,6 +289,11 @@ def run(argv: list[str], *, cwd: Path, stdout: TextIO, stderr: TextIO) -> int:
     if args.command == "layout":
         try:
             project = discover_project(cwd)
+            if args.layout_action:
+                return _run_tag_layout(project, args, stdout)
+            from .catalog import read_layout
+            if read_layout(project).version == 2 and (args.relocate or args.role_selections or args.capture):
+                raise ValueError("Use layout tag/destination for version 2; relocation requires an explicit file map")
             if args.relocate:
                 from .relocation import plan_relocation
                 if args.capture:
@@ -870,3 +881,38 @@ def _init_preview(plan: TransactionPlan) -> list[dict[str, str]]:
 
 def main(argv: list[str] | None = None) -> int:
     return run(sys.argv[1:] if argv is None else argv, cwd=Path.cwd(), stdout=sys.stdout, stderr=sys.stderr)
+
+
+def _run_tag_layout(project: Project, args: argparse.Namespace, stdout: TextIO) -> int:
+    from .catalog import (LayoutConfig, TagBinding, effective_tags, read_layout,
+                          render_config, validate_binding_path, _tags)
+    config = read_layout(project)
+    bindings = list(config.bindings)
+    destinations = dict(config.destinations)
+    if args.layout_action == "inspect":
+        data = json.loads(render_config(config))
+        if args.layout_path:
+            project.resolve(args.layout_path)
+            data["effective_tags"] = sorted(effective_tags(config, args.layout_path))
+        _write_command_data(data, output_format=args.format, stdout=stdout)
+        return 0
+    if args.layout_action == "destination":
+        _tags([args.layout_path])
+        destinations[args.layout_path] = validate_binding_path(project, args.destination_path, "directory")
+    else:
+        path = validate_binding_path(project, args.layout_path, args.kind)
+        add, remove = _tags(args.add), _tags(args.remove)
+        if add & remove:
+            raise ValueError("a tag cannot be added and removed together")
+        existing = next((b for b in bindings if b.path == path and b.kind == args.kind), None)
+        tags = ((existing.tags if existing else frozenset()) - remove) | add
+        excluded = ((existing.remove if existing else frozenset()) - add) | remove
+        bindings = [b for b in bindings if b is not existing]
+        bindings.append(TagBinding(path, args.kind, tags, excluded))
+    path = project.root / LAYOUT_FILE
+    before = path.read_bytes() if path.exists() else None
+    after = render_config(LayoutConfig(2, tuple(bindings), destinations))
+    plan = TransactionPlan(command=("layout", args.layout_action),
+        changes=(Change(LAYOUT_FILE, before, after),), metadata={"undoable": True})
+    return _preview_or_apply(TransactionEngine(project), plan, apply=args.apply,
+                             output_format=args.format, stdout=stdout)

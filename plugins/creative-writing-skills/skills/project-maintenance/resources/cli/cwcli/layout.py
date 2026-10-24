@@ -3,8 +3,6 @@
 from __future__ import annotations
 
 import json
-import os
-import stat
 from pathlib import Path, PurePosixPath
 
 from .project import Project
@@ -45,6 +43,8 @@ def validate_role_path(project: Project, relative: str) -> str:
 def _validate_role_path_syntax(relative: str) -> None:
     if not isinstance(relative, str) or not relative or "\\" in relative:
         raise ValueError("layout role path must be a project-relative folder")
+    if relative == ".":
+        return
     path = PurePosixPath(relative)
     if path.is_absolute() or any(part in {"", ".", ".."} for part in relative.split("/")):
         raise ValueError("layout role path must be a project-relative folder")
@@ -53,40 +53,20 @@ def _validate_role_path_syntax(relative: str) -> None:
 def _validate_role_mapping(roles: dict[str, str]) -> None:
     if not isinstance(roles, dict):
         raise ValueError("layout roles must be an object")
-    owners: dict[str, str] = {}
     for role, relative in roles.items():
         if role not in ROLE_CANDIDATES:
             raise ValueError(f"unknown layout role: {role}")
         _validate_role_path_syntax(relative)
-        previous = owners.get(relative)
-        if previous is not None:
-            raise ValueError(f"layout roles {previous} and {role} cannot use the same folder: {relative}")
-        owners[relative] = role
 
 
 def load_layout(project: Project) -> dict[str, str]:
     """Read explicit folder selections from the separate project layout file."""
-    path = project.root / LAYOUT_FILE
-    try:
-        fd = os.open(path, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0))
-    except FileNotFoundError:
-        return {}
-    try:
-        if not stat.S_ISREG(os.fstat(fd).st_mode):
-            raise ValueError("layout file must be a regular file")
-        with os.fdopen(fd, "r", encoding="utf-8") as stream:
-            fd = -1
-            data = json.load(stream)
-    finally:
-        if fd >= 0:
-            os.close(fd)
-    if not isinstance(data, dict) or data.get("version") != 1 or not isinstance(data.get("roles"), dict):
-        raise ValueError("invalid .cws-layout.json: expected version 1 and roles object")
-    roles = data["roles"]
-    _validate_role_mapping(roles)
-    for role, relative in roles.items():
-        validate_role_path(project, relative)
-    return roles
+    from .catalog import read_layout, tagged_directories
+    config = read_layout(project)
+    if config.version == 1:
+        return dict(config.destinations)
+    return {role: folders[0] for role in ROLE_CANDIDATES
+            if len(folders := tagged_directories(config, role)) == 1}
 
 
 def render_layout(roles: dict[str, str]) -> bytes:
@@ -119,6 +99,9 @@ def resolve_role(project: Project, role: str) -> str:
 
     if role not in ROLE_CANDIDATES:
         raise ValueError(f"unknown folder role: {role}")
+    from .catalog import read_layout, resolve_destination
+    if read_layout(project).version == 2:
+        return resolve_destination(project, role)
     explicit = load_layout(project).get(role)
     if explicit is not None:
         return explicit
@@ -136,6 +119,10 @@ def role_directories(project: Project, role: str) -> tuple[str, ...]:
 
     if role not in ROLE_CANDIDATES:
         raise ValueError(f"unknown folder role: {role}")
+    from .catalog import read_layout, tagged_directories
+    config = read_layout(project)
+    if config.version == 2:
+        return tagged_directories(config, role)
     explicit = load_layout(project).get(role)
     if explicit is not None:
         return (explicit,)
