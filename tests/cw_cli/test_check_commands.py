@@ -39,7 +39,7 @@ class CheckCommandTests(unittest.TestCase):
             self.assertEqual("", error)
             self.assertIn(status, {0, 1})
             self.assertEqual(sorted(checks.CHECKERS), payload["checks"])
-            self.assertEqual({"checks", "findings", "execution_errors", "strict_failure"}, set(payload))
+            self.assertEqual({"checks", "findings", "execution_errors", "strict_failure", "coverage"}, set(payload))
             self.assertGreater(len(payload["findings"]), 1)
 
     def test_checker_exception_is_contained_and_exit_status_is_two(self):

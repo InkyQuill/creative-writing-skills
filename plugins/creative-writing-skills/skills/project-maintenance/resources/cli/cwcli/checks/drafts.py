@@ -34,15 +34,19 @@ def check_drafts(project: Project, store: TransactionStore) -> list[Finding]:
     as repairable warnings and continues after malformed files.
     """
 
-    directory = project.root / resolve_role(project, "drafts")
     if store.project.root != project.root:
         return [_warning(MALFORMED_DRAFT, "transaction store belongs to another project", None)]
-    if directory.is_symlink() or not directory.is_dir():
-        return []
-
+    if project.unstructured or project.selection is not None:
+        from ..catalog import lifecycle_drafts
+        paths = lifecycle_drafts(project)
+    else:
+        directory = project.root / resolve_role(project, "drafts")
+        if directory.is_symlink() or not directory.is_dir():
+            return []
+        paths = sorted(directory.iterdir(), key=lambda item: (_identity(item.name), item.name))
     findings: list[Finding] = []
     targets: dict[str, list[str]] = {}
-    for path in sorted(directory.iterdir(), key=lambda item: (_identity(item.name), item.name)):
+    for path in paths:
         if path.name == "_index.md" or path.suffix.casefold() != ".md":
             continue
         relative = project.relative_id(path)

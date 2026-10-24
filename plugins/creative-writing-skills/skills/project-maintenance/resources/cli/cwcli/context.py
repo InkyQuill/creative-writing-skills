@@ -208,7 +208,7 @@ def plan_context(project: Project, kind: str, path: str, role: str) -> ContextPl
             )
             if target is not None:
                 anchors.add(target)
-        else:
+        elif not project.unstructured:
             unresolved.add(f"draft-target:{subject}")
 
     for raw in _metadata_references(subject_document):
@@ -241,7 +241,10 @@ def plan_context(project: Project, kind: str, path: str, role: str) -> ContextPl
         if resolved is not None:
             anchors.add(resolved)
 
-    for relative in _CONTINUITY:
+    from .catalog import has_tag
+    continuity_paths = tuple(project.relative_id(p) for p in project.iter_managed_markdown()
+                             if has_tag(project, project.relative_id(p), 'continuity')) if project.unstructured else _CONTINUITY
+    for relative in continuity_paths:
         _add_selected_path(
             project,
             relative,
@@ -1473,6 +1476,10 @@ def _validate_subject(project: Project, kind: str, value: str) -> str:
     relative = _normalize_relative(value)
     from .layout import role_directories
 
+    if project.unstructured:
+        if PurePosixPath(relative).suffix.casefold() != '.md' or not _safe_regular(project, relative):
+            raise ContextPlanError(f"context subject must be safe Markdown: {relative}")
+        return relative
     inferred = _document_kind(project, relative)
     if kind == "draft" and not (
         PurePosixPath(relative).parent.as_posix() in role_directories(project, "drafts")
@@ -1535,7 +1542,7 @@ def _add_reference(
         warnings.add(f"explicit reference is outside managed context roots: {relative}")
         return None
     expected_kinds = (expected_kind,) if isinstance(expected_kind, str) else expected_kind
-    if expected_kinds is not None and _document_kind(project, relative) not in expected_kinds:
+    if not project.unstructured and expected_kinds is not None and _document_kind(project, relative) not in expected_kinds:
         unresolved.add(relative)
         warnings.add(f"explicit reference has the wrong document kind: {relative}")
         return None
@@ -1764,13 +1771,16 @@ def _known_character(project: Project, character: str) -> bool:
 
 
 def _in_role(project: Project, relative: str, role: str) -> bool:
-    return PurePosixPath(relative).parent.as_posix() in role_directories(project, role)
+    from .catalog import has_tag
+    return has_tag(project, relative, role)
 
 
 def _safe_regular(project: Project, relative: str) -> bool:
     try:
         normalized = _normalize_relative(relative)
     except ContextPlanError:
+        return False
+    if PurePosixPath(normalized).parts[0] in {'.creative-writing', '.git'}:
         return False
     current = project.root
     for index, part in enumerate(PurePosixPath(normalized).parts):
@@ -1786,7 +1796,7 @@ def _safe_regular(project: Project, relative: str) -> bool:
             if not stat.S_ISDIR(mode):
                 return False
             manifest = current / "project.md"
-            if current != project.root and manifest.is_file() and not manifest.is_symlink():
+            if current != project.root and any(p.is_file() and not p.is_symlink() for p in (manifest, current / ".cws-layout.json")):
                 return False
         elif not stat.S_ISREG(mode):
             return False
@@ -1828,24 +1838,13 @@ def _safe_character_stem(value: str) -> bool:
 
 
 def _document_kind(project: Project, relative: str) -> str | None:
-    from .layout import role_directories
-
-    kind = allowed_document_kind(relative)
-    if kind is not None:
-        return kind
-    parent = PurePosixPath(relative).parent.as_posix()
-    for role, candidate_kind in (
-        ("chapters", "chapter"), ("side-stories", "side-story"),
-        ("drafts", "work-artifact"), ("plans", "work-artifact"),
-        ("reviews", "work-artifact"), ("archive", "work-artifact"),
-        ("characters", "kb-content"), ("world", "kb-content"),
-    ):
-        if parent in role_directories(project, role):
-            return candidate_kind
-    return None
+    from .catalog import classify_document
+    return classify_document(project, relative).managed_kind
 
 
 def _selectable_context_path(project: Project, relative: str) -> bool:
+    if project.unstructured:
+        return PurePosixPath(relative).suffix.casefold() == '.md' and _safe_regular(project, relative)
     return _document_kind(project, relative) in _SELECTABLE_KINDS
 
 

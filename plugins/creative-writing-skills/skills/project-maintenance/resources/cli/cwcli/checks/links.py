@@ -32,7 +32,8 @@ def check_links(project: Project) -> list[Finding]:
     findings: list[Finding] = []
     inbound: set[str] = set()
     authored: set[str] = set()
-    sources = [project.root / "project.md", *project.iter_managed_markdown()]
+    from ..catalog import document_paths
+    sources = document_paths(project)
     for source in sources:
         relative_source = project.relative_id(source)
         if _is_authored_page(relative_source):
@@ -56,6 +57,9 @@ def check_links(project: Project) -> list[Finding]:
 
     for relative_id in sorted(authored - inbound):
         findings.append(_finding(ORPHAN_PAGE, "info", "authored managed page has no inbound explicit Markdown link", relative_id, None, "Add an explicit link from a relevant authored page if this artifact should be discoverable."))
+
+    if project.unstructured or project.selection is not None:
+        return sorted(findings, key=_finding_key)
 
     try:
         reindex = plan_reindex(project, skip_unparseable=True)

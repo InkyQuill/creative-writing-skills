@@ -184,10 +184,9 @@ class StructureCheckTests(unittest.TestCase):
 
             self.assertIn(("CW-STRUCT-011", "error", "kb/vocab.md"), indexed)
             self.assertIn(("CW-STRUCT-021", "warning", "work/_index.md"), indexed)
-            self.assertIn(("CW-STRUCT-060", "warning", "story/stray.md"), indexed)
+            self.assertNotIn(("CW-STRUCT-060", "warning", "story/stray.md"), indexed)
             self.assertTrue(indexed[("CW-STRUCT-011", "error", "kb/vocab.md")].next_action)
             self.assertTrue(indexed[("CW-STRUCT-021", "warning", "work/_index.md")].next_action)
-            self.assertTrue(indexed[("CW-STRUCT-060", "warning", "story/stray.md")].next_action)
 
     def test_schema_v1_allows_each_path_inferred_artifact_class(self):
         directory, root = self.make_project()
@@ -283,7 +282,7 @@ class StructureCheckTests(unittest.TestCase):
 
             report = json.loads(stdout.getvalue())
             self.assertEqual(1, status)
-            self.assertEqual({"checks", "findings", "execution_errors", "strict_failure"}, set(report))
+            self.assertEqual({"checks", "findings", "execution_errors", "strict_failure", "coverage"}, set(report))
             self.assertEqual(["structure"], report["checks"])
             self.assertEqual([], report["execution_errors"])
             self.assertTrue(report["strict_failure"])
@@ -292,32 +291,17 @@ class StructureCheckTests(unittest.TestCase):
                 {finding["severity"] for finding in report["findings"] if finding["code"] == "CW-STRUCT-010"},
             )
 
-    def test_json_check_contains_malformed_manifest_as_an_execution_error(self):
+    def test_foreign_project_note_is_unassessed_without_forced_repair(self):
         with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory) / "project"
-            root.mkdir()
+            root = Path(directory)
             (root / "project.md").write_bytes(b"---\ntitle: Broken\n")
-            stdout = io.StringIO()
-            stderr = io.StringIO()
-            global_stderr = io.StringIO()
-
-            with redirect_stderr(global_stderr):
-                status = app.run(
-                    ["check", "structure", str(root), "--format", "json"],
-                    cwd=root.parent,
-                    stdout=stdout,
-                    stderr=stderr,
-                )
-
+            stdout, stderr = io.StringIO(), io.StringIO()
+            status = app.run(["check", "structure", str(root), "--format", "json"],
+                             cwd=root, stdout=stdout, stderr=stderr)
             report = json.loads(stdout.getvalue())
-            self.assertEqual(2, status)
-            self.assertEqual(["structure"], report["checks"])
-            self.assertEqual([], report["findings"])
-            self.assertEqual(False, report["strict_failure"])
-            self.assertEqual("structure", report["execution_errors"][0]["check"])
-            self.assertIn("line 3: unterminated frontmatter", report["execution_errors"][0]["message"])
-            self.assertEqual("", stderr.getvalue())
-            self.assertEqual("", global_stderr.getvalue())
+            self.assertEqual(0, status)
+            self.assertEqual([], report["execution_errors"])
+            self.assertTrue(report["coverage"][0]["skipped_reason"])
 
     def test_json_check_contains_manifest_read_failures_as_execution_errors(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -351,32 +335,20 @@ class StructureCheckTests(unittest.TestCase):
             self.assertEqual("", stderr.getvalue())
             self.assertEqual("", global_stderr.getvalue())
 
-    def test_json_check_contains_discovery_failure_as_an_execution_error(self):
+    def test_json_check_accepts_an_empty_author_workspace(self):
         with tempfile.TemporaryDirectory() as directory:
-            target = Path(directory) / "not-a-project"
-            target.mkdir()
-            stdout = io.StringIO()
-            stderr = io.StringIO()
-
-            status = app.run(
-                ["check", "structure", str(target), "--format", "json"],
-                cwd=target.parent,
-                stdout=stdout,
-                stderr=stderr,
-            )
-
+            root = Path(directory)
+            stdout, stderr = io.StringIO(), io.StringIO()
+            status = app.run(["check", "structure", str(root), "--format", "json"],
+                             cwd=root, stdout=stdout, stderr=stderr)
             report = json.loads(stdout.getvalue())
-            self.assertEqual(2, status)
-            self.assertEqual(["structure"], report["checks"])
-            self.assertEqual([], report["findings"])
-            self.assertEqual("structure", report["execution_errors"][0]["check"])
-            self.assertIn("no project.md found", report["execution_errors"][0]["message"])
-            self.assertEqual("", stderr.getvalue())
+            self.assertEqual(0, status)
+            self.assertEqual([], report["execution_errors"])
+            self.assertEqual([], list(root.iterdir()))
 
     def test_text_check_uses_injected_stderr_for_execution_failure(self):
         with tempfile.TemporaryDirectory() as directory:
             target = Path(directory) / "not-a-project"
-            target.mkdir()
             stdout = io.StringIO()
             stderr = io.StringIO()
             global_stderr = io.StringIO()
@@ -391,7 +363,7 @@ class StructureCheckTests(unittest.TestCase):
 
             self.assertEqual(2, status)
             self.assertEqual("", stdout.getvalue())
-            self.assertIn("cw: error: no project.md found", stderr.getvalue())
+            self.assertIn("cw: error:", stderr.getvalue())
             self.assertEqual("", global_stderr.getvalue())
 
     def test_init_only_previews_sorted_file_and_protected_directory_creates(self):

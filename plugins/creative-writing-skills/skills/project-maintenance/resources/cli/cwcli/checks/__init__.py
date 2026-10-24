@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Callable, Iterable
 
-from ..findings import ExecutionError, Finding, Report
+from ..findings import CheckCoverage, ExecutionError, Finding, Report
 from ..project import Project
 from ..transactions import TransactionStore
 from .continuity import check_continuity
@@ -48,8 +48,40 @@ def run_checks(project: Project, names: Iterable[str], *, draft_typography: bool
 
     findings: list[Finding] = []
     execution_errors: list[ExecutionError] = []
+    from ..catalog import document_paths, classify_document, lifecycle_drafts, KNOWLEDGE_TAGS
+    from ..documents import read_document
+    coverage = []
+    paths = document_paths(project)
+    relative_paths = tuple(project.relative_id(p) for p in paths)
+    flexible = project.unstructured or project.selection is not None
     for name in selected:
         try:
+            checked = relative_paths
+            skip = None
+            if flexible:
+                if name == 'translation' and project.metadata.get('schema-version') != 2:
+                    skip = 'managed translation is not enabled'
+                    checked = ()
+                elif name == 'journal' and not (project.root / '.creative-writing').exists():
+                    skip = 'no transaction journal exists'
+                    checked = ()
+                elif name == 'drafts':
+                    checked = tuple(project.relative_id(p) for p in lifecycle_drafts(project))
+                    if not checked:
+                        skip = 'no managed draft lifecycle metadata'
+                elif name in {'kb', 'continuity'}:
+                    tags = KNOWLEDGE_TAGS if name == 'kb' else {'continuity'}
+                    checked = tuple(project.relative_id(p) for p in paths
+                                    if classify_document(project, project.relative_id(p)).tags & tags)
+                    if not checked:
+                        skip = 'no documents identified for this optional check'
+                elif name == 'structure':
+                    opaque = [p for p in paths if read_document(p.read_bytes()).metadata_error]
+                    if opaque:
+                        skip = 'opaque metadata is unassessed; author bytes preserved'
+            coverage.append(CheckCoverage(name, checked, skip))
+            if flexible and skip and not checked:
+                continue
             if name == "prose":
                 findings.extend(check_prose(project, draft_typography=draft_typography))
             else:
@@ -58,7 +90,7 @@ def run_checks(project: Project, names: Iterable[str], *, draft_typography: bool
             execution_errors.append(ExecutionError(check=name, message=str(error)))
 
     findings.sort(key=lambda item: (item.path or "", item.code, item.line or 0, item.message))
-    return Report(findings=findings, checks=selected, execution_errors=execution_errors)
+    return Report(findings=findings, checks=selected, execution_errors=execution_errors, coverage=coverage)
 
 
 __all__ = ["CHECKERS", "Checker", "run_checks"]

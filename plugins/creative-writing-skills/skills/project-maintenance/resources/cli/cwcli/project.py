@@ -237,6 +237,8 @@ __all__ = [
 def open_workspace(start: Path, *, root: Path | None = None) -> Project:
     """Open author files without initializing a managed project."""
     start = Path(start).absolute()
+    if not start.exists():
+        raise ProjectDiscoveryError(f"workspace target does not exist: {start}")
     if start.is_symlink():
         raise ProjectPathError("workspace target is a symlink")
     directory = start if start.is_dir() else start.parent

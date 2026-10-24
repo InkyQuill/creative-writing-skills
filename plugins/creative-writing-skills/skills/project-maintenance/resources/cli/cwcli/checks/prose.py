@@ -269,7 +269,8 @@ def check_prose(project: Project, *, draft_typography: bool = False) -> list[Fin
         for role in ("chapters", "side-stories", "drafts", "characters", "world")
     }
 
-    paths = [project.root / "project.md", *project.iter_managed_markdown()]
+    from ..catalog import document_paths, has_tag
+    paths = document_paths(project)
     seen: set[str] = set()
     for path in paths:
         relative_id = project.relative_id(path)
@@ -311,7 +312,7 @@ def check_prose(project: Project, *, draft_typography: bool = False) -> list[Fin
 
         from ..translation.contract import translation_kind
         translated = project.metadata.get("schema-version") == 2 and translation_kind(relative_id) in ("translation-drafts", "translation-accepted")
-        if not _is_prose_path(relative_id, project, role_folders) and not translated:
+        if not (project.unstructured or project.selection is not None or _is_prose_path(relative_id, project, role_folders)) and not translated:
             continue
 
         document_language = _prose_language(relative_id, source, language)
@@ -323,7 +324,7 @@ def check_prose(project: Project, *, draft_typography: bool = False) -> list[Fin
             except (OSError, ValueError, KeyError) as error:
                 findings.append(Finding(UNREADABLE_DOCUMENT, "warning", str(error), path=relative_id))
                 continue
-        is_working_draft = Path(relative_id).parent.as_posix() in role_folders["drafts"] or (
+        is_working_draft = has_tag(project, relative_id, "drafts") or (
             translated and translation_kind(relative_id) == "translation-drafts"
         )
         if _normalize_language(document_language) == "ru" and (

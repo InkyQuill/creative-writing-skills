@@ -153,3 +153,70 @@ def iter_documents(project: Project, *, target: str | None = None):
             raise ValueError(f'check target does not exist: {target}')
     else:
         yield from walk(project.root)
+
+
+KNOWLEDGE_TAGS = frozenset({'kb', 'characters', 'world', 'canon', 'styles', 'samples', 'issues', 'continuity', 'vocabulary'})
+_ROLE_KINDS = {'chapters': 'chapter', 'side-stories': 'side-story',
+               'drafts': 'work-artifact', 'plans': 'work-artifact',
+               'reviews': 'work-artifact', 'brainstorm': 'work-artifact', 'archive': 'work-artifact',
+               **{tag: 'kb-content' for tag in KNOWLEDGE_TAGS}, 'vocabulary': 'vocabulary',
+               'continuity': 'continuity-record'}
+
+
+@dataclass(frozen=True)
+class DocumentClassification:
+    tags: frozenset[str]
+    origin: Literal['explicit', 'legacy', 'unknown']
+    managed_kind: str | None
+    conflicts: tuple[str, ...] = ()
+
+
+def classify_document(project: Project, relative: str) -> DocumentClassification:
+    from .schema import allowed_document_kind
+    from .layout import ROLE_CANDIDATES, role_directories
+    config = read_layout(project)
+    tags = effective_tags(config, relative)
+    if config.version == 2:
+        # Purpose tags are not mutually exclusive; only operations requiring a
+        # single document kind need to reject incompatible purposes.
+        kinds = {_ROLE_KINDS[tag] for tag in tags if tag in _ROLE_KINDS and tag != 'archive'}
+        if 'vocabulary' in kinds or 'continuity-record' in kinds:
+            kinds.discard('kb-content')
+        conflicts = tuple(sorted(kinds)) if len(kinds) > 1 else ()
+        return DocumentClassification(tags, 'explicit' if tags else 'unknown',
+                                      next(iter(kinds)) if len(kinds) == 1 else None, conflicts)
+    if project.manifest is not None or config.bindings:
+        for role in ROLE_CANDIDATES:
+            if PurePosixPath(relative).parent.as_posix() in role_directories(project, role):
+                tags |= {role}
+        kind = allowed_document_kind(relative, schema_version=project.metadata.get('schema-version', 1))
+        if PurePosixPath(relative).name == '_index.md' and tags:
+            kind = 'generated-index'
+        if kind is None:
+            kinds = {_ROLE_KINDS[tag] for tag in tags if tag in _ROLE_KINDS}
+            kind = next(iter(kinds)) if len(kinds) == 1 else None
+        if kind in {'kb-content', 'continuity-record', 'continuity-scene', 'vocabulary'}:
+            tags |= {'kb'}
+        return DocumentClassification(frozenset(tags), 'legacy', kind)
+    return DocumentClassification(frozenset(), 'unknown', None)
+
+
+def document_paths(project: Project) -> tuple[Path, ...]:
+    paths = list(project.iter_managed_markdown())
+    if project.manifest is not None and project.selection is None:
+        paths.insert(0, project.root / 'project.md')
+    return tuple(dict.fromkeys(paths))
+
+
+def has_tag(project: Project, relative: str, tag: str) -> bool:
+    return tag in classify_document(project, relative).tags
+
+
+def lifecycle_drafts(project: Project) -> tuple[Path, ...]:
+    from .documents import read_document
+    found = []
+    for path in project.iter_managed_markdown():
+        read = read_document(path.read_bytes())
+        if read.document is not None and {'target', 'base-revision'} & read.document.metadata.keys():
+            found.append(path)
+    return tuple(found)
