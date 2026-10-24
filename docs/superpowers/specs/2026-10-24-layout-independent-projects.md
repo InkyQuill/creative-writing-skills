@@ -1,6 +1,6 @@
 # Layout-independent story projects
 
-Status: proposed design; implementation is not started.
+Status: implemented; see the implementation plan completion record for validation limits.
 
 Baseline: `origin/main` at `a489953`, plugin 0.12.0, fetched 2026-10-24.
 

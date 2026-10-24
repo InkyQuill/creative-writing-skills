@@ -426,6 +426,9 @@ def _archive_id(project: Project, draft_path: str, transaction_id: str, explicit
         raise DraftError("transaction ID must be a safe ASCII identifier")
     stem = PurePosixPath(draft_path).stem
     archive_id = explicit if explicit is not None else str(PurePosixPath(_role_path(project, 'archive')) / f"{stem}--{transaction_id}.md")
+    from .catalog import is_original
+    if is_original(project, archive_id):
+        raise DraftError('immutable translation originals cannot be archive destinations')
     if PurePosixPath(archive_id).suffix.casefold() != '.md':
         raise DraftError('archive path must be Markdown')
     try:
@@ -773,6 +776,9 @@ def _resolve_target(project: Project, target: str) -> Path:
 def _validate_target_path(project: Project, path: str) -> None:
     if not isinstance(path, str):
         raise DraftError("draft target must be a project-relative string")
+    from .catalog import is_original
+    if is_original(project, path):
+        raise DraftError('immutable translation originals cannot be draft paths or targets')
     pure = PurePosixPath(path)
     if project.unstructured:
         if str(pure) != path or pure.name == '_index.md' or pure.suffix.casefold() != '.md':
@@ -801,6 +807,9 @@ def _validate_target_path(project: Project, path: str) -> None:
 def _validate_draft_path(project: Project, path: str) -> None:
     if not isinstance(path, str):
         raise DraftError("draft path must be a project-relative string")
+    from .catalog import is_original
+    if is_original(project, path):
+        raise DraftError('immutable translation originals cannot be draft paths or targets')
     pure = PurePosixPath(path)
     if project.unstructured:
         if str(pure) != path or pure.name == '_index.md' or pure.suffix.casefold() != '.md':

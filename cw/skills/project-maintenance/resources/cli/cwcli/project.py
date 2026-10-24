@@ -45,7 +45,21 @@ class Project:
         from .catalog import read_layout
         config = read_layout(self)
         paths = [b.path for b in config.bindings]
-        return self.manifest is None or config.version == 2 or '.' in paths or len(paths) != len(set(paths))
+        return (self.manifest is None or config.version == 2 or '.' in paths
+                or len(paths) != len(set(paths)) or (not paths and self._author_layout()))
+
+    def _author_layout(self) -> bool:
+        # A schema-1 manifest alone does not opt an author's flat files into
+        # the historical scaffold. Preserve the adapter for existing layouts.
+        if self.metadata.get('schema-version') != 1:
+            return False
+        from .layout import ROLE_CANDIDATES
+        legacy = set(MANAGED_ROOTS) | {p.split('/')[0] for choices in ROLE_CANDIDATES.values() for p in choices}
+        if any((self.root / name).is_dir() for name in legacy):
+            return False
+        return any(not p.name.startswith('.') and p.name != 'project.md'
+                   and not p.is_symlink() and (p.is_dir() or p.suffix.casefold() == '.md')
+                   for p in self.root.iterdir())
 
     def resolve(self, relative: str, *, for_write: bool = False) -> Path:
         """Resolve a project-relative path without allowing boundary escapes."""
@@ -257,7 +271,7 @@ def open_workspace(start: Path, *, root: Path | None = None) -> Project:
                 break
     if not chosen.is_dir():
         raise ProjectDiscoveryError(f"workspace does not exist: {chosen}")
-    if _contains_symlink(chosen, start) if start.is_relative_to(chosen) else True:
+    if not start.is_relative_to(chosen) or _contains_symlink(chosen, start):
         raise ProjectPathError("workspace target is outside root or contains a symlink")
     manifest_path = chosen / 'project.md'
     manifest = None

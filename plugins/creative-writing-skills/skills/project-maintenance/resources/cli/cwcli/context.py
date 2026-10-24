@@ -244,10 +244,12 @@ def plan_context(project: Project, kind: str, path: str, role: str) -> ContextPl
         if resolved is not None:
             anchors.add(resolved)
 
-    from .catalog import has_tag
+    from .catalog import has_tag, is_archived
     continuity_paths = tuple(project.relative_id(p) for p in project.iter_managed_markdown()
                              if has_tag(project, project.relative_id(p), 'continuity')) if project.unstructured else _CONTINUITY
     for relative in continuity_paths:
+        if _safe_regular(project, relative) and is_archived(project, relative):
+            continue
         _add_selected_path(
             project,
             relative,
@@ -300,6 +302,8 @@ def plan_context(project: Project, kind: str, path: str, role: str) -> ContextPl
         warnings.add(f"continuity context evidence could not be inspected: {error}")
     else:
         for finding in continuity_findings:
+            if finding.path and _safe_regular(project, finding.path) and is_archived(project, finding.path):
+                continue
             if finding.path and _safe_regular(project, finding.path):
                 _add_selected_path(
                     project, finding.path, suggested, catalog=catalog,
@@ -1527,6 +1531,22 @@ def _add_reference(
     project_relative: bool,
     expected_kind: str | tuple[str, ...] | None = None,
 ) -> str | None:
+    if project_relative:
+        from .provenance import resolve_source
+        reference = resolve_source(project, raw)
+        if reference.kind != 'file':
+            if reference.resolution in {'malformed', 'missing', 'unsafe'}:
+                unresolved.add(raw)
+                warnings.add(f'unresolved citation {raw!r}: {reference.reason or reference.resolution}')
+            return None
+        if reference.resolution != 'resolved':
+            unresolved.add(raw)
+            warnings.add(f'unresolved citation {raw!r}: {reference.reason or reference.resolution}')
+            return None
+        raw = reference.path
+        if PurePosixPath(raw).suffix.casefold() != '.md':
+            warnings.add(f'citation exists but content is unassessed: {raw}')
+            return None
     try:
         relative = _resolve_reference(
             raw,
@@ -1627,6 +1647,9 @@ def _manuscript_neighbors(
     side_stories: dict[str, str] = {}
     for path in project.iter_managed_markdown():
         relative = project.relative_id(path)
+        from .catalog import is_archived
+        if is_archived(project, relative):
+            continue
         kind = _document_kind(project, relative)
         if kind not in {'chapter', 'side-story'} or not _safe_regular(project, relative):
             continue
@@ -1701,6 +1724,9 @@ def _scan_documents(project: Project, warnings: "_OrderedStrings") -> tuple[tupl
     documents: list[tuple[str, Document]] = []
     for path in project.iter_managed_markdown():
         relative = project.relative_id(path)
+        from .catalog import is_archived
+        if is_archived(project, relative):
+            continue
         if relative.endswith("/_index.md"):
             continue
         try:
@@ -1728,15 +1754,13 @@ def _document_points_to(
     *,
     restricted: bool = False,
 ) -> bool:
-    values = list(_metadata_references(document))
-    for raw in values:
-        try:
-            resolved = _resolve_reference(raw, relative, project_relative=True, markdown=False)
-        except (UnicodeError, ValueError) as error:
-            warnings.add(f"invalid structured reference {raw!r} in {relative}: {error}")
-            continue
-        if resolved in anchors:
+    from .provenance import resolve_source
+    for raw in _metadata_references(document):
+        reference = resolve_source(project, raw)
+        if reference.kind == 'file' and reference.resolution == 'resolved' and reference.path in anchors:
             return True
+        if reference.resolution in {'malformed', 'unsafe'}:
+            warnings.add(f"invalid structured reference {raw!r} in {relative}: {reference.reason}")
     body = _remove_hidden(document.body) if restricted else document.body
     return _markdown_points_to(project, relative, body, anchors)
 

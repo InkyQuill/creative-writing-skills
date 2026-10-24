@@ -106,6 +106,8 @@ class LayoutIndependenceTests(unittest.TestCase):
         self.assertEqual(0, code, accepted)
         self.assertFalse((self.root / 'revision.md').exists())
         self.assertTrue((self.root / 'old-revision.md').exists())
+        checked, result = self.run_cli('check', 'drafts', '.', '--strict')
+        self.assertEqual(0, checked, result)
         self.run_cli('undo', accepted['transaction_id'], '--apply')
         self.assertEqual(b'Base\n', (self.root / 'one.md').read_bytes())
         self.assertTrue((self.root / 'revision.md').exists())
@@ -175,3 +177,41 @@ class LayoutIndependenceTests(unittest.TestCase):
         self.write('nested/other.md', 'Text')
         _, result = self.run_cli('check', 'links', 'one.md')
         self.assertTrue(result['findings'])
+
+    def test_manifest_in_flat_project_does_not_require_legacy_scaffold(self):
+        self.write('project.md', '---\nschema-version: 1\ntitle: Flat\nlanguage: en\n---\n')
+        self.write('chapter.md', '[missing](absent.md)\n')
+        _, result = self.run_cli('check', 'all', '.', '--strict')
+        self.assertTrue(any(f['code'] == 'CW-LINK-010' for f in result['findings']))
+        self.assertFalse(any(f['code'] == 'CW-STRUCT-010' for f in result['findings']))
+        self.assertFalse((self.root / 'kb').exists())
+
+    def test_context_resolves_file_citations_and_ignores_descriptions(self):
+        self.write('chapter.md', '---\nsources:\n  - file:world.md\n  - note:Author conversation\n---\nText\n')
+        self.write('world.md', 'World\n')
+        _, result = self.run_cli('context', 'chapter', 'chapter.md')
+        rendered = json.dumps(result)
+        self.assertIn('world.md', rendered)
+        self.assertNotIn('unsupported', rendered)
+        self.assertNotIn('invalid explicit reference', rendered)
+
+    def test_archived_continuity_is_not_automatically_current_context(self):
+        self.write('.cws-layout.json', json.dumps({'version': 2, 'bindings': [{'path': 'old.md', 'kind': 'file', 'tags': ['continuity', 'archive']}]}))
+        self.write('chapter.md', 'Text\n')
+        self.write('old.md', 'Old state\n')
+        _, result = self.run_cli('context', 'chapter', 'chapter.md')
+        self.assertNotIn('old.md', json.dumps(result))
+
+    def test_explicit_historical_reference_can_select_archive(self):
+        self.write('.cws-layout.json', json.dumps({'version': 2, 'bindings': [{'path': 'old.md', 'kind': 'file', 'tags': ['continuity', 'archive']}]}))
+        self.write('chapter.md', '---\nsources:\n  - file:old.md\n---\nText\n')
+        self.write('old.md', 'Old state\n')
+        _, result = self.run_cli('context', 'chapter', 'chapter.md')
+        self.assertIn('old.md', result['required'])
+
+    def test_abandoned_flat_archive_is_not_an_active_draft(self):
+        self.write('one.md', 'Base\n')
+        self.run_cli('draft', 'create', 'one.md', '--draft-path', 'revision.md', '--apply')
+        self.run_cli('draft', 'abandon', 'revision.md', '--archive-path', 'old.md', '--apply')
+        code, result = self.run_cli('check', 'drafts', '.', '--strict')
+        self.assertEqual(0, code, result)

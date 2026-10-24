@@ -134,6 +134,8 @@ def iter_documents(project: Project, *, target: str | None = None):
     """Inventory scoped Markdown; never follow links, service dirs or other projects."""
     def walk(directory: Path):
         for path in sorted(directory.iterdir(), key=lambda p: (p.name.casefold(), p.name)):
+            if is_original(project, project.relative_id(path)):
+                continue
             if path.is_symlink() or path.name.startswith('.') or path.name in {'node_modules', '__pycache__'}:
                 continue
             if path.is_dir():
@@ -144,6 +146,8 @@ def iter_documents(project: Project, *, target: str | None = None):
                 yield path
     if target is not None:
         path = project.resolve(target, for_write=True)
+        if is_original(project, project.relative_id(path)):
+            return
         if path.is_file():
             if path.suffix.casefold() == '.md':
                 yield path
@@ -223,5 +227,26 @@ def lifecycle_drafts(project: Project) -> tuple[Path, ...]:
     for path in project.iter_managed_markdown():
         read = read_document(path.read_bytes())
         if read.document is not None and {'target', 'base-revision'} & read.document.metadata.keys():
+            metadata = read.document.metadata
+            status = metadata.get('status')
+            if status in {'accepted', 'abandoned'} and metadata.get(f'{status}-transaction'):
+                continue
             found.append(path)
     return tuple(found)
+
+
+def is_original(project: Project, relative: str) -> bool:
+    return (project.metadata.get('schema-version') == 2
+            and relative.startswith('sources/') and 'originals' in PurePosixPath(relative).parts)
+
+
+def is_archived(project: Project, relative: str) -> bool:
+    if has_tag(project, relative, 'archive'):
+        return True
+    from .documents import read_document
+    read = read_document(project.resolve(relative).read_bytes())
+    if read.document is None:
+        return False
+    metadata = read.document.metadata
+    return (metadata.get('status') in {'archived', 'abandoned'}
+            or (metadata.get('status') == 'accepted' and bool(metadata.get('accepted-transaction'))))

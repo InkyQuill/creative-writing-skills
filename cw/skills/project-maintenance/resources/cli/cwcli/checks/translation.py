@@ -11,6 +11,9 @@ def check_translation(project):
     """Inspect one catalog snapshot, preserving diagnostics from independent records."""
     if project.metadata.get('schema-version') != 2:
         return []
+    from dataclasses import replace
+    selection = project.selection
+    project = replace(project, selection=None)
     findings = []
 
     def add(code, message, path, severity='warning'):
@@ -69,4 +72,7 @@ def check_translation(project):
                         add('CW-TRANS-020', f'no accepted translation for {unit}', path)
             except (KeyError, OSError, TypeError, ValueError) as error:
                 add('CW-TRANS-002', str(error), path, 'error')
+    if selection is not None:
+        prefix = selection.rstrip('/') + '/'
+        findings = [f for f in findings if selection == '.' or f.path == selection or (f.path or '').startswith(prefix)]
     return findings

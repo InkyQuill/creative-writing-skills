@@ -17,6 +17,12 @@ exercise nonmutating checks, tagged notes, descriptive citations, explicit
 context, opaque metadata preservation, and draft accept/undo on flat files.
 They do not certify installed-agent routing behavior.
 
+Implementation verification on 2026-10-24: **985 tests passed**; distribution
+validation and generated-sync checks passed; all 36 skill archives built.
+`test_layout_translation_boundaries.py` also covers immutable originals and
+selected-file translation freshness with optional tags. The independent code
+review's six findings were fixed; no minor findings were deferred.
+
 Fresh installed-agent scenarios remain **NOT RUN** in this implementation:
 
 - Review `chapter.md` in a flat folder with no metadata: read named prose, return

@@ -96,11 +96,11 @@ def plan_reindex(
 ) -> TransactionPlan:
     """Plan exact replacements for every stale generated registry."""
 
-    if project.unstructured:
-        return _plan_author_indexes(project, overlay=overlay, index_ids=index_ids)
     if project.metadata.get("schema-version") == 2:
         from .translation.indexes import plan_translation_indexes
         return plan_translation_indexes(project, overlay=overlay, index_ids=index_ids, skip_unparseable=skip_unparseable)
+    if project.unstructured:
+        return _plan_author_indexes(project, overlay=overlay, index_ids=index_ids)
 
     overlay_changes = tuple(overlay)
     if index_ids is None and not overlay_changes and uses_flexible_layout(project):
