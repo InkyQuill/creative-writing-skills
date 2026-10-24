@@ -43,13 +43,23 @@ def check_structure(project: Project) -> list[Finding]:
         for path in document_paths(project):
             relative = project.relative_id(path)
             try:
-                read = read_document(path.read_bytes())
+                data = path.read_bytes()
+                read = read_document(data)
             except OSError as error:
                 findings.append(Finding(INVALID_FRONTMATTER, "info", f"Document could not be read: {error}", path=relative))
                 continue
             if read.body is None:
                 findings.append(Finding(INVALID_FRONTMATTER, "info", "Document body/metadata could not be assessed", path=relative))
             classification = classify_document(project, relative)
+            if (not project.unstructured and project.metadata.get('schema-version') == 1
+                    and classification.managed_kind is not None):
+                findings.extend(_newline_findings(path, relative, data=data))
+                if read.metadata_error:
+                    findings.append(Finding(INVALID_FRONTMATTER, "error", f"frontmatter could not be interpreted safely: {read.metadata_error}", path=relative))
+                elif not _has_frontmatter(data):
+                    findings.append(_missing_frontmatter_finding(relative))
+                elif read.document is not None:
+                    findings.extend(validate_metadata(relative, read.document, kind_override=classification.managed_kind))
             if classification.conflicts:
                 findings.append(Finding("CW-STRUCT-095", "info", "Multiple purposes; single-purpose operations need an explicit target", path=relative))
         return findings

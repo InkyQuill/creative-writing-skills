@@ -169,10 +169,12 @@ acceptance, and retcon. Do not treat approval of one as approval of another. A
 retcon remains a content decision even when its mechanical edits look routine.
 
 During interactive brainstorming, every direct author answer that settles a
-durable fact or decision is itself explicit confirmation. Persist it
-immediately through a recoverable memory or KB transaction when applicable,
-or a reviewed named edit to the existing author record, before asking the
-next question, unless the author marks it provisional or says not to save it.
+durable fact or decision is itself explicit confirmation. Persist it immediately
+before asking the next question, unless the author marks it provisional or
+says not to save it. Use a recoverable memory or KB transaction when applicable,
+or a reviewed named edit to the existing author record. If no record exists,
+create the first named record at an unambiguous path within the author-approved
+scope; do not create a folder structure merely to save it.
 Do not ask for redundant second confirmation. An explicit instruction such as
 “save this secret now” confirms its promotion. Preserve author-only, character,
 and reader knowledge boundaries in the saved record.

@@ -295,3 +295,12 @@ class LayoutIndependenceTests(unittest.TestCase):
             self.write('.cws-layout.json', '{"version":2,"bindings":[{"path":".","kind":"directory","tags":["kb"]}]}')
             self.assertEqual({'kb'}, read_layout(project).bindings[0].tags)
             self.assertEqual(3, read.call_count)
+
+    def test_selected_legacy_chapter_validates_metadata_without_full_scaffold(self):
+        self.write('project.md', '---\nschema-version: 1\nlanguage: en\n---\n')
+        self.write('story/chapters/one.md', '---\ntitle: One\nstatus: accepted\n---\nText\n')
+        code, result = self.run_cli('check', 'structure', 'story/chapters/one.md', '--strict')
+        self.assertEqual(1, code, result)
+        self.assertTrue(any('number' in f['message'] for f in result['findings']))
+        self.assertTrue(all(f['path'] == 'story/chapters/one.md' for f in result['findings']))
+        self.assertFalse(any(f['code'] == 'CW-STRUCT-010' for f in result['findings']))
