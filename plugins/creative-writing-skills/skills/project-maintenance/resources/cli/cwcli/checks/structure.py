@@ -7,6 +7,7 @@ import unicodedata
 from pathlib import Path
 from typing import Iterator
 
+from ..catalog import classify_document
 from ..documents import DocumentError, parse_document
 from ..findings import Finding
 from ..project import MANAGED_ROOTS, Project
@@ -16,7 +17,6 @@ from ..schema import (
     required_paths,
     SCAFFOLD_DIRECTORIES,
     SCAFFOLD_FILES,
-    allowed_document_kind,
     validate_metadata,
 )
 
@@ -30,7 +30,6 @@ MISSING_SIDE_STORY_ANCHOR = "CW-STRUCT-031"
 CYCLIC_SIDE_STORY_ANCHOR = "CW-STRUCT-032"
 MIXED_NEWLINES = "CW-STRUCT-040"
 CASE_COLLISION = "CW-STRUCT-050"
-ILLEGAL_LOCATION = "CW-STRUCT-060"
 UNMANAGED_MARKDOWN = "CW-STRUCT-090"
 
 
@@ -38,12 +37,16 @@ def check_structure(project: Project) -> list[Finding]:
     """Return deterministic findings without mutating or halting on bad files."""
 
     if project.unstructured or project.selection is not None:
-        from ..catalog import document_paths, classify_document
+        from ..catalog import document_paths
         from ..documents import read_document
         findings = []
         for path in document_paths(project):
             relative = project.relative_id(path)
-            read = read_document(path.read_bytes())
+            try:
+                read = read_document(path.read_bytes())
+            except OSError as error:
+                findings.append(Finding(INVALID_FRONTMATTER, "info", f"Document could not be read: {error}", path=relative))
+                continue
             if read.body is None:
                 findings.append(Finding(INVALID_FRONTMATTER, "info", "Document body/metadata could not be assessed", path=relative))
             classification = classify_document(project, relative)
@@ -95,8 +98,6 @@ def check_structure(project: Project) -> list[Finding]:
     side_story_anchors: dict[str, str] = {}
     for path in project.iter_managed_markdown():
         relative_id = project.relative_id(path)
-        document_kind = allowed_document_kind(relative_id, schema_version=project.metadata.get("schema-version", 1))
-        from ..catalog import classify_document
         document_kind = classify_document(project, relative_id).managed_kind
         try:
             data = path.read_bytes()
@@ -372,7 +373,6 @@ __all__ = [
     "CASE_COLLISION",
     "DUPLICATE_CHAPTER",
     "INVALID_FRONTMATTER",
-    "ILLEGAL_LOCATION",
     "MISSING_FRONTMATTER",
     "MISSING_PATH",
     "MIXED_NEWLINES",

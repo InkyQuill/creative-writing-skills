@@ -66,7 +66,8 @@ stores folder choices for this project, separate from `project.md`.
 an explicit role path. Both preview changes before `--apply` and can be undone.
 `get-folder <role>` prints the selected project-relative path (or returns it
 as `path` with `--format json`) without creating a folder. Resolve roles this
-way before constructing artifact paths in skills and worker tasks. Use these
+way before constructing role-based artifact paths in skills and worker tasks;
+use explicit paths directly. Use these
 as internal setup aids; do not make the author run them or treat a
 missing candidate as a setup failure. Context planning without `--snapshot` is read-only. A restricted
 `context --snapshot` writes derived cache without `--apply`; trusted context
@@ -123,9 +124,9 @@ New projects receive `prose-profile: general`. Existing schema-v1 projects
 without the optional field behave the same way, and valid custom profile slugs
 are preserved by migration, rebase, and exact document edits.
 
-Draft targets may be numbered chapters in the selected chapters folder or
-ordered side stories in the selected side-stories folder. Resolve those paths
-with `cw get-folder` first. A side story requires an `after` path to an
+When a draft target uses the selected chapters or side-stories folder, resolve
+that role with `cw get-folder` first. Use explicit targets and `--draft-path`
+values directly. A side story requires an `after` path to an
 accepted manuscript document and may declare a lower-case `subtype`. Use
 `context chapter` for either accepted manuscript role; it follows their
 aggregate reading order when selecting neighbors.

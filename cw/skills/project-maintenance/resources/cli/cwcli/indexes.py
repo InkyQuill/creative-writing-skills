@@ -285,7 +285,8 @@ def _plan_author_indexes(project: Project, *, overlay=(), index_ids=None) -> Tra
     owned = set()
     for relative, data in contents.items():
         read = read_document(data)
-        if read.document is not None and read.document.metadata.get('generated') is True:
+        if (read.document is not None and read.document.metadata.get('generated') is True
+                and '<!-- generated registry -->' in read.document.body):
             owned.add(relative)
     selected = sorted(owned) if index_ids is None else list(index_ids)
     if len(selected) != len(set(selected)):
@@ -309,7 +310,7 @@ def _plan_author_indexes(project: Project, *, overlay=(), index_ids=None) -> Tra
             link = quote(posixpath.relpath(path, parent.as_posix()), safe='/')
             label = candidate.name.replace('[', r'\[').replace(']', r'\]')
             rows.append(f'- [{label}]({link})')
-        body = '# Contents\n\n' + '\n'.join(rows) + '\n'
+        body = '# Contents\n\n<!-- generated registry -->\n\n' + '\n'.join(rows) + '\n'
         newline = '\r\n' if before and b'\r\n' in before else '\n'
         after = render_document(Document({'generated': True, 'title': 'Contents'}, body.replace('\n', newline), newline, bool(before and before.startswith(b'\xef\xbb\xbf'))))
         if before != after:

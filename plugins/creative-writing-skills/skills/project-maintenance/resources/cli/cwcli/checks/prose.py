@@ -316,6 +316,9 @@ def check_prose(project: Project, *, draft_typography: bool = False) -> list[Fin
         if not (project.unstructured or project.selection is not None or _is_prose_path(relative_id, project, role_folders)) and not translated:
             continue
 
+        if relative_id == "project.md" and project.manifest is not None:
+            continue
+
         document_language = _prose_language(relative_id, source, language)
         if translated:
             from ..translation.catalog import read_source

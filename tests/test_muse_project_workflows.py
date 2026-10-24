@@ -99,7 +99,7 @@ class MuseProjectWorkflowTests(unittest.TestCase):
             r"directly and unambiguously established[^.]*accepted prose[^.]*"
             r"separate[^.]*previewed[^.]*recoverable[^.]*transaction",
         )
-        self.assertRegex(flat, r"separate transaction[^.]*does not[^.]*separate confirmation")
+        self.assertRegex(flat, r"separate (?:transaction|update)[^.]*does not[^.]*separate confirmation")
         self.assertRegex(
             flat,
             r"ask[^.]*only[^.]*(?:ambiguity|ambiguous)[^.]*inference[^.]*"

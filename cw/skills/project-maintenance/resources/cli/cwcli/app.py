@@ -108,7 +108,7 @@ def _parser(*, error_stream: TextIO) -> argparse.ArgumentParser:
     check_commands = check.add_subparsers(dest="check_command", required=True, parser_class=_Parser)
     for name in (*sorted(CHECKERS), "all"):
         check_command = check_commands.add_parser(name, error_stream=error_stream)
-        check_command.add_argument("path", nargs="?", default=".")
+        check_command.add_argument("path", nargs="?", default=None)
         check_command.add_argument("--root")
         if name in {"prose", "all"}:
             check_command.add_argument("--draft-typography", action="store_true")
@@ -387,9 +387,9 @@ def run(argv: list[str], *, cwd: Path, stdout: TextIO, stderr: TextIO) -> int:
     if args.command == "check":
         names = sorted(CHECKERS) if args.check_command == "all" else [args.check_command]
         try:
-            target = _from_cwd(cwd, args.path).absolute()
+            target = _from_cwd(cwd, args.path or ".").absolute()
             project = open_workspace(target, root=_from_cwd(cwd, args.root) if args.root else None)
-            if target != project.root:
+            if args.path is not None and target != project.root:
                 project = replace(project, selection=project.relative_id(target))
         except (DocumentError, OSError, ProjectDiscoveryError, ProjectPathError, UnicodeError, ValueError) as error:
             if args.format != "json":

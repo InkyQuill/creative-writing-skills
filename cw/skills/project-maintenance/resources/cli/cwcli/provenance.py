@@ -49,6 +49,8 @@ def resolve_source(project: Project, source: str) -> SourceReference:
         if not decoded or '\x00' in decoded or '\\' in decoded or Path(decoded).is_absolute() or windows.drive or '..' in Path(decoded).parts:
             return SourceReference('file', 'unsafe', reason='path escapes workspace or is malformed')
         relative = Path(decoded).as_posix()
+        if not Path(relative).parts:
+            return SourceReference('file', 'malformed', reason='workspace root is not a file citation')
         if Path(relative).parts[0] in {'.creative-writing', '.git'}:
             return SourceReference('file', 'unsafe', reason='protected service data')
         current = project.root

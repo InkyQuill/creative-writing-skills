@@ -160,16 +160,19 @@ Author direct edits are valid and authoritative input; always re-read them.
 For applicable managed operations, use `$project-maintenance`: form the exact
 edit or batch, preview the transaction, and apply within the confirmed scope.
 For ordinary files, use safe named edits with a reviewable diff, preserving
-concurrent changes and source tags; do not promise journal undo for those edits. If the result was mistaken, inspect history
-and preview `cw undo <transaction-id>` rather than overwriting current bytes.
+concurrent changes and source tags; do not promise journal undo for those edits. If a journaled result was mistaken, inspect history and preview
+`cw undo <transaction-id>` using its recorded transaction ID. For unjournaled
+named edits, inspect the current bytes and available history, then prepare a
+reviewed corrective edit; do not claim transaction undo.
 
-## Promotion Uses a Separate Transaction
+## Promotion Uses a Separate Reviewed Update
 
 Draft or manuscript acceptance does not itself write anything into the KB.
 After acceptance, re-read the prose and split extraction into settled evidence
 and material questions. Synchronize facts directly and unambiguously established
 by the text through a separate previewed, recoverable `$project-maintenance`
-transaction without asking for re-approval. Separate transaction does not mean
+transaction when managed mechanics apply, or a separate reviewed named edit
+otherwise, without asking for re-approval. Separate update does not mean
 separate confirmation. Include exact destination pages and provenance back to
 the accepted passage or prior direct author answer.
 
@@ -177,7 +180,7 @@ This promotion boundary also applies to voice artifacts. The style-creator
 writes only a proposal under the selected reviews folder (`cw get-folder reviews`);
 muse or the orchestrator promotes
 an approved sample or style through a separate previewed, recoverable
-transaction. A direct author designation of a sample's role or an explicit
+transaction when applicable, or a separate reviewed named edit otherwise. A direct author designation of a sample's role or an explicit
 approval of a style proposal is already confirmation.
 
 Ask only when ambiguity, inference or implication, a canon conflict, a retcon,

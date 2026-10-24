@@ -133,7 +133,8 @@ retcon remains a content decision even when its mechanical edits look routine.
 
 During interactive brainstorming, every direct author answer that settles a
 durable fact or decision is itself explicit confirmation. Persist it
-immediately through a recoverable memory or KB transaction before asking the
+immediately through a recoverable memory or KB transaction when applicable,
+or a reviewed named edit to the existing author record, before asking the
 next question, unless the author marks it provisional or says not to save it.
 Do not ask for redundant second confirmation. An explicit instruction such as
 “save this secret now” confirms its promotion. Preserve author-only, character,
@@ -142,8 +143,9 @@ and reader knowledge boundaries in the saved record.
 Draft acceptance changes the manuscript only, through a reviewed change;
 use a journaled transaction when the managed lifecycle is selected. After acceptance, re-read the prose. Synchronize facts directly
 and unambiguously established by accepted prose in a separate, previewed,
-recoverable KB transaction without asking for re-approval. A separate
-transaction does not mean a separate confirmation.
+recoverable KB transaction when managed mechanics apply, or a separate
+reviewed named edit otherwise, without asking for re-approval. A separate
+update does not mean a separate confirmation.
 
 Use accepted prose and prior direct author answers as evidence. Ask only when
 ambiguity, inference or implication, a canon conflict, a retcon, an uncertain

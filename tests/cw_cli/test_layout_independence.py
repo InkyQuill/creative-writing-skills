@@ -215,3 +215,83 @@ class LayoutIndependenceTests(unittest.TestCase):
         self.run_cli('draft', 'abandon', 'revision.md', '--archive-path', 'old.md', '--apply')
         code, result = self.run_cli('check', 'drafts', '.', '--strict')
         self.assertEqual(0, code, result)
+
+    def test_reindex_does_not_claim_generated_author_notes(self):
+        self.write('notes.md', '---\ngenerated: true\n---\nAuthor-owned generated notes.\n')
+        before = (self.root / 'notes.md').read_bytes()
+        self.run_cli('reindex', '--apply')
+        self.assertEqual(before, (self.root / 'notes.md').read_bytes())
+        self.run_cli('reindex', '--index', 'contents.md', '--apply')
+        self.write('new.md', 'New\n')
+        self.run_cli('reindex', '--apply')
+        self.assertIn('new.md', (self.root / 'contents.md').read_text())
+
+    def test_root_citations_are_malformed_without_crashing_context(self):
+        from cwcli.provenance import resolve_source
+        from cwcli.project import open_workspace
+        self.write('chapter.md', '---\nrelated: ./\n---\nText\n')
+        project = open_workspace(self.root)
+        for value in ('./', 'file:.', 'file:./'):
+            self.assertEqual('malformed', resolve_source(project, value).resolution)
+        code, result = self.run_cli('context', 'chapter', 'chapter.md')
+        self.assertEqual(0, code, result)
+
+    def test_manifest_is_not_prose_or_an_index_entry(self):
+        self.write('project.md', '---\nschema-version: 1\nlanguage: en\n---\n')
+        self.write('chapter.md', 'Hello world.\n')
+        _, result = self.run_cli('check', 'prose', '.')
+        self.assertFalse(any(f['path'] == 'project.md' for f in result['findings']))
+        self.run_cli('reindex', '--index', 'contents.md', '--apply')
+        self.assertNotIn('project.md', (self.root / 'contents.md').read_text())
+
+    def test_omitted_scope_checks_project_but_explicit_dot_checks_subdirectory(self):
+        self.write('project.md', '---\nschema-version: 1\nlanguage: en\n---\n')
+        self.write('one.md', '[broken](missing.md)\n')
+        self.write('nested/two.md', 'Fine\n')
+        for scope, expected in (([], True), (['.'], False)):
+            out = io.StringIO()
+            app.run(['check', 'links', *scope, '--format', 'json'], cwd=self.root / 'nested', stdout=out, stderr=io.StringIO())
+            self.assertEqual(expected, any(f['path'] == 'one.md' for f in json.loads(out.getvalue())['findings']))
+
+    def test_selected_managed_file_does_not_claim_orphan_status(self):
+        self.write('project.md', '---\nschema-version: 1\n---\n')
+        self.write('story/chapters/one.md', 'One\n')
+        self.write('story/chapters/two.md', '[One](one.md)\n')
+        _, result = self.run_cli('check', 'links', 'story/chapters/one.md')
+        self.assertFalse(any(f['code'] == 'CW-LINK-030' for f in result['findings']))
+
+    def test_unreadable_structure_file_does_not_stop_remaining_files(self):
+        from unittest.mock import patch
+        from cwcli.project import open_workspace
+        from cwcli.checks.structure import check_structure
+        self.write('one.md', 'One\n')
+        self.write('two.md', '---\nunclosed')
+        original = Path.read_bytes
+        def read(path):
+            if path.name == 'one.md':
+                raise PermissionError('unreadable')
+            return original(path)
+        with patch.object(Path, 'read_bytes', read):
+            project = open_workspace(self.root)
+            findings = check_structure(project)
+            from cwcli.checks import run_checks
+            report = run_checks(project, ['structure'])
+        self.assertEqual([], report.execution_errors)
+        self.assertEqual({'one.md', 'two.md'}, {f.path for f in findings})
+
+    def test_layout_cache_is_local_and_refreshes_after_configuration_changes(self):
+        from unittest.mock import patch
+        from cwcli.catalog import read_layout
+        from cwcli.project import open_workspace
+        from cwcli import catalog
+        self.write('.cws-layout.json', '{"version":2,"bindings":[]}')
+        project = open_workspace(self.root)
+        with patch.object(catalog, '_read_layout', wraps=catalog._read_layout) as read:
+            first = read_layout(project)
+            self.assertIs(first, read_layout(project))
+            self.assertEqual(1, read.call_count)
+            self.assertIsNot(first, read_layout(open_workspace(self.root)))
+            self.assertEqual(2, read.call_count)
+            self.write('.cws-layout.json', '{"version":2,"bindings":[{"path":".","kind":"directory","tags":["kb"]}]}')
+            self.assertEqual({'kb'}, read_layout(project).bindings[0].tags)
+            self.assertEqual(3, read.call_count)

@@ -79,7 +79,14 @@ def run_checks(project: Project, names: Iterable[str], *, draft_typography: bool
                     if not checked:
                         skip = 'no documents identified for this optional check'
                 elif name == 'structure':
-                    opaque = [p for p in paths if read_document(p.read_bytes()).metadata_error]
+                    opaque = []
+                    for path in paths:
+                        try:
+                            if read_document(path.read_bytes()).metadata_error:
+                                opaque.append(path)
+                        except OSError:
+                            # The structure checker emits the per-file finding.
+                            continue
                     if opaque:
                         skip = 'opaque metadata is unassessed; author bytes preserved'
             coverage.append(CheckCoverage(name, checked, skip))

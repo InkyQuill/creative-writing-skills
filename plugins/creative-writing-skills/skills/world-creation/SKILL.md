@@ -87,13 +87,13 @@ If a folder has an index file, preserve its role:
 
 Create files lazily—only when a direct settled answer has no existing canonical
 home. The settled answer authorizes the smallest unambiguous selected
-destination; preview the creation through `$project-maintenance` without a
-second confirmation. Ask when competing destinations would materially change
+destination; preview a safe named edit or use `$project-maintenance` when
+managed mechanics apply, without a second confirmation. Ask when competing destinations would materially change
 canon, provenance, or a knowledge boundary.
 
 ### Editable vs read-only areas
 
-Editable through previewed, recoverable `$project-maintenance` transactions:
+Editable through safe named edits or previewed, recoverable `$project-maintenance` transactions:
 
 - selected world folder for durable setting facts
 - selected characters folder for settled character facts, relationships, constraints, or backstory
@@ -123,10 +123,12 @@ For each worldbuilding branch:
 3. Include your recommended answer and why it fits.
 4. Wait for the user's answer.
 5. When a direct author answer settles a durable fact or decision, persist it
-   immediately through a previewed, recoverable transaction via
-   `$project-maintenance` before asking the next question.
-6. Update the smallest canonical non-story file and any affected index in that
-   transaction; the agent performs reindexing.
+   immediately before asking the next question: use a reviewed named edit for
+   an ordinary author-owned non-story file, or a previewed, recoverable
+   `$project-maintenance` transaction when managed mechanics apply.
+6. Update the smallest canonical non-story file. Refresh affected tool-owned
+   indexes when applicable; preserve author-owned indexes and use a transaction
+   for managed reindexing.
 7. Continue to the next dependent question.
 
 Do not ask for redundant confirmation. Unless the author marks an answer

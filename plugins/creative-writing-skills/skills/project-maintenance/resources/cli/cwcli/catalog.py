@@ -48,6 +48,21 @@ def _tags(value: object) -> frozenset[str]:
 
 
 def read_layout(project: Project) -> LayoutConfig:
+    from .layout import LAYOUT_FILE
+    try:
+        info = (project.root / LAYOUT_FILE).lstat()
+        signature = (info.st_dev, info.st_ino, info.st_mode, info.st_size, info.st_mtime_ns, info.st_ctime_ns)
+    except FileNotFoundError:
+        signature = None
+    cached = getattr(project, '_layout_cache', None)
+    if cached is not None and cached[0] == signature:
+        return cached[1]
+    config = _read_layout(project)
+    object.__setattr__(project, '_layout_cache', (signature, config))
+    return config
+
+
+def _read_layout(project: Project) -> LayoutConfig:
     from .layout import LAYOUT_FILE, _validate_role_mapping
     path = project.root / LAYOUT_FILE
     try:
@@ -134,6 +149,8 @@ def iter_documents(project: Project, *, target: str | None = None):
     """Inventory scoped Markdown; never follow links, service dirs or other projects."""
     def walk(directory: Path):
         for path in sorted(directory.iterdir(), key=lambda p: (p.name.casefold(), p.name)):
+            if path == project.root / 'project.md' and project.manifest is not None:
+                continue
             if is_original(project, project.relative_id(path)):
                 continue
             if path.is_symlink() or path.name.startswith('.') or path.name in {'node_modules', '__pycache__'}:
