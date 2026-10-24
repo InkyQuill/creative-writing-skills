@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.13.0](https://github.com/InkyQuill/creative-writing-skills/compare/v0.12.0...v0.13.0) (2026-10-24)
+
+
+### Features
+
+* support author-defined story layouts with optional tags ([#21](https://github.com/InkyQuill/creative-writing-skills/issues/21)) ([624a105](https://github.com/InkyQuill/creative-writing-skills/commit/624a105bbb400110dd4213aedc2ca70c5607784e))
+
 ## [0.12.0](https://github.com/InkyQuill/creative-writing-skills/compare/v0.11.0...v0.12.0) (2026-10-08)
 
 
