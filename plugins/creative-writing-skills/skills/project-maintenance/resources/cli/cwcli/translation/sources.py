@@ -18,7 +18,7 @@ def external_bytes(value):
 def plan_source(project, request):
     if not isinstance(request, dict):
         raise ValueError('source request must be a JSON object')
-    _, work, enabled = project_settings(project.manifest.metadata)
+    _, work, enabled = project_settings(project.metadata)
     if not enabled:
         raise ValueError('enable translation first')
     action = request.get('action')

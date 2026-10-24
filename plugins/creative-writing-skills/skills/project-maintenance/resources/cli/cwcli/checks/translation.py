@@ -9,7 +9,7 @@ from ..translation.drafts import translation_status
 
 def check_translation(project):
     """Inspect one catalog snapshot, preserving diagnostics from independent records."""
-    if project.manifest.metadata.get('schema-version') != 2:
+    if project.metadata.get('schema-version') != 2:
         return []
     findings = []
 

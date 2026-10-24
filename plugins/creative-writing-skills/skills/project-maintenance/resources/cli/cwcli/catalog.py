@@ -128,3 +128,28 @@ def resolve_destination(project: Project, tag: str, explicit: str | None = None)
     if len(folders) == 1:
         return folders[0]
     raise LayoutAmbiguity(f'No unique destination for {tag}; provide an explicit output path or layout destination')
+
+
+def iter_documents(project: Project, *, target: str | None = None):
+    """Inventory scoped Markdown; never follow links, service dirs or other projects."""
+    def walk(directory: Path):
+        for path in sorted(directory.iterdir(), key=lambda p: (p.name.casefold(), p.name)):
+            if path.is_symlink() or path.name.startswith('.') or path.name in {'node_modules', '__pycache__'}:
+                continue
+            if path.is_dir():
+                if any((path / name).is_file() for name in ('project.md', '.cws-layout.json')):
+                    continue
+                yield from walk(path)
+            elif path.is_file() and path.suffix.casefold() == '.md':
+                yield path
+    if target is not None:
+        path = project.resolve(target, for_write=True)
+        if path.is_file():
+            if path.suffix.casefold() == '.md':
+                yield path
+        elif path.is_dir():
+            yield from walk(path)
+        else:
+            raise ValueError(f'check target does not exist: {target}')
+    else:
+        yield from walk(project.root)

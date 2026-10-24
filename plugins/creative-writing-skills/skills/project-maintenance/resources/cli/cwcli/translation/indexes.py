@@ -10,7 +10,7 @@ from .contract import project_settings, translation_kind
 def plan_translation_indexes(project, *, overlay=(), index_ids=None, skip_unparseable=False):
     from ..indexes import plan_reindex
     from ..documents import parse_document
-    kind, _, _ = project_settings(project.manifest.metadata)
+    kind, _, _ = project_settings(project.metadata)
     overlay = tuple(overlay)
     records = load_catalog(project, skip_unparseable=skip_unparseable)
     for change in overlay:
@@ -23,12 +23,12 @@ def plan_translation_indexes(project, *, overlay=(), index_ids=None, skip_unpars
                 if not skip_unparseable:
                     raise
                 records.pop(change.path, None)
-    _, required = required_paths(project.manifest.metadata)
+    _, required = required_paths(project.metadata)
     selected = {p for p in required if p.endswith('_index.md') and (kind == 'translation' or p.startswith(('sources/', 'translations/', 'kb/entities/', 'kb/source-comparisons/')))}
     selected.update(f'translations/{d.metadata["direction-id"]}/_index.md' for p, d in records.items() if PurePosixPath(p).name == 'translation.md')
     changes = []
     if kind == 'authoring':
-        legacy = Project(project.root, replace(project.manifest, metadata=dict(project.manifest.metadata, **{'schema-version': 1})))
+        legacy = Project(project.root, replace(project.manifest, metadata=dict(project.metadata, **{'schema-version': 1})))
         changes.extend(plan_reindex(legacy, overlay=tuple(c for c in overlay if c.path.startswith(('story/', 'work/', 'kb/'))), skip_unparseable=skip_unparseable).changes)
     if index_ids is not None:
         index_ids = tuple(index_ids)

@@ -261,7 +261,7 @@ def analyze_prose(text: str, *, language: str) -> ProseMetrics:
 def check_prose(project: Project, *, draft_typography: bool = False) -> list[Finding]:
     """Inspect managed Markdown independently without changing the project."""
 
-    configured_language = project.manifest.metadata.get("language")
+    configured_language = project.metadata.get("language")
     language = configured_language if isinstance(configured_language, str) else ""
     findings: list[Finding] = []
     role_folders = {
@@ -273,7 +273,7 @@ def check_prose(project: Project, *, draft_typography: bool = False) -> list[Fin
     seen: set[str] = set()
     for path in paths:
         relative_id = project.relative_id(path)
-        if project.manifest.metadata.get("schema-version") == 2 and relative_id.startswith("sources/"):
+        if project.metadata.get("schema-version") == 2 and relative_id.startswith("sources/"):
             continue
         if relative_id in seen:
             continue
@@ -310,7 +310,7 @@ def check_prose(project: Project, *, draft_typography: bool = False) -> list[Fin
         findings.extend(_tag_policy_findings(relative_id, integrity, role_folders))
 
         from ..translation.contract import translation_kind
-        translated = project.manifest.metadata.get("schema-version") == 2 and translation_kind(relative_id) in ("translation-drafts", "translation-accepted")
+        translated = project.metadata.get("schema-version") == 2 and translation_kind(relative_id) in ("translation-drafts", "translation-accepted")
         if not _is_prose_path(relative_id, project, role_folders) and not translated:
             continue
 

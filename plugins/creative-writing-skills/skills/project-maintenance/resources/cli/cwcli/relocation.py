@@ -18,7 +18,7 @@ def plan_relocation(project: Project, selections: dict[str, str]) -> Transaction
     """Build guarded file, reference and directory changes for selected roles."""
     if not selections:
         raise ValueError("--relocate requires --set ROLE=FOLDER")
-    if project.manifest.metadata.get("schema-version") != 1:
+    if project.metadata.get("schema-version") != 1:
         raise ValueError("relocation currently supports schema-version 1 authoring projects")
     roles = load_layout(project)
     moves = {}

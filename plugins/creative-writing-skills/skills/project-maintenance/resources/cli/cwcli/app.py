@@ -1,7 +1,7 @@
 """Command-line entrypoint for the story-project CLI foundation."""
 
 import argparse
-from dataclasses import asdict
+from dataclasses import asdict, replace
 import json
 import sys
 import uuid
@@ -43,7 +43,7 @@ from .migration import (
     plan_migration,
     _read_regular_file_no_follow,
 )
-from .project import Project, ProjectDiscoveryError, ProjectPathError, discover_project
+from .project import Project, ProjectDiscoveryError, ProjectPathError, discover_project, open_workspace
 from .prose_fixes import ProseFixError, plan_safe_typography_fix
 from .scaffold import InitError, apply_init, preview_init
 from .transactions import (
@@ -109,6 +109,7 @@ def _parser(*, error_stream: TextIO) -> argparse.ArgumentParser:
     for name in (*sorted(CHECKERS), "all"):
         check_command = check_commands.add_parser(name, error_stream=error_stream)
         check_command.add_argument("path", nargs="?", default=".")
+        check_command.add_argument("--root")
         if name in {"prose", "all"}:
             check_command.add_argument("--draft-typography", action="store_true")
         _report_options(check_command)
@@ -275,7 +276,7 @@ def run(argv: list[str], *, cwd: Path, stdout: TextIO, stderr: TextIO) -> int:
 
     if args.command == "doctor":
         try:
-            result = diagnose_project(discover_project(cwd))
+            result = diagnose_project(open_workspace(cwd))
         except (DocumentError, OSError, ProjectDiscoveryError, ProjectPathError, UnicodeError, ValueError) as error:
             return _write_command_error(
                 error, conflict=False, output_format=args.format, stdout=stdout, stderr=stderr
@@ -288,7 +289,7 @@ def run(argv: list[str], *, cwd: Path, stdout: TextIO, stderr: TextIO) -> int:
 
     if args.command == "layout":
         try:
-            project = discover_project(cwd)
+            project = open_workspace(cwd)
             if args.layout_action:
                 return _run_tag_layout(project, args, stdout)
             from .catalog import read_layout
@@ -339,7 +340,7 @@ def run(argv: list[str], *, cwd: Path, stdout: TextIO, stderr: TextIO) -> int:
 
     if args.command == "get-folder":
         try:
-            relative = resolve_role(discover_project(cwd), args.role)
+            relative = resolve_role(open_workspace(cwd), args.role)
         except (DocumentError, OSError, ProjectDiscoveryError, ProjectPathError, UnicodeError, ValueError) as error:
             return _write_command_error(error, conflict=False, output_format=args.format, stdout=stdout, stderr=stderr)
         if args.format == "json":
@@ -383,7 +384,10 @@ def run(argv: list[str], *, cwd: Path, stdout: TextIO, stderr: TextIO) -> int:
     if args.command == "check":
         names = sorted(CHECKERS) if args.check_command == "all" else [args.check_command]
         try:
-            project = discover_project(_from_cwd(cwd, args.path))
+            target = _from_cwd(cwd, args.path).absolute()
+            project = open_workspace(target, root=_from_cwd(cwd, args.root) if args.root else None)
+            if target != project.root:
+                project = replace(project, selection=project.relative_id(target))
         except (DocumentError, OSError, ProjectDiscoveryError) as error:
             if args.format != "json":
                 stderr.write(f"cw: error: {error}\n")
@@ -432,7 +436,7 @@ def _write_report(report: Report, *, output_format: str, strict: bool, stdout: T
 
 def _run_context(args: argparse.Namespace, *, cwd: Path, stdout: TextIO, stderr: TextIO) -> int:
     try:
-        project = discover_project(cwd)
+        project = open_workspace(cwd)
         planned = plan_context(project, args.context_kind, args.path, args.context_role)
         result = planned.as_dict()
         if args.snapshot:
@@ -466,7 +470,7 @@ def _run_context(args: argparse.Namespace, *, cwd: Path, stdout: TextIO, stderr:
 
 def _run_clean_context(args: argparse.Namespace, *, cwd: Path, stdout: TextIO, stderr: TextIO) -> int:
     try:
-        project = discover_project(cwd)
+        project = open_workspace(cwd)
         result = clean_context(project, apply=args.apply)
         _write_command_data(result.as_dict(), output_format=args.format, stdout=stdout)
         return 0
@@ -496,7 +500,7 @@ def _from_cwd(cwd: Path, path: str) -> Path:
 def _run_edit(args: argparse.Namespace, *, cwd: Path, stdout: TextIO, stderr: TextIO) -> int:
     try:
         if args.edit_command == "apply":
-            project = discover_project(cwd)
+            project = open_workspace(cwd)
             operations = load_operations(_from_cwd(cwd, args.operations))
         else:
             project, relative = _single_edit_target(cwd, args.path)
@@ -535,7 +539,7 @@ def _run_edit(args: argparse.Namespace, *, cwd: Path, stdout: TextIO, stderr: Te
 
 def _run_history(args: argparse.Namespace, *, cwd: Path, stdout: TextIO, stderr: TextIO) -> int:
     try:
-        engine = TransactionEngine(discover_project(cwd))
+        engine = TransactionEngine(open_workspace(cwd))
         if args.history_command == "show":
             result: dict[str, object] = {"transaction": engine.store.manifest(args.transaction_id)}
         else:
@@ -548,7 +552,7 @@ def _run_history(args: argparse.Namespace, *, cwd: Path, stdout: TextIO, stderr:
 
 def _run_undo(args: argparse.Namespace, *, cwd: Path, stdout: TextIO, stderr: TextIO) -> int:
     try:
-        engine = TransactionEngine(discover_project(cwd))
+        engine = TransactionEngine(open_workspace(cwd))
         plan = engine.inverse(args.transaction_id)
         return _preview_or_apply(
             engine, plan, apply=args.apply, output_format=args.format, stdout=stdout
@@ -561,7 +565,7 @@ def _run_undo(args: argparse.Namespace, *, cwd: Path, stdout: TextIO, stderr: Te
 
 def _run_recover(args: argparse.Namespace, *, cwd: Path, stdout: TextIO, stderr: TextIO) -> int:
     try:
-        engine = TransactionEngine(discover_project(cwd))
+        engine = TransactionEngine(open_workspace(cwd))
         if args.apply:
             record = engine.recover(args.transaction_id)
             status = record.state
@@ -631,7 +635,7 @@ def _run_init(args: argparse.Namespace, *, cwd: Path, stdout: TextIO, stderr: Te
 
 def _run_reindex(args: argparse.Namespace, *, cwd: Path, stdout: TextIO, stderr: TextIO) -> int:
     try:
-        project = discover_project(cwd)
+        project = open_workspace(cwd)
         plan = plan_reindex(project)
         return _preview_or_apply(
             TransactionEngine(project),
@@ -652,7 +656,7 @@ def _run_reindex(args: argparse.Namespace, *, cwd: Path, stdout: TextIO, stderr:
 
 def _run_draft(args: argparse.Namespace, *, cwd: Path, stdout: TextIO, stderr: TextIO) -> int:
     try:
-        project = discover_project(cwd)
+        project = open_workspace(cwd)
         engine = TransactionEngine(project)
         planning_store = engine.store if args.apply else _PreviewRevisionStore(engine.store)
         if args.draft_command == "create":
@@ -793,7 +797,7 @@ def _run_migrate(args: argparse.Namespace, *, cwd: Path, stdout: TextIO, stderr:
 
 def _single_edit_target(cwd: Path, value: str) -> tuple[Project, str]:
     target = _from_cwd(cwd, value).absolute()
-    project = discover_project(cwd)
+    project = open_workspace(cwd)
     if Path(value).is_absolute() and (not target.is_file() or target.is_symlink()):
         raise EditPlanError("absolute edit target must be an existing regular file inside the project")
     try:

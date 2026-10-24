@@ -15,7 +15,7 @@ def resolve_unit(project, reference, *, catalog=None):
 
 
 def plan_direction(project, content):
-    _, work, _ = project_settings(project.manifest.metadata)
+    _, work, _ = project_settings(project.metadata)
     load_catalog(project)
     doc = parse_document(content)
     name = slug(doc.metadata.get('direction-id'))
@@ -60,7 +60,7 @@ def effective_direction(project, direction, volume, *, catalog=None):
     path = f'translations/{direction}/translation.md'
     doc = parse_document(read_source(project, path)) if catalog is None else catalog[path]
     settings = dict(doc.metadata)
-    _, work, _ = project_settings(project.manifest.metadata)
+    _, work, _ = project_settings(project.metadata)
     if work == 'series':
         if volume not in strings(settings, 'coverage'):
             raise ValueError(f'direction does not cover {volume}')

@@ -100,7 +100,7 @@ def resolve_role(project: Project, role: str) -> str:
     if role not in ROLE_CANDIDATES:
         raise ValueError(f"unknown folder role: {role}")
     from .catalog import read_layout, resolve_destination
-    if read_layout(project).version == 2:
+    if project.manifest is None or read_layout(project).version == 2:
         return resolve_destination(project, role)
     explicit = load_layout(project).get(role)
     if explicit is not None:
@@ -121,7 +121,7 @@ def role_directories(project: Project, role: str) -> tuple[str, ...]:
         raise ValueError(f"unknown folder role: {role}")
     from .catalog import read_layout, tagged_directories
     config = read_layout(project)
-    if config.version == 2:
+    if project.manifest is None or config.version == 2:
         return tagged_directories(config, role)
     explicit = load_layout(project).get(role)
     if explicit is not None:
@@ -135,7 +135,9 @@ def role_directories(project: Project, role: str) -> tuple[str, ...]:
 def uses_flexible_layout(project: Project) -> bool:
     """Whether the project should avoid assuming the full v1 scaffold."""
 
-    if project.manifest.metadata.get("scaffold-template") == "compact" or load_layout(project):
+    if project.unstructured:
+        return True
+    if project.metadata.get("scaffold-template") == "compact" or load_layout(project):
         return True
     return any(
         any(path != ROLE_CANDIDATES[role][-1] for path in role_directories(project, role))

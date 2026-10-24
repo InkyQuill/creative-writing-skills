@@ -101,7 +101,7 @@ def plan_reindex(
 ) -> TransactionPlan:
     """Plan exact replacements for every stale generated registry."""
 
-    if project.manifest.metadata.get("schema-version") == 2:
+    if project.metadata.get("schema-version") == 2:
         from .translation.indexes import plan_translation_indexes
         return plan_translation_indexes(project, overlay=overlay, index_ids=index_ids, skip_unparseable=skip_unparseable)
 

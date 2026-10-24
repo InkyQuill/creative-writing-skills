@@ -37,7 +37,7 @@ UNMANAGED_MARKDOWN = "CW-STRUCT-090"
 def check_structure(project: Project) -> list[Finding]:
     """Return deterministic findings without mutating or halting on bad files."""
 
-    schema_version = project.manifest.metadata.get("schema-version")
+    schema_version = project.metadata.get("schema-version")
     if isinstance(schema_version, int) and not isinstance(schema_version, bool) and schema_version > max(SUPPORTED_SCHEMA_VERSIONS):
         return [
             Finding(
@@ -55,7 +55,7 @@ def check_structure(project: Project) -> list[Finding]:
     findings: list[Finding] = []
     role_folders = {role: role_directories(project, role) for role in ROLE_CANDIDATES}
     try:
-        required_dirs, required_files = required_paths(project.manifest.metadata)
+        required_dirs, required_files = required_paths(project.metadata)
     except ValueError:
         required_dirs, required_files = SCAFFOLD_DIRECTORIES, SCAFFOLD_FILES
     if uses_flexible_layout(project):
@@ -82,7 +82,7 @@ def check_structure(project: Project) -> list[Finding]:
     side_story_anchors: dict[str, str] = {}
     for path in project.iter_managed_markdown():
         relative_id = project.relative_id(path)
-        document_kind = allowed_document_kind(relative_id, schema_version=project.manifest.metadata.get("schema-version", 1))
+        document_kind = allowed_document_kind(relative_id, schema_version=project.metadata.get("schema-version", 1))
         if document_kind is None:
             parent = Path(relative_id).parent.as_posix()
             if Path(relative_id).name == "_index.md" and any(
@@ -310,7 +310,7 @@ def _iter_unmanaged_markdown(
     managed_folders = set(MANAGED_ROOTS)
     for folders in role_folders.values():
         managed_folders.update(folders)
-    if project.manifest.metadata.get("schema-version") == 2 and project.manifest.metadata.get("translation-enabled") is True:
+    if project.metadata.get("schema-version") == 2 and project.metadata.get("translation-enabled") is True:
         managed_folders.update(("sources", "translations"))
     yield from _iter_unmanaged_markdown_in(project.root, project.root, managed_folders)
 
