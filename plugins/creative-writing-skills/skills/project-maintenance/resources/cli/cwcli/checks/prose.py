@@ -308,7 +308,8 @@ def check_prose(project: Project, *, draft_typography: bool = False) -> list[Fin
             )
         integrity = _integrity_lines(text)
         findings.extend(_tag_findings(relative_id, integrity))
-        findings.extend(_tag_policy_findings(relative_id, integrity, role_folders))
+        if not project.unstructured:
+            findings.extend(_tag_policy_findings(relative_id, integrity, role_folders))
 
         from ..translation.contract import translation_kind
         translated = project.metadata.get("schema-version") == 2 and translation_kind(relative_id) in ("translation-drafts", "translation-accepted")

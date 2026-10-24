@@ -29,6 +29,33 @@ for actionable selections, and uncovered-edition rejection. Consumers must test
 every selection against their resolver, including ambiguous, conflicting,
 unknown-direction, and unbound outcomes.
 
+## Optional workspace and layout version 2 extension
+
+The legacy contract below remains available to existing consumers. Ordinary
+author workspaces need none of its manifest or path conventions. Do not reject
+an author project or require migration because a consumer only supports v1.
+
+Layout version 2 is separate from story schema version 2. It stores `bindings`
+with `path`, `kind` (`directory` or `file`), `tags` and optional `remove`, plus
+optional `destinations` mapping purpose names to folders. Root `.` is valid.
+Directory bindings inherit recursively; shallow bindings apply first and file
+bindings last, removing inherited tags before adding tags. Reject duplicates
+and overlapping add/remove names. Multiple paths may share tags, and custom
+nonempty tags are preserved. Tags do not convey approval or write permission.
+
+An explicit workspace root takes precedence; otherwise use the nearest regular
+`project.md` or `.cws-layout.json` marker, then the supplied directory/file parent.
+Do not scan links, hidden/service directories or nested marked projects by
+default. Named-file checks stay scoped to that file. Never create a marker on
+read. Reports add `coverage` entries (`check`, `paths`, `skipped_reason`); absent
+capabilities are unassessed, not repaired by creating legacy folders.
+
+Reference strings support existing project-relative files, `file:PATH`, URLs,
+`decision:ID`, and descriptive `note:TEXT` or free text. File existence, reference
+verification and author authority are separate. URLs/descriptions are unverified;
+receipts establish transactions only. Preserve existing v1 receipt semantics
+for lookup without treating lookup as proof of author confirmation.
+
 ## Discovery boundary
 
 Starting at a file or directory, walk ancestors toward the filesystem root. The

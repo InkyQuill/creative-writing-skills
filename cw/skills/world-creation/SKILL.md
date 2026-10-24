@@ -25,10 +25,9 @@ prose or scene text in this workflow, regardless of location.
 
 ## Project awareness
 
-From the project root, run `cw get-folder world`, `characters`, `plans`,
-`chapters`, `side-stories`, and `drafts` for the folders needed in this task.
-Use those selected paths for setting lore, character facts, plans, accepted
-prose, and drafts. Use
+Use existing author files for setting lore, character facts, plans, accepted
+prose, and drafts. Optional folder/file tags or `cw get-folder` can help
+locate them; flat files and missing configuration need no setup. Use
 `/project-maintenance` for schema checks, previewed recoverable mutations,
 indexes, and reindexing. If a selected destination needs safe mechanical
 preparation, route it through `/project-maintenance` without moving author files.
@@ -44,7 +43,7 @@ lore decisions require later prose edits, but it must not perform those edits.
 Before asking substantive lore questions:
 
 1. Identify the likely project root from the user's working directory and nearby folders.
-2. Resolve relevant folder roles with `cw get-folder`, then inspect existing indexes. Look for:
+2. Resolve relevant files from author instructions and optional tags, then inspect existing indexes when present. Look for:
    - `_index.md`
    - `index.md`
    - `INDEX.md`
@@ -168,7 +167,8 @@ Use indexes to find adjacent files that might contradict or depend on the decisi
 ### Update non-story files inline
 
 When a fact is resolved by a direct author answer, update the relevant
-canonical non-story file right there through `/project-maintenance`. Do not
+author-owned non-story file right there using a safe named edit or an
+applicable `/project-maintenance` transaction. Do not
 batch settled lore until the end unless the user asks you to wait. Use the
 format in [world-file-format.md](./references/world-file-format.md) for
 worldbuilding files, and preserve compatible author formatting in character or

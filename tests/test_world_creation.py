@@ -14,10 +14,10 @@ class WorldCreationContractTests(unittest.TestCase):
             / "world-file-format.md"
         ).read_text()
 
-    def test_resolves_project_folder_roles(self):
-        self.assertIn("cw get-folder world", self.skill)
-        for role in ("characters", "plans", "chapters", "side-stories", "drafts"):
-            self.assertIn(f"`{role}`", self.skill)
+    def test_resolves_author_files_with_optional_folder_tags(self):
+        self.assertIn("existing author files", self.skill)
+        self.assertIn("Optional folder/file tags", self.skill)
+        self.assertIn("flat files and missing configuration need no setup", self.skill)
 
     def test_prose_is_read_only_and_direct_answers_persist_incrementally(self):
         self.assertRegex(self.skill, r"(?is)accepted chapter.{0,100}draft prose.{0,100}read-only")

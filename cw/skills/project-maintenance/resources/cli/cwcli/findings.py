@@ -24,10 +24,18 @@ class ExecutionError:
 
 
 @dataclass(frozen=True)
+class CheckCoverage:
+    check: str
+    paths: tuple[str, ...] = ()
+    skipped_reason: str | None = None
+
+
+@dataclass(frozen=True)
 class Report:
     findings: list[Finding]
     checks: list[str] = field(default_factory=list)
     execution_errors: list[ExecutionError] = field(default_factory=list)
+    coverage: list[CheckCoverage] = field(default_factory=list)
 
     def exit_status(self, *, strict: bool = False) -> int:
         if self.execution_errors:
@@ -41,6 +49,7 @@ class Report:
         has_error = any(item.severity == "error" for item in self.findings)
         return {
             "checks": self.checks,
+            "coverage": [asdict(item) for item in self.coverage],
             "findings": [finding_json(item) for item in self.findings],
             "execution_errors": [asdict(item) for item in self.execution_errors],
             "strict_failure": strict and self.exit_status(strict=True) == 1 and not has_error,
@@ -58,6 +67,9 @@ class Report:
                 location += ")"
             action = f" Next: {item.next_action}" if item.next_action else ""
             lines.append(f"{item.code} [{item.severity}] {item.message}{location}{action}")
+        for item in self.coverage:
+            lines.append(f"{item.check}: checked {len(item.paths)} file(s)" +
+                         (f"; skipped: {item.skipped_reason}" if item.skipped_reason else ""))
         return "\n".join(lines)
 
 

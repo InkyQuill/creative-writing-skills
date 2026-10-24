@@ -37,9 +37,9 @@ their state evolves rather than gaining a parallel file.
 Cross-link between entries. If a chapter establishes a relationship change between two characters, both character entries should reflect it, and the timeline entry should reference the event. When an event lands on a character sub-timeline as well as the main timeline, record it once with its shared anchor on both, and keep the two synchronized on every later update. If updating one side would desynchronize the other — shifted order, stretched duration, knowledge arriving too early — flag it as a conflict rather than re-timing silently.
 
 Include proposed continuity changes using `resources/continuity-records.md` as
-the format guide and fixed `kb/continuity/` paths: proposed scene record and
+the optional format guide and the author's existing continuity paths: proposed scene record and
 timeline rows, promise and question status changes with chapter references, and
-the refreshed state snapshot. Run `cw check continuity` through
+the refreshed state snapshot. When supported structured tables are present, run `cw check continuity` through
 `$project-maintenance` before finalizing the proposal; report its findings
 alongside the extraction report rather than silently repairing records.
 

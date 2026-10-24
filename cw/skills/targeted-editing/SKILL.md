@@ -15,12 +15,14 @@ manuscript-language, prose-profile, and applicable project style/sample stack
 defined by `/creative-writing-craft`. Never let an assumed English surface
 default override the selected language or evidenced voice.
 
-Use `/project-maintenance` for mechanical checks, exact edit operations,
+Use `/project-maintenance` when applicable for mechanical checks, exact edit operations,
 preview/apply, and transaction recovery. Interpret repairable warnings
 internally and continue the literary edit when its required text is readable.
 A required target that cannot be read safely is the only mechanical reason to
 stop. The agent owns hashes, indexes, base revisions, migration mechanics, and
-repair commands; never ask the author to maintain SHA values.
+repair commands; never ask the author to maintain SHA values. Flat and untagged
+files need no initialization. Safe ordinary named edits are valid when the CLI
+is inapplicable; preserve current bytes and do not promise CLI undo for them.
 
 ## Locate Before Editing
 

@@ -33,7 +33,19 @@ class Project:
     """A discovered story project and its parsed manifest."""
 
     root: Path
-    manifest: Document
+    manifest: Document | None = None
+    selection: str | None = None
+
+    @property
+    def metadata(self) -> dict:
+        return self.manifest.metadata if self.manifest is not None else {}
+
+    @property
+    def unstructured(self) -> bool:
+        from .catalog import read_layout
+        config = read_layout(self)
+        paths = [b.path for b in config.bindings]
+        return self.manifest is None or config.version == 2 or '.' in paths or len(paths) != len(set(paths))
 
     def resolve(self, relative: str, *, for_write: bool = False) -> Path:
         """Resolve a project-relative path without allowing boundary escapes."""
@@ -57,13 +69,17 @@ class Project:
     def iter_managed_markdown(self) -> Iterator[Path]:
         """Yield managed Markdown files without entering links or nested projects."""
 
+        if self.unstructured or self.selection is not None:
+            from .catalog import iter_documents
+            yield from iter_documents(self, target=self.selection)
+            return
         from .layout import ROLE_CANDIDATES, role_directories
 
         roots = [Path(root) for root in MANAGED_ROOTS]
         for role in ROLE_CANDIDATES:
             for directory in role_directories(self, role):
                 roots.append(Path(directory))
-        if self.manifest.metadata.get("schema-version") == 2 and self.manifest.metadata.get("translation-enabled") is True:
+        if self.metadata.get("schema-version") == 2 and self.metadata.get("translation-enabled") is True:
             roots.extend((Path("sources"), Path("translations")))
         covered: list[Path] = []
         for relative_root in sorted(set(roots), key=lambda path: (len(path.parts), path.as_posix())):
@@ -190,7 +206,7 @@ def _nested_project_root(root: Path, target: Path) -> Path | None:
     for part in directory.relative_to(root).parts:
         current /= part
         manifest = current / "project.md"
-        if not manifest.is_symlink() and manifest.is_file():
+        if any(not marker.is_symlink() and marker.is_file() for marker in (manifest, current / ".cws-layout.json")):
             return current
     return None
 
@@ -218,3 +234,36 @@ __all__ = [
     "ProjectPathError",
     "discover_project",
 ]
+
+
+def open_workspace(start: Path, *, root: Path | None = None) -> Project:
+    """Open author files without initializing a managed project."""
+    start = Path(start).absolute()
+    if not start.exists():
+        raise ProjectDiscoveryError(f"workspace target does not exist: {start}")
+    if start.is_symlink():
+        raise ProjectPathError("workspace target is a symlink")
+    directory = start if start.is_dir() else start.parent
+    if root is not None:
+        chosen = Path(root).absolute()
+        if not chosen.is_dir() or chosen.is_symlink():
+            raise ProjectPathError("workspace root must be an existing directory")
+    else:
+        chosen = directory
+        for candidate in (directory, *directory.parents):
+            if any((candidate / name).is_file() and not (candidate / name).is_symlink()
+                   for name in ('project.md', '.cws-layout.json')):
+                chosen = candidate
+                break
+    if not chosen.is_dir():
+        raise ProjectDiscoveryError(f"workspace does not exist: {chosen}")
+    if _contains_symlink(chosen, start) if start.is_relative_to(chosen) else True:
+        raise ProjectPathError("workspace target is outside root or contains a symlink")
+    manifest_path = chosen / 'project.md'
+    manifest = None
+    if manifest_path.is_file() and not manifest_path.is_symlink():
+        from .documents import read_document
+        read = read_document(manifest_path.read_bytes())
+        if read.document is not None and 'schema-version' in read.document.metadata:
+            manifest = read.document
+    return Project(chosen, manifest)

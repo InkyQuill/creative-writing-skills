@@ -29,6 +29,20 @@ CLI does not parse, reindex, rename, or infer meaning from this material.
 Links, special filesystem entries, and nested project boundaries are reported
 for review and never followed.
 
+## Optional author workspaces
+
+The fixed schema below describes legacy managed projects, not a required story
+layout. Flat, shared and nested author files work without a manifest or tags.
+Use an explicit workspace root; otherwise discover the nearest `project.md` or
+`.cws-layout.json` marker, falling back to the supplied directory/file parent.
+Checks never create scaffolds. Read `coverage` for skipped metadata/capabilities.
+
+Optional layout version 2 stores inherited folder/file purpose tags. Purpose,
+author authority and managed draft lifecycle are independent. Exact file paths
+work without tags. Safe body-only edits preserve unsupported frontmatter bytes;
+metadata-dependent changes require interpretable metadata. Author-written indexes
+are not generated merely because they are named `_index.md`.
+
 ## Manifest language and prose profile
 
 Schema v1 requires a non-empty `language` tag and accepts any project language.

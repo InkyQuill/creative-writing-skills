@@ -292,3 +292,29 @@ __all__ = [
     "parse_document",
     "render_document",
 ]
+
+
+@dataclass(frozen=True)
+class DocumentRead:
+    raw: bytes
+    document: Document | None
+    body: str | None
+    metadata_error: str | None
+
+
+def read_document(data: bytes) -> DocumentRead:
+    """Read what is available without coercing foreign metadata into our schema."""
+    try:
+        document = parse_document(data)
+        return DocumentRead(data, document, document.body, None)
+    except (DocumentError, UnicodeError) as error:
+        try:
+            text = data.decode('utf-8-sig')
+        except UnicodeError:
+            return DocumentRead(data, None, None, str(error))
+        lines = text.splitlines(keepends=True)
+        if lines and lines[0].strip() == '---':
+            for index, line in enumerate(lines[1:], 1):
+                if line.strip() == '---':
+                    return DocumentRead(data, None, ''.join(lines[index + 1:]), str(error))
+        return DocumentRead(data, None, None, str(error))

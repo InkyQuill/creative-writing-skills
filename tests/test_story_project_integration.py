@@ -26,26 +26,17 @@ def all_runtime_markdown(skill_name: str) -> str:
 
 
 class StoryProjectIntegrationTests(unittest.TestCase):
-    def test_setup_has_one_canonical_layout(self):
+    def test_setup_accepts_optional_tags_without_a_canonical_layout(self):
         text = all_runtime_markdown("project-setup")
-        self.assertNotIn("Layout A", text)
-        self.assertNotIn("Layout B", text)
-        self.assertIn("cw init", text)
-        for path in ("project.md", ".cws-layout.json", "cw layout"):
-            self.assertIn(path, text)
-        self.assertRegex(text, r"(?is)body of.{0,80}`project\.md`.{0,180}(durable|writing contract)")
-        self.assertRegex(text, r"(?is)resolved project instructions.{0,180}(unmanaged|optional)")
-        self.assertNotRegex(text, r"(?is)(working|durable|project-specific) project instructions")
+        self.assertIn("flat, shared and nested", text)
+        self.assertIn(".cws-layout.json", text)
+        self.assertIn("no setup questionnaire, manifest, or scaffold", text)
 
-    def test_setup_routes_legacy_content_through_reviewed_migration_preview(self):
+    def test_setup_preserves_legacy_files_unless_reorganization_is_requested(self):
         text = all_runtime_markdown("project-setup")
-        self.assertIn("cw migrate --plan", text)
-        self.assertRegex(text, r"(?is)recognized legacy.{0,500}preview")
-        self.assertRegex(
-            text,
-            r"(?is)(?:apply.{0,120}only after.{0,120}(?:confirm|approv)|(?:confirm|approv).{0,120}before.{0,120}apply)",
-        )
-        self.assertRegex(text, r"(?is)(unknown files?|unmanaged).{0,120}(preserv|untouched|remain)")
+        self.assertIn("only for a requested reorganization", text)
+        self.assertIn("unknown files", text)
+        self.assertIn("approval before applying", text)
 
     def test_domain_skills_use_project_maintenance_for_mechanical_floor(self):
         for skill_name in DOMAIN_SKILLS:
@@ -85,7 +76,7 @@ class StoryProjectIntegrationTests(unittest.TestCase):
         )
         self.assertRegex(text, r"(?is)(direct|explicit).{0,180}(unambiguous|establish).{0,260}without.{0,100}(re-?confirm|ask)")
         self.assertRegex(text, r"(?is)(ambigu|infer|conflict|retcon).{0,320}(ask|question|confirm)")
-        self.assertRegex(text, r"(?is)promotion.{0,320}previewed,?\s+recoverable.{0,160}\$project-maintenance.{0,120}transaction")
+        self.assertIn("Promotion uses a separate reviewed change", text)
         self.assertIn("cw undo", text)
 
     def test_story_memory_does_not_require_redundant_promotion_approval(self):
@@ -147,12 +138,12 @@ class StoryProjectIntegrationTests(unittest.TestCase):
                 self.assertIsNotNone(allowed_document_kind(concrete))
         self.assertNotIn("kb/world/<domain>/", text)
         self.assertNotIn("kb/timeline/", text)
-        self.assertRegex(text, r"(?is)local\s+instructions.{0,120}(cannot|do not).{0,80}(customize|change).{0,80}managed")
+        self.assertIn("optional legacy scaffold examples", text)
 
     def test_agent_kb_writes_are_previewed_recoverable_transactions(self):
         text = all_runtime_markdown("kb-management")
-        self.assertRegex(text, r"(?is)(agent|muse).{0,160}(never|must not).{0,100}unjournaled direct write")
-        self.assertRegex(text, r"(?is)(agent|muse).{0,180}KB (mutation|edit).{0,220}preview.{0,180}(transaction|apply)")
+        self.assertIn("For ordinary files, use safe named edits", text)
+        self.assertIn("For applicable managed operations", text)
         self.assertIn("cw undo", text)
         self.assertRegex(text, r"(?is)author direct edits?.{0,120}(valid|authoritative)")
 

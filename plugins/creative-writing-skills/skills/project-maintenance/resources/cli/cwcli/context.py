@@ -184,6 +184,9 @@ def plan_context(project: Project, kind: str, path: str, role: str) -> ContextPl
     suggested = _OrderedPaths()
     unresolved = _OrderedStrings()
     warnings = _OrderedStrings()
+    from .documents import read_document
+    if read_document(subject_path.read_bytes()).metadata_error:
+        warnings.add(f"metadata is unassessed in {subject}; only readable body evidence is available")
     catalog = _PathCatalog.from_project(project)
     if catalog.collision(subject) is None:
         required.add(subject)
@@ -275,7 +278,7 @@ def plan_context(project: Project, kind: str, path: str, role: str) -> ContextPl
     for relative, document in documents:
         if relative in anchors:
             continue
-        if _in_role(project, relative, "plans") or relative.startswith("kb/issues/"):
+        if _in_role(project, relative, "plans") or _in_role(project, relative, "issues"):
             continue
         if _document_points_to(project, relative, document, anchors, warnings, restricted=role != "trusted"):
             _add_selected_path(
@@ -284,7 +287,7 @@ def plan_context(project: Project, kind: str, path: str, role: str) -> ContextPl
             )
 
     for relative, document in documents:
-        if relative.startswith("kb/issues/") and _explicitly_active(document, _ACTIVE_ISSUE):
+        if _in_role(project, relative, "issues") and _explicitly_active(document, _ACTIVE_ISSUE):
             if _document_points_to(project, relative, document, anchors, warnings, restricted=role != "trusted"):
                 _add_selected_path(
                     project, relative, suggested, catalog=catalog,
@@ -1622,35 +1625,27 @@ def _manuscript_neighbors(
 ) -> tuple[str, ...]:
     numbered: dict[int, list[str]] = {}
     side_stories: dict[str, str] = {}
-    from .layout import role_directories
-
-    for directory_id, kind in (
-        *((directory, "chapter") for directory in role_directories(project, "chapters")),
-        *((directory, "side-story") for directory in role_directories(project, "side-stories")),
-    ):
-        directory = project.root / directory_id
-        if not directory.is_dir() or directory.is_symlink():
+    for path in project.iter_managed_markdown():
+        relative = project.relative_id(path)
+        kind = _document_kind(project, relative)
+        if kind not in {'chapter', 'side-story'} or not _safe_regular(project, relative):
             continue
-        for path in sorted(directory.iterdir(), key=lambda item: _identity(item.name)):
-            relative = f"{directory_id}/{path.name}"
-            if path.name == "_index.md" or path.suffix.casefold() != ".md" or not _safe_regular(project, relative):
-                continue
-            if catalog.collision(relative) is not None:
-                _record_collision(relative, catalog, unresolved, warnings)
-                continue
-            try:
-                metadata = _read_document(path).metadata
-            except (OSError, UnicodeError, ValueError) as error:
-                warnings.add(f"cannot inspect manuscript order for {relative}: {error}")
-                continue
-            if kind == "chapter":
-                number = metadata.get("number")
-                if isinstance(number, int) and not isinstance(number, bool) and number > 0:
-                    numbered.setdefault(number, []).append(relative)
-            else:
-                after = metadata.get("after")
-                if isinstance(after, str):
-                    side_stories[relative] = after
+        if catalog.collision(relative) is not None:
+            _record_collision(relative, catalog, unresolved, warnings)
+            continue
+        try:
+            metadata = _read_document(path).metadata
+        except (OSError, UnicodeError, ValueError) as error:
+            warnings.add(f"cannot inspect manuscript order for {relative}: {error}")
+            continue
+        if kind == 'chapter':
+            number = metadata.get('number')
+            if isinstance(number, int) and not isinstance(number, bool) and number > 0:
+                numbered.setdefault(number, []).append(relative)
+        else:
+            after = metadata.get('after')
+            if isinstance(after, str):
+                side_stories[relative] = after
 
     duplicates = {number: paths for number, paths in numbered.items() if len(paths) > 1}
     for number, paths in sorted(duplicates.items()):
@@ -1686,7 +1681,9 @@ def _manuscript_neighbors(
         unresolved.add(f"side-story-placement:{relative}")
 
     if chapter not in ordered:
-        if PurePosixPath(chapter).parent.as_posix() in role_directories(project, "chapters"):
+        if project.unstructured:
+            return ()
+        if _document_kind(project, chapter) == 'chapter':
             unresolved.add(f"chapter-number:{chapter}")
         else:
             unresolved.add(f"side-story-placement:{chapter}")
@@ -1707,6 +1704,10 @@ def _scan_documents(project: Project, warnings: "_OrderedStrings") -> tuple[tupl
         if relative.endswith("/_index.md"):
             continue
         try:
+            from .documents import read_document
+            read = read_document(path.read_bytes())
+            if read.metadata_error:
+                warnings.add(f"metadata is unassessed in {relative}: {read.metadata_error}")
             documents.append((relative, _read_document(path)))
         except (OSError, UnicodeError, ValueError) as error:
             warnings.add(f"cannot inspect structured context evidence in {relative}: {error}")
@@ -1753,20 +1754,11 @@ def _markdown_points_to(project: Project, relative: str, body: str, anchors: set
 
 def _known_character(project: Project, character: str) -> bool:
     expected = _identity(character)
-    for folder in role_directories(project, "characters"):
-        directory = project.root / folder
-        if not directory.is_dir() or directory.is_symlink():
-            continue
-        for path in directory.iterdir():
-            relative = f"{folder}/{path.name}"
-            if (
-                path.name != "_index.md"
-                and path.suffix.casefold() == ".md"
-                and _safe_character_stem(path.stem)
-                and _safe_regular(project, relative)
-                and _identity(path.stem) == expected
-            ):
-                return True
+    for path in project.iter_managed_markdown():
+        relative = project.relative_id(path)
+        if (_in_role(project, relative, 'characters') and _safe_character_stem(path.stem)
+                and _safe_regular(project, relative) and _identity(path.stem) == expected):
+            return True
     return False
 
 
@@ -1895,7 +1887,14 @@ def _read_document(path: Path) -> Document:
             raise OSError("not a regular file")
         with os.fdopen(descriptor, "rb") as stream:
             descriptor = -1
-            return parse_document(stream.read())
+            data = stream.read()
+            from .documents import read_document
+            read = read_document(data)
+            if read.document is not None:
+                return read.document
+            if read.body is None:
+                raise ContextPlanError(f"context body could not be read: {path}")
+            return Document({}, read.body, '\r\n' if b'\r\n' in data else '\n', data.startswith(b'\xef\xbb\xbf'))
     finally:
         if descriptor >= 0:
             os.close(descriptor)

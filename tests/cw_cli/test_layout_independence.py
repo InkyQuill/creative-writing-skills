@@ -138,3 +138,40 @@ class LayoutIndependenceTests(unittest.TestCase):
         self.assertEqual(0, code, result)
         self.assertIn('one.md', (self.root / 'contents.md').read_text())
         self.assertEqual(b'# My own contents\n', (self.root / '_index.md').read_bytes())
+
+    def test_kb_tag_does_not_prohibit_provisional_ai_material(self):
+        self.write('.cws-layout.json', json.dumps({'version': 2, 'bindings': [{'path': '.', 'kind': 'directory', 'tags': ['world', 'kb']}]}))
+        self.write('idea.md', '<AI>A proposed city.</AI>\n')
+        code, result = self.run_cli('check', 'prose', '.', '--strict')
+        self.assertEqual(0, code, result)
+        self.assertFalse(any('not allowed' in f['message'] for f in result['findings']))
+
+    def test_tagged_nested_chapters_contribute_context_neighbors(self):
+        self.write('.cws-layout.json', json.dumps({'version': 2, 'bindings': [{'path': 'text', 'kind': 'directory', 'tags': ['chapters']}]}))
+        self.write('text/vol1/a.md', '---\nnumber: 1\n---\nA\n')
+        self.write('text/vol2/b.md', '---\nnumber: 2\n---\nB\n')
+        _, result = self.run_cli('context', 'chapter', 'text/vol2/b.md')
+        self.assertIn('text/vol1/a.md', json.dumps(result))
+
+    def test_opaque_context_reads_body_without_rewriting_metadata(self):
+        self.write('one.md', '---\ntags: [a, b]\n---\nVisible.\n<hidden>Secret.</hidden>\n')
+        before = self.snapshot()
+        code, result = self.run_cli('context', 'chapter', 'one.md', '--as', 'reader')
+        self.assertEqual(0, code, result)
+        self.assertEqual(before, self.snapshot())
+
+    def test_malformed_tag_config_returns_json_error_without_traceback(self):
+        self.write('.cws-layout.json', '{broken')
+        self.write('one.md', 'Text')
+        out, err = io.StringIO(), io.StringIO()
+        code = app.run(['check', 'all', '.', '--format', 'json'], cwd=self.root, stdout=out, stderr=err)
+        self.assertEqual(2, code)
+        self.assertTrue(json.loads(out.getvalue())['execution_errors'])
+        self.assertEqual('', err.getvalue())
+
+    def test_explicit_link_target_cannot_enter_tag_marked_nested_project(self):
+        self.write('one.md', '[Other](nested/other.md)\n')
+        self.write('nested/.cws-layout.json', '{"version":2,"bindings":[]}')
+        self.write('nested/other.md', 'Text')
+        _, result = self.run_cli('check', 'links', 'one.md')
+        self.assertTrue(result['findings'])

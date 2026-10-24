@@ -6,6 +6,10 @@ description: >
 
 # Story Context
 
+Use the author's actual paths. Folder names below are optional legacy examples;
+flat and mixed layouts are valid. Tags aid routing but do not establish canon.
+Use named outputs and safe edits without requiring a scaffold or CLI lifecycle.
+
 Every handoff starts with a context decision. Get it wrong and a drafting pass invents facts that contradict established canon, a critique misses a continuity issue because it never saw the relevant chapter, or a brainstorming lane explores territory the author already rejected.
 
 This skill teaches the judgment: what story context to pass, when to materialize decisions before handoff, and how much is enough.

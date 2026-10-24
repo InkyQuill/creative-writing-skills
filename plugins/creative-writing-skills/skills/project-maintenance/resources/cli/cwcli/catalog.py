@@ -176,6 +176,8 @@ def classify_document(project: Project, relative: str) -> DocumentClassification
     from .layout import ROLE_CANDIDATES, role_directories
     config = read_layout(project)
     tags = effective_tags(config, relative)
+    if PurePosixPath(relative).suffix.casefold() != '.md':
+        return DocumentClassification(tags, 'explicit' if tags else 'unknown', None)
     if config.version == 2:
         # Purpose tags are not mutually exclusive; only operations requiring a
         # single document kind need to reject incompatible purposes.
@@ -197,6 +199,9 @@ def classify_document(project: Project, relative: str) -> DocumentClassification
             kind = next(iter(kinds)) if len(kinds) == 1 else None
         if kind in {'kb-content', 'continuity-record', 'continuity-scene', 'vocabulary'}:
             tags |= {'kb'}
+            parts = PurePosixPath(relative).parts
+            if len(parts) > 1 and parts[0] == 'kb':
+                tags |= {'vocabulary' if parts[1] == 'vocab.md' else parts[1]}
         return DocumentClassification(frozenset(tags), 'legacy', kind)
     return DocumentClassification(frozenset(), 'unknown', None)
 

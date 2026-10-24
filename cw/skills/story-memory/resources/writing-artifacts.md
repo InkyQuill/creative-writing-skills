@@ -1,14 +1,14 @@
 ---
 name: story-memory
 description: >
-  Where writing artifacts live: kb for durable knowledge, work directory for scratch. Use when deciding where to read from or write to.
+  Use author-owned locations for durable knowledge and working material. Use when deciding where to read from or write to.
 ---
 
 # Writing Artifacts
 
-- Durable project knowledge lives in canonical `kb/`. Continuity records —
-  timeline, promises, questions, state snapshot, and scene records — live only
-  under `kb/continuity/`; see `resources/continuity-records.md` for formats.
+- Durable knowledge and continuity records live in the author's chosen files.
+  Optional `kb` and `continuity` tags aid discovery. The legacy formats in
+  `resources/continuity-records.md` are optional managed-tool examples.
 - Work scratch uses the selected plans, drafts, reviews, brainstorm, and
   archive folders when those roles are configured or discovered. `work/` is
   the default for the full scaffold. Keep scratch scoped to the current task
@@ -18,8 +18,8 @@ description: >
 
 ## Work Layout
 
-Resolve plans, drafts, reviews, brainstorm, and archive with `cw get-folder <role>`
-before reading or assigning an artifact path. Do not create a folder
+Use explicit files and existing conventions; optional folder/file tags or
+`cw get-folder <role>` can help resolve an output destination. Do not create a folder
 merely because this list mentions one.
 
 ## Shared Workspace
@@ -54,8 +54,10 @@ both the fact and its destination in durable author-only knowledge; an explicit
 Preserve every author-only, character, or reader boundary. Ask only when the
 durable destination or knowledge boundary is uncertain.
 
-Promotion always uses a separate previewed, recoverable `/project-maintenance`
-transaction, but that does not always require separate confirmation. Use
+Promotion uses a separate reviewed change. Use a recoverable
+`/project-maintenance` transaction when applicable; otherwise preserve the
+existing file format with safe targeted edits. A separate change does not
+always require separate confirmation. Use
 accepted prose and prior direct author answers as evidence. Ask only when
 ambiguity, inference, conflict, retcon, an uncertain source tag, or an uncertain
 knowledge boundary means different answers would materially change canon or

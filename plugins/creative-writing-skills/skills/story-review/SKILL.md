@@ -16,9 +16,9 @@ scope to the editing workflow; this review skill still returns findings.
 
 ## Prepare the Review
 
-Use `$project-maintenance` before reading: run the checks relevant to the
-requested review and prepare focused context with `cw context draft` for an
-active draft (or the matching chapter context for accepted prose). Inspect the
+Read the author's named files directly, including flat and untagged projects.
+Use `$project-maintenance` checks and `cw context draft` or chapter context
+when useful; inspect coverage and do not create a scaffold to enable them. Inspect the
 draft, intent or outline, relevant style and vocab, neighboring prose, and
 continuity state selected by that context plan before beginning the review.
 For every prose or surface judgment, resolve the same base,

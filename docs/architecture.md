@@ -59,18 +59,31 @@ remain ordinary Markdown owned by the author:
 
 ```mermaid
 flowchart TD
-    KB[kb: canon, world, characters, timeline, styles] --> M[Muse]
-    WORK[work: briefs, plans, drafts, reviews] --> M
+    KB[Author knowledge files: optional purpose tags] --> M[Muse]
+    WORK[Author working files: any layout] --> M
     M --> W[Specialist pass]
     W --> WORK
     M -->|settled decisions only| KB
-    STORY[story: manuscript] --> W
+    STORY[Author manuscript files] --> W
     W -->|named write scope only| STORY
 ```
 
 Planning output remains provisional until the author confirms it. World
 creation reads story prose but does not patch it. Story-memory updates follow
 settled decisions and cite their supporting story or project artifacts.
+
+## Author-owned layout
+
+Skills work with flat, mixed and nested author files without initialization.
+Optional `.cws-layout.json` v2 bindings tag directories recursively or individual
+files; tags describe purpose, not author approval. Existing v1 layouts and
+managed schemas remain compatibility adapters.
+
+The CLI catalog centralizes purpose classification. Workspace discovery accepts
+explicit roots and unconfigured folders. Provenance separately records reference
+resolution and explicit authority. Checks report coverage; managed draft,
+translation and index features are optional and retain their recovery contracts.
+Read-only operations never create a scaffold or state store.
 
 ## Distribution Flow
 

@@ -1,6 +1,6 @@
 ---
 name: project-maintenance
-description: Deterministic maintenance for canonical creative-writing projects. Use when an agent needs to inspect project structure, preview initialization, or run the bundled cw CLI.
+description: Optional deterministic maintenance for author-owned creative-writing workspaces. Use when an agent needs to inspect project structure, preview initialization, or run the bundled cw CLI.
 ---
 
 # Project Maintenance
@@ -12,13 +12,15 @@ briefly. Do not hand the author a list of routine lint findings or ask them to
 perform CLI steps. Working-draft typography is opt-in; accepted-prose spacing
 can be normalized with `fix-prose-typography` after inspecting its preview.
 
-Use the bundled CLI for mechanical story-project work. Resolve the nearest
-ancestor containing `project.md`, resolve this installed skill directory, and
-run its entrypoint directly before considering optional launcher setup:
+Use the bundled CLI when its capability fits the requested work. Resolve the
+explicit workspace or nearest `project.md`/`.cws-layout.json` marker; without
+markers use the supplied directory or a standalone file's parent. No manifest,
+tags or scaffold are required for ordinary checks. Resolve this installed skill
+directory and run its entrypoint directly before optional launcher setup:
 
 ```bash
 python3 <project-maintenance-skill>/resources/cli/cw.py --version
-python3 <project-maintenance-skill>/resources/cli/cw.py check all <project>
+python3 <project-maintenance-skill>/resources/cli/cw.py check links <file-or-directory>
 ```
 
 Keep the command's working path inside the user's requested project. Preview
@@ -30,13 +32,19 @@ performs the deterministic mechanics the agent requests. The agent owns hashes,
 tags, indexes, base revisions, repair-command selection and execution, and
 runtime setup.
 
-Before reading or writing a role folder, resolve it with `cw get-folder
-<role>` from the project root. Roles are `chapters`, `side-stories`, `drafts`,
-`characters`, `world`, `plans`, `brainstorm`, `reviews`, and `archive`. The command returns
-a project-relative path without creating it. Never assume a default folder
-when a project selected another one. If the role is ambiguous, inspect
-`cw layout` and save the actual choice with `cw layout --set ROLE=FOLDER
---apply` only when the author's intent or existing evidence settles it.
+Use actual author filenames first. Optional `cw layout inspect` exposes
+inherited purpose tags; `cw get-folder <role>` is a compatibility convenience,
+not a prerequisite. `cw layout tag PATH --kind directory|file --add TAG`
+previews tags; repeated `--remove TAG` excludes inherited tags. Use `.` for flat
+folders. Tags do not establish authority or opt files into lifecycle metadata.
+An explicit output path works without tags; configure `layout destination`
+only when useful. Never invent default folders for an unconfigured workspace.
+
+Check `coverage` in reports. Metadata, language-specific rules, managed drafts,
+continuity schemas or translation may be unassessed/inapplicable. Continue the
+creative work using the actual sources; do not repair an author's layout into a
+scaffold. Use safe ordinary file tools for authorized named edits when a CLI
+feature does not apply, and do not promise CLI undo for those edits.
 
 Interpret results agent-first: exit 0 continues; exit 1 means inspect the
 findings, repair what is safe, and continue unrelated creative work; exit 2

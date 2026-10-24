@@ -1,18 +1,19 @@
 ---
 name: kb-management
-description: "Maintaining the story knowledge base: creating, updating, and organizing wiki-style reference pages in kb/. Use when capturing finalized story knowledge, updating character profiles, documenting world mechanics, or restructuring the kb.\n"
+description: "Maintaining the story knowledge base: creating, updating, and organizing reference pages in the author's chosen layout. Use when capturing finalized story knowledge, updating character profiles, documenting world mechanics, or restructuring the kb.\n"
 ---
 
 # KB Management
 
-The knowledge base (`kb/`) is the project's durable memory. Drafting, critique,
+The knowledge base is the project's durable knowledge, wherever the author stores it. Drafting, critique,
 planning, and research passes read from it for context. This skill covers how
 to maintain it well.
 
 ## Establish the Mechanical Floor
 
-Use `/project-maintenance` to run `cw check kb` before the semantic audit. Read
-and interpret its findings yourself. Repairable mechanical warnings do not
+Use `cw check kb` through `/project-maintenance` when knowledge tags or legacy
+metadata identify the relevant records. Otherwise audit the named author files
+directly. Read coverage as well as findings; an unassessed record is not verified. Repairable mechanical warnings do not
 block the requested knowledge work: continue wherever the required sources and
 target page are readable, and schedule bounded repairs separately. A required
 target that cannot be read safely is the only mechanical reason to stop that
@@ -38,8 +39,8 @@ critique passes depend on these for voice consistency.
 **Samples**: approved, scoped evidence for author voice. A sample is not an
 instruction to imitate every surface feature.
 
-**Vocab**: canonical story terms, aliases, and exclusions live in
-`kb/vocab.md`.
+**Vocab**: canonical story terms, aliases, and exclusions live in the author's
+vocabulary notes; `kb/vocab.md` is one optional legacy example.
 
 **Issues**: tracked writing problems that span multiple chapters (recurring
 tics, pacing patterns, continuity errors). See the story-memory skill.
@@ -57,9 +58,9 @@ when they were written (`session-3-notes.md`).
 
 ### Organization
 
-Resolve the `characters` and `world` folders with `cw get-folder <role>`
-before reading or creating pages. The examples below show default paths;
-the project's saved choices take precedence.
+Use existing files, optional inherited `kb`/`characters`/`world` tags, and the
+author's instructions. Flat files and nested/shared folders are valid. The
+following paths are optional legacy scaffold examples, never required homes:
 
 ```text
 kb/vocab.md                              # canonical terms
@@ -76,15 +77,14 @@ kb/continuity/state.md
 kb/continuity/scenes/<chapter>.md
 ```
 
-Schema v1 accepts authored KB pages only as direct children of the listed
-managed content directories, plus the exact continuity paths above. Local
-instructions cannot customize or change managed roots. Use links and page
-content to express subdomains instead of nesting another directory.
+Legacy schema validation applies only to opted-in managed records. Do not move
+or reshape author knowledge to satisfy it. Folder/file tags describe purpose;
+acceptance and provenance must come from explicit evidence.
 
 ### Voice Evidence and Guidance
 
-Use descriptive flat paths: `kb/samples/<descriptive-name>.md` for evidence and
-`kb/styles/<descriptive-name>.md` for derived guidance.
+Use the author's sample and style locations or a named output path. Descriptive
+filenames help discovery without imposing a directory structure.
 
 Every sample records manuscript **language/tag**, **scope/applicability**,
 evidence role (`authoritative`, `aspirational`, or `negative`), exact
@@ -145,18 +145,18 @@ concepts.
 
 ## What Belongs in KB vs Work
 
-- Finalized knowledge → `kb/`
+- Finalized knowledge → the author's chosen knowledge records
 - Draft iterations, brainstorm captures, critique reports → the selected
   drafts, brainstorm, and reviews folders (`cw get-folder <role>`); `work/`
   is the full-scaffold default
-- Promoted facts after a draft completes → `kb/canon/` or relevant wiki page
+- Promoted facts after a draft completes → the relevant author-approved record
 
 Use `/story-memory` for routine fact extraction from completed chapters.
 Author direct edits are valid and authoritative input; always re-read them.
-An agent or muse must not make any unjournaled direct write. Every agent or muse
-KB mutation uses `/project-maintenance`: form the exact edit or batch, preview
-the complete recoverable transaction, and apply it only after the preview and
-semantic confirmation still match. If the result was mistaken, inspect history
+For applicable managed operations, use `/project-maintenance`: form the exact
+edit or batch, preview the transaction, and apply within the confirmed scope.
+For ordinary files, use safe named edits with a reviewable diff, preserving
+concurrent changes and source tags; do not promise journal undo for those edits. If the result was mistaken, inspect history
 and preview `cw undo <transaction-id>` rather than overwriting current bytes.
 
 ## Promotion Uses a Separate Transaction

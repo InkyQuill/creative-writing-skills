@@ -150,7 +150,7 @@ def _boundary_kind(project: Project, target: Path) -> str | None:
         if _path_kind(current) == "symlink":
             return "filesystem link"
         manifest = current / "project.md"
-        if _path_kind(manifest) == "file":
+        if any(_path_kind(p) == "file" for p in (manifest, current / ".cws-layout.json")):
             return "nested project reference"
     return None
 

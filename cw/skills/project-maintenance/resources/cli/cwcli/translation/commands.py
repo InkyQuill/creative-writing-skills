@@ -59,14 +59,14 @@ def add_commands(subparsers, error_stream):
 
 
 def plan_enable(project, work_kind):
-    kind, _, enabled = project_settings(project.manifest.metadata)
+    kind, _, enabled = project_settings(project.metadata)
     if enabled:
         raise ValueError('translation already enabled; preserve existing settings')
     for name in ('sources', 'translations', 'kb/entities', 'kb/source-comparisons'):
         path = project.resolve(name, for_write=True)
         if path.exists() and (not path.is_dir() or any(path.iterdir())):
             raise ValueError(f'populated translation path requires explicit registration: {name}')
-    metadata = dict(project.manifest.metadata, **{'schema-version': 2, 'project-kind': kind, 'work-kind': work_kind, 'translation-enabled': True})
+    metadata = dict(project.metadata, **{'schema-version': 2, 'project-kind': kind, 'work-kind': work_kind, 'translation-enabled': True})
     manifest = replace(project.manifest, metadata=metadata)
     changes = [Change('project.md', (project.root / 'project.md').read_bytes(), render_document(manifest))]
     _, files = required_paths(metadata)

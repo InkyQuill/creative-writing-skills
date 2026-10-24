@@ -142,13 +142,14 @@ class DoctorTests(unittest.TestCase):
         )
         self.assertEqual(before, snapshot_tree(self.root))
 
-    def test_doctor_requires_project_and_runtime_failure_is_status_two(self):
+    def test_doctor_accepts_unconfigured_workspace_without_side_effects(self):
         outside = Path(self.temporary.name) / "outside"
         outside.mkdir()
         status, output, error = self.run_cli(["doctor", "--format", "json"], cwd=outside)
-        self.assertEqual(2, status)
+        self.assertEqual(0, status)
         self.assertEqual("", error)
-        self.assertEqual("error", json.loads(output)["status"])
+        self.assertEqual([], json.loads(output)["execution_errors"])
+        self.assertEqual([], list(outside.iterdir()))
 
     def test_text_and_json_have_same_codes_commands_and_agent_audience(self):
         TransactionStore(self.project).prepare(

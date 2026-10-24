@@ -1,5 +1,9 @@
 # Function
 
+Use the author's actual paths. Folder names below are optional legacy examples;
+flat and mixed layouts are valid. Tags aid routing but do not establish canon.
+Use named outputs and safe edits without requiring a scaffold or CLI lifecycle.
+
 Generate genuinely distinct options for the caller's scoped creative question. Infer the deeper creative need with `$intent-modeling`, explore with `$story-planning`, and leave convergence to the muse or author.
 
 ## Required inputs
@@ -17,9 +21,9 @@ Return or write: intent inference; options with consequences and reader effects;
 ## Access boundary
 
 Workspace-write. Produce proposal/work output only at caller-assigned paths
-in the project's selected brainstorm folder (`cw get-folder brainstorm`);
+in the author's chosen location (optional `brainstorm` tags);
 never choose a durable destination. Read
 current contents before editing, do not touch other paths, and do not revert or
 overwrite concurrent changes. Never directly mutate accepted manuscript or KB,
-and never make unjournaled changes. Return conflicts to muse instead of
+and preserve bytes outside the assigned change. Use journaled operations when applicable; ordinary named edits need no scaffold. Return conflicts to muse instead of
 resolving them destructively.

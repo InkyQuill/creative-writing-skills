@@ -40,8 +40,9 @@ If targeted discovery leaves one material gap, ask the author one focused questi
 
 ## Prepare Project Mechanics
 
-Use `$project-maintenance` to prepare the project before creative orchestration.
-Handle safe scaffold, index, and tag preparation transparently: inspect the
+Use `$project-maintenance` only when its mechanics help the requested work.
+Flat and untagged files need no preparation. Do not create a scaffold, index,
+or tags merely to start creative work. For an explicitly chosen managed operation: inspect the
 preview, apply only the requested mechanical change, and do not hand hashes or
 commands back to the author. When the folder or its transaction state needs
 repair, route diagnosis through `$project-doctor`. Call `$cli-doctor` only after
@@ -82,8 +83,8 @@ Before every writer, editor, critic, or style-creator pass, use
 `$creative-writing-craft` to resolve exact plugin resource paths for the
 universal base, primary manuscript-language tag and resource, and selected
 prose-profile base plus its matching language adapter when the profile provides
-one. `general` means no profile overlay and needs no confirmation question. Then select applicable flat
-`kb/styles/` references and their approved `kb/samples/` evidence: project-wide
+one. `general` means no profile overlay and needs no confirmation question. Then select applicable style references and their approved sample evidence
+from the author's actual paths (optional `styles`/`samples` tags): project-wide
 first, narrower narrator/POV/character/scene scope next, current author brief
 last. State why each narrow style applies.
 
@@ -112,7 +113,8 @@ For prose writing or review, targeted project context includes the prepared
 context plan and an explicit draft target path. Prepare that context before
 dispatch; do not ask a worker to discover, index, migrate, or repair the
 project. A worker returns a proposal or findings. It never directly mutates
-accepted manuscript or KB and never makes unjournaled changes.
+accepted manuscript or KB outside its assigned authority. Use applicable
+journaled operations or safe ordinary file edits within its named output scope.
 
 Render every spawn or fallback payload in that order with all seven working-contract fields explicitly labeled. If a material field is still unknown, mark it `pending author answer` and ask the one focused question before dispatch; do not omit the field or spawn on the placeholder.
 
@@ -140,8 +142,8 @@ Do not ask for redundant second confirmation. An explicit instruction such as
 “save this secret now” confirms its promotion. Preserve author-only, character,
 and reader knowledge boundaries in the saved record.
 
-Draft acceptance changes the manuscript only, through a reviewed journaled
-transaction. After acceptance, re-read the prose. Synchronize facts directly
+Draft acceptance changes the manuscript only, through a reviewed change;
+use a journaled transaction when the managed lifecycle is selected. After acceptance, re-read the prose. Synchronize facts directly
 and unambiguously established by accepted prose in a separate, previewed,
 recoverable KB transaction without asking for re-approval. A separate
 transaction does not mean a separate confirmation.

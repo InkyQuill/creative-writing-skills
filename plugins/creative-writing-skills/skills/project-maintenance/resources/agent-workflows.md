@@ -2,12 +2,13 @@
 
 ## Establish the mechanical floor
 
-1. Resolve the nearest `project.md` from the material the user placed in scope.
+1. Resolve the author's explicit workspace and actual files. A manifest and tags are optional.
 2. Run the bundled `resources/cli/cw.py` directly with Python; `cli-doctor`
    will also try to install or refresh its managed launcher without making that
    launcher a prerequisite.
-3. Run `check all` or the checker relevant to the task and inspect its
-   structured findings.
+3. If a mechanical check helps, run the relevant checker on the named file or
+   directory and inspect both findings and coverage. Do not initialize a project
+   to enable a check. Continue semantic work on unassessed author material.
 4. Preview each unambiguous repair, confirm the diff stays in scope, then use
    `--apply`. Run the affected check again.
 
@@ -25,7 +26,7 @@ context. Restricted `context --snapshot` writes derived cache without
 `--apply`. Preview and apply `clean-context` only to remove derived cache; it
 does not enter transaction history.
 
-## Manage a draft
+## Opt into a managed draft
 
 Create the working copy with `draft create`, change lifecycle state through
 `draft set-status`, and run checks before requesting author acceptance. If the
@@ -38,7 +39,7 @@ retcon, uncertain source tags, or uncertain character and reader knowledge
 boundaries. Use `draft abandon` for a rejected draft so it moves to archive
 without becoming canon.
 
-For bonus prose, target a direct file in `cw get-folder side-stories` and retain required
+For legacy managed bonus prose, target a direct file in `cw get-folder side-stories` and retain required
 `after: <accepted-manuscript-path>` placement metadata plus any optional
 lower-case `subtype`. Review the aggregate neighbors with `context chapter`.
 Do not assign the side story a chapter number or renumber main chapters.

@@ -11,6 +11,37 @@ not modify the project. Transactional mutations preview by default and write
 only when repeated with `--apply`; the derived context cache has the narrower
 exceptions described below.
 
+## Flat workspaces and optional purpose tags
+
+No initialization is needed for `cw check all .`, `cw check links chapter.md`,
+or `cw context chapter chapter.md`. Checks accept `--root PATH` for explicit
+scope. Read report `coverage`; unassessed metadata is not a writing blocker.
+
+```bash
+cw layout inspect
+cw layout tag . --kind directory --add drafts
+cw layout tag notes --kind directory --add kb --remove drafts
+cw layout tag world.md --kind file --add world --remove drafts
+cw layout destination reviews .
+cw draft create chapter.md --draft-path revision.md
+cw draft accept revision.md --archive-path old-revision.md
+cw reindex --index contents.md
+```
+
+Mutating examples preview by default; inspect then use `--apply` when authorized.
+Tagging is optional. `--archive-path` and `--index` name outputs without layout
+configuration. `layout tag` supports repeatable `--add`/`--remove`; directory
+inheritance is recursive. `layout destination TAG PATH` chooses an output
+folder without classifying existing files. Version-1 layouts remain readable;
+explicit tag mutations materialize existing roles into version 2. Version-2
+relocation requires a separately reviewed file map and is not automatic.
+
+`reindex` refreshes only owned generated files in unstructured/tagged workspaces;
+`--index` can create a named new index, never overwrite an author-owned page.
+Ordinary drafts need no lifecycle metadata; `draft create` opts a named copy
+into rebase/accept/undo mechanics. Generic exact body edits preserve opaque
+headers; frontmatter mutations require interpretable metadata.
+
 ## Inspect and prepare context
 
 ```text

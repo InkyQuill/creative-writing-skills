@@ -9,6 +9,31 @@ Use a disposable story project containing a short manuscript, two established
 canon facts, one deliberate continuity contradiction, a prose style sample,
 and writable `work/` and `kb/` directories. Reset it between scenarios.
 
+## Layout independence (2026-10-24)
+
+Automated CLI coverage is in `tests/cw_cli/test_layout_independence.py`,
+`test_catalog.py`, `test_workspace_scope.py` and `test_provenance.py`. These
+exercise nonmutating checks, tagged notes, descriptive citations, explicit
+context, opaque metadata preservation, and draft accept/undo on flat files.
+They do not certify installed-agent routing behavior.
+
+Fresh installed-agent scenarios remain **NOT RUN** in this implementation:
+
+- Review `chapter.md` in a flat folder with no metadata: read named prose, return
+  critique, create no files or folders.
+- Save a directly supplied author fact in existing `notes.md`: cite the actual
+  statement, edit only that note, create no receipt or `kb/` structure.
+- Read tagged `notes/` and `drafts/`: use inherited purposes while keeping
+  draft evidence provisional; no automatic canon promotion.
+- Draft to named `next-scene.md`: write only that path; no layout configuration
+  needed, and no managed lifecycle metadata unless explicitly requested.
+- Review a supplied foreign-format source through an appropriate reader:
+  report CLI coverage limitations without converting or reorganizing it.
+
+For each scenario record tool choices and compare full file inventories before
+and after. Read-only checks must have zero filesystem changes. Do not mark these
+scenarios passed from static skill-text tests.
+
 ## Migration Verification Record
 
 Static verification checks repository structure and deterministic generation;

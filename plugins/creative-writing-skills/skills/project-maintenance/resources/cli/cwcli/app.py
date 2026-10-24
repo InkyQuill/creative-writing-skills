@@ -391,7 +391,7 @@ def run(argv: list[str], *, cwd: Path, stdout: TextIO, stderr: TextIO) -> int:
             project = open_workspace(target, root=_from_cwd(cwd, args.root) if args.root else None)
             if target != project.root:
                 project = replace(project, selection=project.relative_id(target))
-        except (DocumentError, OSError, ProjectDiscoveryError) as error:
+        except (DocumentError, OSError, ProjectDiscoveryError, ProjectPathError, UnicodeError, ValueError) as error:
             if args.format != "json":
                 stderr.write(f"cw: error: {error}\n")
                 return 2
@@ -746,7 +746,7 @@ def _run_migrate(args: argparse.Namespace, *, cwd: Path, stdout: TextIO, stderr:
         execution_errors: list[ExecutionError] = []
         try:
             committed_project = discover_project(root)
-        except (DocumentError, OSError, ProjectDiscoveryError) as error:
+        except (DocumentError, OSError, ProjectDiscoveryError, ProjectPathError, UnicodeError, ValueError) as error:
             execution_errors.extend(
                 ExecutionError(check=name, message=str(error))
                 for name in ("structure", "drafts")

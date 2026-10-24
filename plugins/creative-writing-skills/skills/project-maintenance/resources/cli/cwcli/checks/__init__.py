@@ -51,9 +51,12 @@ def run_checks(project: Project, names: Iterable[str], *, draft_typography: bool
     from ..catalog import document_paths, classify_document, lifecycle_drafts, KNOWLEDGE_TAGS
     from ..documents import read_document
     coverage = []
-    paths = document_paths(project)
-    relative_paths = tuple(project.relative_id(p) for p in paths)
-    flexible = project.unstructured or project.selection is not None
+    try:
+        paths = document_paths(project)
+        relative_paths = tuple(project.relative_id(p) for p in paths)
+        flexible = project.unstructured or project.selection is not None
+    except (OSError, UnicodeError, ValueError) as error:
+        return Report([], checks=selected, execution_errors=[ExecutionError(name, str(error)) for name in selected])
     for name in selected:
         try:
             checked = relative_paths

@@ -29,4 +29,4 @@ Return findings: overall verdict; highest-impact finding first; passage-grounded
 
 ## Access boundary
 
-Read-only. Return findings to muse and never patch, rewrite, create, or delete files. Never directly mutate accepted manuscript or KB, and never make unjournaled changes.
+Read-only. Return findings to muse and never patch, rewrite, create, or delete files. Never directly mutate accepted manuscript or KB, and never make workspace changes.
