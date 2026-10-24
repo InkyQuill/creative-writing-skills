@@ -141,6 +141,7 @@ def _parser(*, error_stream: TextIO) -> argparse.ArgumentParser:
 
     reindex = commands.add_parser("reindex", error_stream=error_stream)
     _mutation_options(reindex)
+    reindex.add_argument("--index", action="append", dest="index_ids")
 
     layout = commands.add_parser("layout", error_stream=error_stream)
     layout.add_argument("--set", dest="role_selections", action="append", default=[], metavar="ROLE=FOLDER")
@@ -175,6 +176,8 @@ def _parser(*, error_stream: TextIO) -> argparse.ArgumentParser:
     for name in ("rebase", "accept", "abandon"):
         command = draft_commands.add_parser(name, error_stream=error_stream)
         command.add_argument("draft")
+        if name in {"accept", "abandon"}:
+            command.add_argument("--archive-path")
         _mutation_options(command)
 
     migrate = commands.add_parser("migrate", error_stream=error_stream)
@@ -636,7 +639,7 @@ def _run_init(args: argparse.Namespace, *, cwd: Path, stdout: TextIO, stderr: Te
 def _run_reindex(args: argparse.Namespace, *, cwd: Path, stdout: TextIO, stderr: TextIO) -> int:
     try:
         project = open_workspace(cwd)
-        plan = plan_reindex(project)
+        plan = plan_reindex(project, index_ids=args.index_ids)
         return _preview_or_apply(
             TransactionEngine(project),
             plan,
@@ -671,9 +674,9 @@ def _run_draft(args: argparse.Namespace, *, cwd: Path, stdout: TextIO, stderr: T
         else:
             transaction_id = uuid.uuid4().hex
             if args.draft_command == "accept":
-                plan = plan_accept_draft(project, args.draft, engine.store, transaction_id)
+                plan = plan_accept_draft(project, args.draft, engine.store, transaction_id, args.archive_path)
             else:
-                plan = plan_abandon_draft(project, args.draft, transaction_id)
+                plan = plan_abandon_draft(project, args.draft, transaction_id, args.archive_path)
         return _preview_or_apply(
             engine,
             plan,
@@ -893,6 +896,25 @@ def _run_tag_layout(project: Project, args: argparse.Namespace, stdout: TextIO) 
     config = read_layout(project)
     bindings = list(config.bindings)
     destinations = dict(config.destinations)
+    if config.version == 1 and args.layout_action != "inspect":
+        # Capture existing legacy role choices before switching off inference.
+        from .layout import role_directories
+        grouped = {}
+        for binding in bindings:
+            grouped.setdefault(binding.path, set()).update(binding.tags)
+        if project.manifest is not None:
+            for role in ROLE_CANDIDATES:
+                for folder in role_directories(project, role):
+                    if (project.root / folder).is_dir():
+                        grouped.setdefault(folder, set()).add(role)
+            from .schema import KB_CONTENT_DIRECTORIES
+            for folder in KB_CONTENT_DIRECTORIES | {"kb/continuity", "kb/samples", "kb/styles"}:
+                if (project.root / folder).is_dir():
+                    tag = folder.rsplit('/', 1)[-1]
+                    grouped.setdefault(folder, set()).update({'kb', tag})
+            if (project.root / 'kb/vocab.md').is_file():
+                bindings.append(TagBinding('kb/vocab.md', 'file', frozenset({'vocabulary'})))
+        bindings = [TagBinding(path, 'directory', frozenset(tags)) for path, tags in sorted(grouped.items())] + [b for b in bindings if b.kind == 'file']
     if args.layout_action == "inspect":
         data = json.loads(render_config(config))
         if args.layout_path:

@@ -3,7 +3,7 @@ import hashlib
 from pathlib import Path
 from ..documents import parse_document
 from ..transactions import Change
-from ..schema import allowed_document_kind
+from ..catalog import classify_document
 from .catalog import find_record, load_catalog, make_plan, read_source, render, replacement
 from .contract import project_settings, slug, strings
 
@@ -69,7 +69,7 @@ def plan_source(project, request):
     changes = []
     if action == 'manuscript-unit':
         relative = request.get('manuscript-path')
-        if not isinstance(relative, str) or allowed_document_kind(relative) not in ('chapter', 'side-story'):
+        if not isinstance(relative, str) or classify_document(project, relative).managed_kind not in ('chapter', 'side-story'):
             raise ValueError('manuscript source must be accepted story prose')
         data = read_source(project, relative)
         guards[relative] = hashlib.sha256(data).hexdigest()

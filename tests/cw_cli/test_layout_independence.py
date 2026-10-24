@@ -90,3 +90,51 @@ class LayoutIndependenceTests(unittest.TestCase):
         self.assertFalse(any(f['code'] == 'CW-KB-030' for f in result['findings']))
         self.assertTrue(any('unverified' in f['message'] for f in result['findings']))
         self.assertEqual(before, self.snapshot())
+
+    def test_flat_managed_draft_accept_and_undo_without_layout_file(self):
+        self.write('one.md', 'Base\n')
+        before = self.snapshot()
+        code, preview = self.run_cli('draft', 'create', 'one.md', '--draft-path', 'revision.md')
+        self.assertEqual(0, code, preview)
+        self.assertEqual(before, self.snapshot())
+        code, created = self.run_cli('draft', 'create', 'one.md', '--draft-path', 'revision.md', '--apply')
+        self.assertEqual(0, code, created)
+        self.run_cli('draft', 'rebase', 'revision.md')
+        self.run_cli('draft', 'set-status', 'revision.md', 'ready', '--apply')
+        self.run_cli('draft', 'accept', 'revision.md', '--archive-path', 'old-revision.md')
+        code, accepted = self.run_cli('draft', 'accept', 'revision.md', '--archive-path', 'old-revision.md', '--apply')
+        self.assertEqual(0, code, accepted)
+        self.assertFalse((self.root / 'revision.md').exists())
+        self.assertTrue((self.root / 'old-revision.md').exists())
+        self.run_cli('undo', accepted['transaction_id'], '--apply')
+        self.assertEqual(b'Base\n', (self.root / 'one.md').read_bytes())
+        self.assertTrue((self.root / 'revision.md').exists())
+        self.assertFalse((self.root / 'old-revision.md').exists())
+        self.assertFalse((self.root / '.cws-layout.json').exists())
+        for directory in ('kb', 'story', 'work'):
+            self.assertFalse((self.root / directory).exists())
+
+    def test_opaque_metadata_body_edit_preserves_header_and_undo(self):
+        from cwcli.edits import plan_edits
+        from cwcli.project import open_workspace
+        from cwcli.transactions import TransactionEngine
+        raw = b'\xef\xbb\xbf---\r\ntags: [a, b]\r\n---\r\nBefore.\r\n'
+        (self.root / 'one.md').write_bytes(raw)
+        project = open_workspace(self.root)
+        plan = plan_edits(project, [{'op': 'replace', 'path': 'one.md', 'old': 'Before.', 'new': 'After.'}])
+        self.assertEqual(raw.replace(b'Before.', b'After.'), plan.changes[0].after)
+        engine = TransactionEngine(project)
+        record = engine.apply(plan)
+        self.run_cli('undo', record.id, '--apply')
+        self.assertEqual(raw, (self.root / 'one.md').read_bytes())
+
+    def test_reindex_preserves_authored_index_and_requires_explicit_output(self):
+        self.write('_index.md', '# My own contents\n')
+        self.write('one.md', '# One\n')
+        before = self.snapshot()
+        self.run_cli('reindex')
+        self.assertEqual(before, self.snapshot())
+        code, result = self.run_cli('reindex', '--index', 'contents.md', '--apply')
+        self.assertEqual(0, code, result)
+        self.assertIn('one.md', (self.root / 'contents.md').read_text())
+        self.assertEqual(b'# My own contents\n', (self.root / '_index.md').read_bytes())

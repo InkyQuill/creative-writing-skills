@@ -65,13 +65,8 @@ def _known_index_ids(project: Project) -> set[str]:
 
 
 def _document_kind(project: Project, relative_id: str) -> str | None:
-    if PurePosixPath(relative_id).name == "_index.md":
-        return allowed_document_kind(relative_id)
-    parent = PurePosixPath(relative_id).parent.as_posix()
-    for role, kind in _ROLE_KINDS.items():
-        if parent in role_directories(project, role):
-            return kind
-    return allowed_document_kind(relative_id)
+    from .catalog import classify_document
+    return classify_document(project, relative_id).managed_kind
 
 
 def _index_title(project: Project, index_id: str) -> str:
@@ -101,6 +96,8 @@ def plan_reindex(
 ) -> TransactionPlan:
     """Plan exact replacements for every stale generated registry."""
 
+    if project.unstructured:
+        return _plan_author_indexes(project, overlay=overlay, index_ids=index_ids)
     if project.metadata.get("schema-version") == 2:
         from .translation.indexes import plan_translation_indexes
         return plan_translation_indexes(project, overlay=overlay, index_ids=index_ids, skip_unparseable=skip_unparseable)
@@ -271,3 +268,50 @@ def _source_format(data: bytes) -> tuple[str, bool]:
 
 
 __all__ = ["plan_reindex", "render_index"]
+
+
+def _plan_author_indexes(project: Project, *, overlay=(), index_ids=None) -> TransactionPlan:
+    """Only refresh explicitly owned indexes; never take over an author's file."""
+    from .documents import read_document
+    from urllib.parse import quote
+    from pathlib import Path
+    import posixpath
+    contents = {project.relative_id(p): p.read_bytes() for p in project.iter_managed_markdown()}
+    for change in overlay:
+        if change.after is None:
+            contents.pop(change.path, None)
+        else:
+            contents[change.path] = change.after
+    owned = set()
+    for relative, data in contents.items():
+        read = read_document(data)
+        if read.document is not None and read.document.metadata.get('generated') is True:
+            owned.add(relative)
+    selected = sorted(owned) if index_ids is None else list(index_ids)
+    if len(selected) != len(set(selected)):
+        raise ValueError('index paths must be unique')
+    changes = []
+    for relative in selected:
+        target = project.resolve(relative, for_write=True)
+        if target.suffix.casefold() != '.md':
+            raise ValueError('index must be Markdown')
+        before = target.read_bytes() if target.is_file() else None
+        if before is not None and relative not in owned:
+            raise ValueError(f'index is author-owned; choose a new output path: {relative}')
+        parent = PurePosixPath(relative).parent
+        rows = []
+        for path in sorted(contents):
+            if path == relative or path in owned or path in selected:
+                continue
+            candidate = PurePosixPath(path)
+            if parent not in candidate.parents:
+                continue
+            link = quote(posixpath.relpath(path, parent.as_posix()), safe='/')
+            label = candidate.name.replace('[', r'\[').replace(']', r'\]')
+            rows.append(f'- [{label}]({link})')
+        body = '# Contents\n\n' + '\n'.join(rows) + '\n'
+        newline = '\r\n' if before and b'\r\n' in before else '\n'
+        after = render_document(Document({'generated': True, 'title': 'Contents'}, body.replace('\n', newline), newline, bool(before and before.startswith(b'\xef\xbb\xbf'))))
+        if before != after:
+            changes.append(Change(relative, before, after))
+    return TransactionPlan(command=('reindex',), changes=tuple(changes), metadata={'undoable': True})

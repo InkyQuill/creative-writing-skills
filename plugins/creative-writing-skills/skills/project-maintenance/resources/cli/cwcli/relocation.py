@@ -16,6 +16,8 @@ from .transactions import Change, TransactionPlan
 
 def plan_relocation(project: Project, selections: dict[str, str]) -> TransactionPlan:
     """Build guarded file, reference and directory changes for selected roles."""
+    if project.unstructured:
+        raise ValueError("tagged relocation needs an explicit reviewed file map")
     if not selections:
         raise ValueError("--relocate requires --set ROLE=FOLDER")
     if project.metadata.get("schema-version") != 1:

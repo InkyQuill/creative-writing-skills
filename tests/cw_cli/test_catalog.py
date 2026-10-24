@@ -91,3 +91,22 @@ class CatalogTests(unittest.TestCase):
         run(['undo', result['transaction_id'], '--apply'])
         self.assertFalse((self.root / '.cws-layout.json').exists())
         self.assertFalse((self.root / 'story').exists())
+
+    def test_upgrade_materializes_existing_roles_without_duplicate_bindings(self):
+        (self.root / '.cws-layout.json').write_text(json.dumps({'version': 1, 'roles': {'world': 'notes', 'characters': 'notes'}}))
+        for folder in ('notes', 'chapters'):
+            (self.root / folder).mkdir()
+            (self.root / folder / 'one.md').write_text('Text')
+        out = io.StringIO()
+        status = app.run(['layout', 'tag', 'extras', '--kind', 'directory', '--add', 'reviews', '--apply', '--format', 'json'], cwd=self.root, stdout=out, stderr=io.StringIO())
+        self.assertEqual(0, status, out.getvalue())
+        self.assertEqual({'world', 'characters'}, self.tags('notes/one.md'))
+        self.assertEqual({'chapters'}, self.tags('chapters/one.md'))
+
+    def test_removed_tag_is_not_a_destination(self):
+        from cwcli.catalog import read_layout, tagged_directories
+        self.config([
+            {'path': '.', 'kind': 'directory', 'tags': ['reviews']},
+            {'path': 'notes', 'kind': 'directory', 'tags': ['kb']},
+        ])
+        self.assertEqual(('.',), tagged_directories(read_layout(self.project), 'reviews'))

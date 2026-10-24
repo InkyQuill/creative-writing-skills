@@ -43,7 +43,9 @@ class Project:
     @property
     def unstructured(self) -> bool:
         from .catalog import read_layout
-        return self.manifest is None or read_layout(self).version == 2
+        config = read_layout(self)
+        paths = [b.path for b in config.bindings]
+        return self.manifest is None or config.version == 2 or '.' in paths or len(paths) != len(set(paths))
 
     def resolve(self, relative: str, *, for_write: bool = False) -> Path:
         """Resolve a project-relative path without allowing boundary escapes."""

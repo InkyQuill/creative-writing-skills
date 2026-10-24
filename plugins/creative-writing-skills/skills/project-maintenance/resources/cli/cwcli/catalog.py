@@ -114,7 +114,7 @@ def render_config(config: LayoutConfig) -> bytes:
 
 
 def tagged_directories(config: LayoutConfig, tag: str) -> tuple[str, ...]:
-    return tuple(sorted({b.path for b in config.bindings if b.kind == 'directory'
+    return tuple(sorted({b.path for b in config.bindings if b.kind == 'directory' and tag in b.tags
                          and tag in effective_tags(config, str(PurePosixPath(b.path) / '.tag-probe'))}))
 
 

@@ -207,6 +207,12 @@ def _warning(code: str, message: str, path: str | None) -> Finding:
 
 def _valid_target(project: Project, value: str) -> bool:
     path = Path(value)
+    if project.unstructured:
+        try:
+            project.resolve(value, for_write=True)
+        except ValueError:
+            return False
+        return path.suffix.casefold() == '.md' and path.name != '_index.md'
     parents = {
         directory for role in ("chapters", "side-stories")
         for directory in role_directories(project, role)
