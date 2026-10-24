@@ -79,3 +79,14 @@ class LayoutIndependenceTests(unittest.TestCase):
         _, result = self.run_cli('check', 'continuity', '.')
         self.assertTrue(any('anchor' in f['message'] and f['path'] == 'notes/volumes/events.md' for f in result['findings']))
         self.assertFalse(any('kb/' in str(f) for f in result['findings']))
+
+    def test_tagged_knowledge_accepts_draft_path_and_author_citation(self):
+        self.write('.cws-layout.json', json.dumps({'version': 2, 'bindings': [{'path': 'notes.md', 'kind': 'file', 'tags': ['kb']}]}))
+        self.write('notes.md', '---\nsources:\n  - drafts/chapter.md\n  - "note:Author confirmed the name"\n---\nNotes\n')
+        self.write('drafts/chapter.md', '# Draft\n')
+        before = self.snapshot()
+        code, result = self.run_cli('check', 'kb', '.', '--strict')
+        self.assertEqual(0, code, result)
+        self.assertFalse(any(f['code'] == 'CW-KB-030' for f in result['findings']))
+        self.assertTrue(any('unverified' in f['message'] for f in result['findings']))
+        self.assertEqual(before, self.snapshot())
