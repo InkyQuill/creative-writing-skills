@@ -304,3 +304,22 @@ class LayoutIndependenceTests(unittest.TestCase):
         self.assertTrue(any('number' in f['message'] for f in result['findings']))
         self.assertTrue(all(f['path'] == 'story/chapters/one.md' for f in result['findings']))
         self.assertFalse(any(f['code'] == 'CW-STRUCT-010' for f in result['findings']))
+
+    def test_flat_structure_reports_case_collisions_without_crossing_scope(self):
+        self.write('One.md', 'One\n')
+        self.write('one.md', 'Other\n')
+        if len(list(self.root.glob('*.md'))) != 2:
+            self.skipTest('requires case-sensitive filesystem')
+        self.write('selected.md', 'Selected\n')
+        self.write('nested/.cws-layout.json', '{"version":2,"bindings":[]}')
+        self.write('nested/A.md', 'A\n')
+        self.write('nested/a.md', 'a\n')
+        self.write('.hidden/B.md', 'B\n')
+        self.write('.hidden/b.md', 'b\n')
+        before = self.snapshot()
+        code, result = self.run_cli('check', 'structure', '.', '--strict')
+        self.assertEqual(1, code, result)
+        self.assertEqual({'One.md', 'one.md'}, {f['path'] for f in result['findings'] if f['code'] == 'CW-STRUCT-050'})
+        _, selected = self.run_cli('check', 'structure', 'selected.md')
+        self.assertFalse(any(f['code'] == 'CW-STRUCT-050' for f in selected['findings']))
+        self.assertEqual(before, self.snapshot())

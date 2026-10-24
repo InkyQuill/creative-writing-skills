@@ -62,6 +62,8 @@ def check_structure(project: Project) -> list[Finding]:
                     findings.extend(validate_metadata(relative, read.document, kind_override=classification.managed_kind))
             if classification.conflicts:
                 findings.append(Finding("CW-STRUCT-095", "info", "Multiple purposes; single-purpose operations need an explicit target", path=relative))
+        if project.selection is None:
+            findings.extend(_case_collision_findings(project))
         return findings
     schema_version = project.metadata.get("schema-version")
     if isinstance(schema_version, int) and not isinstance(schema_version, bool) and schema_version > max(SUPPORTED_SCHEMA_VERSIONS):
@@ -335,7 +337,7 @@ def _case_collision_findings(project: Project) -> list[Finding]:
     for directory in _iter_directories(project.root, project.root):
         by_identity: dict[str, list[Path]] = {}
         for path in _sorted_children(directory):
-            if path.is_symlink():
+            if path.is_symlink() or path.name.startswith('.'):
                 continue
             by_identity.setdefault(_portable_identity(path.name), []).append(path)
         for paths in by_identity.values():
@@ -359,10 +361,9 @@ def _case_collision_findings(project: Project) -> list[Finding]:
 def _iter_directories(root: Path, directory: Path) -> Iterator[Path]:
     yield directory
     for path in _sorted_children(directory):
-        if path.is_symlink() or not path.is_dir():
+        if path.is_symlink() or not path.is_dir() or path.name.startswith('.') or path.name in {'node_modules', '__pycache__'}:
             continue
-        manifest = path / "project.md"
-        if path != root and not manifest.is_symlink() and manifest.is_file():
+        if path != root and any((path / marker).is_file() for marker in ("project.md", ".cws-layout.json")):
             continue
         yield from _iter_directories(root, path)
 
