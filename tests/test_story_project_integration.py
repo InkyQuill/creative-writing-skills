@@ -67,53 +67,23 @@ class StoryProjectIntegrationTests(unittest.TestCase):
         text = all_runtime_markdown("story-memory")
         self.assertNotIn("Fact extraction writes", text)
         self.assertNotRegex(text, r"(?is)then write the chapter's scene record")
-        self.assertNotRegex(text, r"(?is)when a work item completes, promote")
-        self.assertRegex(text, r"(?is)fact extraction.{0,220}proposal")
-        self.assertRegex(
-            text,
-            r"(?is)acceptance.{0,180}(does not itself write|writes manuscript state only)"
-            r".{0,160}(continuity records|KB\s+state)",
-        )
-        self.assertRegex(text, r"(?is)(direct|explicit).{0,180}(unambiguous|establish).{0,260}without.{0,100}(re-?confirm|ask)")
-        self.assertRegex(text, r"(?is)(ambigu|infer|conflict|retcon).{0,320}(ask|question|confirm)")
-        self.assertIn("Promotion uses a separate reviewed change", text)
-        self.assertIn("cw undo", text)
+        extraction = (SKILLS / "story-memory/resources/fact-extraction.md").read_text()
+        self.assertIn("## Prepare the Promotion Proposal", extraction)
+        self.assertIn("$kb-management", extraction)
+        self.assertIn("does not", extraction)
+        self.assertIn("independently authorize file changes", extraction)
+        kb = all_runtime_markdown("kb-management")
+        self.assertIn("## Promotion Uses a Separate Reviewed Update", kb)
+        self.assertIn("cw undo", kb)
 
     def test_story_memory_does_not_require_redundant_promotion_approval(self):
-        fact_extraction = (
-            SKILLS / "story-memory" / "resources" / "fact-extraction.md"
-        ).read_text(encoding="utf-8")
-        continuity_records = (
-            SKILLS / "story-memory" / "resources" / "continuity-records.md"
-        ).read_text(encoding="utf-8")
-
-        self.assertNotRegex(
-            fact_extraction,
-            r"(?is)acceptance of\s+the source chapter\s+does not authorize promotion",
-        )
-        self.assertNotRegex(
-            continuity_records,
-            r"(?is)record updates that change canon wait for the author",
-        )
-        self.assertRegex(
-            fact_extraction,
-            r"(?is)acceptance.{0,100}writes manuscript state only, not KB\s+state",
-        )
-        self.assertRegex(
-            fact_extraction,
-            r"(?is)after acceptance.{0,100}re-read.{0,100}synchroniz.{0,100}direct and\s+"
-            r"unambiguous.{0,180}previewed, recoverable transaction.{0,100}"
-            r"without redundant confirmation",
-        )
-        self.assertRegex(
-            continuity_records,
-            r"(?is)after acceptance.{0,100}re-reads.{0,100}synchronizes.{0,180}directly\s+"
-            r"and unambiguously establishes.{0,180}without asking for reconfirmation",
-        )
-        self.assertRegex(
-            continuity_records,
-            r"(?is)ask only.{0,320}(ambigu|infer|conflict|retcon|source tag|knowledge boundary)",
-        )
+        extraction = (SKILLS / "story-memory/resources/fact-extraction.md").read_text()
+        self.assertIn("$kb-management", extraction)
+        kb = re.sub(r"\s+", " ", all_runtime_markdown("kb-management").lower())
+        self.assertIn("draft acceptance changes manuscript state only", kb)
+        self.assertIn("separate update does not mean separate confirmation", kb)
+        self.assertIn("ask only when", kb)
+        self.assertIn("keep those items provisional", kb)
 
     def test_kb_paths_match_schema_v1_allowed_locations(self):
         text = all_runtime_markdown("kb-management")
@@ -153,53 +123,34 @@ class StoryProjectIntegrationTests(unittest.TestCase):
         self.assertRegex(text, r"(?is)repairable warnings?.{0,180}(proceed|continue).{0,100}review")
 
     def test_targeted_edits_preview_exact_or_batch_operations_and_can_undo(self):
-        text = all_runtime_markdown("targeted-editing")
-        self.assertRegex(text, r"(?is)literary scope.{0,300}(exact[- ]anchor|exact anchor)")
-        self.assertRegex(text, r"(?is)(exact[- ]anchor|exact anchor).{0,200}batch")
-        self.assertRegex(text, r"(?is)repeated match.{0,180}(assert|expected count|explicit count)")
-        self.assertRegex(text, r"(?is)preview.{0,300}(apply|--apply)")
-        self.assertIn("cw undo", text)
+        editing = all_runtime_markdown("targeted-editing")
+        self.assertIn("$project-maintenance", editing)
+        self.assertIn("only then", editing)
+        operations = (SKILLS / "project-maintenance/resources/agent-workflows.md").read_text()
+        self.assertRegex(operations, r"(?is)literary scope.{0,100}exact-anchor.{0,80}batch")
+        self.assertRegex(operations, r"(?is)repeated match.{0,100}expected-count assertion")
+        self.assertRegex(operations, r"(?is)preview the complete.{0,180}before apply")
+        self.assertIn("cw undo <transaction-id>", operations)
+        self.assertIn("unjournaled", operations)
 
     def test_acceptance_and_kb_sync_use_separate_transactions_not_blanket_confirmation(self):
-        text = all_runtime_markdown("kb-management") + all_runtime_markdown("story-review")
-        self.assertRegex(text, r"(?is)accept.{0,180}does not.{0,100}(KB|knowledge base)")
-        self.assertRegex(text, r"(?is)separate.{0,100}transaction.{0,180}(not|does not).{0,100}separate confirmation")
-        self.assertRegex(text, r"(?is)(direct|explicit).{0,180}(unambiguous|establish).{0,260}(without|no).{0,100}(re-?approval|re-?confirm|ask)")
-        self.assertRegex(text, r"(?is)ask.{0,100}only.{0,300}(ambigu|infer|conflict|retcon|source tag|knowledge boundar)")
-        self.assertRegex(text, r"(?is)(promotion transaction|promot).{0,220}(provenance|source|evidence)")
-        self.assertNotRegex(text, r"(?is)(always|every).{0,80}(ask|confirm).{0,80}promotion")
+        review = (SKILLS / "story-review/SKILL.md").read_text()
+        self.assertIn("$kb-management", review)
+        kb = re.sub(r"\s+", " ", all_runtime_markdown("kb-management").lower())
+        for boundary in ("draft acceptance changes manuscript state only", "directly and unambiguously establishes", "separate update does not mean separate confirmation", "previewed, recoverable", "reviewed named edit", "ask only when"):
+            self.assertIn(boundary, kb)
 
     def test_routed_workflows_reject_delayed_and_blanket_confirmation_gates(self):
-        brainstorming = all_runtime_markdown("story-planning")
-        command_reference = (
-            SKILLS / "project-maintenance" / "resources" / "command-reference.md"
-        ).read_text(encoding="utf-8")
-        routed = brainstorming + command_reference + all_runtime_markdown("world-creation")
-
-        self.assertNotRegex(
-            brainstorming,
-            r"(?is)durable decisions.{0,100}after the brainstorm completes",
-        )
-        self.assertRegex(
-            brainstorming,
-            r"(?is)direct author answer.{0,180}settles.{0,180}persist.{0,180}"
-            r"before.{0,80}next question",
-        )
+        brainstorming = (SKILLS / "story-planning/resources/brainstorming.md").read_text()
+        world = (SKILLS / "world-creation/SKILL.md").read_text()
+        for text in (brainstorming, world):
+            self.assertIn("$kb-management", text)
+        kb = re.sub(r"\s+", " ", all_runtime_markdown("kb-management").lower())
+        self.assertIn("before the next dependent question", kb)
+        self.assertIn("documentation is in scope", kb)
+        command_reference = (SKILLS / "project-maintenance/resources/command-reference.md").read_text()
         self.assertNotIn("separate author-confirmed decisions", command_reference)
-        self.assertRegex(
-            command_reference,
-            r"(?is)separate KB transaction.{0,120}(does not|is not).{0,100}separate approval",
-        )
-        self.assertRegex(
-            command_reference,
-            r"(?is)direct.{0,80}unambiguous.{0,220}accepted.{0,180}"
-            r"without.{0,80}(reapproval|re-approval|reconfirmation)",
-        )
-        self.assertNotRegex(
-            routed,
-            r"(?is)(always|every).{0,100}(ask|confirm|approval).{0,100}"
-            r"(promotion|canon|KB)",
-        )
+        self.assertRegex(command_reference, r"(?is)separate KB transaction.{0,120}(does not|is not).{0,100}separate approval")
 
     def test_author_is_never_asked_to_maintain_cli_metadata(self):
         text = "\n".join(all_runtime_markdown(name) for name in DOMAIN_SKILLS)

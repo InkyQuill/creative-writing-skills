@@ -107,8 +107,7 @@
         "load": [
           "story-planning",
           "story-memory",
-          "intent-modeling",
-          "llm-writing"
+          "intent-modeling"
         ],
         "available": [],
         "routes": []
@@ -119,8 +118,7 @@
         "description": "Simulates a specified character to test voice, motivation, and relationships.",
         "load": [
           "character-sim",
-          "writing-principles",
-          "llm-writing"
+          "writing-principles"
         ],
         "available": [
           "story-memory"
@@ -147,7 +145,6 @@
         "load": [
           "story-review",
           "writing-principles",
-          "llm-writing",
           "story-memory"
         ],
         "available": [],
@@ -161,7 +158,6 @@
           "story-review",
           "writing-principles",
           "creative-writing-craft",
-          "llm-writing",
           "story-memory"
         ],
         "available": [],
@@ -170,8 +166,8 @@
       "muse": {
         "name": "muse",
         "path": "plugins/creative-writing-skills/skills/creative-writing-muse/SKILL.md",
-        "description": "Use when fiction or story work spans planning, drafting, critique, research, continuity, voice, or durable story state, or when the author explicitly asks for a muse or broad end-to-end creative-writing help.",
-        "fallback": "Fresh worker contexts are the primary route. Only when fresh-context delegation is unavailable, muse applies the same worker prompt as a bounded current-context stance and discloses material loss of independence or parallelism.",
+        "description": "Help an author with fiction spanning planning, drafting, critique, research, continuity, voice, or durable story state; also use when explicitly asked for a muse or broad creative-writing help.",
+        "fallback": "Handle bounded tasks directly. Delegate only when useful and permitted; disclose material limits of same-context or previously exposed reader simulation.",
         "load": [
           "story-planning",
           "writing-principles",
@@ -221,8 +217,7 @@
         "description": "Reports the felt reading experience from a specified persona and knowledge boundary.",
         "load": [
           "reader-sim",
-          "writing-principles",
-          "llm-writing"
+          "writing-principles"
         ],
         "available": [],
         "routes": []
@@ -233,8 +228,7 @@
         "description": "Derives a reusable project style reference from supplied prose samples and constraints.",
         "load": [
           "creative-writing-craft",
-          "writing-principles",
-          "llm-writing"
+          "writing-principles"
         ],
         "available": [
           "story-memory"
@@ -260,8 +254,7 @@
           "creative-writing-craft",
           "targeted-editing",
           "writing-principles",
-          "story-memory",
-          "llm-writing"
+          "story-memory"
         ],
         "available": [],
         "routes": []
@@ -333,7 +326,7 @@
       "creative-writing-modes": {
         "name": "creative-writing-modes",
         "path": "plugins/creative-writing-skills/skills/creative-writing-modes/SKILL.md",
-        "description": "Creative-writing addendum to $llm-writing. Load when putting prose on the page: draft, revise, bridge, vary, or polish.",
+        "description": "Produce fiction prose: draft, revise, bridge, vary, or polish while preserving author intent and voice.",
         "type": "mode-shift",
         "modelInvocable": true,
         "loads": [
@@ -347,7 +340,7 @@
       "creative-writing-muse": {
         "name": "creative-writing-muse",
         "path": "plugins/creative-writing-skills/skills/creative-writing-muse/SKILL.md",
-        "description": "Use when fiction or story work spans planning, drafting, critique, research, continuity, voice, or durable story state, or when the author explicitly asks for a muse or broad end-to-end creative-writing help.",
+        "description": "Help an author with fiction spanning planning, drafting, critique, research, continuity, voice, or durable story state; also use when explicitly asked for a muse or broad creative-writing help.",
         "type": "mode-shift",
         "modelInvocable": true,
         "loads": [],
@@ -445,7 +438,7 @@
       "targeted-editing": {
         "name": "targeted-editing",
         "path": "plugins/creative-writing-skills/skills/targeted-editing/SKILL.md",
-        "description": "Discipline for editing existing prose in place. Use before any revision, bridge, insertion, reorder, or cut: locate the exact target on the outline and timeline, choose the smallest effective change level, and check ripple effects on story flow before touching text.",
+        "description": "Edit existing prose at the requested level, reading enough context to preserve voice and checking only the continuity and structural effects the change can touch.",
         "type": "reference",
         "modelInvocable": true,
         "loads": [],
@@ -455,7 +448,7 @@
       "world-creation": {
         "name": "world-creation",
         "path": "plugins/creative-writing-skills/skills/world-creation/SKILL.md",
-        "description": "Grilling session for story worldbuilding that challenges a lore idea against the existing setting, characters, notes, and other project Markdown, sharpens terminology and consequences, and updates concise non-story lore/supporting files as decisions crystallize. Use when the user wants to brainstorm, change, reconcile, expand, or sanity-check species, cultures, powers, characters, history, geography, institutions, economy, religion, factions, or other setting material. Do not use for rewriting story prose or challenging finished scenes against lore.",
+        "description": "Explore, develop, or settle story-world ideas using existing lore and character context. Use for cultures, powers, history, geography, institutions, or other setting material; keep manuscript prose read-only in this workflow.",
         "type": "mode-shift",
         "modelInvocable": true,
         "loads": [],
@@ -482,7 +475,7 @@
       "writing-staffing": {
         "name": "writing-staffing",
         "path": "plugins/creative-writing-skills/skills/writing-staffing/SKILL.md",
-        "description": "Internal capability-based dispatch reference for composing writing teams. Use when explicitly staffing a workflow to choose skills, context, and parallel lanes without relying on named agents or a specific runtime.",
+        "description": "Optional guidance for choosing independent perspectives or separable writing work when delegation would materially help and is permitted by the host.",
         "type": "reference",
         "modelInvocable": true,
         "loads": [],
@@ -676,7 +669,7 @@
       "shared-dao": {
         "name": "shared-dao",
         "path": "plugins/creative-writing-skills/skills/shared-dao/SKILL.md",
-        "description": "Shared vocabulary for creative writing projects. Load when establishing canonical story terms, resolving ambiguous names, checking term consistency, or deciding where vocabulary belongs in kb/.",
+        "description": "Track story terms, aliases, and context-dependent meanings without standardizing away character or cultural language.",
         "type": "canonical skill",
         "modelInvocable": true,
         "loads": [

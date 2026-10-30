@@ -171,25 +171,30 @@ reviewed corrective edit; do not claim transaction undo.
 
 ## Promotion Uses a Separate Reviewed Update
 
-Draft or manuscript acceptance does not itself write anything into the KB.
-After acceptance, re-read the prose and split extraction into settled evidence
-and material questions. Synchronize facts directly and unambiguously established
-by the text through a separate previewed, recoverable `/project-maintenance`
-transaction when managed mechanics apply, or a separate reviewed named edit
-otherwise, without asking for re-approval. Separate update does not mean
-separate confirmation. Include exact destination pages and provenance back to
-the accepted passage or prior direct author answer.
+This is the shared procedure for settled knowledge and voice guidance.
+Respect documentation scope from the current request and author workflow
+contract. A direct author answer settling a durable fact is confirmation;
+when documentation is in scope, persist it incrementally before the next
+dependent question unless marked provisional or not to be saved. An explicit
+“save now” instruction needs no second approval.
 
-This promotion boundary also applies to voice artifacts. The style-creator
-writes only a proposal under the selected reviews folder (`cw get-folder reviews`);
-muse or the orchestrator promotes
-an approved sample or style through a separate previewed, recoverable
-transaction when applicable, or a separate reviewed named edit otherwise. A direct author designation of a sample's role or an explicit
-approval of a style proposal is already confirmation.
+Draft acceptance changes manuscript state only. After acceptance, re-read the
+prose and extract facts it directly and unambiguously establishes through
+`/story-memory`. Separate world truth from reports, beliefs, and unreliable
+narration. Update the existing records with exact sources and story-time scope.
+Do not create a second account or expose hidden facts to characters/readers.
 
-Ask only when ambiguity, inference or implication, a canon conflict, a retcon,
-an uncertain source tag, or an uncertain character or reader knowledge boundary
-means different answers would materially change canon or knowledge boundaries.
-Keep those items as promotion proposals until resolved. Preserve source tags
-and knowledge boundaries; acceptance never turns an AI suggestion into
-author-stated canon. Do not ask redundant confirmation for every promotion.
+Apply the durable update separately: a previewed, recoverable
+`/project-maintenance` transaction when managed mechanics apply, or a reviewed
+named edit otherwise. A separate update does not mean separate confirmation.
+Use actual author paths; no scaffold or managed lifecycle is required.
+
+Ask only when ambiguity, inference or implication, a canon conflict, retcon,
+uncertain source tags, or a character/reader knowledge boundary materially
+changes what should be recorded. Keep those items provisional. Accepted prose
+does not turn every AI suggestion or character assertion into author-stated canon.
+
+The style-creator writes only a proposal in chat or at an assigned path. Promote
+approved samples and style guidance through this same procedure; a direct
+author designation of a sample's role or approval of a proposal is confirmation.
+Do not require flat KB paths or a reviews folder for ordinary author files.

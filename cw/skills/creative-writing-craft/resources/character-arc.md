@@ -1,12 +1,14 @@
 # Character Arc
 
-Design and troubleshoot character transformation: the inner journey from
+Use transformation and lie/want/need as optional models when they fit.
+Characters may instead reveal themselves, endure, remain stable, or change
+without a single false belief to overcome. Design and troubleshoot transformation: the inner journey from
 one sort of person to another under pressure. When characters feel static,
 when transformation feels unearned or abrupt, when the false belief that
 needs to die cannot be articulated, or when characters serve the plot
-without an internal journey, the arc has a diagnosable defect, and the fix
-is a specific structural adjustment, not a vague instruction to "deepen"
-the character.
+without an intended internal journey, first determine whether this is actually
+a mismatch with the author's aim. Do not create a wound or lesson merely to
+complete a model.
 
 This reference is the diagnostics layer: identify the defect and what to
 change. The production pass that applies the fix — drafting, revising, or
@@ -29,9 +31,9 @@ character becomes.
   lie drives them toward.
 - **Need** — what would actually fulfill them; invisible at the start.
 
-If the character wants exactly what they need, there is no tension. The gap
-between the external goal and the internal need is the arc's fuel, and the
-story's job is to force the character across it.
+A gap between want and need can create tension. When they coincide, pressure
+may instead come from obstacles, competing loyalties, or the cost of acting.
+Do not invent a hidden need to invalidate the character's stated desire.
 
 **Common lies:** "I'm not worthy of love", "Power is the only protection",
 "Trust leads to betrayal", "My value comes from achievement", "The world is

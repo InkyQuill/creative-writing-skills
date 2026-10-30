@@ -121,7 +121,7 @@ class LanguageProseRulesTests(unittest.TestCase):
             text = read(path).lower()
             self.assertRegex(
                 text,
-                r"language adapter.{0,100}(when|if).{0,80}(provide|exist|available)",
+                r"language\s+adapter.{0,100}(when|if).{0,80}(provide|exist|available)",
                 path,
             )
 
@@ -174,7 +174,7 @@ class LanguageProseRulesTests(unittest.TestCase):
         ).lower()
         self.assertRegex(style_creator, r"never.{0,100}cross-language")
 
-    def test_flat_sample_and_style_templates_preserve_promotion_boundary(self):
+    def test_sample_and_style_templates_preserve_scope_and_promotion_boundary(self):
         kb = read("kb-management/SKILL.md")
         setup = read("project-setup/SKILL.md")
         analysis = read("creative-writing-craft/resources/style-analysis.md")
@@ -195,12 +195,12 @@ class LanguageProseRulesTests(unittest.TestCase):
         ):
             self.assertIn(field, combined)
         self.assertRegex(combined, r"evidence.{0,120}not.{0,120}(imitat|mechanical)")
-        self.assertIn("cw get-folder reviews", combined)
+        self.assertIn("assigned output path", combined)
         self.assertRegex(combined, r"style-creator[\s\S]{0,100}proposal")
         self.assertRegex(combined, r"previewed.{0,100}recoverable")
 
     def test_story_context_selects_scoped_language_and_voice_evidence(self):
-        context = read("story-memory/resources/story-context.md").lower()
+        context = re.sub(r"\s+", " ", read("story-memory/resources/story-context.md").lower())
         for phrase in (
             "manuscript language",
             "prose profile",

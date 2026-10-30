@@ -1,183 +1,104 @@
 ---
 name: creative-writing-muse
 description: >
-  Use when fiction or story work spans planning, drafting, critique, research,
-  continuity, voice, or durable story state, or when the author explicitly asks
-  for a muse or broad end-to-end creative-writing help.
+  Help an author with fiction spanning planning, drafting, critique, research,
+  continuity, voice, or durable story state; also use when explicitly asked
+  for a muse or broad creative-writing help.
 ---
 
 # Creative Writing Muse
 
-For literary translation, continuing an existing translated series, or reviewing
-a translation, route to $literary-translation, $translation-memory and
-$translation-review before applying author-manuscript workflows below. Use the
-selected translation direction's sources, language and memory. A standalone
-translation project does not require `story/` or an author KB. Keep the muse as
-the author-facing coordinator; use existing worker conventions only when
-available and requested/appropriate, with disjoint outputs and fixed context.
-Sequential work is fully supported. Do not accept prose or memory outside the
-user's existing authorization.
+Help the author accomplish the requested creative work. Preserve their intent,
+voice, unresolved possibilities, and authority over the story. Strict boundaries
+apply to authorship, knowledge, and edit scope; craft techniques are conditional.
 
-When the user requests Hieronymus or the nearest project agreement or binding
-refers to it, load `$hieronymus-integration` as the bounded memory layer. Keep
-the muse as the leading workflow, apply the free-text agreement before using
-retrieved material, and continue independent file-backed work when the optional
-service is unavailable.
+## Start with the Smallest Useful Pass
 
+Resolve assistance and edit scope through
+`../project-bootstrap/resources/author-workflow-contract.md` when needed.
+Read applicable instructions, the named passage or notes, and enough context to
+understand the request. A short exchange can be handled directly in chat; it
+needs no file target, outline, roster for the whole cast, or working-contract
+form. Ask only when a missing choice materially changes the work.
 
-Own the author-facing story session. Interpret what the author wants, route bounded specialist work, judge every result, and speak back with one coherent creative verdict. The author has final say. `$creative-writing-muse` is always available for explicit invocation and should also activate for broad, multi-stage story work.
+For an ordinary edit: identify the requested change, read the passage and its
+joins, preserve what works, make the authorized change, and check the result.
+Use `$targeted-editing` to expand context when chronology, character knowledge,
+relationships, canon, or setup/payoff is affected. Do not broaden a requested
+fragment into a manuscript or KB rewrite.
 
-## Discover the Project
+Use `$story-planning` to explore, develop, or structure possibilities;
+`$creative-writing-modes` to produce prose; `$story-review` for diagnosis;
+`$world-creation` for lore exploration or decisions. Do not turn exploration
+into an interview unless resolving decisions is the author's aim.
 
-Resolve the author's allowed assistance and edit scope using
-`../project-bootstrap/resources/author-workflow-contract.md` before choosing
-a writer, editor, or read-only reviewer. A requested fragment authorizes only
-that fragment; do not broaden it to accepted chapters or durable KB.
+## Shared Context and Decisions
 
-Before completing the working contract, find and read the project's instruction files and the smallest relevant set of story artifacts: current brief or outline, adjacent prose, canon and character state, timeline, vocabulary, style references, and tracked issues as the task requires. Prefer targeted discovery over loading the whole project.
+`$creative-writing-craft` owns the prose-context procedure: select only the
+applicable language, profile, and voice evidence once for the current scope.
+Pass its exact plugin resource paths or relevant excerpts when delegating;
+include a profile language adapter when the profile provides one. For dialogue,
+load `$creative-writing-craft`'s dialogue rules and relevant roster entries.
+Keep its final review internal unless the author asks for a checklist.
 
-If targeted discovery leaves one material gap, ask the author one focused question that would resolve it. Do not replace discoverable project context with a broad questionnaire or invention.
+`$story-memory` owns role-specific story context and the distinction between
+world truth, reports, beliefs, and character/reader knowledge.
+`$kb-management` owns promotion of settled facts and voice guidance. Use its
+shared update procedure rather than inventing a second acceptance workflow.
+Draft acceptance, a migration apply, and a retcon are distinct decisions:
+explicit authorization for one does not authorize the others. A direct author
+answer that settles a durable fact is already confirmation. Persist it within
+the task's authorized documentation scope before continuing dependent work;
+keep inference and unresolved alternatives provisional. Do not ask redundant
+confirmation or save an answer marked provisional or not to be saved.
 
-## Prepare Project Mechanics
+## Delegation When It Helps
 
-Use `$project-maintenance` only when its mechanics help the requested work.
-Flat and untagged files need no preparation. Do not create a scaffold, index,
-or tags merely to start creative work. For an explicitly chosen managed operation: inspect the
-preview, apply only the requested mechanical change, and do not hand hashes or
-commands back to the author. When the folder or its transaction state needs
-repair, route diagnosis through `$project-doctor`. Call `$cli-doctor` only after
-an actual CLI execution failure, never merely because an optional launcher is
-absent.
+Work directly by default for bounded tasks. Delegate when independent
+perspectives or a separable workload justify it and the host permits it.
+Read only selected entries in `resources/workers/registry.json` and their
+prompt files. Pass the selected prompt or make its exact path available in a
+shared filesystem; do not require copying the entire prompt into every message.
 
-When the relevant writing folder contains `.pocket-editor.json` or sibling
-`*.review.json` files, also load `$pocket-editor-review` as a conditional
-bookkeeping layer. Include its deferred signal-cleanup requirement in action
-plans, consume decided records only after their prose work is verified, and
-keep the binder current when chapters are added. Do not invoke or create Pocket
-Editor artifacts when neither file form exists.
+Give each worker enough context to act: the task and intended output, relevant
+sources, constraints and knowledge boundary, and its access scope. Name exact
+output paths only for file-writing tasks. Optional unknowns remain unknown;
+ask only about a material blocker. A reader simulation receives filtered text,
+reading history and persona, without desired effects or author-only secrets
+for its first pass. Do not send secrets as a list of things to ignore.
 
-Continue unrelated creative work through repairable warnings whenever the
-required sources remain readable. Summarize material conflicts in content
-language—what story fact, draft, or project artifact is affected—not CLI
-commands, ceremony, or terminology.
+Read-only roles return findings. A writer owns only assigned proposal paths;
+accepted prose and KB remain under the caller's authorized editing workflow.
+Use independent parallel work only for complete, separable inputs; dependent
+stages remain sequential. Do not spawn roles or reviews solely to fill a template.
+When delegation is unavailable or unnecessary, perform the task directly without
+rendering a dispatch payload. Never claim an independent or blind reading from
+same-context work; disclose that limitation when it matters to the result.
 
-## Capture Intent First
+## Synthesize, Do Not Vote
 
-Before dispatch, establish the working contract:
+Read any worker results against the sources and author's intent. Distinguish
+supported problems, useful alternatives, working features to preserve, and
+uncertainties. Model agreement is not proof of reader response. “No change
+needed” is valid. Return the requested work and only the explanation useful to
+the author, rather than raw worker reports or a mandatory verdict template.
 
-- task goal;
-- author intent and taste signals;
-- intended reader effect;
-- failure boundary—the wrong kind of success;
-- relevant input paths;
-- output path or response shape;
-- facts, secrets, ambiguities, and decisions that must remain unresolved.
+## Optional Mechanics and Integrations
 
-Ask the author only when a missing answer would materially change the work. Otherwise state your read and continue so the author can correct it. Preserve the difference between author-only truth, character knowledge, reader knowledge, and genuine uncertainty.
+Do not create a scaffold, index, or tags merely to begin writing. Use
+`$project-maintenance` only when its capabilities fit the task; ordinary named
+edits and flat files are valid. Route actual project-mechanics failures to
+`$project-doctor`, and `$cli-doctor` only after an actual CLI execution failure.
+Continue independent literary work through repairable mechanical warnings.
+Explain material consequences in content language, not CLI ceremony.
 
-Setting and worldbuilding work routes through `$world-creation`, including its own research or specialist needs.
+When relevant `.pocket-editor.json` or `*.review.json` files exist, load
+`$pocket-editor-review` for feedback handling and the deferred signal-cleanup
+requirement after verified edits. Do not invoke or create Pocket Editor artifacts
+when neither file form exists.
 
-When the task includes dialogue, load `$creative-writing-craft` and its
-`resources/dialogue-rules.md` before proceeding. Consult the persistent Character
-Voice Roster, preserve each speaker's knowledge and relationship context, and
-apply the rules' final dialogue review. Keep proposed roster changes separate
-from established traits and respect the task's file-edit scope.
-
-## Resolve Prose Context
-
-Before every writer, editor, critic, or style-creator pass, use
-`$creative-writing-craft` to resolve exact plugin resource paths for the
-universal base, primary manuscript-language tag and resource, and selected
-prose-profile base plus its matching language adapter when the profile provides
-one. `general` means no profile overlay and needs no confirmation question. Then select applicable style references and their approved sample evidence
-from the author's actual paths (optional `styles`/`samples` tags): project-wide
-first, narrower narrator/POV/character/scene scope next, current author brief
-last. State why each narrow style applies.
-
-Pass this complete resolved stack in targeted context for both delegated and
-direct writing/review. Missing or unsupported language is never English by
-default. Use explicit project evidence when it settles the surface choice; ask
-one focused question only when the unresolved language norm would materially
-change the work. Preserve grammar, canon, source tags, and character/reader
-knowledge boundaries over every voice layer.
-
-## Route Through the Worker Registry
-
-For other specialist work, choose the smallest specialist composition that can complete the working contract. Read `resources/workers/registry.json`. Select only roles present in that registry and match access to the task: production prose and in-place prose edits route to the workspace-write `writer`; a read-only role never alters files. Before every dispatch, read the selected entry and its referenced prompt file.
-
-When fresh-context delegation is available, the primary path is to dispatch a
-fresh worker context for each selected role. Give that worker one complete
-payload containing:
-
-1. the full contents of the selected worker prompt pasted inline, never only its path or a summary;
-2. the registry entry's declared skills and access level;
-3. all seven fields of the working contract above;
-4. the role-specific scope and decision boundary;
-5. targeted project context: the applicable instruction paths and only the story-artifact paths or excerpts this role needs, including the resolved prose stack for prose roles.
-
-For prose writing or review, targeted project context includes the prepared
-context plan and an explicit draft target path. Prepare that context before
-dispatch; do not ask a worker to discover, index, migrate, or repair the
-project. A worker returns a proposal or findings. It never directly mutates
-accepted manuscript or KB outside its assigned authority. Use applicable
-journaled operations or safe ordinary file edits within its named output scope.
-
-Render every spawn or fallback payload in that order with all seven working-contract fields explicitly labeled. If a material field is still unknown, mark it `pending author answer` and ask the one focused question before dispatch; do not omit the field or spawn on the placeholder.
-
-Name exact input paths and a single caller-owned output path when the worker may write. A workspace-write worker owns only assigned paths. A read-only worker returns findings and never patches files. The delegated worker follows the supplied worker prompt; muse remains the author-facing decision owner.
-
-Dispatch independent roles in parallel only when each has complete inputs and neither consumes another's result. Distinct brainstorm angles, independent reader personas, and unrelated research questions can share a wave. Dependent production stages remain sequential: choose direction, then outline, then draft, then review, then revise. Do not launch a later role on a placeholder, speculative brief, or “preparation” task merely to make the dispatch look parallel.
-
-## Own the Verdict
-
-Read every worker result. Compare it with the working contract and source artifacts, resolve conflicts, and decide whether to revise, ask the author, explore another option, or present the work. Synthesize findings into the author-facing answer; do not forward raw reports or outsource the verdict.
-
-When independent reports disagree, explain the creative tradeoff in terms of author intent and reader effect. Keep strengths worth protecting alongside the highest-impact concern.
-
-## Confirm Material Decisions, Separate Transactions
-
-Obtain explicit author confirmation separately for each migration apply, draft
-acceptance, and retcon. Do not treat approval of one as approval of another. A
-retcon remains a content decision even when its mechanical edits look routine.
-
-During interactive brainstorming, every direct author answer that settles a
-durable fact or decision is itself explicit confirmation. Persist it immediately
-before asking the next question, unless the author marks it provisional or
-says not to save it. Use a recoverable memory or KB transaction when applicable,
-or a reviewed named edit to the existing author record. If no record exists,
-create the first named record at an unambiguous path within the author-approved
-scope; do not create a folder structure merely to save it.
-Do not ask for redundant second confirmation. An explicit instruction such as
-“save this secret now” confirms its promotion. Preserve author-only, character,
-and reader knowledge boundaries in the saved record.
-
-Draft acceptance changes the manuscript only, through a reviewed change;
-use a journaled transaction when the managed lifecycle is selected. After acceptance, re-read the prose. Synchronize facts directly
-and unambiguously established by accepted prose in a separate, previewed,
-recoverable KB transaction when managed mechanics apply, or a separate
-reviewed named edit otherwise, without asking for re-approval. A separate
-update does not mean a separate confirmation.
-
-Use accepted prose and prior direct author answers as evidence. Ask only when
-ambiguity, inference or implication, a canon conflict, a retcon, an uncertain
-source tag, or an uncertain character or reader knowledge boundary means that
-different answers would materially change canon or knowledge boundaries. Those
-items remain proposals until resolved; do not ask redundant or “just in case”
-confirmation questions for every promotion.
-
-## Current-Context Fallback
-
-Only when fresh-context delegation is unavailable, adopt the same selected
-worker prompt as a bounded current-context stance. Supply the registry
-skills/access, complete seven-field working contract, role scope, and targeted
-project context exactly as a fresh worker context would receive them. Keep
-dependent stages separate and synthesize after each stance. This preserves the
-method but not a fresh context or independent perspective.
-
-Disclose the fallback when lost independence or parallelism materially changes confidence, evidence, or the promised result—for example, a supposedly independent reader response. When no material loss exists, the author-facing response begins directly with the work or its creative framing and contains no fallback notice. A blanket preference to announce tool availability does not make the loss material.
-
-## Update Memory After Decisions Settle
-
-Do not write brainstorm options, agent inferences, review hypotheses, or unresolved choices into durable story memory. A direct author answer becomes durable as soon as it settles the fact or decision; persist it incrementally rather than waiting for the brainstorming session to end. After prose acceptance, synchronize facts the text establishes directly and unambiguously. For ambiguous implications or worker inferences, update `$story-memory` only after the author resolves the material question. Materialize confirmed durable state before a handoff when a worker could otherwise contradict it. Preserve source, author-only secrets, character and reader knowledge boundaries, and remaining uncertainty. Keep provisional material in work artifacts until the author settles it.
-
-A clue or implication inferred by the agent merely because it makes accepted prose feel convincing is still provisional. Ask only if adopting it would materially change canon or a knowledge boundary. A direct author statement, an unambiguous fact established by accepted prose, or an explicit “save now” instruction needs no redundant confirmation. Until resolution, retain inferred material in the draft or a caller-owned work artifact.
+For literary translation use `$literary-translation`, `$translation-memory`,
+and `$translation-review`; do not require an author-manuscript scaffold.
+When the user or project agreement/binding refers to Hieronymus, use
+`$hieronymus-integration` as an optional memory layer. Keep one leading workflow
+and preserve existing trust, provenance, and write boundaries.

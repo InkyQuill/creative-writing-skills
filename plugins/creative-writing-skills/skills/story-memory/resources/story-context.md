@@ -37,19 +37,16 @@ history is fine.
 
 ### Writers
 
-Writers need enough to stay in voice and on-canon, not everything ever written. The essential context:
+Provide the requested passage or brief, relevant current character state, and
+only the continuity or vocabulary evidence the work touches. No outline or file
+target is required for an inline task. For revision, include immediate joins;
+expand to chronology and downstream dependencies only when those can change.
 
-- **Scene brief or outline**: what happens in this scene, the beats to hit
-- **Resolved prose stack**: universal base, exact manuscript language,
-  prose-profile base and matching language adapter when the profile provides
-  one, then only applicable
-  `kb/styles/` guidance and supporting `kb/samples/` evidence. Name why every
-  narrower narrator, POV, character, or scene style applies.
-- **Continuity anchors**: the immediately preceding chapter or scene (for flow), plus any chapters that establish facts this scene references. Two to four files, not the entire manuscript. For revisions and insertions, also the scene's timeline position — where its events fall relative to neighboring events and which character sub-timelines intersect — so the edit lands without breaking order, duration, or simultaneity.
-- **Character state**: character files for characters who appear in the scene, especially if their emotional state or knowledge has changed recently
-- **Vocab**: relevant `vocab.md` files when the scene uses invented terms, magic/faction names, titles, relationship labels, or genre terms with project-specific meanings
-
-Tell the writer where to find more if it needs to explore, for example: "the full arc outline is in the work directory; focus on the Route 1 section." Avoid attaching everything preemptively.
+Use the shared prose-context procedure in `$creative-writing-craft`: manuscript
+language, prose profile, applicable voice guidance and samples from actual
+paths (`kb/styles/` and `kb/samples/` are optional examples), and a language
+adapter when the profile provides one. Pass resolved resources instead of
+requiring another discovery pass. Optional evidence may be absent.
 
 ### Critics
 
@@ -94,14 +91,15 @@ reasoning context, attached files for the artifacts the prior phase created.
 
 ## Voice and Knowledge Scope
 
-Select style and sample evidence by manuscript language, prose profile, and
-declared applicability. Project-wide guidance comes before narrower narrator,
-POV, character, or scene guidance; the current brief is last. Pass only
-relevant evidence, and state why a narrow style applies. Never merge
-cross-language samples into a single baseline. Preserve source tags and
-author-only, character, and reader knowledge boundaries when quoting evidence.
-Missing optional evidence leaves the resolved defaults in force and does not
-itself require a question.
+`$creative-writing-craft` owns prose-context selection; reuse the applicable
+resolved resources. Preserve source tags and author-only, character, and reader
+knowledge boundaries. Filter reader-simulation inputs before dispatch: text,
+reading history, and persona only for the initial pass, without desired outcomes,
+prior diagnoses, or secrets to ignore. Do not claim blindness if already exposed.
+
+For story-state handoffs, distinguish facts, reported claims, beliefs, and
+inferences. A character's confident assertion does not establish world truth.
+No role should receive a future revelation as knowledge it has at an earlier time.
 
 ## Vocab Handoffs
 

@@ -571,10 +571,9 @@ class ClaudeDistributionRenderTests(unittest.TestCase):
                 qi_metadata["description"],
             )
             self.assertEqual(
-                "Use when fiction or story work spans planning, drafting, critique, "
-                "research, continuity, voice, or durable story state, or when the "
-                "author explicitly asks for a muse or broad end-to-end creative-writing "
-                "help.\n",
+                split_frontmatter(
+                    Path("plugins/creative-writing-skills/skills/creative-writing-muse/SKILL.md").read_text()
+                )[0]["description"],
                 muse_skill_metadata["description"],
             )
 

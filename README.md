@@ -33,19 +33,14 @@ $world-creation Reconcile this river-based magic idea with the lore in kb/world/
 
 ## How the Muse Works
 
-The muse remains the author-facing partner. It identifies the smallest useful
-specialist composition, prepares a bounded brief and worker prompt for each
-pass, reads the returned work, resolves disagreements, and presents a
-synthesized result. Available roles cover brainstorming, outlining, drafting,
-critique, editing, reader simulation, continuity, character simulation, style,
-and research.
+The muse handles bounded tasks directly, reading only the context needed for
+the requested writing, review, or exploration. Craft methods are optional lenses;
+author intent, voice, knowledge boundaries, and edit scope guide the work.
 
-Independent passes can run in parallel. Dependent work stays sequential: a
-draft is completed before a fresh critic or editor reviews it, and revisions
-follow the muse's synthesis rather than raw worker output. When fresh-context
-delegation is unavailable, the muse applies the same worker prompts as bounded
-stances in the current conversation. It preserves the workflow and tells the
-author when the loss of independence materially affects the result.
+When independent perspectives or separable workloads justify delegation, it uses
+the worker registry and synthesizes the results. Only file-writing tasks need
+output paths. A simulated reader response is a hypothesis, not actual reader
+feedback; same-context work is never presented as an independent blind reading.
 
 ## Claude and ZCode Compatibility
 

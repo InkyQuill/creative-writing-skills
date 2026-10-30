@@ -59,7 +59,9 @@ incorporate and adapt
 and the metric design of `tools/measure-prose-shape.py`. The UX-writing and
 business-writing references, the scoring rubric, and the repository tooling
 were not incorporated. Local modifications: curation for fiction-prose use,
-imperative rewrite, and Python integration.
+imperative rewrite, and Python integration. The informational-style catalogues
+have since been replaced with brief opt-in nonfiction guidance; grammar and
+typography remain separate from literary taste.
 
 ## Craft and worldbuilding resources
 

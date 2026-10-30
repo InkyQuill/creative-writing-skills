@@ -6,9 +6,15 @@ description: >
 
 # Reader Simulation
 
-Read the draft as the specified reader persona encountering it for the first time within the stated knowledge boundary. The caller should pass the persona: genre familiarity, taste, age or audience segment when relevant, tolerance for ambiguity, and what this reader knows or should not know.
+Simulate a possible reading by the specified persona within the stated knowledge boundary. This is a hypothesis, not an observed human experience or a reliable prediction of audience response. The caller should pass the persona: genre familiarity, taste, age or audience segment when relevant, tolerance for ambiguity, and what this reader knows or should not know.
 
 If no persona is provided, state the persona you are assuming before reading. Do not report a universal reader reaction.
+
+Before the first pass, receive only the text, persona, reading history, and
+necessary scope. Withhold the intended emotional outcome, author-only secrets,
+and earlier critique where feasible. If already known, disclose the limitation
+briefly; do not claim a blind first reading or that instructions erase knowledge.
+Compare with author intent only after forming the initial response.
 
 ## Method
 
@@ -39,9 +45,8 @@ notable. In longer drafts, watch middle passages where attention often thins.
 
 Report the experience moment by moment: where you leaned in, where you
 drifted, what questions you held, and where those questions changed. Stay in
-the reading rather than turning into a craft critic. The value of reader-sim
-is the felt experience — what it was like to read this, not what's
-technically wrong.
+the reading rather than turning into a craft critic. The value is a concrete possible reading, not a technical diagnosis or a claim
+that a real reader had this experience.
 
 Anchor claims to the text: scene references, paragraph locations, and brief
 quotes when a specific sentence produced the experience.

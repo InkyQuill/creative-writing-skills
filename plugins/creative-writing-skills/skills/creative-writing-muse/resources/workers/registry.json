@@ -4,7 +4,7 @@
       "name": "brainstormer",
       "description": "Generates distinct creative options for a scoped story question without forcing convergence.",
       "prompt": "brainstormer.md",
-      "skills": ["story-planning", "story-memory", "intent-modeling", "llm-writing"],
+      "skills": ["story-planning", "story-memory", "intent-modeling"],
       "access": "workspace-write",
       "claude": {"model": "inherit", "background": false}
     },
@@ -12,7 +12,7 @@
       "name": "character-sim",
       "description": "Simulates a specified character to test voice, motivation, and relationships.",
       "prompt": "character-sim.md",
-      "skills": ["character-sim", "writing-principles", "llm-writing", "story-memory"],
+      "skills": ["character-sim", "writing-principles", "story-memory"],
       "access": "read-only",
       "claude": {"model": "inherit", "background": false}
     },
@@ -28,7 +28,7 @@
       "name": "critic",
       "description": "Performs a deep, passage-grounded critique of one high-value focus area.",
       "prompt": "critic.md",
-      "skills": ["story-review", "writing-principles", "llm-writing", "story-memory"],
+      "skills": ["story-review", "writing-principles", "story-memory"],
       "access": "read-only",
       "claude": {"model": "inherit", "background": false}
     },
@@ -36,7 +36,7 @@
       "name": "editor",
       "description": "Provides an independent editorial diagnosis at the requested edit level.",
       "prompt": "editor.md",
-      "skills": ["story-review", "writing-principles", "creative-writing-craft", "llm-writing", "story-memory"],
+      "skills": ["story-review", "writing-principles", "creative-writing-craft", "story-memory"],
       "access": "read-only",
       "claude": {"model": "inherit", "background": false}
     },
@@ -52,7 +52,7 @@
       "name": "reader-sim",
       "description": "Reports the felt reading experience from a specified persona and knowledge boundary.",
       "prompt": "reader-sim.md",
-      "skills": ["reader-sim", "writing-principles", "llm-writing"],
+      "skills": ["reader-sim", "writing-principles"],
       "access": "read-only",
       "claude": {"model": "inherit", "background": false}
     },
@@ -60,7 +60,7 @@
       "name": "style-creator",
       "description": "Derives a reusable project style reference from supplied prose samples and constraints.",
       "prompt": "style-creator.md",
-      "skills": ["creative-writing-craft", "writing-principles", "llm-writing", "story-memory"],
+      "skills": ["creative-writing-craft", "writing-principles", "story-memory"],
       "access": "workspace-write",
       "claude": {"model": "inherit", "background": false}
     },
@@ -76,7 +76,7 @@
       "name": "writer",
       "description": "Produces or revises fiction from an approved brief, context, and style references.",
       "prompt": "writer.md",
-      "skills": ["creative-writing-modes", "creative-writing-craft", "targeted-editing", "writing-principles", "story-memory", "llm-writing"],
+      "skills": ["creative-writing-modes", "creative-writing-craft", "targeted-editing", "writing-principles", "story-memory"],
       "access": "workspace-write",
       "claude": {"model": "inherit", "background": false}
     }

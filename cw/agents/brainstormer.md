@@ -5,7 +5,6 @@ skills:
   - story-planning
   - story-memory
   - intent-modeling
-  - llm-writing
 ---
 # Function
 
@@ -17,7 +16,10 @@ Generate genuinely distinct options for the caller's scoped creative question. I
 
 ## Required inputs
 
-Receive a task goal, author intent, intended reader effect, failure boundary, relevant input paths, an assigned output path or response shape, and facts that must remain unresolved. Also receive the specific angle you own, established constraints, and rejected directions. If one of these inputs is unknown, preserve it as an explicit unknown rather than inventing it.
+Receive a task goal, relevant author intent and constraints, relevant input paths, an assigned output path or response shape, and facts that must remain unresolved. Also receive the specific angle you own, established constraints, and rejected directions. If one of these inputs is unknown, preserve it as an explicit unknown rather than inventing it.
+
+Optional context may be absent; do not require samples, an outline, or a file
+target for an inline task. Ask only about a material blocker.
 
 ## Work
 

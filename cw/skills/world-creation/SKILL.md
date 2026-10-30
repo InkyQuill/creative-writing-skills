@@ -1,214 +1,85 @@
 ---
 name: world-creation
-description: "Grilling session for story worldbuilding that challenges a lore idea against the existing setting, characters, notes, and other project Markdown, sharpens terminology and consequences, and updates concise non-story lore/supporting files as decisions crystallize. Use when the user wants to brainstorm, change, reconcile, expand, or sanity-check species, cultures, powers, characters, history, geography, institutions, economy, religion, factions, or other setting material. Do not use for rewriting story prose or challenging finished scenes against lore."
+description: "Explore, develop, or settle story-world ideas using existing lore and character context. Use for cultures, powers, history, geography, institutions, or other setting material; keep manuscript prose read-only in this workflow.\n"
 ---
 
-<what-to-do>
+# World Creation
 
-Run a structured worldbuilding interrogation. First map the relevant existing project context, then interview me about the idea one decision at a time until we reach a shared understanding. Walk down each branch of the lore tree, resolving dependencies between decisions before moving outward. For each question, provide your recommended answer.
+Match the author's desired kind of help. A request for possibilities is not an
+invitation to interrogate every dependency or build a complete taxonomy.
 
-Ask the questions one at a time, waiting for feedback on each question before continuing.
+## Choose the Conversation
 
-If a question can be answered by exploring project files, explore them instead.
+- **Explore:** offer distinct possibilities, associations, or concrete scenarios.
+  Keep alternatives provisional and let ambiguity remain creative space.
+- **Develop:** follow a selected idea's consequences for people and the world.
+  Test relevant limits and interactions without demanding encyclopedic coverage.
+- **Settle:** resolve a consequential choice and record the author's decision
+  within the authorized documentation scope.
 
-Direct author answers that settle durable lore are confirmation; persist them
-incrementally without asking for redundant confirmation. Suggestions, inferred
-implications, and unresolved options remain provisional and are not canonized.
+Infer the mode from the request; do not demand a mode selection. Ask one focused
+question when a decision blocks progress. Recommend an answer when the evidence
+supports one; several artistically viable choices need no artificial winner.
+A sustained one-question-at-a-time interview is appropriate when the author
+asks to work that way, not the default for all worldbuilding.
+
+## Read Relevant Context
+
+Use existing author files for lore, characters, plans, and prose evidence.
+Optional folder/file tags and indexes can help; flat files and missing configuration need no setup.
+Start from the named topic, discover relevant files, and read actual sources
+before asserting a conflict. Indexes are maps, not substitutes for evidence.
+Expand discovery when a proposed change affects other records or story events.
 
 Treat accepted chapter and side-story prose, and draft prose, as read-only
-evidence wherever their selected folders are. Never rewrite, patch, or directly edit
-prose or scene text in this workflow, regardless of location.
+evidence. Never rewrite, patch, or insert scene text in this workflow. A small
+hypothetical scenario can illustrate a consequence in discussion; it is not
+manuscript output or a canon decision.
 
-</what-to-do>
+Distinguish what the world establishes, what a group believes, what a character
+reports, and what remains uncertain. Preserve `<AI>` proposals and `<hidden>`
+author-only material. A future truth must not leak into earlier character or
+reader knowledge. Different names for one concept can be meaningful; use
+`/shared-dao` without forcing every culture to share one term.
 
-<supporting-info>
+## Develop Useful Consequences
 
-## Project awareness
+Choose questions that bear on this story: who benefits, what everyday practice
+changes, what the limits allow, or where a character's choices become difficult.
+Not every idea needs an economic, legal, religious, and military analysis.
+Use concrete scenarios to reveal an important ambiguity, not to force a fully
+specified system. Preserve mystery when it is part of the intended experience.
 
-Use existing author files for setting lore, character facts, plans, accepted
-prose, and drafts. Optional folder/file tags or `cw get-folder` can help
-locate them; flat files and missing configuration need no setup. Use
-`/project-maintenance` for schema checks, previewed recoverable mutations,
-indexes, and reindexing. If a selected destination needs safe mechanical
-preparation, route it through `/project-maintenance` without moving author files.
+When evidence conflicts, cite the passages and explain the consequence. Offer
+possibilities such as narrowing the idea, keeping an in-world disagreement, or
+proposing a retcon. The author decides material changes to established canon.
+Generator resources under `resources/generators/` are optional prompts when
+useful for exploration; their output remains provisional.
 
-Use folder index files first when they exist, then search filenames and file
-contents, then read the relevant files faithfully before asking substantive
-questions. Files in the selected prose folders may be read to
-understand on-page evidence but remain read-only. This skill may point out that
-lore decisions require later prose edits, but it must not perform those edits.
+## Record Settled Decisions
 
-### Discovery order
-
-Before asking substantive lore questions:
-
-1. Identify the likely project root from the user's working directory and nearby folders.
-2. Resolve relevant files from author instructions and optional tags, then inspect existing indexes when present. Look for:
-   - `_index.md`
-   - `index.md`
-   - `INDEX.md`
-   - `README.md`
-3. If a needed selected folder is absent, use `/project-maintenance` to
-   prepare it only when this task needs to write there.
-4. Read the most relevant indexes in this order when present:
-   - project-level index or README
-   - selected world folder index
-   - selected characters folder index
-   - indexes in relevant subfolders such as systems, locations, or factions, or equivalent local categories
-5. Use the indexes to choose targeted files to read. Do not treat an index summary as a substitute for the linked source file when the exact canon matters.
-6. If no index exists, fall back to filename discovery and content search
-   within the selected folders. The agent handles reindexing when a durable
-   transaction changes discoverability.
-7. If the topic touches story events, search the selected chapter,
-   side-story, and draft folders for evidence only after reading
-   lore and character files.
-   Keep all prose read-only.
-
-Index files are maps, not canon by themselves unless they explicitly contain canon facts. Prefer source topic files for final wording and conflict checks.
-
-### File structure
-
-Keep durable world and character facts in their selected folders. Put
-planning proposals in the selected plans folder. Use other KB destinations only
-when their declared document kind matches the fact. If the current topic
-crosses several files or directories, read all relevant material before
-challenging the idea.
-
-If a folder has an index file, preserve its role:
-
-- Use it to understand folder scope, canonical file homes, and existing taxonomy.
-- Follow Markdown links from the index when they appear relevant.
-- When adding a new durable lore or character file, update the nearest relevant
-  index in the same transaction.
-- When changing a file's title, topic, or scope in a way that makes an index
-  stale, update the index in the same transaction.
-- The agent owns reindexing. Create an index only when several durable files
-  make it useful; ask only when its scope or taxonomy is materially ambiguous.
-
-Create files lazily—only when a direct settled answer has no existing canonical
-home. The settled answer authorizes the smallest unambiguous selected
-destination; preview a safe named edit or use `/project-maintenance` when
-managed mechanics apply, without a second confirmation. Ask when competing destinations would materially change
-canon, provenance, or a knowledge boundary.
-
-### Editable vs read-only areas
-
-Editable through safe named edits or previewed, recoverable `/project-maintenance` transactions:
-
-- selected world folder for durable setting facts
-- selected characters folder for settled character facts, relationships, constraints, or backstory
-- selected plans folder for planning context that is not durable canon
-- another schema-v1 KB path only when its document kind is the unambiguous home
-
-Read-only in this workflow:
-
-- selected chapters folder for accepted prose
-- selected side-stories folder for accepted bonus prose
-- selected drafts folder for draft prose
-- any other prose or scene text, regardless of location
-
-If a confirmed worldbuilding change affects existing prose, record the lore decision in the smallest appropriate non-story file and tell the user which prose files may need a separate revision pass. Do not rewrite prose here.
-
-## During the session
-
-### Operating loop
-
-For each worldbuilding branch:
-
-1. State the existing context briefly:
-   - `Existing lore`
-   - `Existing character/story evidence`
-   - `Gaps or conflicts`
-2. Ask one decision question.
-3. Include your recommended answer and why it fits.
-4. Wait for the user's answer.
-5. When a direct author answer settles a durable fact or decision, persist it
-   immediately before asking the next question: use a reviewed named edit for
-   an ordinary author-owned non-story file, or a previewed, recoverable
-   `/project-maintenance` transaction when managed mechanics apply.
-6. Update the smallest canonical non-story file. Refresh affected tool-owned
-   indexes when applicable; preserve author-owned indexes and use a transaction
-   for managed reindexing.
-7. Continue to the next dependent question.
-
+`/kb-management` owns the shared promotion procedure. When documentation is in
+scope and a direct author answer settles durable lore, persist it before the
+next dependent question using a reviewed named edit or a previewed, recoverable
+`/project-maintenance` transaction where managed mechanics apply.
 Do not ask for redundant confirmation. Unless the author marks an answer
-provisional or asks not to save it, persist every settled direct answer. Ask
-only when ambiguity, inference, conflict, retcon, source-tag uncertainty, or
-character/reader
-knowledge-boundary uncertainty means different answers materially change canon
-or knowledge boundaries. Do not jump straight to a large taxonomy,
-encyclopedia entry, or multi-file rewrite. Build from settled decisions.
+provisional or asks not to save it, record settled decisions within that scope.
+A discussion-only request returns decisions without changing files.
 
-### Challenge against existing lore
+Ask only about material ambiguity, inference, conflict, retcon, source tags,
+or knowledge boundaries. Keep unresolved options in working notes when notes
+are requested; do not ask permission for each open question or put speculation
+in canon. Reuse the smallest appropriate author record; create a file only
+when the task needs one and its destination is clear.
 
-When the user proposes something that conflicts with existing files, call it out immediately. "The current `Elves.md` says X, but this idea implies Y — should we revise X, narrow Y, or make this an in-world contradiction?"
+Use [world-file-format.md](references/world-file-format.md) as a format guide
+for new world records while preserving compatible author formatting. Update
+affected existing indexes with the same edit or transaction; use managed reindexing
+only where applicable. No new folder or index is required for a single fact.
 
-Also challenge against character files and story evidence. "The story has
-already shown X in the cited chapter, but this lore change implies
-Y. Should the lore be narrowed, or should that scene be flagged for a later
-rewrite?"
+## Return Useful Work
 
-### Sharpen fuzzy setting language
-
-When the user uses vague or overloaded terms, propose a precise canonical term. "You're saying 'magic' — do you mean Talents, Skills, divine intervention, or something else?"
-
-### Discuss concrete scenarios
-
-Stress-test lore with specific situations. Invent small scenarios that probe boundaries: edge cases, social consequences, power abuse, mixed ancestry, institutional response, everyday life, taboos, trade, law, inheritance, or war.
-
-### Trace consequences
-
-Do not let a cool idea remain isolated. Ask who gains power, who loses status, what becomes illegal, what becomes normal, what institutions adapt, and what limits keep the element from dominating the entire setting.
-
-### Cross-reference across project files
-
-When the user states how something works, check whether related lore, character, note, and story files agree. If a contradiction appears, surface it before continuing. Prefer targeted reads over relying on memory.
-
-Use indexes to find adjacent files that might contradict or depend on the decision. For example, a new slavery-law detail may require checking the regional location file, the relevant social-system file, the faction enforcing it, and any character whose backstory depends on it.
-
-### Update non-story files inline
-
-When a fact is resolved by a direct author answer, update the relevant
-author-owned non-story file right there using a safe named edit or an
-applicable `/project-maintenance` transaction. Do not
-batch settled lore until the end unless the user asks you to wait. Use the
-format in [world-file-format.md](./references/world-file-format.md) for
-worldbuilding files, and preserve compatible author formatting in character or
-other Markdown files unless normalization is explicitly requested.
-
-When proposing new world structure rather than recording settled lore, draw on
-the parameter-level generators under `resources/generators/` — belief,
-economic, governance, settlement, metabolic, systemic, and oblique references
-supplying parameter tables, typologies, and consequence patterns. Generator
-output is subject to the confirmation boundary above: proposals become world
-knowledge only after the author confirms them.
-
-Worldbuilding files should contain durable setting facts, not transcripts, discarded alternatives, or long reasoning. Keep them concise but complete enough that future sessions can reconstruct the canon.
-
-Character files should contain durable character facts and constraints, not scene rewrites. If a decision changes how a character should behave in prose, record the constraint in the character file and flag the affected story material for a future prose-level review.
-
-Index updates should be concise:
-
-- Add or adjust one table row or bullet per changed file.
-- Keep links relative to the index file.
-- Keep descriptions short enough to scan.
-- Do not duplicate full lore from topic files into the index.
-
-### Record open questions only with permission
-
-If a question remains unresolved, ask whether to record it as an open question in the relevant file. Do not add speculative possibilities to canon sections.
-
-### Preserve user's ownership
-
-Your role is to pressure-test and recommend, not to decide. Always distinguish:
-
-- `Existing lore`: what files already say
-- `Existing character/story evidence`: what character files or read-only story prose already show
-- `Recommendation`: what you think fits best
-- `User decision`: what should be written
-
-## Boundary with prose-level review
-
-This skill develops and records lore. It may identify that existing story or draft prose conflicts with lore or would benefit from revision, but it must not suggest full rewrites or patch prose text. Handle prose-level changes in a separate revision workflow.
-
-</supporting-info>
+Give the ideas, consequences, or decision record the author requested. Separate
+evidence, proposals, decisions, and remaining uncertainty without requiring the
+same labels before every question. If a settled change affects prose, name the
+relevant passages for a separate revision; keep this workflow's prose read-only.

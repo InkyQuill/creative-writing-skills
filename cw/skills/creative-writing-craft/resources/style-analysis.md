@@ -24,8 +24,8 @@ you where the boundaries are.
 
 ## File Splitting
 
-Style files are the unit of context selection: an orchestrator passes
-individual files to writers via `-f`. Every file boundary is a context
+Style files are units of context selection: pass only the relevant references
+or excerpts to a writing pass. Every file boundary is a context
 decision: would an agent ever need this chunk without that chunk?
 
 Split where a caller would plausibly want one part without the other. A
@@ -33,10 +33,10 @@ character with distinct dialogue and narration modes might need separate files.
 A character with a simple, consistent voice needs one. A scene type that works
 the same regardless of POV is its own file.
 
-Keep schema-v1 paths flat. Evidence lives at
-`kb/samples/<descriptive-name>.md`; durable derived guidance lives at
-`kb/styles/<descriptive-name>.md`. Do not nest language, profile, character, or
-scene directories beneath those roots. Encode applicability in each file.
+Use the author's actual sample and style locations, flat or nested.
+`kb/samples/<descriptive-name>.md` and `kb/styles/<descriptive-name>.md` are
+optional legacy examples, not required homes. Encode applicability in each
+record and avoid duplicating existing voice guidance.
 
 ## Evidence Sample Template
 
@@ -110,25 +110,23 @@ what it covers and when to load it.
 
 ## Patterns vs Problems
 
-Intentional patterns go in style files: the voice a writer should reproduce.
-Unconscious tics and inconsistencies go in the issues directory: problems for
-the critic to watch for and the author to address in revision.
+Separate an observed tendency, an author-desired practice, and a supported
+problem. Compare passages with similar speakers, narrative distance, purpose,
+and pressure. A raw count does not establish a tic; absence of a technique
+from another chapter does not establish inconsistency.
 
-The test: would the author want a writer agent to reproduce this? If "for a
-moment" appears 29 times across 17 chapters, that's a tic. If an emotional
-technique works in chapters 2 and 15 but is absent from chapter 11, that's an
-inconsistency to log as an issue.
+Describe the effect before prescribing a rule. Repetition may create a motif;
+a voice may change under stress. Label a defect only when evidence shows an
+unwanted effect in context. Do not turn an isolated choice into a standing rule.
+The current brief and new prose can establish intentional experimentation;
+prior approved samples are helpful, not a prerequisite for a new voice.
 
-Analyze one declared language/profile scope at a time. Never merge
-cross-language samples into one baseline: a repeated surface pattern can have a
-different function or grammatical status in another language.
-
-The style-creator writes only a proposal as a direct file in the selected
-reviews folder (`cw get-folder reviews`). Muse or the orchestrator promotes approved sample and style
-artifacts into the flat KB paths through a previewed, recoverable transaction.
-An explicit author choice or directly settled answer needs no redundant second
-confirmation; ambiguity, conflicting evidence, source-boundary uncertainty,
-and material inference remain provisional until resolved.
+Analyze one language/profile scope at a time; do not merge cross-language
+surface tendencies into one baseline. Produce the requested reference in chat
+or at the assigned output path. The style-creator writes only a proposal;
+`/kb-management` owns promotion of approved sample/style guidance and its
+shared evidence/status rules. Do not invent a reviews folder or flatten the
+author's existing structure.
 
 ## Quality Tests
 

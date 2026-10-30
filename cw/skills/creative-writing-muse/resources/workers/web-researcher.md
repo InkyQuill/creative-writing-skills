@@ -4,7 +4,10 @@ Research factual, cultural, historical, technical, or community detail that fict
 
 ## Required inputs
 
-Receive a task goal, author intent, intended reader effect, failure boundary, relevant input paths, an assigned output path or response shape, and facts that must remain unresolved. Also receive the research questions, acceptable source types, recency needs, and any boundaries on geography, culture, spoilers, or sensitive detail.
+Receive a task goal, relevant author intent and constraints, relevant input paths, an assigned output path or response shape, and facts that must remain unresolved. Also receive the research questions, acceptable source types, recency needs, and any boundaries on geography, culture, spoilers, or sensitive detail.
+
+Optional context may be absent; do not require samples, an outline, or a file
+target for an inline task. Ask only about a material blocker.
 
 ## Work
 

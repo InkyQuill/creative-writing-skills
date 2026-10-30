@@ -48,16 +48,16 @@ EXPECTED_WORKERS = {
 }
 
 EXPECTED_WORKER_CONFIG = {
-    "brainstormer": ("workspace-write", {"story-planning", "story-memory", "intent-modeling", "llm-writing"}),
-    "character-sim": ("read-only", {"character-sim", "writing-principles", "llm-writing", "story-memory"}),
+    "brainstormer": ("workspace-write", {"story-planning", "story-memory", "intent-modeling"}),
+    "character-sim": ("read-only", {"character-sim", "writing-principles", "story-memory"}),
     "continuity-checker": ("read-only", {"story-review", "md-validation", "shared-dao", "story-memory"}),
-    "critic": ("read-only", {"story-review", "writing-principles", "llm-writing", "story-memory"}),
-    "editor": ("read-only", {"story-review", "writing-principles", "creative-writing-craft", "llm-writing", "story-memory"}),
+    "critic": ("read-only", {"story-review", "writing-principles", "story-memory"}),
+    "editor": ("read-only", {"story-review", "writing-principles", "creative-writing-craft", "story-memory"}),
     "outliner": ("workspace-write", {"story-planning", "story-memory", "md-validation"}),
-    "reader-sim": ("read-only", {"reader-sim", "writing-principles", "llm-writing"}),
-    "style-creator": ("workspace-write", {"creative-writing-craft", "writing-principles", "llm-writing", "story-memory"}),
+    "reader-sim": ("read-only", {"reader-sim", "writing-principles"}),
+    "style-creator": ("workspace-write", {"creative-writing-craft", "writing-principles", "story-memory"}),
     "web-researcher": ("workspace-write", {"creative-research"}),
-    "writer": ("workspace-write", {"creative-writing-modes", "creative-writing-craft", "targeted-editing", "writing-principles", "story-memory", "llm-writing"}),
+    "writer": ("workspace-write", {"creative-writing-modes", "creative-writing-craft", "targeted-editing", "writing-principles", "story-memory"}),
 }
 
 PRESSURE_RESULTS = REPO_ROOT / "tests" / "fixtures" / "muse-pressure" / "results.md"

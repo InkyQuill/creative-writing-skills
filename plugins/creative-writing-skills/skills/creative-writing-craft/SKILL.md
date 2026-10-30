@@ -21,21 +21,34 @@ Before prose production or surface review, resolve resources in this order:
 1. universal prose base: `resources/prose/base.md`;
 2. exact manuscript-language defaults under `resources/prose/languages/`,
    using the primary tag (`ru-RU` → `ru`, `en-GB` → `en`);
-3. for `ru`-language projects during proofreading, line editing, or review
-   passes: the applicable files under `resources/prose/editorial/ru/`;
+3. for Russian proofreading or a specific grammar/typography question, only
+   the relevant sections of `resources/prose/editorial/ru/grammar.md`,
+   `punctuation.md`, or `typography.md`; informational editing resources are
+   opt-in for nonfiction, never a default fiction layer;
 4. the prose-profile base under `resources/prose/profiles/`, plus its matching
    language adapter when the profile provides one;
-5. applicable project-wide `kb/styles/` references and their approved
-   `kb/samples/` evidence;
+5. applicable project-wide style references and samples from the author's
+   actual paths (`kb/styles/` and `kb/samples/` are optional examples);
 6. narrower narrator, POV, character, or scene style references and evidence;
 7. the current author brief.
 
-Grammar and orthography in the language resource are the floor. Project
-conventions choose among valid variants. A profile shapes register but cannot
-override grammar. Evidence-backed author voice overrides generic matters of
-taste; narrower voice overrides broader voice. Intentional nonstandard usage
-overrides a normal rule only when documented and evidenced. Canon, source tags,
-and character knowledge boundaries remain absolute.
+Use language norms to identify possible errors, not to erase deliberate voice.
+Project conventions choose among valid variants; a profile guides register.
+Author intent and the passage's voice override generic taste. Intentional
+nonstandard usage may be established by the current brief or text, including
+a newly emerging voice; prior documentation is not required. Preserve a
+plausible deliberate choice unless an authorized correction is clear.
+Canon, source tags, knowledge boundaries, and edit scope remain constraints.
+
+This is the shared prose-context procedure for all prose roles. Select it once
+per relevant scope and reuse it until the task, language, voice, or sources
+change. Load only applicable sections; do not demand missing optional samples
+or turn a short edit into a style investigation.
+
+Craft methods are options, not universal laws. Before prescribing a technique,
+identify the effect the author wants and the passage-level reason it would help.
+Atmosphere, quiet companionship, reflection, repetition, and strangeness can
+earn space without escalation or plot advancement. “No change needed” is valid.
 
 No prose profile means `general`: use the universal base and language defaults
 without a profile overlay and without asking a confirmation question. An
@@ -47,7 +60,7 @@ when the missing language norm would materially change the work.
 
 For any dialogue drafting, revision, review, or character simulation, read
 [resources/dialogue-rules.md](resources/dialogue-rules.md) and consult the
-project's persistent Character Voice Roster. Apply its final review before
+project's relevant Character Voice Roster entries. Apply its final review internally before
 delivering dialogue. Character consistency and conversational intention come
 first; naturalness supports them. Do not force brevity, colloquialism, hidden
 agendas, catchphrases, profanity, or speech imperfections.

@@ -8,8 +8,9 @@ description: >
 
 Analyze the caller's scoped creative question and return decision material to
 muse. Stay inside the supplied brief, project context, and knowledge boundary.
-Do not contact the author, choose a direction, edit project files, record a
-decision, or initiate a production handoff.
+In a delegated analysis, return findings to the caller rather than initiating
+a handoff or editing files. In direct work, answer the author in the requested
+shape; a recommendation is allowed when requested, but the decision is theirs.
 
 ## How It Works
 
@@ -35,8 +36,8 @@ Return a compact analysis in this order:
 4. tradeoffs in author intent, reader effect, continuity, and production cost;
 5. unresolved questions or risks muse must carry into author-facing synthesis.
 
-Leave questions, recommendation, synthesis, confirmation, handoff, edits, and
-decision recording to muse.
+When delegated, leave synthesis and decisions to the caller. In direct use,
+apply the same evidence boundaries without manufacturing an orchestrator.
 
 ## Scale the Analysis
 
