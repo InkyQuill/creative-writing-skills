@@ -140,13 +140,13 @@ or contrast with surrounding scenes is doing useful work.
 
 ### S4: Missing Sequel
 
-**Symptoms:** Scene-to-scene jumps with no processing time. The reader
-becomes numb; each new disaster hits with diminishing impact because there
-is no valley between the peaks.
+**Symptoms:** Missing processing time weakens the intended emotional impact
+between scenes. Identify the affected transition; a direct cut alone is not
+evidence of a pacing problem.
 
-**Intervention:** Insert a sequel beat, even a single paragraph of
-reaction, before the next scene. Compression is fine; elimination
-exhausts.
+**Intervention:** When the scene-sequel model fits and missing processing
+causes the problem, consider a reaction beat before the next scene. Compress
+or omit it when the chosen rhythm works without it.
 
 ### S5: Wallowing Sequel
 
@@ -162,11 +162,12 @@ If the character is not moving toward a choice, compress or cut.
 ### 1. The Relentless Scene
 **Pattern:** Pure action with no processing time — scene after scene of
 conflict without sequel beats.
-**Why it fails:** The reader becomes numb. Without processing time,
-emotional stakes flatten and each new disaster hits with diminishing
-impact. The reader cannot catch up.
-**Fix:** Insert sequel beats even in fast-paced stories. Even a paragraph
-of reaction helps; compression is fine, elimination exhausts.
+**When it fails:** Repeated action can flatten emotional stakes when the
+intended response depends on processing the previous event. Continuous action
+is not itself a defect.
+**Possible fix:** Add a reaction beat if that restores the intended impact;
+preserve an uninterrupted sequence when its momentum or disorientation serves
+the work.
 
 ### 2. The Wallowing Sequel
 **Pattern:** Pages of introspection without decision — extended internal
@@ -206,7 +207,8 @@ specifically what the POV character wants here, the scene lacks direction.
 
 ## Diagnostic Process
 
-When pacing feels wrong:
+When pacing feels wrong, use the questions relevant to the intended effect;
+absence of escalation, complication, or a sequel is not itself a defect.
 
 1. **Ask about the goal** — what does the character want in this scene?
 2. **Check escalation** — does the conflict intensify beat by beat?

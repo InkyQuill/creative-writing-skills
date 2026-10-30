@@ -50,8 +50,8 @@ requiring another discovery pass. Optional evidence may be absent.
 
 For related prose work, retrieve durable human-praise records captured through
 `/pocket-editor-review`, including after sidecars were consumed. Pass only
-relevant excerpts, actual comments, and scope; distinguish the human judgment
-from assistant interpretation. Use these as strengths to preserve, not editing
+relevant excerpts, `good`/`brilliant` signal types, actual comments, and scope;
+distinguish the human judgment from assistant interpretation. Use these as strengths to preserve, not editing
 locks or automatically accepted style rules.
 
 ### Critics
