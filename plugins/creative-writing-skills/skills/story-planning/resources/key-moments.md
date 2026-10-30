@@ -53,8 +53,8 @@ situations.
    maximize impact, including non-linear presentation.
 6. **Consequence cascades** — each key moment creates ripple effects
    through the story system that later planning must absorb.
-7. **Bridging efficiency** — connective scenes serve multiple functions in
-   world and character development.
+7. **Bridging contribution** — multiple functions can enrich a connective
+   scene, but one useful contribution can earn its place. Do not impose a quota.
 
 ## Key Moments by Elemental Genre
 

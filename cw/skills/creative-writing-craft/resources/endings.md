@@ -275,7 +275,8 @@ records; the judgment of how much closure each deserves is made here.
 | **Horror** | Monster defeated or prevails | Pyrrhic victory; corruption persists |
 | **Fantasy** | Quest complete | Changed hero returns to a changed world |
 
-Meet genre expectations at the macro level; surprise at the micro level.
+Use these expectations as context for the author's intended promise. Surprise
+at the micro level is an option, not a requirement.
 Per-genre prose guidance lives under `resources/genre/`.
 
 ## The Final Image
@@ -367,9 +368,9 @@ When a writer presents ending problems:
 
 1. **Identify the problem type.** Does it feel random (E1), obvious (E2),
    lucky (E3), confusing (E4), preachy (E5), or rushed/draggy (E6)?
-2. **Apply the inevitable/surprising test.** Is it inevitable — can you
-   trace the seeds back? Is it surprising — did something subvert
-   expectation? Both are needed for satisfaction.
+2. **Check the intended payoff.** Can you trace its preparation through the
+   story? Assess subversion of expectations when surprise is intended; an
+   anticipated resolution can reward through recognition and execution.
 3. **Check character arc completion.** Does the protagonist demonstrate the
    transformation through action at the climax?
 4. **Check promise balance.** The structural ledger is
