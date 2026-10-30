@@ -48,8 +48,12 @@ apply to authorship, knowledge, and edit scope; craft techniques are conditional
 
 ## Start with the Smallest Useful Pass
 
-Resolve assistance and edit scope through
-`../project-bootstrap/resources/author-workflow-contract.md` when needed.
+Use `/project-bootstrap` for assistance and edit-scope decisions when available;
+it owns `resources/author-workflow-contract.md`. In standalone use, follow the
+current request and applicable project instructions, preserve provisional and
+accepted status, and keep edits within the authorized materials. Ask about an
+unresolved authority conflict only when it affects the requested action; do not
+require project setup or invent permission from a folder name.
 Read applicable instructions, the named passage or notes, and enough context to
 understand the request. A short exchange can be handled directly in chat; it
 needs no file target, outline, roster for the whole cast, or working-contract

@@ -6,7 +6,7 @@ description: >
 
 # Reader Simulation
 
-Simulate a possible reading by the specified persona within the stated knowledge boundary. This is a hypothesis, not an observed human experience or a reliable prediction of audience response. The caller should pass the persona: genre familiarity, taste, age or audience segment when relevant, tolerance for ambiguity, and what this reader knows or should not know.
+Simulate a possible reading by the specified persona within the stated knowledge boundary. This is a hypothesis, not an observed human experience or a reliable prediction of audience response. The caller should pass the persona: genre familiarity, taste, age or audience segment when relevant, tolerance for ambiguity, and the material this reader has already read or knows. Do not list hidden facts to define what the reader should not know.
 
 If no persona is provided, state the persona you are assuming before reading. Do not report a universal reader reaction.
 

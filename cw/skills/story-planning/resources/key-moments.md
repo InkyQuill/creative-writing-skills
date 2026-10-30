@@ -165,9 +165,9 @@ to follow this sequence.
 
 ### Phase 1: Identify and Sequence Moments
 
-**Determine primary and secondary genres.** Identify the core emotional
-experiences the author wants readers to have, then the elemental genres
-that deliver them.
+**Identify intended experiences.** Start with what the author wants readers
+to experience. If the author chooses an elemental-genre framework, use its
+labels; distinguish primary and supporting genres only if they want a hierarchy.
 
 **Select useful moments.** Choose as many or as few as the scope warrants.
 Let the author mix, transform, or reject the tables' suggestions. Do not enforce
@@ -228,9 +228,10 @@ intensity or sequence be adjusted?
 Do the character decisions leading into moments make sense? Do the world
 systems create the conditions the moments assume?
 
-**Genre satisfaction.** Are the primary genre's emotional experiences the
-most prominent? Do secondaries support rather than overshadow? Are the
-genre's satisfaction conditions met?
+**Experience and genre expectations.** Does the plan serve the intended
+experiences? If the author chose a genre framework, consider its promises.
+Check dominance only when the author selected a primary/supporting hierarchy;
+do not impose one on mixtures or unlabeled work.
 
 ## Selection Failure States
 
@@ -248,10 +249,9 @@ wants to reconsider the approach; plot-first planning is not itself a defect.
 
 ### K2: Genre Mismatch
 
-**Symptoms:** The most prominent moments deliver different emotional
-experiences than the primary genre promises — a horror plan whose beats
-are mostly relationship moments disappoints both promises. Readers come to
-genres for specific emotional experiences.
+**Symptoms:** The planned moments undermine an emotional or genre promise
+the author intends to make. A mixture of horror and relationship moments is
+not itself a mismatch; identify the specific promise that goes unsupported.
 **Intervention:** Compare the planned experience with the author's intent.
 Discuss a mismatch in expectations if supported; do not relabel the book or
 force secondary experiences into submission to a genre table.

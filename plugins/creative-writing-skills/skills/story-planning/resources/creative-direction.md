@@ -7,7 +7,7 @@ description: >
 # Creative Direction
 
 Analyze the caller's scoped creative question and return decision material to
-muse. Stay inside the supplied brief, project context, and knowledge boundary.
+the caller. Stay inside the supplied brief, project context, and knowledge boundary.
 In a delegated analysis, return findings to the caller rather than initiating
 a handoff or editing files. In direct work, answer the author in the requested
 shape; a recommendation is allowed when requested, but the decision is theirs.
@@ -26,9 +26,9 @@ as `magic-system.md`. Do not invent missing context.
 meaning, or reader experience rather than surface detail. A short prose sketch
 is allowed only when the brief asks for one and it clarifies the contrast.
 
-## Return to muse
+## Return to the Caller
 
-Return a compact analysis in this order:
+When delegated, return a compact analysis for muse's synthesis in this order:
 
 1. the scoped decision and applicable constraints;
 2. two to four genuinely distinct options;
@@ -37,7 +37,9 @@ Return a compact analysis in this order:
 5. unresolved questions or risks muse must carry into author-facing synthesis.
 
 When delegated, leave synthesis and decisions to the caller. In direct use,
-apply the same evidence boundaries without manufacturing an orchestrator.
+answer the author in the requested shape: explain the decision, relevant options
+and tradeoffs, and any uncertainty they need to judge. Recommend an option when
+asked; do not require the delegated template or refer to a future muse synthesis.
 
 ## Scale the Analysis
 
@@ -48,4 +50,4 @@ apply the same evidence boundaries without manufacturing an orchestrator.
 
 Do not expand scope merely because more analysis is possible. If the brief
 requires information not supplied or discoverable within the assigned paths,
-return the gap to muse.
+report the gap to the caller.

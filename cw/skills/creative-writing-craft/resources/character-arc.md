@@ -130,11 +130,11 @@ drifts scene to scene.
 
 ### A5: Want/Need Alignment
 
-**Key Question:** Are want and need different?
-**Symptoms:** The character wants exactly what they need; no internal
-tension, nothing for the arc to bridge.
-**Intervention:** Create a gap between the external goal and the internal
-need.
+**Key Question:** Does the relationship between want and need serve the intended arc?
+**Symptoms:** An intended internal conflict lacks support. Alignment alone is
+not a defect; the pressure may come from the cost of pursuing the right goal.
+**Intervention:** Create a gap only when it serves the author's intended arc.
+Otherwise consider the obstacles, competing values, or consequences of that goal.
 
 ### A6: Missing Struggle
 

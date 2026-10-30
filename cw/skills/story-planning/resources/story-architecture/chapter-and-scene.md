@@ -7,15 +7,15 @@ multiple scenes or one long scene. It can advance the arc's plot or develop
 character while the plot pauses. Consider internal satisfaction and the desire to continue as useful lenses,
 not mandatory chapter architecture.
 
-**Internal completeness**: something should change within the chapter. The
-reader should feel they received something: a revelation, an emotional shift,
-a new complication, a moment of connection. Chapters that are purely
-transitional may still earn space through orientation, atmosphere, or rhythm.
+**Internal contribution**: what does this chapter give the reader—a revelation,
+an emotional shift, a new complication, a moment of connection? A change is one
+possible contribution. Transitional chapters may earn space through orientation,
+atmosphere, or rhythm; assess their purpose in the surrounding work.
 
-**External pull**: when forward momentum serves the work, consider the ending's invitation to continue. Rest, closure, or an image can also be appropriate. An unanswered
-question, a new threat, an emotional shift that demands exploration. This
-doesn't mean every chapter needs a cliffhanger: subtler forms of pull work too.
-The reader should want to know what happens next.
+**External pull**: when forward momentum serves the work, consider the ending's
+invitation to continue: an unanswered question, a new threat, or an emotional
+shift that invites exploration. These can create pull without a cliffhanger.
+Rest, closure, or an image can also be appropriate to the intended rhythm.
 
 ## Scene Design
 

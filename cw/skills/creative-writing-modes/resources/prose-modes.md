@@ -31,7 +31,7 @@ Preserve voice, strong images, useful ambiguity, and working structure.
 
 Read before revising:
 - Current draft
-- Critique synthesis, prioritized by impact
+- Critique synthesis when available, prioritized by impact; author direction alone can justify a revision
 - Original brief or author intent
 - Resolved prose-stack and canon files relevant to the findings
 
