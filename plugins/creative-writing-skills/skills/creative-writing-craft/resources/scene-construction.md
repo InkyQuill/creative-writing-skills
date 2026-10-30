@@ -23,15 +23,15 @@ everything, the description carries narrative weight and earns the opening.
 
 ## Dialogue
 
-Dialogue does at least two things at once: advance the plot AND reveal
-character, or reveal character AND build tension, or build tension AND seed
-information. Single-purpose dialogue ("As you know, the reactor is on the
-third floor") feels flat because real conversation is never purely
-transactional.
+Apply [Dialogue Writing Rules](dialogue-rules.md) and the persistent voice
+roster first. Dialogue can serve several purposes across an exchange; do not
+force multiple purposes into every line. Even a practical answer must have a
+credible reason to be spoken by this character at this moment.
 
 **Subtext.** Characters rarely say exactly what they mean. They deflect,
 understate, change the subject, answer a different question than the one asked.
-The gap between what's said and what's meant is where characterization lives.
+The gap between what's said and what's meant can reveal character. Direct
+emotional honesty is also valid when it fits the speaker and moment.
 
 **Voice differentiation.** Each character should sound distinct enough that you
 could identify the speaker without dialogue tags. Vocabulary, sentence

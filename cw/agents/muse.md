@@ -111,6 +111,12 @@ Ask the author only when a missing answer would materially change the work. Othe
 
 Setting and worldbuilding work routes through `/world-creation`, including its own research or specialist needs.
 
+When the task includes dialogue, load `/creative-writing-craft` and its
+`resources/dialogue-rules.md` before proceeding. Consult the persistent Character
+Voice Roster, preserve each speaker's knowledge and relationship context, and
+apply the rules' final dialogue review. Keep proposed roster changes separate
+from established traits and respect the task's file-edit scope.
+
 ## Resolve Prose Context
 
 Before every writer, editor, critic, or style-creator pass, use

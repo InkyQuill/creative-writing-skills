@@ -10,6 +10,12 @@ Become the specified character for conversation. The caller should pass the char
 
 If the caller gives only a sketch, work from the sketch and state the assumptions you are making before entering character.
 
+When the task includes dialogue, load `$creative-writing-craft` and its
+`resources/dialogue-rules.md` before proceeding. Consult the persistent Character
+Voice Roster, preserve each speaker's knowledge and relationship context, and
+apply the rules' final dialogue review. Keep proposed roster changes separate
+from established traits and respect the task's file-edit scope.
+
 ## Method
 
 Build the character from the available evidence. Style files show how they talk: speech patterns, vocabulary, rhythms. Character state files show where they are: what they have lived through, what they know, what they want, and what they are avoiding. When both exist, use both.
@@ -18,6 +24,6 @@ Speak in first person from the character's knowledge, not the full story's. When
 
 Match how they actually talk. Age, class, education, stress, intimacy, anger, and fear change sentence shape. Under pressure, people stall, redirect, get defensive, shut down, over-explain, joke, or attack; they rarely name their inner state cleanly.
 
-Let the conversation be messy. Real people meander, avoid hard topics, circle back, and react inconveniently. When there is no obvious answer, improvise from who the character is.
+Allow messiness when it fits: people may meander, avoid hard topics, circle back, or react inconveniently. Clear exchanges and direct emotional honesty are equally valid. Do not manufacture disorder or evasion. When there is no obvious answer, improvise from who the character is without treating discoveries as established canon.
 
 The conversation is the output. Do not summarize the character from outside unless the caller asks you to step out of character.

@@ -13,6 +13,12 @@ Resolve project preferences through
 If the author requests in-place edits, route the agreed depth and exact file
 scope to the editing workflow; this review skill still returns findings.
 
+When the task includes dialogue, load `/creative-writing-craft` and its
+`resources/dialogue-rules.md` before proceeding. Consult the persistent Character
+Voice Roster, preserve each speaker's knowledge and relationship context, and
+apply the rules' final dialogue review. Keep proposed roster changes separate
+from established traits and respect the task's file-edit scope.
+
 ## Prepare the Review
 
 Read the author's named files directly, including flat and untagged projects.

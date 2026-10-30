@@ -32,6 +32,10 @@ Characters think in summary rather than in the messy, associative way real thoug
 - Emotional states are named rather than experienced ("I felt a surge of determination")
 
 ### Low dialogue subtext
+
+Use these as contextual investigation triggers, not requirements for evasion.
+Direct emotional honesty and efficient exchanges are valid when they fit the
+character and moment; apply `/creative-writing-craft`'s dialogue rules.
 Characters say what they mean directly. Subtext, the gap between what's said and what's meant, is rare. Conversations are efficient rather than realistic. Signs:
 - Characters articulate their feelings clearly in dialogue
 - Disagreements are stated rather than shown through evasion, topic-changing, or body language
