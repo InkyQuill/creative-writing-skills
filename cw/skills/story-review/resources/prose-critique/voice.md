@@ -7,13 +7,13 @@ prose stack; the principles below concern character pressure and knowledge.
 
 ## Dialogue
 
-Dialogue should do at least two things simultaneously: advance plot AND reveal character, or build tension AND seed information. Single-purpose dialogue feels flat.
+Apply `/creative-writing-craft`'s `resources/dialogue-rules.md` and consult the persistent Character Voice Roster. Judge purpose across the exchange, not by a per-line quota. Preserve earned brevity, formality, verbosity, silence, and direct honesty.
 
 ### Subtext
 
 Characters rarely say exactly what they mean. They deflect, understate, change the subject, answer a different question. The gap between what's said and what's meant is where characterization lives.
 
-Flag dialogue that's "on the nose": characters stating their feelings, motivations, or the scene's theme directly. "I'm angry because you betrayed my trust and now I don't know if I can ever believe you again" is not how people talk during conflict. People say "Fine." People say "Whatever you need to tell yourself." People say nothing and leave the room.
+Flag explicit explanation when it replaces a believable response with a prepared statement for the reader. Do not flag emotional honesty merely for being direct. A confession, a blunt accusation, "Fine," or silence can each fit a different character and moment; diagnose against established voice and intention.
 
 ### "As You Know, Bob"
 

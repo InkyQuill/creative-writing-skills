@@ -13,15 +13,20 @@ drafting, revising, or polishing dialogue — belongs to
 
 ## Core Principle
 
-Dialogue must do more than one thing at a time, or it is too inert for the
-purposes of fiction (Sloane, 1979). Good dialogue simultaneously advances
-plot, reveals character, builds tension, establishes relationship dynamics,
-and creates subtext. If a line is only delivering information, it is
-failing.
+Read and apply [Dialogue Writing Rules](dialogue-rules.md) first, including the
+persistent Character Voice Roster and final review. Character consistency and
+conversational intention govern these diagnostics. Dialogue can advance plot,
+reveal character, build tension, establish relationships, or carry subtext;
+judge its contribution across the exchange, not by a quota for every line.
+A plain answer, practical explanation, or direct confession can be exactly right.
+
+Treat the states and checklists below as contextual questions, not required
+features. Do not create hidden agendas, disorder, fragments, or verbal tics
+merely to satisfy a diagnostic.
 
 ## The Three Layers
 
-Every line of dialogue operates on three layers:
+Examine dialogue through three possible layers; a hidden layer need not exist in every line:
 
 | Layer | Definition | Check |
 |-------|------------|-------|
@@ -29,8 +34,9 @@ Every line of dialogue operates on three layers:
 | **What they actually want** | The want driving each speaker, plus the power dynamics, history, and stakes shaping the exchange | Does each character want something? Does the exchange move them toward or away from it? |
 | **What they hide** | What is meant beneath the words, and what is deliberately not said | Is there a gap between said and meant? What matters here that is not being said? |
 
-When dialogue fails, it usually fails at the hidden layer (no subtext) or at
-the surface layer (undifferentiated voices).
+Investigate missing subtext when the situation calls for it, and voice
+uniformity against the roster. Neither directness nor shared wording alone
+establishes a failure.
 
 ## Diagnostic States
 
@@ -60,15 +66,15 @@ are uniform across characters.
 
 - Profile each character's speech patterns separately
 - Read dialogue aloud, voicing each character distinctly
-- Give each character a verbal tic and a verbal avoidance
+- Record evidenced verbal habits and avoidances; do not invent a tic for every character
 - Run the audit's cross-speaker vocabulary overlap as a mechanical signal
   (see Deterministic Measurements), then confirm in judgment
 
 ### D2: Wooden Dialogue
 
-**Symptoms:** Dialogue feels stilted, formal, unnatural. Characters speak
-in complete grammatical sentences. No contractions. No interruptions. No
-fragments.
+**Symptoms:** Dialogue feels stilted relative to the speaker and situation.
+Formality, complete sentences, and uninterrupted speech are not faults by
+themselves; preserve them when they fit the character.
 
 **Key Questions:**
 
@@ -121,9 +127,9 @@ syndrome.
 
 ### D4: No Subtext (On-The-Nose)
 
-**Symptoms:** Characters say exactly what they mean, feel, and want. No gap
-between surface and meaning. Dialogue lacks dramatic tension because
-everything is explicit.
+**Symptoms:** Characters explain feelings or motives for the reader despite
+having reasons to conceal, evade, or struggle with them. Direct honesty that
+fits the character and moment is not this failure state.
 
 **Key Questions:**
 
@@ -141,7 +147,7 @@ everything is explicit.
 
 **Interventions:**
 
-- Give each character a hidden agenda for every conversation
+- Identify hidden motives when supported; allow direct emotional honesty when it fits
 - Convert direct statements to indirect expressions (jealousy becomes a
   comment on someone's "nice corner office")
 - Add body language that contradicts or complicates words
@@ -154,7 +160,7 @@ but nothing else. Conversations feel functional but inert. No relationship
 shift, no character revelation, no tension.
 
 **The Double-Duty Test:**
-For every exchange, you should be able to answer at least three of:
+Use these questions to assess an exchange; there is no minimum score:
 
 1. What does this accomplish for plot?
 2. What does it reveal about character?
@@ -170,7 +176,7 @@ For every exchange, you should be able to answer at least three of:
 
 **Interventions:**
 
-- Refuse single-function dialogue — always add a second purpose
+- Add another purpose only when it strengthens the exchange without distorting the speaker
 - Track what each character wants vs. what they say they want
 - End scenes at a changed state, not just information transferred
 - Apply the Double-Duty Test by judgment: the deterministic audit counts
@@ -291,9 +297,9 @@ When a writer presents a dialogue problem:
 1. **Identify the layer.** Which layer is failing? Surface text:
    undifferentiated voices, wooden delivery. Hidden want and history:
    unclear power dynamics, missing stakes. What they hide: on-the-nose
-   lines, no hidden agenda.
-2. **Apply the Double-Duty Test.** Can the writer answer at least three of
-   the four D5 questions for the exchange?
+   explanation where concealment or evasion would fit.
+2. **Apply the Double-Duty Test.** Use the D5 questions to understand the
+   exchange's contribution without imposing a quota on lines or scenes.
 3. **Read aloud.** The simplest diagnostic: does it sound like something a
    person would say? Can you distinguish speakers without tags?
 4. **Check for anti-patterns.** Run through the anti-pattern list. Most
@@ -407,7 +413,6 @@ isn't realism; it's the illusion of realism in service of the story.
 
 When dialogue fails, trace it to the layer: the text (how it sounds), the
 want (who is trying to get what), or the hidden layer (what is meant but
-not said). Most dialogue problems are subtext problems: characters saying
-what they mean is easier to write but dramatically inert. Give every
-character a hidden agenda. Make them want something they can't ask for.
-The gap between said and meant is where drama lives.
+not said). Subtext can deepen drama, but directness can carry equal weight.
+Choose implication or honesty from this character's intention, relationship,
+and emotional state; neither is a universal fix.

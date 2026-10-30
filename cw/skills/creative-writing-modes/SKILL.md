@@ -12,6 +12,12 @@ rhythm, omission, ambiguity, genre promise, and reader simulation.
 Use the smallest mode that fits the task. Read only the matching section in
 `resources/prose-modes.md` unless the prompt explicitly asks for a hybrid pass.
 
+When the task includes dialogue, load `/creative-writing-craft` and its
+`resources/dialogue-rules.md` before proceeding. Consult the persistent Character
+Voice Roster, preserve each speaker's knowledge and relationship context, and
+apply the rules' final dialogue review. Keep proposed roster changes separate
+from established traits and respect the task's file-edit scope.
+
 ## Prose Modes
 
 - **Fresh draft** — new prose from a brief, outline, style files, and canon.

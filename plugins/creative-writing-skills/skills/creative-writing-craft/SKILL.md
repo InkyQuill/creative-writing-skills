@@ -43,6 +43,15 @@ unsupported or missing language is never silently treated as English. Use
 explicit project evidence when it is sufficient; ask one focused question only
 when the missing language norm would materially change the work.
 
+## Required Dialogue Rules
+
+For any dialogue drafting, revision, review, or character simulation, read
+[resources/dialogue-rules.md](resources/dialogue-rules.md) and consult the
+project's persistent Character Voice Roster. Apply its final review before
+delivering dialogue. Character consistency and conversational intention come
+first; naturalness supports them. Do not force brevity, colloquialism, hidden
+agendas, catchphrases, profanity, or speech imperfections.
+
 Load only the other resource needed for the task:
 
 - `resources/scene-construction.md` — scene entry, dialogue, pacing, transitions.

@@ -28,8 +28,8 @@ when to leave space and when to orient.
 
 ## Economy
 
-Every element does more than one thing. A line of dialogue advances plot
-AND reveals character. A sensory detail grounds the scene AND shows who the
+Seek elements that do more than one thing across a passage. A dialogue
+exchange can advance plot AND reveal character; an individual reply need not. A sensory detail grounds the scene AND shows who the
 POV character is. A transition compresses time AND carries an emotional
 beat. Single-purpose prose makes fiction go flat: description that only
 describes, dialogue that only informs, interiority that only labels.
@@ -43,6 +43,15 @@ The LLM pull is toward completeness: covering every beat, naming every
 emotion, resolving every ambiguity. Economy is the counter-discipline:
 what can you leave out and still have the scene work? What's the reader
 already doing for you?
+
+## Dialogue Priority
+
+Character consistency and conversational intention come first. Naturalness
+supports them; it must not erase an eloquent, formal, verbose, or restrained
+voice. Apply `/creative-writing-craft`'s `resources/dialogue-rules.md`, including
+the persistent Character Voice Roster and final review, whenever working on
+dialogue. Judge economy across the exchange: a simple answer or honest
+statement may earn its place without an added hidden agenda or second purpose.
 
 ## Reader Reward Channels
 

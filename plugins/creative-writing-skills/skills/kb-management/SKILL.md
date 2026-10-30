@@ -102,6 +102,14 @@ Examples are evidence, not a mechanical imitation corpus. Missing or sparse
 samples leave the resolved language and prose-profile defaults in force.
 Label inference instead of inventing a rule or repeatedly asking the author.
 
+### Character Voice Roster
+
+Maintain persistent speech traits in the author's existing character or voice
+records. Use `$creative-writing-craft`'s `resources/dialogue-rules.md` for the
+roster template, evidence/status rules, and contextual variation. Update
+established traits from author decisions or accepted prose; keep draft and
+simulation discoveries provisional. Read-only work returns proposed updates.
+
 ### Linking
 
 Link to related pages with relative paths. Cross-reference instead of
