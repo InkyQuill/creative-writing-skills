@@ -1,7 +1,10 @@
 ---
 name: story-planning
 description: >
-  Genre-driven emotional beats for pre-outline planning: select the essential emotional moments a story exists to deliver, then build structure, world, and characters around them. Use when plotting feels mechanical, emotional beats need defining, or the story should grow from vivid scenes rather than a plot outline.
+  Optional emotional-first planning: develop vivid moments and the structure,
+  world, and characters that support them when this serves the author's intent.
+  Use when planning starts from scenes or emotional experiences; character-first,
+  situation-first, thematic, and discovery-based approaches are also valid.
 ---
 
 # Key Moments

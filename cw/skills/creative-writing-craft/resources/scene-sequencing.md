@@ -107,18 +107,19 @@ inside action kills momentum.
 
 ## Diagnostic States
 
-When pacing is not working, identify which state applies.
+When pacing is not working, use these diagnostics only where the scene-sequel
+model fits the intended effect. A missing model component is not enough to
+establish a problem; identify what the passage fails to deliver.
 
 ### S1: Missing Goal
 
-**Symptoms:** Things happen in the scene but nothing drives them. Ask
-"what does the character want here?" — if there is no clear answer, the
-scene lacks direction. Without a goal there is nothing to oppose, and
-without opposition nothing to fail: the scene becomes description, not
-story.
+**Symptoms:** A passage intended to build goal-driven tension leaves the
+character's aim too unclear for the reader to follow the stakes. Quiet,
+descriptive, or associative passages need not have that structure.
 
-**Intervention:** Establish the goal in the first paragraph, specifically
-enough that the reader could state what the POV character is after.
+**Intervention:** Clarify the goal where the reader needs it to follow this
+sequence. Do not require a first-paragraph declaration or invent a goal for
+a passage whose contribution lies elsewhere.
 
 ### S2: Static Conflict
 
@@ -191,19 +192,16 @@ sets up the disaster.
 ### 4. The Clean Victory
 **Pattern:** The character achieves the goal without complications —
 scenes ending in a simple "yes".
-**Why it fails:** Clean victories drain tension. Each unqualified success
-makes the next challenge feel less dangerous; readers stop worrying.
-**Fix:** Add a "but" or an "and furthermore" — the victory creates a new
-problem or costs more than expected. Simple success is rare; complications
-are normal.
+**When it fails:** The success releases tension the author intends to sustain.
+An earned victory can instead provide relief, satisfaction, or contrast.
+**Possible fix:** When continued pressure serves the sequence, consider a cost
+or a new problem arising from the victory. Otherwise preserve the clean success;
+complications are not a requirement.
 
 ### 5. The Goalless Scene
-**Pattern:** The scene begins with no clear character goal — things happen
-but there is no drive.
-**Why it fails:** Without a goal there is no conflict and no disaster; the
-scene becomes description, not story.
-**Fix:** Establish the goal in the first paragraph. If you cannot say
-specifically what the POV character wants here, the scene lacks direction.
+Use **S1: Missing Goal** above only for a passage intended to create
+goal-driven tension. Evaluate quiet or associative passages by their intended
+contribution; lack of a goal alone does not justify redirecting them.
 
 ## Diagnostic Process
 
