@@ -91,6 +91,10 @@ Seeds were not planted.
 
 **Symptoms:** The reader sees the ending coming from far away. The intended surprise is absent. Predictability is not a defect when the
 author seeks recognition, reassurance, or fulfillment of a known destination.
+Apply the questions, checklist, and interventions below only when surprise is
+part of the intended payoff. Otherwise skip E2; do not recommend subversion
+merely because the destination is known. The checklist offers alternative
+ways to achieve surprise, not four requirements every ending must satisfy.
 
 **Key Questions:**
 
@@ -371,8 +375,10 @@ When a writer presents ending problems:
 2. **Check the intended payoff.** Can you trace its preparation through the
    story? Assess subversion of expectations when surprise is intended; an
    anticipated resolution can reward through recognition and execution.
-3. **Check character arc completion.** Does the protagonist demonstrate the
-   transformation through action at the climax?
+3. **Check the intended character outcome.** If the story promises a completed
+   transformation, assess how the climax demonstrates it through action. For
+   flat, partial, unresolved, or observational arcs, assess the intended
+   stability, change, or uncertainty without demanding transformation.
 4. **Check promise balance.** The structural ledger is
    `kb/continuity/promises.md`, and `cw check continuity` reports unfired
    setups; verify the literary side here — everything used at the climax
