@@ -39,6 +39,10 @@ cannot be read safely is the only mechanical reason to stop the requested
 review. The agent owns hashes, indexes, base revisions, migration mechanics,
 and repair commands; never ask the author to maintain SHA values.
 
+Include relevant saved human-praise evidence in review context, even when
+Pocket Editor sidecars are gone. Preserve the valued effects in recommendations;
+record conflicts with the current brief instead of treating praise as a lock.
+
 Choose the review level before reading. Start big before small unless the
 caller explicitly asks for a late-stage pass. The edit levels move from
 structural to surface, and each assumes the levels above it are stable:

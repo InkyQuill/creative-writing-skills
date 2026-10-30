@@ -48,6 +48,12 @@ paths (`kb/styles/` and `kb/samples/` are optional examples), and a language
 adapter when the profile provides one. Pass resolved resources instead of
 requiring another discovery pass. Optional evidence may be absent.
 
+For related prose work, retrieve durable human-praise records captured through
+`/pocket-editor-review`, including after sidecars were consumed. Pass only
+relevant excerpts, actual comments, and scope; distinguish the human judgment
+from assistant interpretation. Use these as strengths to preserve, not editing
+locks or automatically accepted style rules.
+
 ### Critics
 
 Critics need the draft plus enough context to judge it against:
@@ -59,6 +65,8 @@ Critics need the draft plus enough context to judge it against:
   the review's narrator, character, scene, and language scope
 - **Prior chapters for continuity**: so continuity critics can cross-reference facts
 - **Author intent**: via conversation history if the orchestrator discussed direction with the author, or via materialized decision notes
+- **Human praise**: relevant saved `good`/`brilliant` evidence and comments,
+  so critique protects what reviewers valued even without live sidecars
 - **Known issues**: tracked issues if the critic should watch for specific recurring problems
 - **Vocab**: relevant `vocab.md` files when consistency of naming, aliases, deprecated terms, or invented language matters
 
