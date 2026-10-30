@@ -122,21 +122,21 @@ enough that the reader could state what the POV character is after.
 
 ### S2: Static Conflict
 
-**Symptoms:** The opposition does not grow. Conflict that stays at one
-level makes the scene feel flat however vividly it is written.
+**Symptoms:** A scene intended to intensify repeats opposition without
+developing the intended pressure. Sustained opposition can be deliberate.
 
-**Intervention:** Make each beat harder than the last — raise the cost,
-shorten the time, sharpen the opposition.
+**Intervention:** If intensification serves the scene, consider raising the
+cost, shortening the time, or sharpening the opposition. Do not require every
+beat to be harder than the last.
 
 ### S3: Weak Disaster
 
-**Symptoms:** The outcome is too clean. "Yes" endings without complications
-drain tension; each unqualified success makes the next challenge feel less
-dangerous.
+**Symptoms:** A clean outcome releases pressure the author intends to sustain.
+A clear success can also provide earned relief or satisfaction.
 
-**Intervention:** Add a "but" or an "and furthermore" — the goal is
-achieved but a new problem is created, or the failure makes the situation
-worse.
+**Intervention:** Add a complication or worsening consequence only when it
+serves the intended effect. Preserve an unqualified success when its payoff
+or contrast with surrounding scenes is doing useful work.
 
 ### S4: Missing Sequel
 

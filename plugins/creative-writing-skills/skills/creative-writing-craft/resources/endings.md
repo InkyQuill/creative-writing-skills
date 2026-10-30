@@ -419,13 +419,13 @@ is a problem, and guide toward the fix; the writer does the writing.
 
 Endings are promises kept. Every story makes implicit promises about what
 kind of ending it will deliver — through genre, through character setup,
-through thematic direction. A good ending keeps those promises in an
-unexpected way.
+through thematic direction. A satisfying ending fulfills or deliberately transforms those promises in a
+way that serves the work. Surprise is one option; an anticipated resolution can
+reward the reader through execution, emotional weight, or recognition.
 
 The most common failure is the arbitrary ending: a resolution that does
 not emerge from what was built. One useful investigation is to trace
 backward. What ending does this story actually point toward? Then either
 write that ending, or revise the story to point toward the ending the
 author wants. The promise ledger in `kb/continuity/promises.md` and
-`cw check continuity` carry the bookkeeping; the design of the payoff —
-inevitable and surprising at once — is decided here.
+`cw check continuity` carry the bookkeeping; the design of the payoff, including whether surprise serves it, is considered here.

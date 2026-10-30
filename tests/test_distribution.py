@@ -295,12 +295,14 @@ class DistributionScaffoldTests(unittest.TestCase):
         self.assertIn("Otherwise deliver the", text)
         self.assertNotIn("Write a full draft to disk so you can edit it piece by piece", text)
 
-    def test_creative_direction_returns_scoped_analysis_to_muse(self):
+    def test_creative_direction_distinguishes_delegated_and_direct_returns(self):
         text = (
             PLUGIN_ROOT
             / "skills/story-planning/resources/creative-direction.md"
         ).read_text()
-        self.assertIn("Return to muse", text)
+        self.assertIn("When delegated, return a compact analysis for muse", text)
+        self.assertIn("answer the author in the requested shape", text)
+        self.assertIn("do not require the delegated template", text)
         self.assertIn("options", text.lower())
         self.assertIn("evidence", text.lower())
         self.assertIn("tradeoffs", text.lower())

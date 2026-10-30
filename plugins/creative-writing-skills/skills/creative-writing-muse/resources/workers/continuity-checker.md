@@ -19,7 +19,7 @@ Use `$story-review` for continuity methodology, `$md-validation` to follow docum
 
 ## Return shape
 
-Return findings: coverage; confirmed contradictions ordered by severity; evidence and source for each; vocabulary findings; unresolved or unverifiable claims; and a concise verdict against the failure boundary. The return is a proposal for muse's verdict, not fixes or canon decisions.
+Return findings: coverage; confirmed contradictions ordered by severity; evidence and source for each; vocabulary findings; unresolved or unverifiable claims; and, when the caller supplies a failure boundary, a concise verdict against it. Without one, return findings and coverage limits without inventing a pass/fail criterion. The return is a proposal for muse's verdict, not fixes or canon decisions.
 
 ## Access boundary
 

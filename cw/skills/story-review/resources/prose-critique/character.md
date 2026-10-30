@@ -40,14 +40,14 @@ matter even when they do not drive external events.
 
 ## Relationship Dynamics
 
-Relationships should evolve through interaction, not through narration about how they've changed.
+Evaluate whether interaction or credible summary makes a relationship change convincing at the scale the author intends.
 
 **Distinct dynamics.** Each pair of characters should have their own dynamic: power balance, communication style, history, unresolved tensions. If A's relationship with B feels the same as A's relationship with C, one relationship isn't doing enough work.
 
 **Conflict specificity.** Conflicts between characters should arise from who they specifically are: their particular values, histories, and blind spots. Generic "misunderstanding" conflicts that any two characters could have are weak.
 
 **Evolution through scenes.** Relationships can develop through scenes or credible summary. Evaluate whether
-the chosen treatment gives the change the weight this passage needs. If two characters are closer at the end of a chapter, point to the specific interaction that moved the needle.
+the chosen treatment gives the change the weight this passage needs. If two characters are closer at the end of a chapter, point to the interaction or summary that makes that development credible.
 
 ## Voice Distinction
 

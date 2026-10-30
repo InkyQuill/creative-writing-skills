@@ -79,7 +79,7 @@ Don't spend time on prose-level polish of a scene that has structural problems. 
 
 ## Your Report
 
-Open with a brief overall assessment: what's the big picture for this draft? Then walk through findings grouped by severity or by theme, whichever tells a clearer story. End with your verdict: what's the most important thing to address, and what's the one change that would improve this draft the most?
+Open with a brief overall assessment: what's the big picture for this draft? Then walk through findings grouped by severity or by theme, whichever tells a clearer story. End with a supported verdict: name the most useful change when one is warranted, or explicitly conclude “No substantial change needed” and identify what should be preserved. Do not manufacture a recommendation to fill the report.
 
 In multi-critic parallel lanes, keep your report focused on your assigned area. The orchestrator synthesizes across critics: you go deep, not broad.
 
