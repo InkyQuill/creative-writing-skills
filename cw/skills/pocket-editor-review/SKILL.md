@@ -1,14 +1,15 @@
 ---
 name: pocket-editor-review
-description: "Consume Pocket Editor review sidecars during planning and prose revision. Load when a writing folder contains .pocket-editor.json or sibling *.review.json files: resolve accepted, rejected, or obsolete review items, remove handled records, delete empty sidecars, and register new chapters in the binder. Do nothing when the author does not use Pocket Editor.\n"
+description: "Consume Pocket Editor review sidecars during planning and prose revision. Load when a writing folder contains .pocket-editor.json or sibling *.review.json files: resolve accepted, rejected, or obsolete review items, preserve good/brilliant praise before removing handled records, delete empty sidecars, and register new chapters in the binder. Do nothing when the author does not use Pocket Editor.\n"
 ---
 
 # Pocket Editor Review
 
 Treat Pocket Editor files as the current editorial overlay, not as review
 history. Apply this skill alongside the writing, review, planning, or editing
-workflow that decides the substance of the feedback. It owns only Pocket
-Editor bookkeeping.
+workflow that decides the substance of the feedback. It owns Pocket Editor
+bookkeeping and capture of human praise as durable, sourced review evidence;
+it does not independently accept prose or decide canon.
 
 The durable format belongs to
 [Pocket Editor](https://github.com/InkyQuill/pocket-editor). Inspect the files
@@ -27,11 +28,14 @@ Scan the relevant chapter folder for `.pocket-editor.json` and sibling
 `<chapter>.review.json` files. Re-read the source, binder, and sidecar
 immediately before deciding or mutating anything.
 
-For a v1 review sidecar, distinguish all six review surfaces:
+For a v1 review sidecar, distinguish six signal types and two other review surfaces:
 
-- `signals[]` records with type `note`, `change_required`, `warning`, or
-  `review`; each has a stable `id`, selected text, an anchor, and an optional
-  or empty comment.
+- `signals[]` records with type `note`, `change_required`, `warning`,
+  `review`, `good`, or `brilliant`; each has a stable `id`, `selected_text`,
+  an `anchor`, and an optional or empty `comment`.
+- `good` means the reviewer liked the passage; `brilliant` means they loved it
+  and it is especially worth preserving. These are positive evidence, not
+  change requests or locks on editing.
 - `edits[]` records; each stable `id` proposes replacing `before` with `after`.
 - The singleton `chapter_note` string; an empty string means that no chapter
   comment remains.
@@ -48,9 +52,27 @@ the feedback irrelevant.
 Do not rewrite anchors for unresolved records merely because the source
 changed. Preserve every field and record not explicitly handled.
 
+## Preserve Positive Feedback Before Consumption
+
+When processing `good` or `brilliant`, read
+[resources/positive-feedback.md](resources/positive-feedback.md). Save what the
+reviewer praised in the project's durable review-strengths or voice-evidence
+notes, verify the saved record, then consume the signal. An empty comment is
+still meaningful praise; do not invent the reviewer's reason. Capture before
+revising the praised passage so its original wording is not lost.
+
+Read-only review returns the proposed capture and leaves the signal intact.
+If capture is blocked or its destination is unresolved, keep the signal and
+continue independent work. Positive feedback does not accept the chapter,
+promote story facts to canon, or authorize unrelated file changes.
+
 ## Resolve One Item at a Time
 
 Classify each item the author or current workflow has decided:
+
+- **Positive feedback captured:** for `good` or `brilliant`, verify the durable
+  evidence record and its source identity before removing the signal. No prose
+  change is required. Preserve unresolved or uncaptured praise.
 
 - **Accepted and applied:** first verify the intended source change is present,
   then remove that signal or edit record. For an accepted chapter comment,
@@ -86,10 +108,11 @@ the record that was adjudicated. Make the smallest JSON change:
   and all unresolved records exactly.
 
 After the mutation, parse the JSON again and confirm the intended IDs are gone
-and all other IDs remain. If `chapter_note` is empty and both `signals` and
+and all other IDs remain. For consumed positive signals, re-check that each
+source identity still has its saved praise record. If `chapter_note` is empty and both `signals` and
 `edits` are empty, delete the sidecar instead of retaining an empty overlay.
 Report which IDs or chapter comment were consumed and whether the sidecar was
-deleted.
+deleted, and where positive feedback was preserved.
 
 ## Keep the Binder Current
 

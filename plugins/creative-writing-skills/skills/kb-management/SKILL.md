@@ -102,6 +102,15 @@ Examples are evidence, not a mechanical imitation corpus. Missing or sparse
 samples leave the resolved language and prose-profile defaults in force.
 Label inference instead of inventing a rule or repeatedly asking the author.
 
+### Human Praise as Voice Evidence
+
+Keep human review judgments in the existing strengths or voice-evidence notes.
+`$pocket-editor-review` owns capture-before-consumption for `good` and `brilliant`.
+Preserve the excerpt, exact comment, source identity, version, and scope; do not
+turn praise into canon, chapter acceptance, or an authoritative style rule.
+Keep assistant explanations separate and provisional. Link relevant records
+from style or character guidance so later passes can find what humans valued.
+
 ### Character Voice Roster
 
 Maintain persistent speech traits in the author's existing character or voice
