@@ -19,14 +19,14 @@ Read before drafting:
 
 Write the full beat before judging line polish. Let `/creative-writing-craft`
 govern immersion, rhythm, psychic distance, dialogue, and pacing through the
-resolved prose stack and `resources/scene-construction.md`. Use `/llm-writing` only
-to catch unchosen defaults: generic phrases, explanatory smoothing, fake
-clarity, or vague language that avoids a sharper choice.
+resolved prose stack and `resources/scene-construction.md`. Check for unchosen
+defaults in context; do not import informational-text rules into fiction.
 
 ## Revision
 
-Revise from synthesized critique, not from every raw finding. Identify the
-reader simulation that failed, then touch the smallest surface that can fix it.
+Revise from the author's direction or supported critique, not every raw finding.
+Identify the intended effect and the specific mismatch, then choose the smallest
+change that can address it. No reader simulation is required.
 Preserve voice, strong images, useful ambiguity, and working structure.
 
 Read before revising:
@@ -68,7 +68,8 @@ more interesting omission, or a direction that should be discarded.
 
 ## Line Polish
 
-Polish only after structure, causality, and voice are settled. Read the passage
+For a requested polish, work at line level. If a larger issue makes a line edit
+misleading, flag it without requiring structural work before useful local edits. Read the passage
 aloud internally for rhythm and pressure. Cut filler, sharpen images, vary
 sentence movement, and remove explanatory lines that pre-chew the reader's
 experience.

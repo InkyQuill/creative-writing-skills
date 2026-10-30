@@ -8,7 +8,10 @@ Cross-reference the supplied content against established canon for factual contr
 
 ## Required inputs
 
-Receive a task goal, author intent, intended reader effect, failure boundary, a prepared context plan, an explicit draft target path, the required response shape, and facts that must remain unresolved. The prepared plan names the relevant canon, timeline, character, vocabulary, and neighboring-prose paths and includes any applicable `cw check continuity` results and coverage. Receive the review scope and report when the supplied canon gives only partial coverage.
+Receive a task goal, relevant author intent and constraints, relevant prepared context, the supplied text or input paths, the required response shape, and facts that must remain unresolved. The prepared plan names the relevant canon, timeline, character, vocabulary, and neighboring-prose paths and includes any applicable `cw check continuity` results and coverage. Receive the review scope and report when the supplied canon gives only partial coverage.
+
+Optional context may be absent; do not require samples, an outline, or a file
+target for an inline task. Ask only about a material blocker.
 
 ## Work
 

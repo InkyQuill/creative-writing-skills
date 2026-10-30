@@ -131,3 +131,18 @@ diagnosis.
 The agent owns hashes, tags, indexes, base revisions, repair-command selection
 and execution, runtime setup, and optional launcher setup. Ask the author for
 semantic choices and approval boundaries, not mechanical maintenance.
+
+
+## Exact prose edits when using the managed CLI
+
+Choose literary scope before forming an exact-anchor operation or batch.
+Read current bytes immediately before planning. `cw edit replace` treats
+non-empty whitespace runs as equivalent, including tabs and line breaks.
+Each repeated match needs an explicit expected-count assertion; never let a
+common phrase silently select the first occurrence.
+
+Preview the complete operation or batch and inspect every changed passage
+before apply. Use `--apply` only while the preview still represents the
+requested edit. If a journaled edit was mistaken, inspect history and preview
+`cw undo <transaction-id>` before applying the inverse. For ordinary unjournaled
+edits, inspect current text and available history rather than claiming CLI undo.

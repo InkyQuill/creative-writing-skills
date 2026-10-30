@@ -72,70 +72,50 @@ class MuseProjectWorkflowTests(unittest.TestCase):
         self.assertRegex(flat, r"not cli (?:commands|ceremony|terminology)")
 
     def test_muse_conditionally_routes_pocket_editor_bookkeeping(self):
-        lower = self.muse.lower()
-        self.assertIn("$pocket-editor-review", self.muse)
-        self.assertIn(".pocket-editor.json", lower)
-        self.assertIn("*.review.json", lower)
-        self.assertIn("deferred signal-cleanup requirement", lower)
-        self.assertIn("do not invoke or create pocket\neditor artifacts", lower)
+        flat = re.sub(r"\s+", " ", self.muse.lower())
+        for marker in ("$pocket-editor-review", ".pocket-editor.json", "*.review.json", "deferred signal-cleanup requirement", "when neither file form exists"):
+            self.assertIn(marker, flat)
 
     def test_muse_preserves_distinct_durable_change_boundaries(self):
-        lower = self.muse.lower()
-        flat = re.sub(r"\s+", " ", lower)
-        for decision in (
-            "migration apply",
-            "draft acceptance",
-            "retcon",
-        ):
-            with self.subTest(decision=decision):
-                self.assertRegex(
-                    flat,
-                    rf"(?:separate|explicit)[^.]*confirmation[^.]*{decision}|"
-                    rf"{decision}[^.]*(?:separate|explicit)[^.]*confirmation",
-                )
-        self.assertRegex(flat, r"acceptance[^.]*manuscript only")
-        self.assertRegex(
-            flat,
-            r"directly and unambiguously established[^.]*accepted prose[^.]*"
-            r"separate[^.]*previewed[^.]*recoverable[^.]*transaction",
-        )
-        self.assertRegex(flat, r"separate (?:transaction|update)[^.]*does not[^.]*separate confirmation")
-        self.assertRegex(
-            flat,
-            r"ask[^.]*only[^.]*(?:ambiguity|ambiguous)[^.]*inference[^.]*"
-            r"conflict[^.]*retcon[^.]*source tag[^.]*knowledge boundary",
-        )
-        self.assertNotRegex(flat, r"durable memory[^.]*after (?:the )?author accepts")
+        flat = re.sub(r"\s+", " ", self.muse.lower())
+        for decision in ("draft acceptance", "migration apply", "retcon"):
+            self.assertIn(decision, flat)
+        self.assertIn("explicit authorization for one does not authorize the others", flat)
+        self.assertIn("$kb-management", flat)
+        kb = (MUSE_ROOT.parent / "kb-management/SKILL.md").read_text().lower()
+        for boundary in ("manuscript state only", "separate update does not mean separate confirmation", "inference", "knowledge boundary"):
+            self.assertIn(boundary, re.sub(r"\s+", " ", kb))
 
     def test_confirmed_brainstorm_answers_persist_before_the_next_question(self):
-        flat = re.sub(r"\s+", " ", self.muse.lower())
-        self.assertIn("interactive brainstorming", flat)
-        self.assertRegex(
-            flat,
-            r"direct author answer.{0,180}durable fact or decision.{0,180}"
-            r"persist it immediately.{0,180}before asking the next question",
-        )
-        self.assertRegex(flat, r"do not ask[^.]*redundant[^.]*confirmation")
-        self.assertRegex(flat, r"unless[^.]*provisional[^.]*not to save")
+        self.assertIn("$kb-management", self.muse)
+        kb = re.sub(r"\s+", " ", (MUSE_ROOT.parent / "kb-management/SKILL.md").read_text().lower())
+        self.assertIn("direct author answer settling a durable fact is confirmation", kb)
+        self.assertIn("documentation is in scope", kb)
+        self.assertIn("before the next dependent question", kb)
+        self.assertIn("unless marked provisional or not to be saved", kb)
 
     def test_explicit_save_instruction_confirms_promotion(self):
-        flat = re.sub(r"\s+", " ", self.muse.lower())
-        self.assertIn("save this secret now", flat)
-        self.assertRegex(flat, r"save this secret now[^.]*confirms[^.]*promotion")
-        self.assertRegex(flat, r"author-only[^.]*character[^.]*reader")
+        kb = re.sub(r"\s+", " ", (MUSE_ROOT.parent / "kb-management/SKILL.md").read_text().lower())
+        self.assertIn("save now", kb)
+        self.assertIn("needs no second approval", kb)
+        self.assertIn("do not create a second account or expose hidden facts", kb)
 
     def test_muse_uses_existing_evidence_instead_of_blanket_reconfirmation(self):
-        flat = re.sub(r"\s+", " ", self.muse.lower())
-        self.assertRegex(flat, r"accepted prose[^.]*prior direct author answers[^.]*evidence")
-        self.assertRegex(flat, r"different answers[^.]*materially change[^.]*canon[^.]*knowledge boundaries")
-        self.assertNotRegex(flat, r"(?:always|every)[^.]{0,80}(?:ask|confirm)[^.]{0,80}promotion")
+        self.assertIn("$kb-management", self.muse)
+        kb = re.sub(r"\s+", " ", (MUSE_ROOT.parent / "kb-management/SKILL.md").read_text().lower())
+        self.assertIn("direct author answer", kb)
+        self.assertIn("re-read the prose", kb)
+        self.assertIn("directly and unambiguously establishes", kb)
+        self.assertIn("ask only when", kb)
 
-    def test_prose_workers_require_prepared_context_and_explicit_draft_target(self):
+    def test_prose_workers_support_inline_tasks_and_scoped_context(self):
         for name in PROSE_WORKERS:
             required_inputs = self.prompts[name].split("## Work", 1)[0].lower()
             with self.subTest(worker=name):
-                self.assertIn("prepared context plan", required_inputs)
-                self.assertIn("explicit draft target path", required_inputs)
+                self.assertIn("relevant prepared context", required_inputs)
+                self.assertNotIn("explicit draft target path", required_inputs)
+                self.assertIn("inline task", required_inputs)
+        self.assertIn("draft target path only if writing a file", self.prompts["writer"])
 
     def test_every_owned_worker_returns_proposals_without_direct_canon_mutation(self):
         for name, prompt in self.prompts.items():

@@ -1,18 +1,21 @@
 # Editorial Review
 
 An editorial review is the holistic third-party book-editor pass. It answers:
-what kind of revision does this draft need, and in what order should the author
-work?
+whether this draft needs revision, and which changes would serve the author's
+intent. No substantial change is a valid conclusion.
 
 ## How to Read
 
-Read the full draft before writing a single note. The first read is for the
+For a holistic review, read the supplied draft before diagnosing it. For a
+scoped excerpt review, stay within the supplied material and state any material
+coverage limit. The first reading attends to the
 felt experience: where you leaned in, where attention drifted, where the
 story gained or lost momentum. Resist the impulse to annotate on first
 contact. Many apparent problems resolve later in the manuscript; many
 real problems only become visible in retrospect.
 
-On the second pass, read with the diagnostic lens. You now know what the
+Revisit relevant passages with the diagnostic lens; a short local review does
+not require two full manuscript reads. You now know what the
 draft is trying to do. The question becomes: where does it succeed at that,
 and where does it fall short?
 

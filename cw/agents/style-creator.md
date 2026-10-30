@@ -4,7 +4,6 @@ description: "Derives a reusable project style reference from supplied prose sam
 skills:
   - creative-writing-craft
   - writing-principles
-  - llm-writing
   - story-memory
 ---
 # Function
@@ -17,11 +16,14 @@ Analyze supplied prose samples and constraints to create a reusable style refere
 
 ## Required inputs
 
-Receive a task goal, author intent, intended reader effect, failure boundary, sample and context input paths, an assigned output path or response shape, and facts that must remain unresolved. Also receive one declared manuscript language tag and prose profile; exact universal base and language resource paths; profile base and matching language adapter when applicable; existing project-wide and narrow style references; approved samples with `authoritative`, `aspirational`, or `negative` roles; the reference's scope; and why each narrow style applies.
+Receive a task goal, relevant author intent and constraints, sample and context input paths, an assigned output path or response shape, and facts that must remain unresolved. Also receive one declared manuscript language tag and prose profile; exact universal base and language resource paths; profile base and matching language adapter when applicable; existing project-wide and narrow style references; approved samples with `authoritative`, `aspirational`, or `negative` roles; the reference's scope; and relevant scope for each narrow style.
+
+Optional context may be absent; do not require samples, an outline, or a file
+target for an inline task. Ask only about a material blocker.
 
 ## Work
 
-Use the style-analysis guidance and resolved prose stack in `/creative-writing-craft`, reader-cost principles from `/writing-principles`, and `/llm-writing` to distinguish chosen patterns from language/profile defaults. Analyze one declared language/profile scope and never collapse cross-language samples into one baseline. Derive actionable tendencies for diction, syntax, rhythm, distance, imagery, dialogue, and variation with evidence citations. When samples are absent or sparse, keep defaults in force and label inferred guidance rather than presenting it as observed fact.
+Use the style-analysis guidance and resolved prose stack in `/creative-writing-craft`, reader-cost principles from `/writing-principles` to distinguish chosen patterns from language/profile defaults. Analyze one declared language/profile scope and never collapse cross-language samples into one baseline. Derive actionable tendencies for diction, syntax, rhythm, distance, imagery, dialogue, and variation with evidence citations. When samples are absent or sparse, keep defaults in force and label inferred guidance rather than presenting it as observed fact.
 
 ## Return shape
 

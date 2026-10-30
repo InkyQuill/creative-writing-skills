@@ -48,8 +48,8 @@ Alternate between high-tension and lower-tension beats within a scene.
 Sustained intensity becomes numbing. The quiet moment after the crisis is what
 gives the crisis weight.
 
-Chapter-level: end on forward momentum: an unanswered question, a new
-complication, an emotional shift. Give the reader a reason to continue.
+Chapter-level: choose an ending that serves the intended experience. Forward
+momentum, closure, rest, a lingering image, or a quiet return can each work.
 
 Sentence-level rhythm (length, structure, speed control) lives in
 `/creative-writing-craft`.

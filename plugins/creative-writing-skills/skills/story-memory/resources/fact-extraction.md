@@ -10,6 +10,16 @@ Read written chapters and extract the *factual state diff*: anything the
 chapter made true that wasn't before, and anything it changed about what was
 already true.
 
+## Truth, Reports, and Beliefs
+
+A statement appearing in accepted prose is not automatically world truth.
+Separate an event the text establishes from what a character says, believes,
+remembers, infers, or hears. Account for unreliable narration and POV limits.
+“She says the king died” establishes that she made the claim; record the death
+as confirmed only when the author or reliable story evidence establishes it.
+Preserve who knows what and when; do not make a hidden truth available to an
+earlier character or reader context.
+
 ## What to Extract
 
 Common categories to look for, but don't treat as exhaustive:
@@ -26,34 +36,21 @@ If something the chapter establishes doesn't fit the common categories but still
 
 ## Prepare the Promotion Proposal
 
-Fact extraction prepares the KB promotion proposal; it does not write to the KB
-itself. Acceptance of the source chapter writes manuscript state only, not KB
-state. After acceptance, re-read the prose and synchronize direct and
-unambiguous facts through the separate previewed, recoverable transaction below
-without redundant confirmation. Describe updates to existing entries instead
-of proposing duplicates. A character entry should grow chapter by chapter as
-their state evolves rather than gaining a parallel file.
+Extract once, compare with existing records, and propose updates rather than
+creating parallel accounts. Include sources, applicable story time, and which
+claims remain uncertain. Maintain shared anchors across main and character
+timelines when those records exist; do not retime silently to erase a conflict.
 
-Cross-link between entries. If a chapter establishes a relationship change between two characters, both character entries should reflect it, and the timeline entry should reference the event. When an event lands on a character sub-timeline as well as the main timeline, record it once with its shared anchor on both, and keep the two synchronized on every later update. If updating one side would desynchronize the other — shifted order, stretched duration, knowledge arriving too early — flag it as a conflict rather than re-timing silently.
+Use `$kb-management`'s promotion procedure for authorization, source status,
+and durable updates after prose acceptance. Accepted prose supports only what
+it directly and unambiguously establishes. Keep inferred implications and
+conflicting claims provisional. This resource extracts evidence; it does not
+independently authorize file changes.
 
-Include proposed continuity changes using `resources/continuity-records.md` as
-the optional format guide and the author's existing continuity paths: proposed scene record and
-timeline rows, promise and question status changes with chapter references, and
-the refreshed state snapshot. When supported structured tables are present, run `cw check continuity` through
-`$project-maintenance` before finalizing the proposal; report its findings
-alongside the extraction report rather than silently repairing records.
-
-After acceptance, distinguish facts the prose establishes directly and
-unambiguously from inference or implication. Synchronize the direct facts and
-their exact destinations through a separate previewed, recoverable
-`$project-maintenance` transaction without asking for reconfirmation. A separate
-transaction is not automatically a separate confirmation. Ask only about
-ambiguity, inference, canon conflict, retcon, uncertain source tags, or uncertain
-character and reader knowledge boundaries. If the applied promotion was
-mistaken, inspect history and preview `cw undo <transaction-id>` instead of
-making a direct restorative write.
-
-Check for conflicts between what the chapter establishes and what's already in the kb. If the chapter contradicts existing canon or uses a term differently from the relevant vocab file, flag it in your report; preserve the existing record until the author or orchestrator resolves the conflict. The contradiction may be an error in the chapter, an intentional retcon, or a vocabulary decision that needs recording.
+Use `resources/continuity-records.md` only when the existing project needs those
+formats. Run `cw check continuity` through `$project-maintenance` when supported
+records are present and useful; inspect coverage and do not invent records to
+satisfy a checker.
 
 ## Quality Bar
 

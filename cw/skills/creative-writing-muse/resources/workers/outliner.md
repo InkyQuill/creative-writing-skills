@@ -8,7 +8,10 @@ Turn a confirmed story direction into a structural blueprint at the requested sa
 
 ## Required inputs
 
-Receive a task goal, author intent, intended reader effect, failure boundary, a prepared context plan, an assigned proposal path in the author's chosen location or response shape, and facts that must remain unresolved. The caller supplies the path from author conventions; optional tags or `cw get-folder plans` can assist. Also receive the confirmed direction, scope, prior and following story state, and required setup/payoff connections. A direction that is not yet chosen is an unresolved input, not permission to choose one.
+Receive a task goal, relevant author intent and constraints, relevant prepared context, an assigned proposal path in the author's chosen location or response shape, and facts that must remain unresolved. The caller supplies the path from author conventions; optional tags or `cw get-folder plans` can assist. Also receive the confirmed direction, scope, prior and following story state, and required setup/payoff connections. A direction that is not yet chosen is an unresolved input, not permission to choose one.
+
+Optional context may be absent; do not require samples, an outline, or a file
+target for an inline task. Ask only about a material blocker.
 
 ## Work
 

@@ -4,15 +4,15 @@
 
 Chapters are reading units, not structural units. A chapter can contain
 multiple scenes or one long scene. It can advance the arc's plot or develop
-character while the plot pauses. What makes it work as a chapter is internal
-completeness and external pull.
+character while the plot pauses. Consider internal satisfaction and the desire to continue as useful lenses,
+not mandatory chapter architecture.
 
 **Internal completeness**: something should change within the chapter. The
 reader should feel they received something: a revelation, an emotional shift,
 a new complication, a moment of connection. Chapters that are purely
-transitional ("getting from A to B") feel like filler.
+transitional may still earn space through orientation, atmosphere, or rhythm.
 
-**External pull**: the chapter should end with forward momentum. An unanswered
+**External pull**: when forward momentum serves the work, consider the ending's invitation to continue. Rest, closure, or an image can also be appropriate. An unanswered
 question, a new threat, an emotional shift that demands exploration. This
 doesn't mean every chapter needs a cliffhanger: subtler forms of pull work too.
 The reader should want to know what happens next.
@@ -23,13 +23,13 @@ A scene is the smallest structural unit: a continuous sequence in a specific
 time and place. Every scene should earn its presence.
 
 Questions to ask about a scene:
-- What changes? (If nothing, cut it or combine it with another scene.)
+- What experience does it provide, and what would the work lose without it?
 - Whose scene is it? (Which character drives the action or has the most at stake?)
 - What does the reader learn? (New information, new character depth, new tension.)
 - How does it connect to the arc? (Advance, complicate, deepen, or resolve.)
 
-Scenes that only exist to convey information can usually be cut: find a scene
-that's already doing something and deliver the information there.
+An informative or atmospheric scene may earn its own space. Combine or cut
+only when that improves the intended reading without sacrificing its contribution.
 
 ## Outline vs. Discovery
 

@@ -186,7 +186,9 @@ read-only reviews and workers return proposed roster changes with evidence
 instead of editing files. Do not ask for repeated approval of already settled
 traits; leave genuinely unresolved traits provisional.
 
-Before delivering a dialogue scene, run the ten-question final review above.
+Before delivering a dialogue scene, run the ten-question final review above
+internally. Do not append a checklist report unless requested. Load only
+entries relevant to this passage; a short exchange needs no full-cast audit.
 Treat speaker recognition as a diagnostic, not a demand for a conspicuous quirk
 in every short reply. Keep roster bookkeeping outside manuscript prose and
 in-character conversation.

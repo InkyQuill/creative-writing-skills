@@ -25,7 +25,7 @@ class WorldCreationContractTests(unittest.TestCase):
         self.assertRegex(
             self.skill,
             r"(?is)direct author answer.{0,180}settles.{0,180}"
-            r"before.{0,80}next question.{0,180}reviewed named edit.{0,180}"
+            r"before.{0,80}next dependent question.{0,180}reviewed named edit.{0,180}"
             r"previewed, recoverable.{0,80}transaction",
         )
         self.assertRegex(self.skill, r"(?is)unless.{0,80}provisional.{0,100}(not to save|no-save)")

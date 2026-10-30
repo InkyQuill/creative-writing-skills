@@ -1,56 +1,36 @@
-# Reader Experience in Review
+# Reader Simulation in Review
 
-Reader-sim output is experiential evidence: what a specified persona felt
-while reading, moment by moment. It is not a fix list and not a craft
-diagnosis. It tells you *what happened to the reader*. Craft critique tells
-you *why* and *what to change*.
+Treat a simulated reader response as a passage-grounded hypothesis about a
+possible reading. It is not an observed human reaction, a population estimate,
+or evidence that a passage succeeds or fails. Distinguish actual reader
+feedback, model-generated response, and editorial inference in synthesis.
 
-## Using Reader-Sim Signal
+## Use the Signal
 
-**Preserve the persona.** A reader-sim report is bound to a specific persona
-with a specific knowledge boundary, genre familiarity, and tolerance for
-ambiguity. A teenage fantasy reader and a literary-fiction editor will report
-different experiences of the same passage. Neither is wrong. Know which
-persona generated the signal before acting on it.
+Preserve the persona, reading order, available text, and knowledge boundary.
+Use a fresh context for a first-time simulation when available and authorized;
+do not give it the desired emotional outcome or the critic's diagnosis before
+its initial response. If the context already contains that information, name
+that limitation rather than claiming a blind reading.
 
-**Trust the felt experience over the explanation.** When a reader-sim reports
-"I drifted here" or "I stopped caring what happened next," the experience is
-reliable even if the reader's self-diagnosis is wrong. A reader who says "the
-sentences are too long" might actually be experiencing a pacing problem, not a
-prose problem. Use the *where* and *what I felt* from reader-sim; use craft
-critique for the *why*.
+A report such as “I drifted here” suggests a location to investigate. Return to
+the passage and assess possible causes against the author's intent. Do not
+present the imagined feeling as reliable evidence or accept its explanation
+without checking the text.
 
-**Look for convergence.** When reader-sim and craft critique point to the same
-passage for different reasons — reader-sim says "I felt confused here," craft
-critique says "POV break" — that's a high-confidence finding. When they
-disagree — reader-sim says a passage worked, critic says it has a structural
-problem — investigate before overriding the reader's experience.
+Agreement between simulation and critique can prioritize investigation; it
+does not independently validate either account. Shared model assumptions,
+prompts, or prior context can produce correlated judgments. Disagreement is
+useful when it reveals different plausible readings, not a vote to be won.
 
-**Map signal to reward channels.** Reader-sim reports through five channels:
-transportation, aesthetic pleasure, social simulation, curiosity/prediction,
-and flow. Each maps to different craft actions:
+## Synthesize for the Author
 
-- Transportation breaks → check POV consistency, sensory grounding, world
-  logic, coherence of narrative progression
-- Aesthetic flatness → check sentence rhythm, word choice, variety, whether
-  style is doing work or just being competent
-- Social simulation gaps → check character motivation, distinct voice,
-  access to interiority, whether emotions are shown or labeled
-- Curiosity/prediction loss → check information design: is the reader
-  holding questions? Are gaps closing too early, too late, or going
-  unanswered? Is there forward pull?
-- Flow breaks → check pacing, challenge-fit, clarity, scene-level momentum
+Report the possible reading, its textual basis, and why it matters to the
+requested experience. Preserve alternatives when the text supports them.
+An ambiguity may be productive. No change is required merely because one
+simulation preferred another execution.
 
-**Watch the middle.** Reader-sim data is most diagnostic in the middle of
-longer drafts. Openings usually have momentum from novelty. Endings usually
-have momentum from closure. The middle is where the reader's willingness to
-continue gets tested, and where curiosity/prediction signal is most revealing.
-
-## What Reader-Sim Cannot Tell You
-
-Reader-sim reports a single reading. It cannot tell you whether a passage will
-work for a different persona, a re-reader, or a reader who brings different
-genre expectations. It cannot diagnose structural problems that only become
-visible across the full arc. And it cannot distinguish between "this passage
-failed" and "the setup before this passage failed," because the reader only
-knows what they experienced, not what caused it.
+Use reader-reward channels from `/writing-principles` only when they clarify
+a finding; do not fill a report category for every channel. Actual author and
+reader responses can later support or overturn the hypothesis. Model agreement
+and successful mechanical checks do not establish literary quality.

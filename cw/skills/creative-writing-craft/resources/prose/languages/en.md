@@ -33,7 +33,8 @@ the actual reader effect rather than applying an English vocabulary blacklist.
 ## Allowed Variation and Failure Modes
 
 Contractions, dialect spelling, run-ons, fragments, and unusual punctuation
-may be intentional voice. Require project evidence before normalizing them.
+may be intentional voice. Preserve them when supported by the current passage or author brief, including
+a newly emerging voice; prior documentation is not required.
 Common failures are translation-shaped syntax, uniform subject-first cadence,
 and polishing every voice into the same fluent standard English. Correct
 grammar where the text claims standard usage; protect documented deviation.

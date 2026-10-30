@@ -1,14 +1,14 @@
 ---
 name: creative-writing-modes
 description: >
-  Creative-writing addendum to $llm-writing. Load when putting prose on the page: draft, revise, bridge, vary, or polish.
+  Produce fiction prose: draft, revise, bridge, vary, or polish while preserving author intent and voice.
 ---
 
 # Creative Writing Modes
 
-Load `$llm-writing` if it is not already loaded. This skill adds the
-creative-writing layer for putting prose on the page: story pressure, voice,
-rhythm, omission, ambiguity, genre promise, and reader simulation.
+Use `$creative-writing-craft` for the shared prose-context procedure. Write
+toward the author's requested experience; explanatory-text rules such as
+leading with the useful point do not govern fiction.
 
 Use the smallest mode that fits the task. Read only the matching section in
 `resources/prose-modes.md` unless the prompt explicitly asks for a hybrid pass.

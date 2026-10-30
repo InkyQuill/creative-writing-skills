@@ -15,23 +15,23 @@ Promises are tracked structurally in `kb/continuity/promises.md` and
 checked by `cw check continuity`; this reference governs the literary
 design of payoff, not the bookkeeping.
 
-## Core Principle
+## Choose the Intended Ending
 
-The best endings feel both inevitable ("of course it had to end this way")
-AND surprising ("I didn't see that coming"). The contradiction resolves by
-planting seeds throughout the story, letting the ending emerge from
-character and theme, and subverting surface expectations while fulfilling
-deeper ones.
+Surprising inevitability is one useful effect, not the test of every ending.
+A predictable arrival can satisfy; an open, circular, abrupt, or unresolved
+ending can be intentional. Establish the experience the author wants before
+using the diagnostics below. A listed feature's absence is not itself a defect.
 
-An ending that is only inevitable feels predictable. An ending that is only
-surprising feels arbitrary. Both together create satisfaction.
+The following anatomy describes a conventional dramatic resolution. Use only
+applicable parts; do not require a climax, final choice, transformation, or
+complete closure in every work.
 
 ## The Anatomy of an Ending
 
 ### Climax
 
 The point of highest tension, where the dramatic question is answered. The
-climax must:
+climax may:
 
 - answer the central dramatic question;
 - force the protagonist's final choice;
@@ -89,9 +89,8 @@ Seeds were not planted.
 
 ### State E2: Predictable Ending
 
-**Symptoms:** The reader sees the ending coming from far away. No surprise
-at all. Genre conventions followed too literally; surface expectations met
-exactly.
+**Symptoms:** The reader sees the ending coming from far away. The intended surprise is absent. Predictability is not a defect when the
+author seeks recognition, reassurance, or fulfillment of a known destination.
 
 **Key Questions:**
 
@@ -237,7 +236,8 @@ timing; the reader feels impatience or confusion in the final pages.
 
 ## Character Arc Completion
 
-The ending must complete the character's transformation:
+When the story promises a completed transformation, consider how the ending
+addresses it. Flat, partial, unresolved, and observational arcs remain valid:
 
 | Arc Type | Ending Requirement | Test |
 |----------|-------------------|------|
@@ -245,8 +245,8 @@ The ending must complete the character's transformation:
 | **Negative** | Character's fall completes, consequences manifest | Does the tragedy feel inevitable from the character's choices? |
 | **Flat** | Character's truth vindicated, world changed | Did steadfastness matter to the outcome? |
 
-**Key test:** does the protagonist at the end prove — through action, not
-statement — that they have changed? Arc design and troubleshooting live in
+**Key question:** does the ending express the intended change, stability, or
+uncertainty through the form the author chose? Arc design and troubleshooting live in
 `resources/character-arc.md`.
 
 ## Subplot Resolution
@@ -255,7 +255,7 @@ Not every thread needs equal closure:
 
 | Subplot Type | Resolution Needed |
 |--------------|------------------|
-| **Main plot-connected** | Must resolve, connected to the climax |
+| **Main plot-connected** | Address the expectations actually established; openness may be deliberate |
 | **Character-developing** | Should resolve or show the new state |
 | **Thematic mirror** | Can be left open if the theme is clear |
 | **World-texture** | Can continue unresolved |
@@ -423,7 +423,7 @@ through thematic direction. A good ending keeps those promises in an
 unexpected way.
 
 The most common failure is the arbitrary ending: a resolution that does
-not emerge from what was built. The fix is always the same — trace
+not emerge from what was built. One useful investigation is to trace
 backward. What ending does this story actually point toward? Then either
 write that ending, or revise the story to point toward the ending the
 author wants. The promise ledger in `kb/continuity/promises.md` and

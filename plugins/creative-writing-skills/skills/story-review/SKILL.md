@@ -27,10 +27,11 @@ Use `$project-maintenance` checks and `cw context draft` or chapter context
 when useful; inspect coverage and do not create a scaffold to enable them. Inspect the
 draft, intent or outline, relevant style and vocab, neighboring prose, and
 continuity state selected by that context plan before beginning the review.
-For every prose or surface judgment, resolve the same base,
-manuscript-language, prose-profile, and applicable project style/sample stack
-defined by `$creative-writing-craft`. Never substitute English when the
-language is missing or unsupported.
+Use `$creative-writing-craft`'s shared prose-context procedure for surface
+judgment, reusing applicable context already resolved. For a short requested
+review, the passage and immediate context may suffice; do not demand an outline,
+full manuscript, or project checks. Never substitute English for a missing or
+unsupported language.
 
 Interpret repairable warnings internally and continue the review with the
 readable evidence, naming any limitation in the report. A required target that
@@ -58,7 +59,7 @@ Each level has a dedicated resource with method and checklist:
 - `resources/copyedit.md`
 - `resources/proofreading.md`
 
-For adversarial craft critique (as opposed to editorial review), load:
+For focused craft diagnosis (or adversarial stress-testing when requested), load:
 
 - `resources/prose-critique.md` — methodology and focus-area routing.
 - `resources/prose-critique/` — deep resources per focus area (structure,
@@ -71,11 +72,9 @@ When review incorporates reader-sim data:
 
 ## Acceptance Boundary
 
-A review may recommend draft acceptance, but it never applies acceptance
-without author confirmation and a reviewed `$project-maintenance` preview.
-The acceptance transaction does not update the KB or knowledge base. After
-acceptance, `$kb-management` re-reads the prose and synchronizes directly and
-unambiguously established facts through a separate previewed, recoverable
-transaction without re-approval. Separate transaction does not mean separate
-confirmation. Ask only about ambiguity, inference, conflict, retcon, uncertain
-source tags, or uncertain character and reader knowledge boundaries.
+A review returns findings; it does not itself accept or alter prose. For
+requested revision, route the authorized scope to the editing workflow.
+`$kb-management` owns the shared promotion procedure for facts established by
+accepted prose, including source/status boundaries and separate durable updates.
+Do not treat review approval, model agreement, or a successful checker as author
+acceptance or proof of literary quality.

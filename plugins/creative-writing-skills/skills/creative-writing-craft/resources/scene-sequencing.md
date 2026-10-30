@@ -1,25 +1,26 @@
 # Scene Sequencing and Pacing
 
-Diagnose and shape narrative pacing through the scene-sequel rhythm: the
+Use the scene-sequel model when a goal-driven sequence would benefit from it.
+It is an optional lens, not the structure required of quiet, episodic, or
+associative work. Diagnose and shape pacing through this rhythm: the
 alternation of scene (goal, conflict, disaster) with sequel (reaction,
 dilemma, decision). When individual scenes work but do not accumulate, when
 pacing feels off — too rushed or too slow — or when transitions feel
-mechanical, a link in that chain has broken, and the fix is a specific
-structural adjustment, not a vague instruction to "pace it better".
+mechanical, investigate whether this model explains the problem before
+proposing a structural adjustment.
 
 This reference is the diagnostics layer: identify which link is broken and
 what to change. The production pass that applies the fix — drafting,
 revising, or polishing scenes — belongs to `$creative-writing-modes`.
 
-Scene records live in `kb/continuity/scenes/` per the project contract;
+Scene records may live in `kb/continuity/scenes/` or the author's existing layout;
 this reference governs prose rhythm, not record keeping. Use `$story-memory`
 for scene record formats and `$story-planning` for what a scene must
 accomplish in the story.
 
 ## Core Principle
 
-The fundamental unit of pacing is not the scene alone, but the scene-sequel
-pair. Scenes create tension; sequels process it. The alternation creates
+This model considers the scene-sequel pair as one useful unit of pacing. Scenes create tension; sequels process it. The alternation creates
 the peaks and valleys that make stories readable.
 
 ## Scene Structure: Goal → Conflict → Disaster
@@ -41,16 +42,17 @@ Opposition to the goal that **escalates** within the scene:
 - an environmental obstacle or time pressure;
 - internal resistance — fear, doubt, values.
 
-Static conflict is boring. Each beat should make the goal harder to achieve.
+Escalate obstacles when that serves the sequence; sustained conditions,
+repetition, relief, and a clean success can also provide the intended experience.
 
 ### Disaster
 
-End the scene with one of these outcomes, in order of narrative power:
+Possible outcomes include the following; none is inherently strongest:
 
-1. **Yes, but...** — goal achieved, new problem created (strongest).
+1. **Yes, but...** — goal achieved, new problem created (when a new problem is useful).
 2. **No, and furthermore...** — goal failed, situation made worse.
 3. **No** — goal failed, the character must try again.
-4. **Yes** — goal achieved cleanly (use sparingly; it kills tension).
+4. **Yes** — goal achieved cleanly (can provide relief, satisfaction, or a stable moment).
 
 ## Sequel Structure: Reaction → Dilemma → Decision
 
@@ -70,8 +72,8 @@ resolved easily is not one.
 ### Decision
 
 The character commits to an action, and that commitment becomes the goal of
-the next scene. This decision-to-goal chain is what makes scenes accumulate
-into a story instead of merely following one another.
+a later scene when a causal chain fits. Other forms can accumulate through
+perception, motif, relationship, or contrast without this link.
 
 ## Pacing Control
 
@@ -257,10 +259,8 @@ Do not prescribe specific scene lengths, enforce rigid templates, demand a
 sequel after every scene (pacing varies by genre and intent), or choose
 what should happen in scenes. That last call is the author's.
 
-## Key Insight
+## Scope
 
-Scenes create tension; sequels process it. The sequel is the pacing lever:
-scenes run at their natural length, and compressing or expanding the
-reaction, dilemma, and decision is how tempo is controlled. And the chain
-is the story: each decision must become the next scene's goal, or scenes
-follow one another without accumulating.
+Use action and response to vary tempo when useful. Do not impose a decision-to-
+goal chain, disaster, dilemma, or sequel on every passage. Preserve the story's
+chosen form and evaluate what its actual connections contribute.

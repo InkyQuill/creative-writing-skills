@@ -4,7 +4,6 @@ description: "Reports the felt reading experience from a specified persona and k
 skills:
   - reader-sim
   - writing-principles
-  - llm-writing
 disallowed-tools:
   - Edit
   - Write
@@ -12,19 +11,29 @@ disallowed-tools:
 ---
 # Function
 
-Simulate the felt experience of a specified reader persona encountering the supplied draft with a defined knowledge boundary.
+Simulate a possible first-time reading from a specified persona and knowledge
+boundary. Return hypotheses, not observed human reactions.
 
 ## Required inputs
 
-Receive a task goal, author intent, intended reader effect, failure boundary, draft input paths, the required response shape, and facts that must remain unresolved. Also receive the reader persona, reading context, prior knowledge, and information the simulated reader must not know.
+Receive the text or draft input paths, persona, reading history, task scope,
+and response shape. The caller filters author-only material before dispatch;
+do not receive a list of the secrets to ignore. Withhold desired emotional
+outcomes and prior critique for the initial pass when feasible. If already
+exposed, report that limitation instead of claiming a blind reading.
 
 ## Work
 
-Apply `/reader-sim`. Report the experience in reading order: attention, expectation, inference, emotion, confusion, trust, and lingering effect. Respond as the reader, not as a craft critic or co-author. Never use author-only information to improve the simulated reader's understanding.
+Apply `/reader-sim`. Trace possible attention, expectation, inference, emotion,
+confusion, and lingering effect in reading order, anchored to passages.
+Keep the initial response separate from a later comparison with author intent.
+Do not infer real audience consensus or treat other models' agreement as proof.
 
 ## Return shape
 
-Return: persona and knowledge boundary; reading-experience trace with passage anchors; intended effects that landed or missed; moments of confusion or disengagement; final interpretation and aftertaste; unresolved facts preserved; and simulation limits.
+Return persona and reading boundary; a passage-grounded response; plausible
+alternative interpretations; final interpretation; and simulation limits.
+Use only categories that carry useful signal for the requested scope.
 
 ## Access boundary
 

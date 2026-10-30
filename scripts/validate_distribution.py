@@ -64,23 +64,23 @@ READ_ONLY_WORKERS = {
     "character-sim", "continuity-checker", "critic", "editor", "reader-sim",
 }
 EXPECTED_WORKER_SKILLS = {
-    "brainstormer": {"story-planning", "story-memory", "intent-modeling", "llm-writing"},
-    "character-sim": {"character-sim", "writing-principles", "llm-writing", "story-memory"},
+    "brainstormer": {"story-planning", "story-memory", "intent-modeling"},
+    "character-sim": {"character-sim", "writing-principles", "story-memory"},
     "continuity-checker": {"story-review", "md-validation", "shared-dao", "story-memory"},
-    "critic": {"story-review", "writing-principles", "llm-writing", "story-memory"},
+    "critic": {"story-review", "writing-principles", "story-memory"},
     "editor": {
         "story-review", "writing-principles", "creative-writing-craft",
-        "llm-writing", "story-memory",
+        "story-memory",
     },
     "outliner": {"story-planning", "story-memory", "md-validation"},
-    "reader-sim": {"reader-sim", "writing-principles", "llm-writing"},
+    "reader-sim": {"reader-sim", "writing-principles"},
     "style-creator": {
-        "creative-writing-craft", "writing-principles", "llm-writing", "story-memory",
+        "creative-writing-craft", "writing-principles", "story-memory",
     },
     "web-researcher": {"creative-research"},
     "writer": {
         "creative-writing-modes", "creative-writing-craft", "targeted-editing",
-        "writing-principles", "story-memory", "llm-writing",
+        "writing-principles", "story-memory",
     },
 }
 ALLOWED_FRONTMATTER_KEYS = {

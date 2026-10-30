@@ -7,7 +7,7 @@ description: >
 # Key Moments
 
 Plan a story around the emotional experiences it exists to deliver: select
-the key moments the chosen genres require, sequence them for maximum
+possible key moments for the intended experiences, sequence them for maximum
 impact, and build world, characters, and connective tissue to enable those
 moments. When plotting feels mechanical, when emotional beats are
 undefined, or when planning starts from vivid scenes rather than an
@@ -25,11 +25,12 @@ statements stay untagged, AI-suggested moments stay wrapped in
 KB records. The author confirms before a moment set becomes the story's
 plan.
 
-## Core Principle
+## Optional Method
 
-Stories are defined by emotional experiences, not plot mechanics.
-Identify the key moments the genre requires, sequence them for maximum
-impact, then build everything else to make those moments possible.
+Use emotional-first planning when the author wants to develop vivid moments.
+Character-first, situation-first, thematic, and discovery-based approaches are
+equally valid. Choose moments that serve this story; the tables below are
+prompts, not required milestones or a test of genre legitimacy.
 
 This inverts the outline-then-dramatize habit (the essential-moments
 method, after Robert Rodriguez's practice of visualizing key moments
@@ -58,11 +59,9 @@ situations.
 ## Key Moments by Elemental Genre
 
 Elemental genres are defined by the emotional experience they promise the
-reader, independent of market genre (setting and trappings). A story has a
-primary elemental genre — the dominant emotional experience — and zero or
-more secondary genres that support rather than overshadow it. Each genre
-below names its characteristic key moments; select from the primary
-genre's table first, then cross in supporting moments from the secondaries.
+reader, independent of market genre (setting and trappings). If useful, identify a dominant experience and supporting ones; mixtures need
+not have a single hierarchy. Each table suggests possibilities to combine or
+reject according to the author's intent.
 
 ### Wonder
 
@@ -160,7 +159,9 @@ the world and the promise) are separate; see the genre references in
 
 ## Selection Process
 
-Work the phases in order; each answers a question the next one needs.
+Use the phases that help the current question. Start from existing characters,
+world, or scenes when those are already established; do not restart development
+to follow this sequence.
 
 ### Phase 1: Identify and Sequence Moments
 
@@ -168,13 +169,9 @@ Work the phases in order; each answers a question the next one needs.
 experiences the author wants readers to have, then the elemental genres
 that deliver them.
 
-**Select the critical moments.** Choose 3-5 essential moments from the
-primary genre and 2-3 supporting moments from the secondary genre, keeping
-the total within the 5-8 moment budget that the failure states and the
-Output section enforce: with no secondary genre take five primary moments,
-and with multiple secondary genres let the primary genre claim the larger
-share and trim secondary support to fit. Ensure the set creates emotional
-variety and progression, not repetition.
+**Select useful moments.** Choose as many or as few as the scope warrants.
+Let the author mix, transform, or reject the tables' suggestions. Do not enforce
+a total, a primary/secondary ratio, or coverage of every listed moment type.
 
 **Sequence for impact.** Arrange chronologically as a starting point, then
 adjust for emotional pacing and tension curves; allow non-linear
@@ -199,8 +196,7 @@ detail to `$world-creation`; keep here only what the moments require.
 
 **Identify required functions.** What roles must be filled for each moment
 to land — who enables it, who experiences it, who opposes it? Assign
-functions to specific characters, and ensure the protagonist experiences
-the most significant moments.
+functions to specific characters, without requiring the protagonist to experience every significant moment.
 
 **Shape arcs to intersect the moments.** Development paths should pass
 through the key moments: character growth enables progression through
@@ -213,15 +209,14 @@ character-arc reference in `$creative-writing-craft`.
 which character and world states change, and which time, distance, and
 knowledge gaps need filling?
 
-**Design multifunctional bridge scenes.** Every bridge should serve at
-least two purposes: moving toward the next key moment AND developing
-character OR revealing world OR exploring theme. A scene that only serves
-logistics is a candidate for compression or cutting.
+**Design connective passages.** Give orientation, travel, reflection, or
+companionship the space the intended experience needs. Multiple functions can
+help, but a passage need not satisfy a quota to earn its place.
 
 **Install setup and payoff.** Plant the elements later moments need, seed
 foreshadowing that amplifies later emotional impact, and establish rules
-or limitations that become significant later. Track open setups so every
-significant one pays off.
+or limitations that become significant later. Track established promises and deliberate open questions without treating
+every vivid detail as a commitment to a later payoff.
 
 ### Phase 5: Test and Refine
 
@@ -247,10 +242,9 @@ When a moment set is not working, identify which state applies.
 retrofitted into it; the moments interrupt the story to deliver required
 feelings. Emotion retrofitted to plot feels mechanical because the moments
 do not emerge from character and situation.
-**Intervention:** Start over from the emotional experiences the author
-wants readers to have, and build backward: what situations create those
-emotions, what characters inhabit those situations, what world enables
-them.
+**Intervention:** Identify the specific forced beat. Adjust it, its placement,
+or its preparation within the existing plan. Start over only if the author
+wants to reconsider the approach; plot-first planning is not itself a defect.
 
 ### K2: Genre Mismatch
 
@@ -258,27 +252,25 @@ them.
 experiences than the primary genre promises — a horror plan whose beats
 are mostly relationship moments disappoints both promises. Readers come to
 genres for specific emotional experiences.
-**Intervention:** Verify the most prominent moments belong to the primary
-genre; secondary-genre moments support, they do not dominate. If the
-mismatch is intentional, the story is a different genre than the author
-thinks — re-run Phase 1 on the actual genre.
+**Intervention:** Compare the planned experience with the author's intent.
+Discuss a mismatch in expectations if supported; do not relabel the book or
+force secondary experiences into submission to a genre table.
 
 ### K3: Logistics-Only Bridges
 
 **Symptoms:** Connective scenes only move characters from one moment to
 the next; pacing sags between peaks and the story develops a stop-start
 rhythm.
-**Intervention:** Give every bridge a second function — character
-development, world revelation, or theme. If a scene serves only logistics,
-compress or cut it.
+**Intervention:** Assess what the bridge contributes and what would be lost
+by shortening it. Compress redundant logistics only when that serves the work.
 
 ### K4: Moment Inflation
 
 **Symptoms:** Every scene is treated as a key moment; the plan is loaded
 with climactic experiences and nothing is quiet.
-**Intervention:** Limit the story to 5-8 key moments. Let some scenes be
-quieter — the valleys make the peaks feel taller — and reserve the
-strongest moments for maximum impact.
+**Intervention:** Adjust emphasis to the desired rhythm. Quiet and intense
+passages can coexist without a fixed moment budget; reduce peaks only when
+their density weakens the experience the author wants.
 
 ### K5: Forced Causation
 
@@ -338,15 +330,11 @@ ancient aquatic civilization.
 
 ## What Verification Here Can and Cannot Settle
 
-Checkable in the artifact with high confidence: genre alignment (do the
-moments match the primary genre?) and emotional variety (is there
-progression, not repetition?). Causal logic — do the moments follow from
-character and world? — is checkable with medium confidence.
-
-Requires the author's judgment: whether the moments will emotionally
-land, whether bridges are efficient, and whether the sequence fulfills the
-genre's promise. Do not present any of these as settled; return them as
-open questions with the proposal.
+Check concrete consistency: whether proposed moments contradict established
+facts, require unavailable knowledge, or depend on events absent from the plan.
+Explain evidence and uncertainty. Genre fit, emotional variety, and likely
+impact are interpretations, not confidence scores supplied by this framework.
+The author's grading and actual reader responses may overturn them.
 
 ## Output
 
@@ -355,8 +343,8 @@ selected plans folder (the muse's outliner worker owns such paths) or return it 
 the requested response shape. Before generating fresh, check for prior
 key-moment proposals for this story and keep them consistent with any
 changes the author has since confirmed; beats that failed in earlier
-rounds inform the failure states above. Include: genre selection, the 5-8
-key moments with scene concepts, character functions per moment, and the
+rounds inform the failure states above. Include: the chosen experiential focus,
+useful moments with scene concepts, character functions per moment, and the
 bridging requirements between them. Preserve unresolved facts as explicit
 unknowns rather than inventing them, keep AI-proposed moments tagged, and
 follow `$story-memory` for artifact locations and naming.
@@ -368,11 +356,8 @@ detail through `$world-creation`. When the author is weighing the genre
 choice itself, `$decision-grill` can pressure-test it — but the choice is
 the author's, not this method's.
 
-## Key Insight
+## Scope
 
-A story is the emotional experiences it delivers; everything else exists
-to enable them. Selecting the key moments first focuses development on
-what is critical (nothing is built that no moment needs), keeps genre
-promises honest, lets sequencing flex for impact while preserving
-coherence, and gives revision a clear framework: when something is not
-working, ask which emotional moment it serves — and cut or fix accordingly.
+This method can help develop a story from vivid moments. It does not decide
+what all stories are for. Keep existing character, world, and author decisions
+as constraints; revise a proposed moment before reshaping them to fit a table.

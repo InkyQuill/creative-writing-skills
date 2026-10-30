@@ -5,8 +5,8 @@ description: "What fiction readers want (reader reward channels) and the specifi
 
 # Writing Principles
 
-Load `/llm-writing` if it isn't already loaded. This skill adds the
-fiction-specific layer.
+Use these as questions about possible reader effects, not a checklist every
+passage must satisfy. Preserve the author's chosen form and requested scope.
 
 ## Trust the Reader
 
@@ -31,8 +31,8 @@ when to leave space and when to orient.
 Seek elements that do more than one thing across a passage. A dialogue
 exchange can advance plot AND reveal character; an individual reply need not. A sensory detail grounds the scene AND shows who the
 POV character is. A transition compresses time AND carries an emotional
-beat. Single-purpose prose makes fiction go flat: description that only
-describes, dialogue that only informs, interiority that only labels.
+beat. A passage can also earn its place through one sustained experience:
+atmosphere, companionship, reflection, comic repetition, or linguistic pleasure.
 
 Economy isn't minimalism. Dense, lyrical prose can be economical when every
 phrase carries weight. Sparse prose can be wasteful when it takes ten short

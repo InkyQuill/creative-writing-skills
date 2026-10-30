@@ -28,9 +28,13 @@ Character arcs need to be visible in the character's behavior, not just in the n
 
 ## Agency
 
-The protagonist should drive the story more than the story happens to them.
+Assess agency within this story's premise. Choices matter, but constrained,
+reactive, or observing protagonists can be intentional; do not replace that
+premise with a requirement for control.
 
-**Reactive protagonist**: things happen TO the protagonist and they respond. This works briefly (the inciting incident disrupts their world) but becomes a problem if sustained. At some point, the protagonist needs to start making choices that drive events.
+**Reactive protagonist**: things happen TO the protagonist and they respond. Investigate whether this limits the intended experience or expresses the
+character's situation. Small choices, endurance, perception, and refusal can
+matter even when they do not drive external events.
 
 **Choice-driven scenes**: the most compelling scenes present the character with a genuine choice between competing values or consequences. Not "good vs bad" but "good vs good" or "bad vs bad."
 
@@ -42,7 +46,8 @@ Relationships should evolve through interaction, not through narration about how
 
 **Conflict specificity.** Conflicts between characters should arise from who they specifically are: their particular values, histories, and blind spots. Generic "misunderstanding" conflicts that any two characters could have are weak.
 
-**Evolution through scenes.** Relationships change because of what happens between characters in scenes, not because the narrator says they've changed. If two characters are closer at the end of a chapter, point to the specific interaction that moved the needle.
+**Evolution through scenes.** Relationships can develop through scenes or credible summary. Evaluate whether
+the chosen treatment gives the change the weight this passage needs. If two characters are closer at the end of a chapter, point to the specific interaction that moved the needle.
 
 ## Voice Distinction
 

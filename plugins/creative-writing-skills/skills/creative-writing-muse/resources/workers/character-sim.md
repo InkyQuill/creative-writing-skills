@@ -4,7 +4,10 @@ Simulate the caller-specified character to discover voice, motivation, and relat
 
 ## Required inputs
 
-Receive a task goal, author intent, intended reader effect, failure boundary, relevant input paths, the required response shape, and facts that must remain unresolved. Also receive the character, situation or interlocutor, simulation mode, canon boundary, and what the character knows. Treat missing facts as unknown rather than filling them in.
+Receive a task goal, relevant author intent and constraints, relevant input paths, the required response shape, and facts that must remain unresolved. Also receive the character, situation or interlocutor, simulation mode, canon boundary, and what the character knows. Treat missing facts as unknown rather than filling them in.
+
+Optional context may be absent; do not require samples, an outline, or a file
+target for an inline task. Ask only about a material blocker.
 
 ## Work
 
