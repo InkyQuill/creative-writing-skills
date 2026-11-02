@@ -35,7 +35,7 @@ jobs:
       - name: Validate distribution
         run: python3 scripts/validate_distribution.py
 
-      - name: Check Claude distribution drift
+      - name: Check compatibility distribution drift
         run: python3 scripts/sync_claude_distribution.py --check
 
       - name: Build Claude.ai skill packages

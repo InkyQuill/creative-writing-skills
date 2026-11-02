@@ -1,0 +1,19 @@
+{
+  "name": "creative-writing-skills",
+  "version": "0.13.1",
+  "description": "Composable skills for planning, drafting, and revising creative writing.",
+  "author": {
+    "name": "InkyQuill"
+  },
+  "homepage": "https://github.com/InkyQuill/creative-writing-skills",
+  "license": "Apache-2.0",
+  "skills": "./kimi/skills/",
+  "agents": "./kimi/agents/",
+  "interface": {
+    "displayName": "Creative Writing Skills",
+    "shortDescription": "Plan, draft, and improve fiction.",
+    "longDescription": "Creative-writing workflows for research, planning, drafting, revision, continuity, and story knowledge management.",
+    "developerName": "InkyQuill",
+    "websiteURL": "https://github.com/InkyQuill/creative-writing-skills"
+  }
+}

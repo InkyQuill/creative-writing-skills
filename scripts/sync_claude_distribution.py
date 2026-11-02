@@ -35,6 +35,7 @@ CONFIG_PATH = REPO_ROOT / "config" / "distribution.json"
 PLUGIN_ROOT = REPO_ROOT / "plugins" / "creative-writing-skills"
 SKILLS_ROOT = PLUGIN_ROOT / "skills"
 CANONICAL_MANIFEST_PATH = PLUGIN_ROOT / ".codex-plugin" / "plugin.json"
+PLUGIN_NAME = "creative-writing-skills"
 TEXT_REPLACEMENTS = {
     "Codex subagent": "subagent",
     "Codex subagents": "subagents",
@@ -47,12 +48,16 @@ CLAUDE_FRONTMATTER_KEYS = (
     "argument-hint",
 )
 _DOLLAR_REFERENCE_RE = re.compile(r"\$([a-z][a-z0-9-]*)")
+_KIMI_SKILL_REFERENCE_RE = re.compile(
+    r"/skill:([A-Za-z0-9_-]+):([a-z][a-z0-9-]*)(?![A-Za-z0-9/-])"
+)
 _SKILL_NAME_RE = re.compile(r"[a-z][a-z0-9-]*\Z")
 _CONFIG_KEYS = {
     "canonical_skills",
     "workers",
     "claude",
     "zcode",
+    "kimi",
 }
 _CLAUDE_PATH_CONFIG = {
     "root": "cw",
@@ -74,7 +79,13 @@ _ZCODE_CONFIG_KEYS = {
     "marketplace",
     "icon",
 }
+_KIMI_PATH_CONFIG = {
+    "root": "kimi",
+    "manifest": "kimi.plugin.json",
+}
+_KIMI_CONFIG_KEYS = {"root", "manifest"}
 _ZCODE_PLUGIN_NAME_RE = re.compile(r"[a-z0-9][a-z0-9._-]{0,127}\Z")
+_RUNTIME_TARGETS = frozenset({"claude", "kimi"})
 _EXCLUDED_RUNTIME_PARTS = frozenset({"__pycache__"})
 _EXCLUDED_RUNTIME_SUFFIXES = frozenset({".pyc"})
 
@@ -139,6 +150,8 @@ class DistributionContext:
     cw_root: Path
     marketplace_path: Path
     zcode_marketplace_path: Path
+    kimi_root: Path
+    kimi_manifest_path: Path
     zcode_icon: str
     skill_names: tuple[str, ...]
     known_skills: frozenset[str]
@@ -335,6 +348,11 @@ def _load_context(repo_root: Path) -> DistributionContext:
         raise ValueError("distribution ZCode icon must be an absolute HTTPS URL")
     if zcode.get("root") != claude.get("root"):
         raise ValueError("distribution ZCode root must match the Claude root")
+    kimi = config.get("kimi")
+    if not isinstance(kimi, dict) or set(kimi) != _KIMI_CONFIG_KEYS:
+        raise ValueError("distribution Kimi fields do not match schema")
+    if any(kimi.get(key) != value for key, value in _KIMI_PATH_CONFIG.items()):
+        raise ValueError("distribution Kimi paths are not canonical")
     disable_model_invocation = claude.get("disable_model_invocation")
     if not isinstance(disable_model_invocation, list) or any(
         not isinstance(skill, str) or _SKILL_NAME_RE.fullmatch(skill) is None
@@ -412,6 +430,18 @@ def _load_context(repo_root: Path) -> DistributionContext:
         "ZCode marketplace",
         allow_leaf_symlink=True,
     )
+    kimi_root = _require_contained_path(
+        repo_root / "kimi",
+        repo_root,
+        "Kimi Code root",
+        allow_leaf_symlink=True,
+    )
+    kimi_manifest_path = _require_contained_path(
+        repo_root / "kimi.plugin.json",
+        repo_root,
+        "Kimi Code root manifest",
+        allow_leaf_symlink=True,
+    )
     context = DistributionContext(
         repo_root=repo_root,
         config=config,
@@ -422,6 +452,8 @@ def _load_context(repo_root: Path) -> DistributionContext:
         cw_root=cw_root,
         marketplace_path=marketplace_path,
         zcode_marketplace_path=zcode_marketplace_path,
+        kimi_root=kimi_root,
+        kimi_manifest_path=kimi_manifest_path,
         zcode_icon=zcode_icon,
         skill_names=tuple(skill_values),
         known_skills=frozenset(skill_values),
@@ -448,6 +480,7 @@ def _render_skill_frontmatter(
     skill_name: str,
     *,
     disable_model_invocation: bool,
+    runtime: str = "claude",
 ) -> str:
     if metadata.get("name") != skill_name:
         raise UnsupportedTransformError(
@@ -475,7 +508,8 @@ def _render_skill_frontmatter(
         value = metadata["argument-hint"]
         if not isinstance(value, str) or not value.strip():
             raise UnsupportedTransformError(f"{skill_name}: argument-hint must be nonempty")
-        lines.append(f"argument-hint: {_yaml_scalar(value)}")
+        if runtime == "claude":
+            lines.append(f"argument-hint: {_yaml_scalar(value)}")
     lines.extend(("---", ""))
     return "\n".join(lines)
 
@@ -484,7 +518,11 @@ def _transform_markdown(
     text: str,
     label: str,
     known_skills: set[str] | frozenset[str] | None = None,
+    *,
+    runtime: str = "claude",
 ) -> str:
+    if runtime not in _RUNTIME_TARGETS:
+        raise ValueError(f"unknown distribution runtime: {runtime}")
     known_skills = known_skills if known_skills is not None else _canonical_skills()
 
     def transform(segment: str) -> str:
@@ -493,7 +531,11 @@ def _transform_markdown(
 
         def replace_skill(match: re.Match[str]) -> str:
             skill = match.group(1)
-            return f"/{skill}" if skill in known_skills else match.group(0)
+            if skill not in known_skills:
+                return match.group(0)
+            if runtime == "kimi":
+                return f"/skill:{PLUGIN_NAME}:{skill}"
+            return f"/{skill}"
 
         return _DOLLAR_REFERENCE_RE.sub(replace_skill, segment)
 
@@ -514,11 +556,29 @@ def _transform_markdown(
     if dollar_references:
         reference = sorted(dollar_references)[0]
         raise UnsupportedTransformError(f"{label}: unsupported dollar reference ${reference}")
-    for reference in sorted(extract_skill_references(rendered, "/")):
-        if reference not in known_skills:
-            raise UnsupportedTransformError(
-                f"{label}: unknown Claude skill reference /{reference}"
+    if runtime == "kimi":
+        references: set[tuple[str, str]] = set()
+
+        def collect_kimi_references(segment: str) -> str:
+            references.update(
+                (match.group(1), match.group(2))
+                for match in _KIMI_SKILL_REFERENCE_RE.finditer(segment)
             )
+            return segment
+
+        map_outside_fences(rendered, collect_kimi_references)
+        for plugin, reference in sorted(references):
+            if plugin != PLUGIN_NAME or reference not in known_skills:
+                raise UnsupportedTransformError(
+                    f"{label}: unknown Kimi Code skill reference "
+                    f"/skill:{plugin}:{reference}"
+                )
+    else:
+        for reference in sorted(extract_skill_references(rendered, "/")):
+            if reference not in known_skills:
+                raise UnsupportedTransformError(
+                    f"{label}: unknown Claude skill reference /{reference}"
+                )
     return rendered
 
 
@@ -528,6 +588,7 @@ def transform_skill(
     known_skills: set[str] | frozenset[str] | None = None,
     *,
     disable_model_invocation: bool = False,
+    runtime: str = "claude",
 ) -> str:
     known_skills = known_skills if known_skills is not None else _canonical_skills()
     metadata, body = split_frontmatter(text)
@@ -540,14 +601,15 @@ def transform_skill(
         value = metadata.get(key)
         if isinstance(value, str):
             metadata[key] = _transform_markdown(
-                value, f"{skill_name} {key}", known_skills
+                value, f"{skill_name} {key}", known_skills, runtime=runtime
             )
     return _render_skill_frontmatter(
         metadata,
         skill_name,
         disable_model_invocation=disable_model_invocation,
+        runtime=runtime,
     ) + _transform_markdown(
-        body, skill_name, known_skills
+        body, skill_name, known_skills, runtime=runtime
     )
 
 
@@ -556,11 +618,14 @@ def _transform_resource_markdown(
     skill_name: str,
     relative_path: Path,
     known_skills: set[str] | frozenset[str],
+    *,
+    runtime: str = "claude",
 ) -> str:
     rendered = _transform_markdown(
         text,
         f"{skill_name}/{relative_path.as_posix()}",
         known_skills,
+        runtime=runtime,
     )
     return rendered
 
@@ -569,7 +634,11 @@ def render_agent(
     worker: dict[str, object],
     prompt: str,
     known_skills: set[str] | frozenset[str] | None = None,
+    *,
+    runtime: str = "claude",
 ) -> str:
+    if runtime not in _RUNTIME_TARGETS:
+        raise ValueError(f"unknown distribution runtime: {runtime}")
     name = worker.get("name")
     description = worker.get("description")
     skills = worker.get("skills")
@@ -594,20 +663,30 @@ def render_agent(
         "---",
         f"name: {name}",
         f"description: {_yaml_scalar(description)}",
-        "skills:",
-        *(f"  - {skill}" for skill in skills),
     ]
-    if claude.get("background") is True:
-        lines.append("background: true")
+    if runtime == "claude":
+        lines.extend(("skills:", *(f"  - {skill}" for skill in skills)))
+        if claude.get("background") is True:
+            lines.append("background: true")
     if access == "read-only":
         # A read-only worker must never alter files, matching the muse
         # orchestration contract ("a read-only role never alters files").
-        lines.append("disallowed-tools:")
-        lines.extend(f"  - {tool}" for tool in ("Edit", "Write", "NotebookEdit"))
+        restriction = "disallowed-tools" if runtime == "claude" else "disallowedTools"
+        tools = ("Edit", "Write", "NotebookEdit") if runtime == "claude" else ("Edit", "Write")
+        lines.append(f"{restriction}:")
+        lines.extend(f"  - {tool}" for tool in tools)
     lines.extend(("---", ""))
-    return "\n".join(lines) + _transform_markdown(
-        prompt, f"agent {name}", known_skills
-    )
+    body = _transform_markdown(prompt, f"agent {name}", known_skills, runtime=runtime)
+    if runtime == "kimi" and skills:
+        assigned_skills = "\n".join(
+            f"- `/skill:{PLUGIN_NAME}:{skill}`" for skill in skills
+        )
+        body = (
+            "## Assigned Plugin Skills\n\n"
+            "Load the skills relevant to the assigned task:\n\n"
+            f"{assigned_skills}\n\n"
+        ) + body
+    return "\n".join(lines) + body
 
 
 def _write_json(path: Path, value: object) -> None:
@@ -622,6 +701,7 @@ def _copy_skill(
     known_skills: set[str] | frozenset[str],
     *,
     disable_model_invocation: bool,
+    runtime: str = "claude",
 ) -> None:
     for path in sorted(source.rglob("*")):
         relative = path.relative_to(source)
@@ -650,6 +730,7 @@ def _copy_skill(
                     skill_name,
                     known_skills,
                     disable_model_invocation=disable_model_invocation,
+                    runtime=runtime,
                 ),
                 encoding="utf-8",
             )
@@ -660,6 +741,7 @@ def _copy_skill(
                     skill_name,
                     relative,
                     known_skills,
+                    runtime=runtime,
                 ),
                 encoding="utf-8",
             )
@@ -671,9 +753,11 @@ def _render_muse_agent(
     skill_source: str,
     skills: list[str],
     known_skills: set[str] | frozenset[str],
+    *,
+    runtime: str = "claude",
 ) -> str:
     rendered_skill = transform_skill(
-        skill_source, "creative-writing-muse", known_skills
+        skill_source, "creative-writing-muse", known_skills, runtime=runtime
     )
     metadata, body = split_frontmatter(rendered_skill)
     return render_agent(
@@ -686,20 +770,54 @@ def _render_muse_agent(
         },
         body,
         known_skills,
+        runtime=runtime,
     )
+
+
+def _render_kimi_manifest(
+    canonical_manifest: dict[str, object],
+    *,
+    root: str = ".",
+) -> dict[str, object]:
+    canonical_interface = canonical_manifest["interface"]
+    if not isinstance(canonical_interface, dict):
+        raise ValueError("canonical plugin interface must be an object")
+    interface_fields = (
+        "displayName",
+        "shortDescription",
+        "longDescription",
+        "developerName",
+        "websiteURL",
+    )
+    return {
+        "name": canonical_manifest["name"],
+        "version": canonical_manifest["version"],
+        "description": canonical_manifest["description"],
+        "author": canonical_manifest["author"],
+        "homepage": canonical_manifest["homepage"],
+        "license": canonical_manifest["license"],
+        "skills": f"{root}/skills/",
+        "agents": f"{root}/agents/",
+        "interface": {
+            field: canonical_interface[field] for field in interface_fields
+        },
+    }
 
 
 def _render_distribution(
     output_root: Path,
     repo_root: Path,
     context: DistributionContext | None = None,
+    *,
+    runtime: str = "claude",
 ) -> None:
+    if runtime not in _RUNTIME_TARGETS:
+        raise ValueError(f"unknown distribution runtime: {runtime}")
     output_root = Path(output_root)
     if output_root.exists():
         raise FileExistsError(f"distribution output already exists: {output_root}")
 
     context = context or _load_context(repo_root)
-    config = context.config
     configured_skills = context.skill_names
     source_skills = skill_directories(context.skills_root)
     if set(source_skills) != set(configured_skills):
@@ -722,6 +840,7 @@ def _render_distribution(
             disable_model_invocation=(
                 skill_name in context.claude_disable_model_invocation
             ),
+            runtime=runtime,
         )
 
     workers_path = context.workers_path
@@ -744,7 +863,12 @@ def _render_distribution(
             raise ValueError(f"worker {name}: invalid prompt path {prompt_name!r}")
         worker_names.add(name)
         (agents_root / f"{name}.md").write_text(
-            render_agent(worker, prompt_path.read_text(encoding="utf-8"), context.known_skills),
+            render_agent(
+                worker,
+                prompt_path.read_text(encoding="utf-8"),
+                context.known_skills,
+                runtime=runtime,
+            ),
             encoding="utf-8",
         )
 
@@ -754,11 +878,18 @@ def _render_distribution(
             muse_source.read_text(encoding="utf-8"),
             list(configured_skills),
             context.known_skills,
+            runtime=runtime,
         ),
         encoding="utf-8",
     )
 
     canonical_manifest = load_json(context.manifest_path)
+    if runtime == "kimi":
+        _write_json(
+            output_root / ".kimi-plugin" / "plugin.json",
+            _render_kimi_manifest(canonical_manifest),
+        )
+        return
     manifest_fields = (
         "name",
         "version",
@@ -776,6 +907,11 @@ def _render_distribution(
 def render_distribution(output_root: Path) -> None:
     context = _load_context(REPO_ROOT)
     _render_distribution(output_root, REPO_ROOT, context)
+
+
+def render_kimi_distribution(output_root: Path) -> None:
+    context = _load_context(REPO_ROOT)
+    _render_distribution(output_root, REPO_ROOT, context, runtime="kimi")
 
 
 def _render_marketplace(repo_root: Path) -> dict[str, object]:
@@ -1036,25 +1172,35 @@ def _sync(apply: bool, repo_root: Path) -> int:
     cw_root = context.cw_root
     marketplace_path = context.marketplace_path
     zcode_marketplace_path = context.zcode_marketplace_path
+    kimi_root = context.kimi_root
+    kimi_manifest_path = context.kimi_manifest_path
     transaction_root = Path(
         tempfile.mkdtemp(prefix=".claude-distribution-", dir=repo_root)
     )
     retain_recovery = False
     try:
         candidate_cw = transaction_root / "candidate-cw"
+        candidate_kimi = transaction_root / "candidate-kimi"
         candidate_marketplace = transaction_root / "candidate-claude-marketplace.json"
         candidate_zcode_marketplace = (
             transaction_root / "candidate-zcode-marketplace.json"
         )
+        candidate_kimi_manifest = transaction_root / "candidate-kimi-plugin.json"
         _render_distribution(candidate_cw, repo_root, context)
+        _render_distribution(candidate_kimi, repo_root, context, runtime="kimi")
         _write_json(candidate_marketplace, _render_marketplace(repo_root))
         _write_json(
             candidate_zcode_marketplace,
             _render_zcode_marketplace(repo_root, context.zcode_icon),
         )
+        _write_json(
+            candidate_kimi_manifest,
+            _render_kimi_manifest(load_json(context.manifest_path), root="./kimi"),
+        )
 
         if not apply:
             problems = _distribution_drift(candidate_cw, cw_root, "cw")
+            problems.extend(_distribution_drift(candidate_kimi, kimi_root, "kimi"))
             problems.extend(
                 _single_path_drift(
                     candidate_marketplace,
@@ -1069,23 +1215,32 @@ def _sync(apply: bool, repo_root: Path) -> int:
                     "marketplace.json",
                 )
             )
+            problems.extend(
+                _single_path_drift(
+                    candidate_kimi_manifest,
+                    kimi_manifest_path,
+                    "kimi.plugin.json",
+                )
+            )
             problems.sort(key=lambda problem: problem.split(": ", 1)[-1])
             if problems:
                 for problem in problems:
                     print(problem)
                 return 1
-            print("Claude and ZCode distributions are in sync")
+            print("Claude, ZCode, and Kimi Code distributions are in sync")
             return 0
 
         _commit_candidate(
             (
                 ("cw", candidate_cw, cw_root),
+                ("kimi", candidate_kimi, kimi_root),
                 ("claude-marketplace", candidate_marketplace, marketplace_path),
                 (
                     "zcode-marketplace",
                     candidate_zcode_marketplace,
                     zcode_marketplace_path,
                 ),
+                ("kimi-manifest", candidate_kimi_manifest, kimi_manifest_path),
             ),
             transaction_root,
         )
@@ -1098,8 +1253,10 @@ def _sync(apply: bool, repo_root: Path) -> int:
         print("synced agent muse")
         print("synced cw/.claude-plugin/plugin.json")
         print("synced cw/.zcode-plugin/plugin.json")
+        print("synced kimi/.kimi-plugin/plugin.json")
         print("synced .claude-plugin/marketplace.json")
         print("synced marketplace.json")
+        print("synced kimi.plugin.json")
         return 0
     except (DistributionTransactionError, DistributionTransactionInterrupt):
         retain_recovery = True
@@ -1111,7 +1268,7 @@ def _sync(apply: bool, repo_root: Path) -> int:
 
 def main(argv: list[str] | None = None, *, repo_root: Path = REPO_ROOT) -> int:
     parser = argparse.ArgumentParser(
-        description="Generate the Claude and ZCode compatibility distributions"
+        description="Generate the Claude, ZCode, and Kimi Code compatibility distributions"
     )
     mode = parser.add_mutually_exclusive_group(required=True)
     mode.add_argument("--apply", action="store_true", help="replace generated output")

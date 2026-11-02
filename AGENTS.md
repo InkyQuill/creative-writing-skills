@@ -9,11 +9,13 @@ runtime is `plugins/creative-writing-skills/` and the canonical manifest is
 `plugins/creative-writing-skills/.codex-plugin/plugin.json`.
 
 `cw/` is committed generated output for Claude Code, Cowork, Claude.ai, and
-ZCode. It is never an independent source tree and must not be hand-edited.
-Generated skills do not need separate content or code review: review their
-canonical sources instead. Keep the generator synchronization checks; they
-verify that the generated distribution matches those reviewed sources.
-Make every runtime change in the canonical plugin first, then regenerate `cw/`.
+ZCode. `kimi/` and the root `kimi.plugin.json` are the generated Kimi Code
+runtime and direct-install manifest. They are never independent source trees
+and must not be hand-edited. Generated skills do not need separate content or
+code review: review their canonical sources instead. Keep the generator
+synchronization checks; they verify that the generated distributions match
+those reviewed sources. Make every runtime change in the canonical plugin
+first, then regenerate `cw/` and `kimi/`.
 
 The repository marketplace is `.agents/plugins/marketplace.json`. The exact
 36-skill inventory is declared in
@@ -29,13 +31,13 @@ The repository marketplace is `.agents/plugins/marketplace.json`. The exact
   `skills/creative-writing-muse/resources/workers/` inside the plugin.
 - Codex skill references use `$skill-name` outside fenced examples.
 - `agents/openai.yaml` is Codex UI metadata and is excluded from generated
-  Claude runtime and Claude.ai archives.
+  compatibility runtimes and Claude.ai archives.
 
 All skills are maintained in this repository. Some began as adaptations;
 their provenance remains in [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md).
 Do not refresh them from an external checkout.
 
-## Generated Claude and ZCode Distribution
+## Generated Compatibility Distributions
 
 After editing canonical skills, worker resources, or the plugin manifest, run:
 
@@ -46,12 +48,15 @@ python3 scripts/sync_claude_distribution.py --check
 
 The generator derives `cw/skills/`, `cw/agents/`,
 `cw/.claude-plugin/plugin.json`, `cw/.zcode-plugin/plugin.json`,
-`.claude-plugin/marketplace.json`, and the ZCode root `marketplace.json`. It
-performs the supported Codex-to-Claude vocabulary transformations and fails on
-constructs it cannot translate. ZCode reads the Claude-compatible `cw/` tree
-through its own manifest and repository-root marketplace. Never patch
-generated drift by editing `cw/`, `marketplace.json`, or the generated
-manifests.
+`kimi/skills/`, `kimi/agents/`, `kimi/.kimi-plugin/plugin.json`, the Kimi Code
+root `kimi.plugin.json`, `.claude-plugin/marketplace.json`, and the ZCode root
+`marketplace.json`. It performs the supported Codex-to-Claude and
+Codex-to-Kimi vocabulary transformations and fails on constructs it cannot
+translate. ZCode reads the Claude-compatible `cw/` tree through its own
+manifest and repository-root marketplace. Kimi Code reads `kimi/` through the
+root manifest for direct repository installation. Never patch generated drift
+by editing `cw/`, `kimi/`, `marketplace.json`, `kimi.plugin.json`, or the
+generated manifests.
 
 ## Validation
 

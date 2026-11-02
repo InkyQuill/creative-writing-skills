@@ -65,7 +65,7 @@ jobs:
           git fetch origin "$head"
           git switch -c "$head" "origin/$head"
           python3 scripts/automatic_release.py sync
-          git add cw .claude-plugin/marketplace.json marketplace.json
+          git add cw kimi kimi.plugin.json .claude-plugin/marketplace.json marketplace.json
           if ! git diff --cached --quiet; then
             git config user.name 'github-actions[bot]'
             git config user.email '41898282+github-actions[bot]@users.noreply.github.com'

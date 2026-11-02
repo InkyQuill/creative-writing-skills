@@ -3,9 +3,10 @@
 [![CI](https://github.com/InkyQuill/creative-writing-skills/actions/workflows/ci.yml/badge.svg)](https://github.com/InkyQuill/creative-writing-skills/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
 
-A Codex plugin for planning, drafting, reviewing, and maintaining fiction. A
-muse coordinates focused specialist passes while shared skills preserve craft,
-voice, continuity, and durable story context.
+A creative-writing plugin for Codex, Claude Code, ZCode, and Kimi Code. A muse
+coordinates planning, drafting, reviewing, and maintenance through focused
+specialist passes while shared skills preserve craft, voice, continuity, and
+durable story context.
 
 ## Install for Codex
 
@@ -42,7 +43,7 @@ the worker registry and synthesizes the results. Only file-writing tasks need
 output paths. A simulated reader response is a hypothesis, not actual reader
 feedback; same-context work is never presented as an independent blind reading.
 
-## Claude and ZCode Compatibility
+## Claude, ZCode, and Kimi Code Compatibility
 
 Claude Code, Cowork, and ZCode use the generated compatibility plugin in `cw/`.
 
@@ -62,6 +63,19 @@ In ZCode, open **Settings → Plugin Management → Discover**, click **+**, add
 `InkyQuill/creative-writing-skills` as a marketplace, and install
 **creative-writing-skills**. ZCode reads the generated root `marketplace.json`
 and the `cw/.zcode-plugin/plugin.json` manifest.
+
+Kimi Code uses the generated plugin in `kimi/` and the repository-root
+`kimi.plugin.json`. Install the repository, then reload it:
+
+```text
+/plugins install https://github.com/InkyQuill/creative-writing-skills
+/reload
+```
+
+Invoke the muse explicitly with
+`/skill:creative-writing-skills:creative-writing-muse`, or describe the writing
+task naturally. The generated Kimi Code agents mirror the muse and specialist
+roles.
 
 ### Claude.ai skill archives
 
@@ -150,8 +164,8 @@ my-story/
 ```
 
 `AGENTS.md` is the single shared project-instruction source for Codex, Pi,
-OpenCode, ZCode, and MiMo Code. Claude Code uses the regular `CLAUDE.md` import
-shim. The bootstrap skill reconciles this pair automatically, so authors do not
+OpenCode, ZCode, MiMo Code, and Kimi Code. Claude Code uses the regular
+`CLAUDE.md` import shim. The bootstrap skill reconciles this pair automatically, so authors do not
 need to maintain duplicate harness instructions or filesystem symlinks.
 
 This is one story-project model across planning, drafting, review, and durable
@@ -179,7 +193,8 @@ decision boundary requires the author.
 
 The only canonical runtime source is
 `plugins/creative-writing-skills/`. Edit skills and worker resources there;
-never hand-edit `cw/`, which is committed generated compatibility output.
+never hand-edit the committed `cw/` or `kimi/` compatibility outputs or their
+generated manifests.
 
 ```bash
 PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tests -v

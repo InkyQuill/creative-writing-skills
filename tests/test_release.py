@@ -17,6 +17,8 @@ EXPECTED_RELEASE_STATUS = (
     " M .claude-plugin/marketplace.json\n"
     " M cw/.claude-plugin/plugin.json\n"
     " M cw/.zcode-plugin/plugin.json\n"
+    " M kimi.plugin.json\n"
+    " M kimi/.kimi-plugin/plugin.json\n"
     " M marketplace.json\n"
     " M plugins/creative-writing-skills/.codex-plugin/plugin.json\n"
 )
@@ -107,6 +109,11 @@ class SideEffectFailureRunner:
                 zcode_marketplace.write_text(
                     json.dumps({"plugins": [{"version": version}]}) + "\n"
                 )
+                kimi_manifest = cwd / "kimi/.kimi-plugin/plugin.json"
+                kimi_manifest.parent.mkdir(parents=True, exist_ok=True)
+                kimi_manifest.write_text(json.dumps({"version": version}) + "\n")
+                kimi_root_manifest = cwd / "kimi.plugin.json"
+                kimi_root_manifest.write_text(json.dumps({"version": version}) + "\n")
                 if self.residue_stage == "apply":
                     self._write_residue(cwd)
             elif command[2:] == ["scripts/create_skill_zips.py"]:
@@ -301,6 +308,8 @@ class ReleaseOrchestrationTests(unittest.TestCase):
                     "plugins/creative-writing-skills/.codex-plugin/plugin.json",
                     "cw/.claude-plugin/plugin.json",
                     "cw/.zcode-plugin/plugin.json",
+                    "kimi/.kimi-plugin/plugin.json",
+                    "kimi.plugin.json",
                     ".claude-plugin/marketplace.json",
                     "marketplace.json",
                 ],
@@ -378,6 +387,8 @@ class ReleaseOrchestrationTests(unittest.TestCase):
                 "--",
                 "plugins/creative-writing-skills/.codex-plugin/plugin.json",
                 "cw",
+                "kimi",
+                "kimi.plugin.json",
                 ".claude-plugin/marketplace.json",
                 "marketplace.json",
             ],
@@ -436,6 +447,11 @@ class ReleaseGitRecoveryTests(unittest.TestCase):
         zcode_marketplace.write_text(
             json.dumps({"plugins": [{"version": "0.5.9"}]}) + "\n"
         )
+        kimi_manifest = root / "kimi/.kimi-plugin/plugin.json"
+        kimi_manifest.parent.mkdir(parents=True)
+        kimi_manifest.write_text(json.dumps({"version": "0.5.9"}) + "\n")
+        kimi_root_manifest = root / "kimi.plugin.json"
+        kimi_root_manifest.write_text(json.dumps({"version": "0.5.9"}) + "\n")
         canonical_skill = (
             root / "plugins/creative-writing-skills/skills/demo/SKILL.md"
         )
@@ -459,6 +475,8 @@ class ReleaseGitRecoveryTests(unittest.TestCase):
                 marketplace_path = root / ".claude-plugin/marketplace.json"
                 zcode_manifest_path = root / "cw/.zcode-plugin/plugin.json"
                 zcode_marketplace_path = root / "marketplace.json"
+                kimi_manifest_path = root / "kimi/.kimi-plugin/plugin.json"
+                kimi_root_manifest_path = root / "kimi.plugin.json"
                 source_skill = root / "plugins/creative-writing-skills/skills/demo/SKILL.md"
                 claude_skill = root / "cw/skills/demo/SKILL.md"
                 version = json.loads(manifest_path.read_text())["version"]
@@ -468,6 +486,9 @@ class ReleaseGitRecoveryTests(unittest.TestCase):
                     zcode_manifest_path.parent.mkdir(parents=True, exist_ok=True)
                     zcode_manifest_path.write_text(json.dumps({"version": version}) + "\\n")
                     zcode_marketplace_path.write_text(json.dumps({"plugins": [{"version": version}]}) + "\\n")
+                    kimi_manifest_path.parent.mkdir(parents=True, exist_ok=True)
+                    kimi_manifest_path.write_text(json.dumps({"version": version}) + "\\n")
+                    kimi_root_manifest_path.write_text(json.dumps({"version": version}) + "\\n")
                     claude_skill.write_bytes(source_skill.read_bytes())
                 elif sys.argv[1] == "--check":
                     matches = (
@@ -475,6 +496,8 @@ class ReleaseGitRecoveryTests(unittest.TestCase):
                         and json.loads(marketplace_path.read_text())["metadata"]["version"] == version
                         and json.loads(zcode_manifest_path.read_text())["version"] == version
                         and json.loads(zcode_marketplace_path.read_text())["plugins"][0]["version"] == version
+                        and json.loads(kimi_manifest_path.read_text())["version"] == version
+                        and json.loads(kimi_root_manifest_path.read_text())["version"] == version
                         and claude_skill.read_bytes() == source_skill.read_bytes()
                     )
                     if not matches:
@@ -549,6 +572,14 @@ class ReleaseGitRecoveryTests(unittest.TestCase):
                 "version"
             ],
         )
+        self.assertEqual(
+            "0.5.9",
+            json.loads((root / "kimi/.kimi-plugin/plugin.json").read_text())["version"],
+        )
+        self.assertEqual(
+            "0.5.9",
+            json.loads((root / "kimi.plugin.json").read_text())["version"],
+        )
         tags = self._git(root, "tag", "--list", "v0.5.10", capture_output=True).stdout
         if tag_target is None:
             self.assertEqual("", tags)
@@ -574,6 +605,8 @@ class ReleaseGitRecoveryTests(unittest.TestCase):
                 "plugins/creative-writing-skills/.codex-plugin/plugin.json",
                 "cw/.claude-plugin/plugin.json",
                 "cw/.zcode-plugin/plugin.json",
+                "kimi/.kimi-plugin/plugin.json",
+                "kimi.plugin.json",
                 ".claude-plugin/marketplace.json",
                 "marketplace.json",
             ],
@@ -741,6 +774,8 @@ class ReleaseGitRecoveryTests(unittest.TestCase):
                     ".claude-plugin/marketplace.json",
                     "cw/.claude-plugin/plugin.json",
                     "cw/.zcode-plugin/plugin.json",
+                    "kimi.plugin.json",
+                    "kimi/.kimi-plugin/plugin.json",
                     "marketplace.json",
                     "plugins/creative-writing-skills/.codex-plugin/plugin.json",
                 },
@@ -756,6 +791,8 @@ class ReleaseGitRecoveryTests(unittest.TestCase):
                 ("cw/.claude-plugin/plugin.json", ("version",)),
                 (".claude-plugin/marketplace.json", ("metadata", "version")),
                 ("cw/.zcode-plugin/plugin.json", ("version",)),
+                ("kimi/.kimi-plugin/plugin.json", ("version",)),
+                ("kimi.plugin.json", ("version",)),
             ):
                 value = json.loads((root / path).read_text())
                 for key in keys:

@@ -5,4 +5,4 @@
 Follow the contributor rules in `AGENTS.md`. In particular, edit
 `plugins/creative-writing-skills/` first, regenerate with
 `python3 scripts/sync_claude_distribution.py --apply`, and never hand-edit the
-generated `cw/` tree.
+generated `cw/` or `kimi/` trees or their manifests.

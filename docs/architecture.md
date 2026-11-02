@@ -1,7 +1,7 @@
 # Plugin Architecture
 
 Creative Writing Skills is a Codex-first plugin with one canonical runtime and
-a generated Claude compatibility distribution.
+generated Claude, ZCode, and Kimi Code compatibility distributions.
 
 ## Runtime Flow
 
@@ -88,40 +88,43 @@ Read-only operations never create a scaffold or state store.
 ## Distribution Flow
 
 `plugins/creative-writing-skills/` is the only source of truth. The canonical
-plugin manifest owns version and identity metadata. The Claude generator
+plugin manifest owns version and identity metadata. The compatibility generator
 performs explicit syntax and orchestration transformations and replaces the
-committed compatibility tree transactionally.
+committed compatibility trees transactionally.
 
 ```mermaid
 flowchart LR
     C[Canonical Codex plugin] --> V[Distribution validator]
     C --> G[sync_claude_distribution.py]
     G --> CW[Generated cw/ plugin]
+    G --> K[Generated kimi/ plugin]
+    G --> KM[Generated root Kimi manifest]
     G --> CM[Generated Claude marketplace metadata]
     G --> ZM[Generated ZCode marketplace metadata]
-    CW --> Z[25 deterministic .skill archives]
+    CW --> Z[36 deterministic .skill archives]
 ```
 
 Generated outputs are:
 
-- `cw/skills/` from canonical skills;
-- `cw/agents/` from the worker registry and prompts;
+- `cw/skills/` and `kimi/skills/` from canonical skills;
+- `cw/agents/` and `kimi/agents/` from the worker registry and prompts;
 - `cw/.claude-plugin/plugin.json` from canonical metadata;
 - `cw/.zcode-plugin/plugin.json`, the ZCode plugin manifest;
+- `kimi/.kimi-plugin/plugin.json`, the Kimi Code plugin manifest;
+- `kimi.plugin.json` at the repository root for direct Kimi Code installation;
 - `.claude-plugin/marketplace.json` for Claude marketplace compatibility;
 - `marketplace.json` at the repository root for ZCode marketplace
   compatibility;
 - `zips/*.skill` from the generated Claude skill tree.
 
-Do not hand-edit `cw/`. Change the canonical plugin, run
-`python3 scripts/sync_claude_distribution.py --apply`, and commit the canonical
-and regenerated results together.
+Do not hand-edit `cw/`, `kimi/`, or generated manifests. Change the canonical
+plugin, run `python3 scripts/sync_claude_distribution.py --apply`, and commit
+the canonical and regenerated results together.
 
 ## Release Boundary
 
 `plugins/creative-writing-skills/.codex-plugin/plugin.json` is the sole version
-source. `scripts/release.py` requires a clean `main` branch, rejects an
-existing next-version tag, updates the canonical manifest, regenerates the
-Claude and ZCode metadata, runs the complete verification chain, and only then
-commits and tags. It never pushes unless `--push` is supplied; that push sends
-the branch and tag atomically.
+source. Release-please updates the canonical manifest in its release PR; the
+release workflow regenerates the Claude, ZCode, and Kimi Code outputs, runs the
+complete verification chain, and publishes verified skill archives after the
+PR merges. See `docs/releases.md` for the automated release process.

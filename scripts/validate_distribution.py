@@ -56,6 +56,21 @@ ZCODE_MANIFEST_FIELDS = (
     "repository",
     "license",
 )
+KIMI_MANIFEST_FIELDS = (
+    "name",
+    "version",
+    "description",
+    "author",
+    "homepage",
+    "license",
+)
+KIMI_INTERFACE_FIELDS = (
+    "displayName",
+    "shortDescription",
+    "longDescription",
+    "developerName",
+    "websiteURL",
+)
 EXPECTED_WORKERS = {
     "brainstormer", "character-sim", "continuity-checker", "critic", "editor",
     "outliner", "reader-sim", "style-creator", "web-researcher", "writer",
@@ -89,6 +104,9 @@ ALLOWED_FRONTMATTER_KEYS = {
 WORKER_KEYS = {"name", "description", "prompt", "skills", "access", "claude"}
 SEMVER_RE = re.compile(r"^[0-9]+\.[0-9]+\.[0-9]+$")
 ZCODE_PLUGIN_NAME_RE = re.compile(r"^[a-z0-9][a-z0-9._-]{0,127}$")
+KIMI_SKILL_REFERENCE_RE = re.compile(
+    r"/skill:([A-Za-z0-9_-]+):([a-z][a-z0-9-]*)(?![A-Za-z0-9/-])"
+)
 MARKDOWN_LINK_RE = re.compile(
     r"\[[^]]+\]\((?!https?://|#|mailto:)([^)]+)\)",
     re.IGNORECASE,
@@ -705,11 +723,12 @@ def _validate_config(repo_root: Path, problems: list[str]) -> dict[str, object] 
         return None
     expected_keys = {
         "canonical_skills", "workers",
-        "claude", "zcode",
+        "claude", "zcode", "kimi",
     }
     if set(config) != expected_keys:
         problems.append(
-            "distribution config keys must be canonical_skills, workers, claude, zcode"
+            "distribution config keys must be canonical_skills, workers, "
+            "claude, zcode, kimi"
         )
     inventories = (
         ("canonical skill registry", "canonical_skills", EXPECTED_SKILLS),
@@ -799,6 +818,11 @@ def _validate_config(repo_root: Path, problems: list[str]) -> dict[str, object] 
         problems.append(
             "distribution config ZCode icon must be an absolute HTTPS URL"
         )
+    kimi = config.get("kimi")
+    if not isinstance(kimi, dict) or set(kimi) != {"root", "manifest"}:
+        problems.append("distribution config Kimi fields do not match schema")
+    elif kimi.get("root") != "kimi" or kimi.get("manifest") != "kimi.plugin.json":
+        problems.append("distribution config Kimi paths are not canonical")
     return config
 
 
@@ -1408,6 +1432,221 @@ def _validate_zcode_distribution(
                 )
 
 
+def _validate_kimi_manifest(
+    manifest: dict[str, object],
+    canonical_manifest: dict[str, object] | None,
+    *,
+    root: str,
+    label: str,
+    problems: list[str],
+) -> None:
+    expected_fields = {
+        *KIMI_MANIFEST_FIELDS,
+        "skills",
+        "agents",
+        "interface",
+    }
+    if set(manifest) != expected_fields:
+        problems.append(f"{label} fields do not match the Kimi Code schema")
+    if canonical_manifest is not None:
+        for field in KIMI_MANIFEST_FIELDS:
+            if manifest.get(field) != canonical_manifest.get(field):
+                problems.append(f"{label} {field} does not match canonical manifest")
+        canonical_interface = canonical_manifest.get("interface")
+        interface = manifest.get("interface")
+        if not isinstance(interface, dict) or set(interface) != set(KIMI_INTERFACE_FIELDS):
+            problems.append(f"{label} interface fields do not match the Kimi Code schema")
+        elif isinstance(canonical_interface, dict):
+            for field in KIMI_INTERFACE_FIELDS:
+                if interface.get(field) != canonical_interface.get(field):
+                    problems.append(
+                        f"{label} interface {field} does not match canonical manifest"
+                    )
+    if manifest.get("skills") != f"{root}/skills/":
+        problems.append(f"{label} skills path must be {root}/skills/")
+    if manifest.get("agents") != f"{root}/agents/":
+        problems.append(f"{label} agents path must be {root}/agents/")
+
+
+def _validate_kimi_distribution(
+    repo_root: Path,
+    config: dict[str, object] | None,
+    canonical_manifest: dict[str, object] | None,
+    worker_names: set[str],
+    problems: list[str],
+) -> None:
+    root_value: object = "kimi"
+    root_manifest_value: object = "kimi.plugin.json"
+    if config is not None and isinstance(config.get("kimi"), dict):
+        kimi_config = config["kimi"]
+        root_value = kimi_config.get("root", root_value)
+        root_manifest_value = kimi_config.get("manifest", root_manifest_value)
+
+    root_candidate = repo_root / Path(str(root_value))
+    if root_candidate.is_symlink():
+        problems.append("Kimi Code root must not be a symlink")
+        return
+    kimi_root = _resolve_relative(repo_root, root_value, repo_root)
+    if kimi_root is None:
+        if root_candidate.exists():
+            problems.append("Kimi Code root escapes repository root")
+        return
+    if not kimi_root.exists():
+        return
+
+    manifest_path = kimi_root / ".kimi-plugin" / "plugin.json"
+    if _reject_control_symlink(
+        manifest_path,
+        kimi_root,
+        "Kimi Code plugin manifest",
+        problems,
+    ):
+        manifest = None
+    else:
+        manifest = _load_object(manifest_path, "Kimi Code plugin manifest", problems)
+    if manifest is not None:
+        _validate_kimi_manifest(
+            manifest,
+            canonical_manifest,
+            root=".",
+            label="Kimi Code plugin manifest",
+            problems=problems,
+        )
+
+    root_manifest_candidate = repo_root / Path(str(root_manifest_value))
+    if _reject_control_symlink(
+        root_manifest_candidate,
+        repo_root,
+        "Kimi Code root manifest",
+        problems,
+    ):
+        root_manifest = None
+    else:
+        root_manifest_path = _resolve_relative(
+            repo_root,
+            root_manifest_value,
+            repo_root,
+        )
+        root_manifest = (
+            _load_object(root_manifest_path, "Kimi Code root manifest", problems)
+            if root_manifest_path is not None
+            else None
+        )
+        if root_manifest_path is None:
+            problems.append("Kimi Code root manifest path is not safe")
+    if root_manifest is not None:
+        _validate_kimi_manifest(
+            root_manifest,
+            canonical_manifest,
+            root="./kimi",
+            label="Kimi Code root manifest",
+            problems=problems,
+        )
+
+    skill_root = kimi_root / "skills"
+    valid_skill_root = True
+    if skill_root.is_symlink():
+        problems.append("Kimi Code skills root must not be a symlink")
+        valid_skill_root = False
+    elif skill_root.exists() and not _is_within(skill_root, kimi_root):
+        problems.append("Kimi Code skills root escapes plugin root")
+        valid_skill_root = False
+    skill_dirs = (
+        {
+            path.name: path
+            for path in skill_root.iterdir()
+            if path.is_dir() or path.is_symlink()
+        }
+        if valid_skill_root and skill_root.is_dir() else {}
+    )
+    _check_exact_inventory(
+        "Kimi Code skill directories",
+        set(skill_dirs),
+        EXPECTED_SKILLS,
+        problems,
+    )
+
+    agent_root = kimi_root / "agents"
+    valid_agent_root = True
+    if agent_root.is_symlink():
+        problems.append("Kimi Code agents root must not be a symlink")
+        valid_agent_root = False
+    elif agent_root.exists() and not _is_within(agent_root, kimi_root):
+        problems.append("Kimi Code agents root escapes plugin root")
+        valid_agent_root = False
+    agents = (
+        {path.stem for path in agent_root.glob("*.md") if path.is_file()}
+        if valid_agent_root and agent_root.is_dir() else set()
+    )
+    _check_exact_inventory(
+        "Kimi Code agent files",
+        agents,
+        worker_names | {"muse"},
+        problems,
+    )
+
+    runtime_paths = set()
+    if valid_skill_root and skill_root.is_dir():
+        runtime_paths.update(skill_root.rglob("*"))
+    if valid_agent_root and agent_root.is_dir():
+        runtime_paths.update(agent_root.rglob("*"))
+    for path in sorted(runtime_paths):
+        label = _runtime_label(path, repo_root)
+        if path.is_symlink():
+            problems.append(f"{label}: runtime resource must not be a symlink")
+            continue
+        if path.is_dir():
+            if not _is_within(path, kimi_root):
+                problems.append(f"{label}: runtime resource escapes Kimi Code root")
+            continue
+        if not path.is_file() or path.suffix.lower() not in TEXT_RUNTIME_SUFFIXES:
+            continue
+        if not _is_within(path, kimi_root):
+            problems.append(f"{label}: runtime resource escapes Kimi Code root")
+            continue
+        try:
+            text = path.read_text(encoding="utf-8")
+        except (OSError, UnicodeError) as error:
+            problems.append(f"{label}: cannot read: {error}")
+            continue
+        if (
+            path.name == "SKILL.md"
+            and path.parent.parent == skill_root
+            and path.parent.name in skill_dirs
+        ):
+            _validate_claude_frontmatter(
+                text,
+                label,
+                path.parent.name,
+                path.parent.name in CLAUDE_DISABLE_MODEL_INVOCATION,
+                problems,
+            )
+        elif path.parent == agent_root and path.suffix == ".md":
+            if path.stem in READ_ONLY_WORKERS:
+                if "disallowedTools:\n  - Edit\n  - Write\n" not in text:
+                    problems.append(f"{label}: read-only agent must disallow Edit and Write")
+            elif "disallowedTools:" in text:
+                problems.append(f"{label}: workspace-write agent has tool restrictions")
+        visible = _outside_fences(_without_urls_outside_fences(text))
+        for token in ("spawn_agent", "collaboration."):
+            if token in visible:
+                problems.append(f"{label}: Codex-only vocabulary {token}")
+        for reference in sorted(extract_skill_references(visible, "$")):
+            problems.append(f"{label}: Codex-only skill reference ${reference}")
+        for reference in sorted(extract_skill_references(visible, "/")):
+            if reference in EXPECTED_SKILLS:
+                problems.append(f"{label}: unqualified Kimi Code skill reference /{reference}")
+        for match in KIMI_SKILL_REFERENCE_RE.finditer(visible):
+            plugin, reference = match.groups()
+            if plugin != PLUGIN_NAME or reference not in EXPECTED_SKILLS:
+                problems.append(
+                    f"{label}: dangling Kimi Code skill reference "
+                    f"/skill:{plugin}:{reference}"
+                )
+        for match in PLATFORM_VOCABULARY_RE.finditer(text):
+            problems.append(f"{label}: forbidden runtime vocabulary {match.group(0)}")
+
+
 def validate(repo_root: Path, *, canonical_only: bool = False) -> list[str]:
     repo_root = Path(repo_root)
     problems: list[str] = []
@@ -1438,6 +1677,13 @@ def validate(repo_root: Path, *, canonical_only: bool = False) -> list[str]:
             problems,
         )
         _validate_zcode_distribution(repo_root, config, manifest, problems)
+        _validate_kimi_distribution(
+            repo_root,
+            config,
+            manifest,
+            effective_workers,
+            problems,
+        )
     return list(dict.fromkeys(problems))
 
 
@@ -1446,7 +1692,7 @@ def main(argv: list[str] | None = None, *, repo_root: Path = REPO_ROOT) -> int:
     parser.add_argument(
         "--canonical-only",
         action="store_true",
-        help="skip checks for the generated Claude compatibility distribution",
+        help="skip checks for generated compatibility distributions",
     )
     args = parser.parse_args(argv)
     problems = validate(repo_root, canonical_only=args.canonical_only)

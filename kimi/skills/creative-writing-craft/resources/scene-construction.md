@@ -1,0 +1,66 @@
+---
+name: creative-writing-craft
+description: >
+  How to build scenes: entry, dialogue, pacing, transitions. Use when writing or evaluating how scenes work on the page.
+---
+
+# Scene Construction
+
+How scenes work on the page: how to enter, how dialogue works, how to pace
+beats within and across scenes, how to transition. `/skill:creative-writing-skills:creative-writing-craft` covers
+sentence-level immersion; `/skill:creative-writing-skills:story-planning` covers what scenes do in the
+story.
+
+## Scene Entry
+
+Open in the middle of something happening. A character mid-task,
+mid-conversation, or mid-thought gives the reader something to track
+immediately. Let them orient through action and context.
+
+When the setting itself is the story beat, such as a character seeing a
+destroyed city for the first time or arriving somewhere that changes
+everything, the description carries narrative weight and earns the opening.
+
+## Dialogue
+
+Apply [Dialogue Writing Rules](dialogue-rules.md) and the persistent voice
+roster first. Dialogue can serve several purposes across an exchange; do not
+force multiple purposes into every line. Even a practical answer must have a
+credible reason to be spoken by this character at this moment.
+
+**Subtext.** Characters rarely say exactly what they mean. They deflect,
+understate, change the subject, answer a different question than the one asked.
+The gap between what's said and what's meant can reveal character. Direct
+emotional honesty is also valid when it fits the speaker and moment.
+
+**Voice differentiation.** Each character should sound distinct enough that you
+could identify the speaker without dialogue tags. Vocabulary, sentence
+structure, speech patterns, what they choose to talk about.
+
+**Tags and action beats.** Choose both through the manuscript-language resource
+and the character's evidenced voice. A tag can identify the speaker; an action
+beat can reveal pressure or redirect attention. Do not replace one with the
+other mechanically or import another language's dialogue habits.
+
+## Pacing
+
+Alternate between high-tension and lower-tension beats within a scene.
+Sustained intensity becomes numbing. The quiet moment after the crisis is what
+gives the crisis weight.
+
+Chapter-level: choose an ending that serves the intended experience. Forward
+momentum, closure, rest, a lingering image, or a quiet return can each work.
+
+Sentence-level rhythm (length, structure, speed control) lives in
+`/skill:creative-writing-skills:creative-writing-craft`.
+
+## Transitions
+
+Move between scenes and time periods without losing the reader. A hard scene
+break (whitespace or divider) resets time and place cleanly. A soft transition
+within a scene compresses time: "The next three weeks passed in a blur of
+training."
+
+Match transition weight to what's being skipped. If nothing important happens
+between scenes, a hard break is enough. If the skipped time matters
+emotionally, a brief transitional passage acknowledges it.
