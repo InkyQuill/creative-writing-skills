@@ -19,16 +19,22 @@ CLAUDE_MANIFEST_RELATIVE = Path("cw/.claude-plugin/plugin.json")
 CLAUDE_MARKETPLACE_RELATIVE = Path(".claude-plugin/marketplace.json")
 ZCODE_MANIFEST_RELATIVE = Path("cw/.zcode-plugin/plugin.json")
 ZCODE_MARKETPLACE_RELATIVE = Path("marketplace.json")
+KIMI_MANIFEST_RELATIVE = Path("kimi/.kimi-plugin/plugin.json")
+KIMI_ROOT_MANIFEST_RELATIVE = Path("kimi.plugin.json")
 STAGED_RELEASE_PATHS = (
     MANIFEST_RELATIVE.as_posix(),
     CLAUDE_MANIFEST_RELATIVE.as_posix(),
     ZCODE_MANIFEST_RELATIVE.as_posix(),
+    KIMI_MANIFEST_RELATIVE.as_posix(),
+    KIMI_ROOT_MANIFEST_RELATIVE.as_posix(),
     CLAUDE_MARKETPLACE_RELATIVE.as_posix(),
     ZCODE_MARKETPLACE_RELATIVE.as_posix(),
 )
 RESTORED_RELEASE_PATHS = (
     MANIFEST_RELATIVE.as_posix(),
     "cw",
+    "kimi",
+    KIMI_ROOT_MANIFEST_RELATIVE.as_posix(),
     CLAUDE_MARKETPLACE_RELATIVE.as_posix(),
     ZCODE_MARKETPLACE_RELATIVE.as_posix(),
 )

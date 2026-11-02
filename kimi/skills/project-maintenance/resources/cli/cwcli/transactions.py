@@ -1,0 +1,1803 @@
+"""Persistent plans and content-addressed snapshots for story-file transactions."""
+
+from __future__ import annotations
+
+import difflib
+import errno
+import hashlib
+import json
+import os
+import shutil
+import stat
+import tempfile
+import uuid
+import warnings
+from collections.abc import Callable, Mapping
+from contextlib import contextmanager
+from dataclasses import dataclass
+from datetime import datetime, timezone
+from pathlib import Path, PurePosixPath, PureWindowsPath
+from types import MappingProxyType
+
+from .documents import logical_hash
+from .project import Project
+from .sqlite_store import SQLiteStoreMixin
+
+
+_DIRECTORY_TOKEN_PREFIX = "@directory:"
+
+
+class TransactionError(RuntimeError):
+    """Raised when a guarded transaction cannot be completed safely."""
+
+
+class InterruptedDatabaseWrite(TransactionError):
+    """SQLite rollback requires an explicitly authorized recovery write."""
+
+
+class TransactionConflict(TransactionError):
+    """Raised when current project bytes conflict with a requested transaction."""
+
+
+class _StateDurabilityError(TransactionError):
+    """Raised when a journal state transition is not durably confirmed."""
+
+
+class _TerminalStateInstalledError(_StateDurabilityError):
+    """Raised when a terminal journal state must be treated as authoritative."""
+
+    def __init__(self, message: str, state: str, *, observed: bool):
+        super().__init__(message)
+        self.state = state
+        self.observed = observed
+
+
+@dataclass(frozen=True)
+class Change:
+    """One exact-byte replacement planned for a project-relative file."""
+
+    path: str
+    before: bytes | None
+    after: bytes | None
+
+    def __post_init__(self) -> None:
+        _validate_change_path(self.path)
+
+
+@dataclass(frozen=True)
+class TransactionPlan:
+    """The complete immutable input to a transaction."""
+
+    command: tuple[str, ...]
+    changes: tuple[Change, ...]
+    metadata: Mapping[str, object]
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "command", tuple(self.command))
+        object.__setattr__(self, "changes", tuple(self.changes))
+        object.__setattr__(self, "metadata", _freeze_metadata(self.metadata))
+
+
+@dataclass(frozen=True)
+class TransactionRecord:
+    """An execution-state snapshot of a persisted transaction."""
+
+    id: str
+    state: str
+    completed: tuple[str, ...]
+
+
+class LegacyTransactionStore:
+    """Persist transaction plans beneath a project's protected journal directory."""
+
+    def __init__(self, project: Project):
+        self.project = project
+        self.root = project.root / ".creative-writing" / "transactions"
+        self.directory_sync_hook = _fsync_directory
+
+    def prepare(self, plan: TransactionPlan, *, transaction_id: str | None = None) -> TransactionRecord:
+        """Snapshot ``plan`` and return its newly prepared transaction record."""
+
+        identifier = transaction_id or uuid.uuid4().hex
+        transaction_dir = self._transaction_dir(identifier)
+        if self._require_transactions_directory(allow_missing=True) and _entry_exists(
+            transaction_dir
+        ):
+            raise FileExistsError(f"transaction already exists: {identifier}")
+        self._ensure_layout()
+        if _entry_exists(transaction_dir):
+            raise FileExistsError(f"transaction already exists: {identifier}")
+
+        manifest = {
+            "changes": [self._manifest_change(change) for change in plan.changes],
+            "command": list(plan.command),
+            "completed": [],
+            "intents": [],
+            "metadata": _jsonable(plan.metadata),
+            "state": "prepared",
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        }
+        rendered_manifest = _render_json(manifest)
+
+        self._require_transactions_directory()
+        try:
+            transaction_dir.mkdir()
+            _require_directory(transaction_dir, "transaction directory")
+            self.directory_sync_hook(transaction_dir.parent)
+        except FileExistsError as error:
+            raise FileExistsError(f"transaction already exists: {identifier}") from error
+
+        try:
+            self._write_json(transaction_dir / "manifest.json", rendered_manifest)
+        except BaseException:
+            _require_directory(transaction_dir, "transaction directory")
+            shutil.rmtree(transaction_dir)
+            self.directory_sync_hook(transaction_dir.parent)
+            raise
+        return TransactionRecord(identifier, "prepared", ())
+
+    def load(self, transaction_id: str) -> TransactionRecord:
+        """Load a transaction's state without reading its blob contents."""
+
+        manifest = self._read_manifest(transaction_id)
+        return TransactionRecord(
+            id=transaction_id,
+            state=manifest["state"],
+            completed=tuple(manifest["completed"]),
+        )
+
+    def history(self) -> tuple[dict[str, object], ...]:
+        """Return newest-first manifest summaries without loading content blobs."""
+
+        if not self._require_transactions_directory(allow_missing=True):
+            return ()
+        entries: list[dict[str, object]] = []
+        for transaction_dir in self.root.iterdir():
+            if transaction_dir.name in {"blobs", "revisions"}:
+                label = (
+                    "transaction blob directory"
+                    if transaction_dir.name == "blobs"
+                    else "revision store directory"
+                )
+                _require_directory(transaction_dir, label)
+                continue
+            manifest_path = transaction_dir / "manifest.json"
+            _require_directory(transaction_dir, "transaction directory")
+            _require_regular_file(manifest_path, "transaction manifest")
+            transaction_id = transaction_dir.name
+            manifest = self._read_manifest(transaction_id)
+            changes = manifest.get("changes")
+            entries.append(
+                {
+                    "id": transaction_id,
+                    "state": manifest.get("state"),
+                    "timestamp": manifest.get("timestamp"),
+                    "command": manifest.get("command"),
+                    "metadata": manifest.get("metadata"),
+                    "change_count": len(changes) if isinstance(changes, list) else 0,
+                }
+            )
+        entries.sort(
+            key=lambda entry: (str(entry.get("timestamp") or ""), str(entry["id"])),
+            reverse=True,
+        )
+        return tuple(entries)
+
+    def manifest(self, transaction_id: str) -> dict[str, object]:
+        """Return one stored manifest, including its review diffs but not blob bytes."""
+
+        manifest = self._read_manifest(transaction_id)
+        return {"id": transaction_id, **manifest}
+
+    def write_state(
+        self,
+        transaction_id: str,
+        state: str,
+        *,
+        completed: tuple[str, ...] = (),
+        intents: tuple[str, ...] | None = None,
+    ) -> TransactionRecord:
+        """Atomically replace execution state and optional durable intent progress."""
+
+        manifest_path = self._transaction_dir(transaction_id) / "manifest.json"
+        manifest = self._read_manifest(transaction_id)
+        manifest["state"] = state
+        manifest["completed"] = list(completed)
+        if intents is not None:
+            manifest["intents"] = list(intents)
+        elif "intents" not in manifest:
+            manifest["intents"] = list(completed)
+        self._write_json(manifest_path, _render_json(manifest))
+        return TransactionRecord(transaction_id, state, tuple(completed))
+
+    def blob(self, data: bytes) -> str:
+        """Persist ``data`` once and return its SHA-256 content identifier."""
+
+        if not isinstance(data, bytes):
+            raise TypeError("blob data must be bytes")
+
+        identifier = hashlib.sha256(data).hexdigest()
+        self._ensure_layout()
+        blobs = self.root / "blobs"
+        destination = blobs / identifier
+        if _entry_exists(destination):
+            _require_regular_file(destination, "transaction blob")
+            return identifier
+
+        self._write_bytes(destination, data)
+        return identifier
+
+    def remember_revision(self, logical_hash_value: str, data: bytes) -> str:
+        """Persist the first exact-byte snapshot for one normalized revision."""
+
+        _validate_digest(logical_hash_value, "logical revision hash")
+        if not isinstance(data, bytes):
+            raise TypeError("revision data must be bytes")
+        try:
+            actual_logical_hash = logical_hash(data)
+        except (UnicodeDecodeError, UnicodeError) as error:
+            raise TransactionError("revision data must be valid UTF-8") from error
+        if actual_logical_hash != logical_hash_value:
+            raise ValueError("revision data does not match the supplied logical hash")
+
+        self._ensure_revision_layout()
+        destination = self.root / "revisions" / logical_hash_value
+        if _entry_exists(destination):
+            self._load_revision_entry(logical_hash_value)
+            return logical_hash_value
+
+        temporary = destination.parent / f".{logical_hash_value}.{uuid.uuid4().hex}.tmp"
+        try:
+            temporary.mkdir()
+            _require_directory(temporary, "temporary revision directory")
+            self.directory_sync_hook(temporary.parent)
+            exact_hash = hashlib.sha256(data).hexdigest()
+            self._write_bytes(temporary / "snapshot", data)
+            self._write_json(
+                temporary / "descriptor.json",
+                _render_json(
+                    {"byte_hash": exact_hash, "logical_hash": logical_hash_value}
+                ),
+            )
+            self.directory_sync_hook(temporary)
+            if _entry_exists(destination):
+                raise FileExistsError(f"revision already exists: {logical_hash_value}")
+            os.rename(temporary, destination)
+            self.directory_sync_hook(destination.parent)
+        except FileExistsError:
+            cleanup_error = _remove_internal_directory(
+                temporary, self.directory_sync_hook
+            )
+            if cleanup_error is not None:
+                raise TransactionError(
+                    f"revision collision cleanup failed: {_error_text(cleanup_error)}"
+                ) from cleanup_error
+            self._load_revision_entry(logical_hash_value)
+        except BaseException as error:
+            cleanup_error = _remove_internal_directory(
+                temporary, self.directory_sync_hook
+            )
+            if cleanup_error is not None:
+                raise TransactionError(
+                    f"{_error_text(error)}; temporary revision cleanup failed: "
+                    f"{_error_text(cleanup_error)}"
+                ) from error
+            raise
+        return logical_hash_value
+
+    def load_revision(self, logical_hash_value: str) -> bytes:
+        """Load and verify one exact revision snapshot without following links."""
+
+        _validate_digest(logical_hash_value, "logical revision hash")
+        self._require_transactions_directory()
+        revisions = self.root / "revisions"
+        _require_directory(revisions, "revision store directory")
+        return self._load_revision_entry(logical_hash_value)
+
+    def _load_revision_entry(self, logical_hash_value: str) -> bytes:
+        revision = self.root / "revisions" / logical_hash_value
+        _require_directory(revision, "revision snapshot directory")
+        try:
+            with _open_regular_file(
+                revision / "descriptor.json", "revision descriptor", text=True
+            ) as stream:
+                descriptor = json.load(stream)
+        except (json.JSONDecodeError, UnicodeError) as error:
+            raise TransactionError(
+                f"revision {logical_hash_value} has an invalid descriptor"
+            ) from error
+        if not isinstance(descriptor, dict) or set(descriptor) != {
+            "byte_hash",
+            "logical_hash",
+        }:
+            raise TransactionError(
+                f"revision {logical_hash_value} has an invalid descriptor"
+            )
+        byte_hash = descriptor.get("byte_hash")
+        recorded_logical_hash = descriptor.get("logical_hash")
+        try:
+            _validate_digest(byte_hash, "revision byte hash")
+            _validate_digest(recorded_logical_hash, "recorded logical revision hash")
+        except (TypeError, ValueError) as error:
+            raise TransactionError(
+                f"revision {logical_hash_value} has an invalid descriptor"
+            ) from error
+        if recorded_logical_hash != logical_hash_value:
+            raise TransactionError(
+                f"revision descriptor does not match {logical_hash_value}"
+            )
+        with _open_regular_file(revision / "snapshot", "revision snapshot") as stream:
+            data = stream.read()
+        if hashlib.sha256(data).hexdigest() != byte_hash:
+            raise TransactionError(
+                f"revision {logical_hash_value} exact-byte hash does not match"
+            )
+        try:
+            actual_logical_hash = logical_hash(data)
+        except (UnicodeDecodeError, UnicodeError) as error:
+            raise TransactionError(
+                f"revision {logical_hash_value} is not valid UTF-8"
+            ) from error
+        if actual_logical_hash != logical_hash_value:
+            raise TransactionError(
+                f"revision {logical_hash_value} logical hash does not match"
+            )
+        return data
+
+    def _manifest_change(self, change: Change) -> dict[str, object]:
+        return {
+            "after": self._content_reference(change.after),
+            "before": self._content_reference(change.before),
+            "diff": _unified_diff(change.path, change.before, change.after),
+            "path": change.path,
+        }
+
+    def _content_reference(self, data: bytes | None) -> dict[str, str | None]:
+        if data is None:
+            return {"blob": None, "byte_hash": None, "logical_hash": None}
+
+        identifier = self.blob(data)
+        try:
+            logical_identifier = logical_hash(data)
+        except UnicodeError:
+            logical_identifier = None
+        return {
+            "blob": identifier,
+            "byte_hash": identifier,
+            "logical_hash": logical_identifier,
+        }
+
+    def _read_manifest(self, transaction_id: str) -> dict[str, object]:
+        self._require_transactions_directory()
+        transaction_dir = self._transaction_dir(transaction_id)
+        _require_directory(transaction_dir, "transaction directory")
+        manifest_path = self._transaction_dir(transaction_id) / "manifest.json"
+        with _open_regular_file(manifest_path, "transaction manifest", text=True) as stream:
+            return json.load(stream)
+
+    def read_blob(self, identifier: str) -> bytes:
+        """Read one snapshot without following any protected journal link."""
+
+        if (
+            not isinstance(identifier, str)
+            or len(identifier) != 64
+            or any(character not in "0123456789abcdef" for character in identifier)
+        ):
+            raise ValueError("blob identifier must be a lowercase SHA-256 digest")
+        self._require_transactions_directory()
+        blobs = self.root / "blobs"
+        _require_directory(blobs, "transaction blob directory")
+        with _open_regular_file(blobs / identifier, "transaction blob") as stream:
+            return stream.read()
+
+    def _transaction_dir(self, transaction_id: str) -> Path:
+        if not isinstance(transaction_id, str) or not transaction_id:
+            raise ValueError("transaction id must be a non-empty string")
+        candidate = Path(transaction_id)
+        if candidate.name != transaction_id or transaction_id in {".", ".."}:
+            raise ValueError("transaction id must be a single path component")
+        return self.root / transaction_id
+
+    def _ensure_layout(self) -> None:
+        protected = self.project.root / ".creative-writing"
+        _mkdir_durable(protected, self.directory_sync_hook)
+        _mkdir_durable(self.root, self.directory_sync_hook)
+        _mkdir_durable(self.root / "blobs", self.directory_sync_hook)
+
+    def _ensure_revision_layout(self) -> None:
+        self._ensure_layout()
+        _mkdir_durable(self.root / "revisions", self.directory_sync_hook)
+
+    def _require_transactions_directory(self, *, allow_missing: bool = False) -> bool:
+        protected = self.project.root / ".creative-writing"
+        if not _entry_exists(protected):
+            if allow_missing:
+                return False
+            raise TransactionError("protected .creative-writing directory is missing")
+        _require_directory(protected, "protected .creative-writing directory")
+        if not _entry_exists(self.root):
+            if allow_missing:
+                return False
+            raise TransactionError("transaction directory is missing")
+        _require_directory(self.root, "transaction directory")
+        return True
+
+    def _write_json(self, destination: Path, rendered: str) -> None:
+        _require_directory(destination.parent, "journal write directory")
+        if _entry_exists(destination):
+            _require_regular_file(destination, "transaction manifest")
+        stream = tempfile.NamedTemporaryFile(
+            mode="w",
+            encoding="utf-8",
+            dir=destination.parent,
+            prefix=f".{destination.name}.",
+            suffix=".tmp",
+            delete=False,
+        )
+        temporary = Path(stream.name)
+        try:
+            with stream:
+                stream.write(rendered)
+                stream.flush()
+                os.fsync(stream.fileno())
+            _require_directory(destination.parent, "journal write directory")
+            if _entry_exists(destination):
+                _require_regular_file(destination, "transaction manifest")
+            self.directory_sync_hook(destination.parent)
+            os.replace(temporary, destination)
+            self.directory_sync_hook(destination.parent)
+        except BaseException as error:
+            cleanup_error = _remove_internal_file(
+                temporary, self.directory_sync_hook
+            )
+            if cleanup_error is not None:
+                raise OSError(
+                    f"{_error_text(error)}; temporary cleanup failed: "
+                    f"{_error_text(cleanup_error)}"
+                ) from error
+            raise
+
+    def _write_bytes(self, destination: Path, data: bytes) -> None:
+        _require_directory(destination.parent, "journal write directory")
+        if _entry_exists(destination):
+            raise TransactionError(f"journal destination already exists: {destination.name}")
+        stream = tempfile.NamedTemporaryFile(
+            mode="wb",
+            dir=destination.parent,
+            prefix=f".{destination.name}.",
+            suffix=".tmp",
+            delete=False,
+        )
+        temporary = Path(stream.name)
+        try:
+            with stream:
+                stream.write(data)
+                stream.flush()
+                os.fsync(stream.fileno())
+            _require_directory(destination.parent, "journal write directory")
+            if _entry_exists(destination):
+                raise TransactionError(f"journal destination already exists: {destination.name}")
+            self.directory_sync_hook(destination.parent)
+            os.replace(temporary, destination)
+            self.directory_sync_hook(destination.parent)
+        except BaseException as error:
+            cleanup_error = _remove_internal_file(
+                temporary, self.directory_sync_hook
+            )
+            if cleanup_error is not None:
+                raise OSError(
+                    f"{_error_text(error)}; temporary cleanup failed: "
+                    f"{_error_text(cleanup_error)}"
+                ) from error
+            raise
+
+
+
+class TransactionStore(SQLiteStoreMixin, LegacyTransactionStore):
+    """SQLite journal with a read-only fallback for pre-migration projects."""
+
+
+class TransactionEngine:
+    """Guard, stage, apply, and recover multi-file project transactions."""
+
+    def __init__(self, project: Project):
+        self.project = project
+        self.store = TransactionStore(project)
+        self.replace_hook = os.replace
+        self.unlink_hook = os.unlink
+        self.directory_sync_hook = _fsync_directory
+
+    def preview(self, plan: TransactionPlan) -> dict[str, object]:
+        """Validate ``plan`` against the project and return its read-only preview."""
+
+        self._validate_plan(plan)
+        return {
+            "changes": [
+                {
+                    "action": _change_action(change),
+                    "diff": _unified_diff(change.path, change.before, change.after),
+                    "path": change.path,
+                }
+                for change in plan.changes
+            ],
+            "command": list(plan.command),
+            "metadata": _jsonable(plan.metadata),
+        }
+
+    def apply(
+        self, plan: TransactionPlan, *, transaction_id: str | None = None
+    ) -> TransactionRecord:
+        """Serialize validation and installation across project writers."""
+        with _project_transaction_lock(self.project.root):
+            record = self._apply_locked(plan, transaction_id=transaction_id)
+            try:
+                self.store.prune(keep=record.id)
+            except (OSError, TransactionError, ValueError, TypeError, KeyError) as error:
+                warnings.warn(f"transaction committed; history cleanup deferred: {error}", RuntimeWarning)
+            return record
+
+    def _apply_locked(
+        self, plan: TransactionPlan, *, transaction_id: str | None = None
+    ) -> TransactionRecord:
+        self._validate_plan(plan)
+        identifier = transaction_id or uuid.uuid4().hex
+        for change in plan.changes:
+            if change.after is not None:
+                temporary = self._temporary_path(identifier, change.path)
+                if _entry_exists(temporary):
+                    raise TransactionError(
+                        f"staged transaction sibling already exists for {change.path}"
+                    )
+        prepared = self.store.prepare(plan, transaction_id=identifier)
+        completed: list[str] = []
+        intents: list[str] = []
+        create_directories, remove_directories = self._directory_changes(plan.metadata)
+
+        try:
+            self._write_nonterminal_state(
+                prepared.id, "applying", completed=(), intents=()
+            )
+            for path in create_directories:
+                self._apply_directory_intent(
+                    prepared.id,
+                    _directory_token("create", path),
+                    completed,
+                    intents,
+                )
+            for change in plan.changes:
+                if change.after is not None:
+                    self._write_staged_bytes(prepared.id, change.path, change.after)
+
+            # Staging may take time. Re-resolve and re-read every target before
+            # allowing the first externally visible replacement.
+            self._validate_changes(plan.changes)
+            self._validate_read_guards(plan.metadata)
+
+            for change in plan.changes:
+                intents.append(change.path)
+                self._write_nonterminal_state(
+                    prepared.id,
+                    "applying",
+                    completed=tuple(completed),
+                    intents=tuple(intents),
+                )
+                self._install_change(prepared.id, change)
+                completed.append(change.path)
+                self._write_nonterminal_state(
+                    prepared.id,
+                    "applying",
+                    completed=tuple(completed),
+                    intents=tuple(intents),
+                )
+
+            for path in reversed(remove_directories):
+                self._apply_directory_intent(
+                    prepared.id,
+                    _directory_token("remove", path),
+                    completed,
+                    intents,
+                )
+
+            return self._write_terminal_state(
+                prepared.id,
+                "committed",
+                completed=tuple(completed),
+                intents=tuple(intents),
+            )
+        except _TerminalStateInstalledError as error:
+            reconciliation_errors = self._honor_terminal_state(
+                prepared.id, plan.changes, error.state
+            )
+            outcome = self._terminal_reconciliation_outcome(
+                error, reconciliation_errors
+            )
+            raise TransactionError(
+                f"transaction {prepared.id} could not confirm its terminal state: "
+                f"{_error_text(error)}; {outcome}"
+            ) from error
+        except BaseException as error:
+            state_durability_failed = isinstance(error, _StateDurabilityError)
+            rollback_intents, progress_errors = self._rollback_intents(
+                prepared.id, tuple(intents), tuple(completed)
+            )
+            rollback_errors = progress_errors
+            rollback_errors.extend(
+                self._cleanup_temporaries(prepared.id, plan.changes)
+            )
+            rollback_errors.extend(
+                self._restore_intents(prepared.id, plan.changes, rollback_intents)
+            )
+            rollback_errors.extend(
+                self._cleanup_temporaries(prepared.id, plan.changes)
+            )
+
+            if not state_durability_failed and not rollback_errors:
+                try:
+                    self._write_terminal_state(
+                        prepared.id,
+                        "rolled-back",
+                        completed=tuple(completed),
+                        intents=rollback_intents,
+                    )
+                except _TerminalStateInstalledError as state_error:
+                    reconciliation_errors = self._honor_terminal_state(
+                        prepared.id, plan.changes, state_error.state
+                    )
+                    outcome = self._terminal_reconciliation_outcome(
+                        state_error, reconciliation_errors
+                    )
+                    raise TransactionError(
+                        f"transaction {prepared.id} failed: {_error_text(error)}; "
+                        f"{_error_text(state_error)}; {outcome}"
+                    ) from error
+                except BaseException as state_error:
+                    rollback_errors.append(_error_text(state_error))
+
+            if state_durability_failed:
+                rollback_errors.insert(
+                    0, "a journal state transition was not durably confirmed"
+                )
+
+            if rollback_errors:
+                details = "; ".join(rollback_errors)
+                raise TransactionError(
+                    f"transaction {prepared.id} failed: {_error_text(error)}; "
+                    f"rollback failed and remains recoverable: {details}"
+                ) from error
+            raise TransactionError(
+                f"transaction {prepared.id} failed: {_error_text(error)}; rolled back"
+            ) from error
+
+    def preflight_recovery(self, transaction_id: str) -> TransactionRecord:
+        """Validate a complete rollback without mutating targets or journal state."""
+
+        record = self.store.load(transaction_id)
+        if record.state not in {"prepared", "applying"}:
+            raise TransactionError(
+                f"cannot recover transaction {transaction_id} in state {record.state}"
+            )
+        changes = self._persisted_changes(transaction_id)
+        by_path = {change.path: change for change in changes}
+        if len(by_path) != len(changes):
+            raise TransactionError(f"transaction {transaction_id} contains duplicate paths")
+        intents = self._manifest_intents(transaction_id, record.completed)
+        directory_tokens = set(self._persisted_directory_tokens(transaction_id))
+        if len(set(intents)) != len(intents) or any(
+            path not in by_path and path not in directory_tokens for path in intents
+        ):
+            raise TransactionError(f"transaction {transaction_id} has invalid intent paths")
+        self._resolve_changes(changes)
+        conflicts: list[str] = []
+        created_directories = {
+            relative
+            for token in intents
+            if token.startswith(_DIRECTORY_TOKEN_PREFIX)
+            for action, relative in (_parse_directory_token(token),)
+            if action == "create"
+        }
+        created_files = {
+            path for path in intents if path in by_path and by_path[path].before is None
+        }
+        directory_intents = {
+            path for path in intents if path.startswith(_DIRECTORY_TOKEN_PREFIX)
+        }
+        for path in sorted(directory_tokens):
+            action, relative = _parse_directory_token(path)
+            target = self._directory_target(relative)
+            if path not in directory_intents:
+                expected_present = action == "remove"
+                if _entry_exists(target) != expected_present:
+                    conflicts.append(f"{relative}: changed without durable intent")
+                elif expected_present:
+                    _require_directory(target, "recovery directory")
+                continue
+            if _entry_exists(target):
+                _require_directory(target, "recovery directory intent")
+                if action == "create":
+                    for root, directories, files in os.walk(target, followlinks=False):
+                        root_path = Path(root)
+                        for name in directories:
+                            child = root_path / name
+                            child_relative = child.relative_to(self.project.root).as_posix()
+                            if child.is_symlink() or child_relative not in created_directories:
+                                conflicts.append(
+                                    f"{child_relative}: unexpected entry in created directory"
+                                )
+                        for name in files:
+                            child = root_path / name
+                            child_relative = child.relative_to(self.project.root).as_posix()
+                            if child.is_symlink() or child_relative not in created_files:
+                                conflicts.append(
+                                    f"{child_relative}: unexpected entry in created directory"
+                                )
+            elif action == "remove":
+                _require_directory(target.parent, "recovery directory parent")
+
+        file_intents = {path for path in intents if path in by_path}
+        for change in changes:
+            target = self.project.resolve(change.path, for_write=True)
+            current = self._current_bytes(change.path, target)
+            if change.path not in file_intents and current != change.before:
+                conflicts.append(
+                    f"{change.path}: changed without durable intent"
+                )
+            elif current not in {change.before, change.after}:
+                conflicts.append(
+                    f"{change.path}: current bytes match neither before nor after"
+                )
+            temporary = self._temporary_path(transaction_id, change.path)
+            if _entry_exists(temporary):
+                _require_regular_file(temporary, "staged transaction sibling")
+        if conflicts:
+            raise TransactionConflict("recovery conflicts: " + "; ".join(conflicts))
+        return record
+
+    def recover(self, transaction_id: str) -> TransactionRecord:
+        """Restore interrupted writes while excluding active project writers."""
+        with _project_transaction_lock(self.project.root):
+            return self._recover_locked(transaction_id)
+
+    def _recover_locked(self, transaction_id: str) -> TransactionRecord:
+        # A write-authorized recovery may first let SQLite recover hot journals.
+        with self.store._write_database():
+            pass
+        record = self.preflight_recovery(transaction_id)
+
+        changes = self._persisted_changes(transaction_id)
+        by_path = {change.path: change for change in changes}
+        if len(by_path) != len(changes):
+            raise TransactionError(f"transaction {transaction_id} contains duplicate paths")
+        intents = self._manifest_intents(transaction_id, record.completed)
+        directory_tokens = set(self._persisted_directory_tokens(transaction_id))
+        if len(set(intents)) != len(intents) or any(
+            path not in by_path and path not in directory_tokens for path in intents
+        ):
+            raise TransactionError(
+                f"transaction {transaction_id} has invalid intent paths"
+            )
+
+        # Resolve the complete persisted target set before touching any file.
+        self._resolve_changes(changes)
+        recovery_errors = self._cleanup_temporaries(transaction_id, changes)
+        recovery_errors.extend(self._restore_intents(transaction_id, changes, intents))
+        recovery_errors.extend(self._cleanup_temporaries(transaction_id, changes))
+        if recovery_errors:
+            raise TransactionError(
+                f"recovery of transaction {transaction_id} failed: "
+                + "; ".join(recovery_errors)
+            )
+        try:
+            return self._write_terminal_state(
+                transaction_id,
+                "rolled-back",
+                completed=record.completed,
+                intents=intents,
+            )
+        except _TerminalStateInstalledError as error:
+            reconciliation_errors = self._honor_terminal_state(
+                transaction_id, changes, error.state
+            )
+            outcome = self._terminal_reconciliation_outcome(
+                error, reconciliation_errors
+            )
+            raise TransactionError(
+                f"recovery of transaction {transaction_id} could not confirm its "
+                f"terminal state: {_error_text(error)}; {outcome}"
+            ) from error
+        except BaseException as error:
+            raise TransactionError(
+                f"recovery of transaction {transaction_id} could not durably record "
+                f"rolled-back state: {_error_text(error)}"
+            ) from error
+
+    def inverse(self, transaction_id: str) -> TransactionPlan:
+        """Build an undo plan when the committed after-snapshots still match exactly."""
+
+        manifest = self.store.manifest(transaction_id)
+        if manifest.get("state") != "committed":
+            raise TransactionConflict(
+                f"cannot undo transaction {transaction_id} in state {manifest.get('state')}"
+            )
+        metadata = manifest.get("metadata")
+        if not isinstance(metadata, dict):
+            raise TransactionError(f"transaction {transaction_id} has invalid metadata")
+        if metadata.get("undoable", True) is not True:
+            raise TransactionConflict(f"transaction {transaction_id} is not undoable")
+
+        changes = tuple(
+            Change(change.path, change.after, change.before)
+            for change in self._persisted_changes(transaction_id)
+        )
+        created, removed = self._persisted_directory_changes(transaction_id)
+        inverse = TransactionPlan(
+            command=("undo", transaction_id),
+            changes=changes,
+            metadata={
+                "directory-changes": {"create": removed, "remove": created},
+                "undo-of": transaction_id,
+                "undoable": True,
+            },
+        )
+        try:
+            self._validate_plan(inverse)
+        except TransactionError as error:
+            if "stale precondition" in str(error):
+                raise TransactionConflict(
+                    f"cannot undo transaction {transaction_id}: {error}"
+                ) from error
+            raise
+        return inverse
+
+    def _validate_read_guards(self, metadata):
+        coverage = metadata.get("accepted-coverage-guard")
+        if coverage is not None:
+            from .translation.drafts import validate_accepted_coverage
+            try:
+                validate_accepted_coverage(self.project, _jsonable(coverage))
+            except (KeyError, OSError, TypeError, ValueError) as error:
+                raise TransactionConflict(f"stale accepted coverage: {error}") from error
+        packet = metadata.get("translation-packet")
+        if packet is not None:
+            from .translation.context import rebuild_packet
+            try:
+                plain = _jsonable(packet)
+                current = rebuild_packet(self.project, plain)
+                if plain != current:
+                    raise ValueError("translation context changed")
+            except (KeyError, OSError, TypeError, ValueError) as error:
+                raise TransactionConflict(f"stale translation context: {error}") from error
+        guards = metadata.get("read-guards", {})
+        if not isinstance(guards, Mapping):
+            raise TransactionError("read-guards must be a mapping")
+        for relative, digest in guards.items():
+            _validate_digest(digest, "read guard")
+            try:
+                target = self.project.resolve(relative, for_write=True)
+                with _open_regular_file(target, "guarded source") as stream:
+                    actual = hashlib.sha256(stream.read()).hexdigest()
+            except (OSError, ValueError, TransactionError) as error:
+                raise TransactionConflict(f"unreadable guarded source {relative}: {error}") from error
+            if actual != digest:
+                raise TransactionConflict(f"stale read precondition for {relative}")
+
+    def _validate_plan(self, plan: TransactionPlan) -> None:
+        self._validate_read_guards(plan.metadata)
+        self._validate_directories(plan.metadata)
+        self._validate_changes(plan.changes)
+
+    def _validate_changes(self, planned: tuple[Change, ...]) -> None:
+        changes = self._resolve_changes(planned)
+        for change, target in changes:
+            self._validate_target(change, target)
+
+    def _validate_directories(self, metadata: Mapping[str, object]) -> None:
+        created, removed = self._directory_changes(metadata)
+        created_set = set(created)
+        if created_set.intersection(removed):
+            raise TransactionError("directory cannot be both created and removed")
+        for path in created:
+            target = self._directory_target(path)
+            if _entry_exists(target):
+                raise TransactionConflict(f"stale directory precondition for {path}")
+            parent = target.parent
+            journal_parent_bootstrapped = False
+            while parent != self.project.root and not _entry_exists(parent):
+                relative_parent = parent.relative_to(self.project.root).as_posix()
+                # TransactionStore.prepare() durably bootstraps its protected
+                # journal root before any planned directory intent is applied.
+                if relative_parent == ".creative-writing":
+                    journal_parent_bootstrapped = True
+                    break
+                if relative_parent not in created_set:
+                    raise TransactionError(
+                        f"directory parent is neither present nor planned: {path}"
+                    )
+                parent = parent.parent
+            if not journal_parent_bootstrapped:
+                _require_directory(parent, "transaction directory parent")
+        for path in removed:
+            _require_directory(self._directory_target(path), "transaction removed directory")
+
+    def _directory_changes(
+        self, metadata: Mapping[str, object]
+    ) -> tuple[tuple[str, ...], tuple[str, ...]]:
+        rendered = metadata.get("directory-changes")
+        if rendered is None:
+            return (), ()
+        if not isinstance(rendered, Mapping) or set(rendered) != {"create", "remove"}:
+            raise TransactionError("directory-changes must contain exactly create and remove")
+        groups: list[tuple[str, ...]] = []
+        for action in ("create", "remove"):
+            values = rendered[action]
+            if not isinstance(values, (list, tuple)) or any(
+                not isinstance(path, str) for path in values
+            ):
+                raise TransactionError(f"directory-changes.{action} must be a path array")
+            paths = tuple(values)
+            if len(set(paths)) != len(paths):
+                raise TransactionError(f"directory-changes.{action} contains duplicates")
+            for path in paths:
+                self._directory_target(path)
+            groups.append(tuple(sorted(paths, key=lambda path: (len(PurePosixPath(path).parts), path))))
+        return groups[0], groups[1]
+
+    def _directory_target(self, path: str) -> Path:
+        _validate_change_path(path)
+        if path == ".creative-writing/context":
+            return self.project.root / ".creative-writing" / "context"
+        try:
+            return self.project.resolve(path, for_write=True)
+        except (OSError, ValueError) as error:
+            raise TransactionError(
+                f"unsafe transaction directory {path}: {_error_text(error)}"
+            ) from error
+
+    def _apply_directory_intent(
+        self,
+        transaction_id: str,
+        token: str,
+        completed: list[str],
+        intents: list[str],
+    ) -> None:
+        intents.append(token)
+        self._write_nonterminal_state(
+            transaction_id,
+            "applying",
+            completed=tuple(completed),
+            intents=tuple(intents),
+        )
+        action, path = _parse_directory_token(token)
+        target = self._directory_target(path)
+        if action == "create":
+            _require_directory(target.parent, "transaction directory parent")
+            target.mkdir()
+            self.directory_sync_hook(target.parent)
+        else:
+            _require_directory(target, "transaction removed directory")
+            target.rmdir()
+            self.directory_sync_hook(target.parent)
+        completed.append(token)
+        self._write_nonterminal_state(
+            transaction_id,
+            "applying",
+            completed=tuple(completed),
+            intents=tuple(intents),
+        )
+
+    def _resolve_changes(self, changes: tuple[Change, ...]) -> tuple[tuple[Change, Path], ...]:
+        seen: set[str] = set()
+        resolved: list[tuple[Change, Path]] = []
+        for change in changes:
+            if change.path in seen:
+                raise TransactionError(f"duplicate transaction target: {change.path}")
+            seen.add(change.path)
+            try:
+                target = self.project.resolve(change.path, for_write=True)
+            except (OSError, ValueError) as error:
+                raise TransactionError(
+                    f"unsafe transaction target {change.path}: {_error_text(error)}"
+                ) from error
+            resolved.append((change, target))
+        return tuple(resolved)
+
+    def _validate_target(self, change: Change, target: Path) -> None:
+        try:
+            if not target.exists():
+                actual = None
+            elif not target.is_file():
+                raise TransactionError(
+                    f"stale precondition for {change.path}: target is not a regular file"
+                )
+            else:
+                actual = target.read_bytes()
+        except TransactionError:
+            raise
+        except OSError as error:
+            raise TransactionError(
+                f"could not read transaction target {change.path}: {_error_text(error)}"
+            ) from error
+
+        if actual != change.before:
+            raise TransactionConflict(f"stale precondition for {change.path}")
+
+    def _install_change(self, transaction_id: str, change: Change) -> None:
+        target = self.project.resolve(change.path, for_write=True)
+        if change.after is None:
+            if change.before is not None:
+                self._mutate_and_sync(
+                    lambda: self.unlink_hook(target), target.parent
+                )
+            return
+        temporary = self._temporary_path(transaction_id, change.path)
+        self._mutate_and_sync(
+            lambda: self.replace_hook(temporary, target), target.parent
+        )
+
+    def _rollback_intents(
+        self,
+        transaction_id: str,
+        local_intents: tuple[str, ...],
+        completed: tuple[str, ...],
+    ) -> tuple[tuple[str, ...], list[str]]:
+        errors: list[str] = []
+        persisted_intents: tuple[str, ...] = ()
+        try:
+            persisted_intents = self._manifest_intents(transaction_id, completed)
+        except BaseException as error:
+            errors.append(f"could not reload durable intents: {_error_text(error)}")
+        return _ordered_union(persisted_intents, completed, local_intents), errors
+
+    def _restore_intents(
+        self,
+        transaction_id: str,
+        changes: tuple[Change, ...],
+        intents: tuple[str, ...],
+    ) -> list[str]:
+        by_path = {change.path: change for change in changes}
+        errors: list[str] = []
+        for path in reversed(intents):
+            if path.startswith(_DIRECTORY_TOKEN_PREFIX):
+                try:
+                    self._restore_directory_intent(path)
+                except BaseException as error:
+                    errors.append(f"{path}: {_error_text(error)}")
+                continue
+            change = by_path.get(path)
+            if change is None:
+                errors.append(f"{path}: intent has no persisted change")
+                continue
+            try:
+                self._restore_if_needed(transaction_id, change)
+            except BaseException as error:
+                errors.append(f"{path}: {_error_text(error)}")
+        return errors
+
+    def _restore_directory_intent(self, token: str) -> None:
+        action, path = _parse_directory_token(token)
+        target = self._directory_target(path)
+        if action == "create":
+            if not _entry_exists(target):
+                return
+            _require_directory(target, "rollback created directory")
+            target.rmdir()
+            self.directory_sync_hook(target.parent)
+            return
+        if _entry_exists(target):
+            _require_directory(target, "rollback removed directory")
+            return
+        _require_directory(target.parent, "rollback directory parent")
+        target.mkdir()
+        self.directory_sync_hook(target.parent)
+
+    def _restore_if_needed(self, transaction_id: str, change: Change) -> None:
+        target = self.project.resolve(change.path, for_write=True)
+        current = self._current_bytes(change.path, target)
+        if current == change.before:
+            return
+        if current != change.after:
+            raise TransactionError(
+                f"recovery conflict for {change.path}: current bytes match neither before nor after"
+            )
+
+        self._remove_temporary(transaction_id, change.path)
+        if change.before is None:
+            try:
+                self._mutate_and_sync(lambda: self.unlink_hook(target), target.parent)
+            except BaseException as error:
+                if isinstance(error, TransactionError) or self._current_bytes(
+                    change.path, target
+                ) != change.before:
+                    raise
+            return
+        self._write_staged_bytes(transaction_id, change.path, change.before)
+        temporary = self._temporary_path(transaction_id, change.path)
+        try:
+            self._mutate_and_sync(
+                lambda: self.replace_hook(temporary, target), target.parent
+            )
+        except BaseException as error:
+            if isinstance(error, TransactionError) or self._current_bytes(
+                change.path, target
+            ) != change.before:
+                raise
+
+    def _honor_terminal_state(
+        self, transaction_id: str, changes: tuple[Change, ...], state: str
+    ) -> list[str]:
+        errors: list[str] = []
+        created, removed = self._persisted_directory_changes(transaction_id)
+        present = created if state == "committed" else removed
+        absent = removed if state == "committed" else created
+        for path in present:
+            try:
+                target = self._directory_target(path)
+                if not _entry_exists(target):
+                    _require_directory(target.parent, "terminal directory parent")
+                    target.mkdir()
+                    self.directory_sync_hook(target.parent)
+                else:
+                    _require_directory(target, "terminal directory")
+            except BaseException as error:
+                errors.append(f"{path}: {_error_text(error)}")
+        for change in changes:
+            try:
+                self._reconcile_terminal_change(transaction_id, change, state)
+            except BaseException as error:
+                errors.append(f"{change.path}: {_error_text(error)}")
+        errors.extend(self._cleanup_temporaries(transaction_id, changes))
+        for path in reversed(absent):
+            try:
+                target = self._directory_target(path)
+                if _entry_exists(target):
+                    _require_directory(target, "terminal removed directory")
+                    target.rmdir()
+                    self.directory_sync_hook(target.parent)
+            except BaseException as error:
+                errors.append(f"{path}: {_error_text(error)}")
+        return errors
+
+    def _reconcile_terminal_change(
+        self, transaction_id: str, change: Change, state: str
+    ) -> None:
+        if state not in {"committed", "rolled-back"}:
+            raise TransactionError(f"unknown terminal state {state}")
+        target = self.project.resolve(change.path, for_write=True)
+        desired = change.after if state == "committed" else change.before
+        opposite = change.before if state == "committed" else change.after
+        current = self._current_bytes(change.path, target)
+        if current == desired:
+            return
+        if current != opposite:
+            raise TransactionError(
+                f"terminal reconciliation conflict: current bytes match neither "
+                f"the {state} snapshot nor its opposite"
+            )
+
+        self._remove_temporary(transaction_id, change.path)
+        if desired is None:
+            self._mutate_and_sync(lambda: self.unlink_hook(target), target.parent)
+            return
+        self._write_staged_bytes(transaction_id, change.path, desired)
+        temporary = self._temporary_path(transaction_id, change.path)
+        self._mutate_and_sync(
+            lambda: self.replace_hook(temporary, target), target.parent
+        )
+
+    @staticmethod
+    def _terminal_reconciliation_outcome(
+        error: _TerminalStateInstalledError, errors: list[str]
+    ) -> str:
+        if error.observed:
+            outcome = f"{error.state} state is terminal and was honored"
+        else:
+            outcome = (
+                f"{error.state} state could not be ruled out and its filesystem "
+                f"snapshot was preserved"
+            )
+        if errors:
+            outcome += "; terminal filesystem reconciliation failed: " + "; ".join(
+                errors
+            )
+        return outcome
+
+    def _current_bytes(self, path: str, target: Path) -> bytes | None:
+        try:
+            if not target.exists():
+                return None
+            if not target.is_file():
+                raise TransactionError(
+                    f"recovery conflict for {path}: target is not a regular file"
+                )
+            return target.read_bytes()
+        except TransactionError:
+            raise
+        except OSError as error:
+            raise TransactionError(
+                f"could not classify recovery target {path}: {_error_text(error)}"
+            ) from error
+
+    def _cleanup_temporaries(
+        self, transaction_id: str, changes: tuple[Change, ...]
+    ) -> list[str]:
+        errors: list[str] = []
+        for change in changes:
+            try:
+                self._remove_temporary(transaction_id, change.path)
+            except BaseException as error:
+                errors.append(
+                    f"could not clean temporary sibling for {change.path}: {_error_text(error)}"
+                )
+        return errors
+
+    def _remove_temporary(self, transaction_id: str, path: str) -> None:
+        temporary = self._temporary_path(transaction_id, path)
+        if _entry_exists(temporary):
+            _require_regular_file(temporary, "staged transaction sibling")
+            temporary.unlink()
+            self.directory_sync_hook(temporary.parent)
+
+    def _write_staged_bytes(self, transaction_id: str, path: str, data: bytes) -> Path:
+        destination = self._temporary_path(transaction_id, path)
+        _require_directory(destination.parent, "transaction target directory")
+        if _entry_exists(destination):
+            raise TransactionError(f"staged transaction sibling already exists for {path}")
+        descriptor = os.open(
+            destination,
+            os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0),
+            0o600,
+        )
+        try:
+            with os.fdopen(descriptor, "wb") as stream:
+                descriptor = -1
+                stream.write(data)
+                stream.flush()
+                os.fsync(stream.fileno())
+            self.directory_sync_hook(destination.parent)
+        except BaseException as error:
+            if descriptor >= 0:
+                os.close(descriptor)
+            cleanup_error = _remove_internal_file(
+                destination, self.directory_sync_hook
+            )
+            if cleanup_error is not None:
+                raise TransactionError(
+                    f"{_error_text(error)}; staged temporary cleanup failed: "
+                    f"{_error_text(cleanup_error)}"
+                ) from error
+            raise
+        return destination
+
+    def _mutate_and_sync(self, mutation: Callable[[], object], directory: Path) -> None:
+        mutation_error: BaseException | None = None
+        try:
+            mutation()
+        except BaseException as error:
+            mutation_error = error
+
+        sync_error: BaseException | None = None
+        try:
+            self.directory_sync_hook(directory)
+        except BaseException as error:
+            sync_error = error
+
+        if mutation_error is not None and sync_error is not None:
+            raise TransactionError(
+                f"mutation failed: {_error_text(mutation_error)}; target directory fsync failed: "
+                f"{_error_text(sync_error)}"
+            ) from mutation_error
+        if mutation_error is not None:
+            raise mutation_error
+        if sync_error is not None:
+            raise TransactionError(
+                f"target directory fsync failed: {_error_text(sync_error)}"
+            ) from sync_error
+
+    def _write_nonterminal_state(
+        self,
+        transaction_id: str,
+        state: str,
+        *,
+        completed: tuple[str, ...],
+        intents: tuple[str, ...],
+    ) -> TransactionRecord:
+        try:
+            return self.store.write_state(
+                transaction_id, state, completed=completed, intents=intents
+            )
+        except BaseException as error:
+            raise _StateDurabilityError(
+                f"could not durably persist {state} state for transaction "
+                f"{transaction_id}: {_error_text(error)}"
+            ) from error
+
+    def _write_terminal_state(
+        self,
+        transaction_id: str,
+        state: str,
+        *,
+        completed: tuple[str, ...],
+        intents: tuple[str, ...],
+    ) -> TransactionRecord:
+        previous = self.store.load(transaction_id)
+        previous_intents = self._manifest_intents(transaction_id, previous.completed)
+        if previous.state not in {"prepared", "applying"}:
+            raise _StateDurabilityError(
+                f"transaction {transaction_id} is already terminal in state {previous.state}"
+            )
+        try:
+            return self.store.write_state(
+                transaction_id, state, completed=completed, intents=intents
+            )
+        except BaseException as error:
+            revert_errors: list[str] = []
+            terminal_observed = False
+            try:
+                observed = self.store.load(transaction_id)
+                if observed.state == state:
+                    terminal_observed = True
+                    self.store.write_state(
+                        transaction_id,
+                        previous.state,
+                        completed=previous.completed,
+                        intents=previous_intents,
+                    )
+            except BaseException as revert_error:
+                revert_errors.append(
+                    f"could not restore nonterminal journal state: {_error_text(revert_error)}"
+                )
+
+            final_record: TransactionRecord | None = None
+            try:
+                final_record = self.store.load(transaction_id)
+            except BaseException as observation_error:
+                revert_errors.append(
+                    f"could not observe final journal state: {_error_text(observation_error)}"
+                )
+
+            suffix = "" if not revert_errors else "; " + "; ".join(revert_errors)
+            if final_record is not None and final_record.state in {
+                "committed",
+                "rolled-back",
+            }:
+                raise _TerminalStateInstalledError(
+                    f"could not durably persist terminal {state} state for transaction "
+                    f"{transaction_id}: {_error_text(error)}{suffix}",
+                    final_record.state,
+                    observed=True,
+                ) from error
+            if final_record is None:
+                raise _TerminalStateInstalledError(
+                    f"could not durably persist terminal {state} state for transaction "
+                    f"{transaction_id}: {_error_text(error)}{suffix}",
+                    state,
+                    observed=terminal_observed,
+                ) from error
+            raise _StateDurabilityError(
+                f"could not durably persist terminal {state} state for transaction "
+                f"{transaction_id}: {_error_text(error)}{suffix}"
+            ) from error
+
+    def _manifest_intents(
+        self, transaction_id: str, completed: tuple[str, ...]
+    ) -> tuple[str, ...]:
+        manifest = self.store._read_manifest(transaction_id)
+        rendered = manifest.get("intents", [])
+        if not isinstance(rendered, list) or any(
+            not isinstance(path, str) for path in rendered
+        ):
+            raise TransactionError(
+                f"transaction {transaction_id} has invalid durable intents"
+            )
+        rendered_intents = tuple(rendered)
+        if (
+            len(set(rendered_intents)) != len(rendered_intents)
+            or any(not isinstance(path, str) for path in completed)
+            or len(set(completed)) != len(completed)
+        ):
+            raise TransactionError(
+                f"transaction {transaction_id} has duplicate or invalid progress paths"
+            )
+        return _ordered_union(rendered_intents, completed)
+
+    def _persisted_directory_changes(
+        self, transaction_id: str
+    ) -> tuple[tuple[str, ...], tuple[str, ...]]:
+        manifest = self.store._read_manifest(transaction_id)
+        metadata = manifest.get("metadata")
+        if not isinstance(metadata, dict):
+            raise TransactionError(f"transaction {transaction_id} has invalid metadata")
+        return self._directory_changes(metadata)
+
+    def _persisted_directory_tokens(self, transaction_id: str) -> tuple[str, ...]:
+        created, removed = self._persisted_directory_changes(transaction_id)
+        return tuple(
+            [*(_directory_token("create", path) for path in created),
+             *(_directory_token("remove", path) for path in removed)]
+        )
+
+    def _temporary_path(self, transaction_id: str, path: str) -> Path:
+        self.store._transaction_dir(transaction_id)
+        target = self.project.resolve(path, for_write=True)
+        identity = hashlib.sha256(f"{transaction_id}\0{path}".encode("utf-8")).hexdigest()
+        return target.parent / f".cw-transaction-{identity}.tmp"
+
+    def _persisted_changes(self, transaction_id: str) -> tuple[Change, ...]:
+        manifest = self.store._read_manifest(transaction_id)
+        rendered_changes = manifest.get("changes")
+        if not isinstance(rendered_changes, list):
+            raise TransactionError(f"transaction {transaction_id} has invalid changes")
+
+        changes: list[Change] = []
+        try:
+            for rendered in rendered_changes:
+                if not isinstance(rendered, dict):
+                    raise TypeError("change must be an object")
+                path = rendered["path"]
+                if not isinstance(path, str):
+                    raise TypeError("change path must be a string")
+                before = self._read_blob_reference(rendered["before"])
+                after = self._read_blob_reference(rendered["after"])
+                changes.append(Change(path, before, after))
+        except (KeyError, OSError, TypeError, ValueError) as error:
+            raise TransactionError(
+                f"transaction {transaction_id} has invalid snapshots: {_error_text(error)}"
+            ) from error
+        return tuple(changes)
+
+    def _read_blob_reference(self, reference: object) -> bytes | None:
+        if not isinstance(reference, dict):
+            raise TypeError("content reference must be an object")
+        identifier = reference.get("blob")
+        if identifier is None:
+            return None
+        if (
+            not isinstance(identifier, str)
+            or len(identifier) != 64
+            or any(character not in "0123456789abcdef" for character in identifier)
+        ):
+            raise ValueError("blob identifier must be a lowercase SHA-256 digest")
+        data = self.store.read_blob(identifier)
+        if hashlib.sha256(data).hexdigest() != identifier:
+            raise ValueError(f"blob content does not match identifier {identifier}")
+        return data
+
+
+def _fsync_directory(directory: Path) -> bool:
+    """Fsync a directory, or warn and return false when the platform cannot.
+
+    POSIX filesystems normally support opening a directory and syncing its entry
+    table. Some platforms, notably Windows, reject that operation. On those
+    platforms file contents are still fsynced and atomic replacement is used, but
+    crash durability of directory entries remains explicitly best-effort.
+    """
+
+    flags = (
+        os.O_RDONLY
+        | getattr(os, "O_DIRECTORY", 0)
+        | getattr(os, "O_NOFOLLOW", 0)
+    )
+    try:
+        descriptor = os.open(directory, flags)
+    except OSError as error:
+        if _directory_fsync_unsupported(error):
+            warnings.warn(
+                "directory fsync is unsupported on this platform; transaction "
+                "directory-entry durability is best-effort",
+                RuntimeWarning,
+                stacklevel=2,
+            )
+            return False
+        raise
+
+    try:
+        if not stat.S_ISDIR(os.fstat(descriptor).st_mode):
+            raise NotADirectoryError(f"not an ordinary directory: {directory}")
+        os.fsync(descriptor)
+    except OSError as error:
+        if _directory_fsync_unsupported(error):
+            warnings.warn(
+                "directory fsync is unsupported on this platform; transaction "
+                "directory-entry durability is best-effort",
+                RuntimeWarning,
+                stacklevel=2,
+            )
+            return False
+        raise
+    finally:
+        os.close(descriptor)
+    return True
+
+
+def _directory_fsync_unsupported(error: OSError) -> bool:
+    unsupported = {
+        errno.EINVAL,
+        getattr(errno, "ENOTSUP", errno.EINVAL),
+        getattr(errno, "EOPNOTSUPP", errno.EINVAL),
+    }
+    if error.errno in unsupported:
+        return True
+    return os.name == "nt" and error.errno in {
+        errno.EACCES,
+        errno.EPERM,
+        getattr(errno, "EISDIR", errno.EACCES),
+    }
+
+
+def _mkdir_durable(directory: Path, sync_hook: Callable[[Path], object]) -> None:
+    missing: list[Path] = []
+    current = directory
+    while not _entry_exists(current):
+        missing.append(current)
+        if current.parent == current:
+            break
+        current = current.parent
+    _require_directory(current, "journal directory ancestor")
+    for created in reversed(missing):
+        _require_directory(created.parent, "journal directory parent")
+        created.mkdir()
+        _require_directory(created, "journal directory")
+        sync_hook(created.parent)
+    _require_directory(directory, "journal directory")
+
+
+def _remove_internal_file(
+    path: Path, sync_hook: Callable[[Path], object]
+) -> BaseException | None:
+    if not _entry_exists(path):
+        return None
+    try:
+        _require_regular_file(path, "internal temporary file")
+        path.unlink()
+        sync_hook(path.parent)
+    except BaseException as error:
+        return error
+    return None
+
+
+def _remove_internal_directory(
+    path: Path, sync_hook: Callable[[Path], object]
+) -> BaseException | None:
+    if not _entry_exists(path):
+        return None
+    try:
+        _require_directory(path, "internal temporary directory")
+        shutil.rmtree(path)
+        sync_hook(path.parent)
+    except BaseException as error:
+        return error
+    return None
+
+
+def _entry_exists(path: Path) -> bool:
+    try:
+        os.lstat(path)
+    except FileNotFoundError:
+        return False
+    return True
+
+
+def _require_directory(path: Path, label: str) -> None:
+    try:
+        mode = os.lstat(path).st_mode
+    except FileNotFoundError as error:
+        raise TransactionError(f"{label} is missing: {path}") from error
+    if not stat.S_ISDIR(mode):
+        raise TransactionError(f"{label} must be an ordinary directory without links: {path}")
+
+
+def _require_regular_file(path: Path, label: str) -> None:
+    try:
+        mode = os.lstat(path).st_mode
+    except FileNotFoundError as error:
+        raise TransactionError(f"{label} is missing: {path}") from error
+    if not stat.S_ISREG(mode):
+        raise TransactionError(f"{label} must be an ordinary file without links: {path}")
+
+
+def _open_regular_file(path: Path, label: str, *, text: bool = False):
+    _require_regular_file(path, label)
+    descriptor = os.open(path, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0))
+    try:
+        if not stat.S_ISREG(os.fstat(descriptor).st_mode):
+            raise TransactionError(f"{label} must be an ordinary file without links: {path}")
+        if text:
+            return os.fdopen(descriptor, "r", encoding="utf-8")
+        return os.fdopen(descriptor, "rb")
+    except BaseException:
+        os.close(descriptor)
+        raise
+
+
+def _ordered_union(*groups: tuple[str, ...]) -> tuple[str, ...]:
+    seen: set[str] = set()
+    ordered: list[str] = []
+    for group in groups:
+        for path in group:
+            if path not in seen:
+                seen.add(path)
+                ordered.append(path)
+    return tuple(ordered)
+
+
+def _unified_diff(path: str, before: bytes | None, after: bytes | None) -> str:
+    """Render an exact textual review diff for a planned byte replacement."""
+
+    try:
+        before_text = "" if before is None else before.decode("utf-8")
+        after_text = "" if after is None else after.decode("utf-8")
+    except UnicodeDecodeError:
+        return (
+            f"Binary change: {path}\n"
+            f"before: {_binary_summary(before)}\n"
+            f"after: {_binary_summary(after)}\n"
+        )
+    return "".join(
+        difflib.unified_diff(
+            before_text.splitlines(keepends=True),
+            after_text.splitlines(keepends=True),
+            fromfile=path,
+            tofile=path,
+        )
+    )
+
+
+def _binary_summary(data: bytes | None) -> str:
+    if data is None:
+        return "absent"
+    preview = data[:32].hex()
+    suffix = "" if len(data) <= 32 else "..."
+    return (
+        f"size={len(data)} sha256={hashlib.sha256(data).hexdigest()} "
+        f"hex={preview}{suffix}"
+    )
+
+
+def _freeze_metadata(metadata: Mapping[str, object]) -> Mapping[str, object]:
+    if not isinstance(metadata, Mapping):
+        raise TypeError("transaction metadata must be a mapping")
+    return MappingProxyType({key: _freeze_jsonlike(value) for key, value in metadata.items()})
+
+
+def _freeze_jsonlike(value: object) -> object:
+    if isinstance(value, Mapping):
+        return MappingProxyType({key: _freeze_jsonlike(item) for key, item in value.items()})
+    if isinstance(value, (list, tuple)):
+        return tuple(_freeze_jsonlike(item) for item in value)
+    if isinstance(value, (set, frozenset)):
+        return frozenset(_freeze_jsonlike(item) for item in value)
+    return value
+
+
+def _jsonable(value: object) -> object:
+    if isinstance(value, Mapping):
+        return {key: _jsonable(item) for key, item in value.items()}
+    if isinstance(value, tuple):
+        return [_jsonable(item) for item in value]
+    return value
+
+
+def _render_json(value: object) -> str:
+    return json.dumps(value, ensure_ascii=False, indent=2, sort_keys=True) + "\n"
+
+
+def _validate_change_path(path: str) -> None:
+    if not isinstance(path, str) or not path:
+        raise ValueError("change path must be a non-empty project-relative POSIX path")
+    if "\\" in path:
+        raise ValueError("change path must use forward slashes")
+
+    posix = PurePosixPath(path)
+    windows = PureWindowsPath(path)
+    if posix.is_absolute() or windows.is_absolute() or windows.drive or windows.root:
+        raise ValueError("change path must be project-relative")
+
+    segments = path.split("/")
+    if any(segment in {"", ".", ".."} for segment in segments):
+        raise ValueError("change path must be a normalized project-relative identity")
+
+
+def _validate_digest(value: object, label: str) -> None:
+    if (
+        not isinstance(value, str)
+        or len(value) != 64
+        or any(character not in "0123456789abcdef" for character in value)
+    ):
+        raise ValueError(f"{label} must be a lowercase SHA-256 digest")
+
+
+def _directory_token(action: str, path: str) -> str:
+    if action not in {"create", "remove"}:
+        raise ValueError("directory action must be create or remove")
+    _validate_change_path(path)
+    return f"{_DIRECTORY_TOKEN_PREFIX}{action}:{path}"
+
+
+def _parse_directory_token(token: str) -> tuple[str, str]:
+    if not isinstance(token, str) or not token.startswith(_DIRECTORY_TOKEN_PREFIX):
+        raise TransactionError("invalid directory intent token")
+    rendered = token[len(_DIRECTORY_TOKEN_PREFIX) :]
+    try:
+        action, path = rendered.split(":", 1)
+    except ValueError as error:
+        raise TransactionError("invalid directory intent token") from error
+    if action not in {"create", "remove"}:
+        raise TransactionError("invalid directory intent action")
+    _validate_change_path(path)
+    return action, path
+
+
+def _change_action(change: Change) -> str:
+    if change.before is None and change.after is not None:
+        return "create"
+    if change.before is not None and change.after is None:
+        return "delete"
+    return "update"
+
+
+def _error_text(error: BaseException) -> str:
+    return str(error) or type(error).__name__
+
+
+__all__ = [
+    "Change",
+    "TransactionConflict",
+    "TransactionEngine",
+    "TransactionError",
+    "TransactionPlan",
+    "TransactionRecord",
+    "TransactionStore",
+]
+
+
+@contextmanager
+def _project_transaction_lock(root: Path):
+    """Lock the stable project directory inode, without a removable lock file."""
+    _require_directory(root, 'project root')
+    if os.name == 'nt':
+        with _windows_project_mutex(root):
+            yield
+        return
+    try:
+        import fcntl
+    except ImportError as error:
+        raise TransactionError('project transaction locking is unsupported on this platform') from error
+    descriptor = os.open(root, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+    try:
+        fcntl.flock(descriptor, fcntl.LOCK_EX)
+        yield
+    finally:
+        os.close(descriptor)
+
+
+@contextmanager
+def _windows_project_mutex(root: Path):
+    """Use a kernel mutex across processes and sessions, released on process exit."""
+    import ctypes
+    from ctypes import wintypes
+
+    kernel = ctypes.WinDLL('kernel32', use_last_error=True)
+    kernel.CreateMutexW.argtypes = (ctypes.c_void_p, wintypes.BOOL, wintypes.LPCWSTR)
+    kernel.CreateMutexW.restype = wintypes.HANDLE
+    kernel.WaitForSingleObject.argtypes = (wintypes.HANDLE, wintypes.DWORD)
+    kernel.WaitForSingleObject.restype = wintypes.DWORD
+    kernel.ReleaseMutex.argtypes = (wintypes.HANDLE,)
+    kernel.ReleaseMutex.restype = wintypes.BOOL
+    kernel.CloseHandle.argtypes = (wintypes.HANDLE,)
+    kernel.CloseHandle.restype = wintypes.BOOL
+    identity = hashlib.sha256(os.path.normcase(str(root.resolve())).encode('utf-8')).hexdigest()
+    handle = kernel.CreateMutexW(None, False, 'Global\\cwcli-transaction-' + identity)
+    if not handle:
+        raise TransactionError(f'cannot create project mutex: {ctypes.WinError(ctypes.get_last_error())}')
+    acquired = False
+    try:
+        result = kernel.WaitForSingleObject(handle, 0xFFFFFFFF)
+        # An abandoned mutex transfers ownership too; journal recovery remains
+        # explicit and the ordinary before-snapshot guards still run.
+        if result not in (0, 0x80):
+            raise TransactionError(f'cannot acquire project mutex: {ctypes.WinError(ctypes.get_last_error())}')
+        acquired = True
+        yield
+    finally:
+        if acquired:
+            kernel.ReleaseMutex(handle)
+        kernel.CloseHandle(handle)

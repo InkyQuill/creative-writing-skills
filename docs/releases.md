@@ -19,7 +19,8 @@ On pushes to `main`, release-please opens or updates one release PR containing:
 The canonical plugin manifest remains the runtime/distribution version source.
 `version.txt` and the release-please manifest must match it and are checked by CI;
 do not update these independently. The workflow runs the ordinary distribution
-generator on the bot branch and commits derived Claude/ZCode metadata there.
+generator on the bot branch and commits derived Claude, ZCode, and Kimi Code
+metadata there.
 Generated files are never edited by release-please directly.
 
 CI is explicitly dispatched on the synchronized PR branch. Publication invokes
@@ -41,8 +42,9 @@ SHA and `v<version>` tag. The release workflow:
 4. Changes the merged release PR label from `autorelease: pending` to
    `autorelease: tagged` after publication.
 
-Codex, Claude Code, and ZCode consume the committed plugin/marketplace trees;
-Claude.ai packages are the `.skill` release attachments. No separate package
+Codex, Claude Code, ZCode, and Kimi Code consume the committed
+plugin/marketplace trees; Claude.ai packages are the `.skill` release
+attachments. No separate package
 registry or deployment service is involved. Release PRs are not auto-merged.
 
 ## Enable once

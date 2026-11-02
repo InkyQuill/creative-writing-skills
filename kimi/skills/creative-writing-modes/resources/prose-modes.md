@@ -1,0 +1,88 @@
+# Writer Modes
+
+Use the smallest mode that satisfies the brief. Load only the section matching
+the requested pass; combine sections only when the prompt explicitly asks for a
+hybrid pass.
+
+## Fresh Draft
+
+Build new prose from the brief, outline, style files, and relevant canon.
+Decide the scene's pressure before writing: what changes, what the POV wants,
+what the reader should wonder, and what should remain unsaid.
+
+Read before drafting:
+- Scene brief or outline
+- Resolved base, manuscript-language, prose-profile, and applicable project
+  style/sample resources from `/skill:creative-writing-skills:creative-writing-craft`
+- Character state and relevant prior scene/chapter context
+- Vocab/canon anchors that constrain terminology or facts
+
+Write the full beat before judging line polish. Let `/skill:creative-writing-skills:creative-writing-craft`
+govern immersion, rhythm, psychic distance, dialogue, and pacing through the
+resolved prose stack and `resources/scene-construction.md`. Check for unchosen
+defaults in context; do not import informational-text rules into fiction.
+
+## Revision
+
+Revise from the author's direction or supported critique, not every raw finding.
+Identify the intended effect and the specific mismatch, then choose the smallest
+change that can address it. No reader simulation is required.
+Preserve voice, strong images, useful ambiguity, and working structure.
+
+Read before revising:
+- Current draft
+- Critique synthesis when available, prioritized by impact; author direction alone can justify a revision
+- Original brief or author intent
+- Resolved prose-stack and canon files relevant to the findings
+
+Revision is not always line editing. A pacing problem might need a cut, a
+scene-order change, or a stronger beat. A voice problem might need different
+interiority, not prettier sentences. Note judgment calls where you decline or
+reinterpret a critique finding.
+
+## Bridge / Connective Tissue
+
+Connect scenes, compress time, change emotional register, or carry a small
+character moment. The bridge should feel like the same story at a different
+pressure level, not a full scene pretending to be a transition.
+
+Read before bridging:
+- Scene/chapter before and after the bridge
+- Required timeline or location change
+- Emotional state entering and leaving
+- Any setup/payoff the bridge must preserve
+
+Keep it light. Orient the reader, move time, seed the necessary detail, and
+stop. If the passage develops its own conflict and turn, it has become a scene;
+ask the orchestrator or author whether that expansion is wanted.
+
+## Alternate Take
+
+Write a competing approach when direction is not proven on the page. Change a
+real variable: POV distance, entry point, emotional register, reveal timing,
+structure, or scene pressure. Cosmetic variation wastes the pass.
+
+Before writing, name the variable this take explores. After writing, note what
+this take proves or reveals: stronger voice, better tension, cleaner causality,
+more interesting omission, or a direction that should be discarded.
+
+## Line Polish
+
+For a requested polish, work at line level. If a larger issue makes a line edit
+misleading, flag it without requiring structural work before useful local edits. Read the passage
+aloud internally for rhythm and pressure. Cut filler, sharpen images, vary
+sentence movement, and remove explanatory lines that pre-chew the reader's
+experience.
+
+When a line feels generic, climb the specificity ladder before cutting: name
+the actor, name the object or place, name the action, then add the one
+concrete detail — number, texture, smell, consequence — that only this story
+could supply. If the sentence still only says "this matters," cut it.
+
+Never invent a specific to fill a gap. Mark honest gaps in place —
+`[detail needed: harbor layout]` — and leave them for the author or research;
+a fabricated fact that reads vividly is worse than an honest gap.
+
+Do not polish away the point. Keep awkwardness, repetition, fragments,
+withholding, or rough rhythm when those choices express POV, pressure, or the
+scene's intended effect.

@@ -875,6 +875,10 @@ class ValidatorTests(unittest.TestCase):
                     "creative-writing-skills/assets/scroll-quill.png"
                 ),
             },
+            "kimi": {
+                "root": "kimi",
+                "manifest": "kimi.plugin.json",
+            },
         }
         self._write_json(self.root / "config" / "distribution.json", config)
         self._write_json(

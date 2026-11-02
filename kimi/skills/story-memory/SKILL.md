@@ -1,0 +1,43 @@
+---
+name: story-memory
+description: "Creative-writing domain knowledge for durable story state. Load when preserving or retrieving project memory — fact extraction, context scoping, reference writing, artifact layout, and issue tracking. Apply it directly for fiction-specific categories and conventions during knowledge work.\n"
+---
+
+# Story Memory
+
+Knowledge that must survive the current pass: canon facts, context handoffs,
+vocab/reference material, project layout, and persistent issues.
+
+Use `/skill:creative-writing-skills:project-maintenance` for applicable deterministic mechanics. Checks are
+optional aids; inspect coverage and reconcile the named author files directly
+when metadata/tags are absent. Keep flat and mixed layouts intact. Continue semantic work when the required
+sources are readable; a required target that cannot be read safely is the only
+mechanical reason to stop. Direct author edits remain valid input and must be
+re-read rather than overwritten from remembered state.
+
+When the current user, project agreement, or applicable project binding refers
+to Hieronymus, load
+`/skill:creative-writing-skills:hieronymus-integration` before selecting, retrieving, or delivering durable
+memory. Keep file and Hieronymus provenance distinct. Trust assigned by the
+agreement does not authorize a write, and replacement memory does not require a
+file mirror. A project binding identifies the destination; it grants neither
+trust nor write authorization.
+
+Load the resource needed:
+
+- `resources/story-context.md` — what context to pass into handoffs for writers, critics, brainstormers, and knowledge agents.
+- `resources/fact-extraction.md` — extract durable facts from chapters: character state, timeline, reveals, terminology.
+- `resources/continuity-records.md` — optional legacy `kb/continuity/` records and tagged continuity evidence: timeline, promises, questions, state snapshot, and scene records.
+- `resources/story-reference-writing.md` — wiki pages, vocab, decisions, summaries, issue logs.
+- `resources/writing-artifacts.md` — how to use the author's artifact locations.
+- `resources/writing-issues.md` — persistent writing issue tracking across chapters.
+
+The agent owns hashes, indexes, base revisions, migration mechanics, and repair
+commands. Never delegate SHA or generated-index maintenance to the author.
+
+## Translation boundary
+
+For translation-specific terms, voices and inheritance use /skill:creative-writing-skills:translation-memory.
+Shared entity identity belongs to the project KB, while target expressions and
+voice adaptations belong to the selected direction. Do not promote observations
+from an auxiliary edition into original canon or another language's rules.
