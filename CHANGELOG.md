@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.13.1](https://github.com/InkyQuill/creative-writing-skills/compare/v0.13.0...v0.13.1) (2026-10-30)
+
+
+### Bug Fixes
+
+* align writing guidance with author intent and voice ([8e391ad](https://github.com/InkyQuill/creative-writing-skills/commit/8e391ad5cb6964aaff24a19bed68cff36e578be4))
+* enforce character-centered dialogue writing rules ([8e4fe1b](https://github.com/InkyQuill/creative-writing-skills/commit/8e4fe1b5dc3dcd08d7b0be646521724d1b8c24d7))
+* preserve positive Pocket Editor review feedback ([c6f6769](https://github.com/InkyQuill/creative-writing-skills/commit/c6f6769d6ad37466d714e65d4e534b6487e14f9f))
+* preserve praise levels and conditional craft diagnostics ([be04d22](https://github.com/InkyQuill/creative-writing-skills/commit/be04d223edb4b112425882f897973a3253e66421))
+* reconcile optional writing guidance and review contracts ([5a9bf60](https://github.com/InkyQuill/creative-writing-skills/commit/5a9bf600931a6a48c602965faa24bc98b9837e5a))
+* scope arc and scene diagnostics to author intent ([e82e530](https://github.com/InkyQuill/creative-writing-skills/commit/e82e53096c7df2c104bb54966df69c9918028daf))
+
 ## [0.13.0](https://github.com/InkyQuill/creative-writing-skills/compare/v0.12.0...v0.13.0) (2026-10-24)
 
 
