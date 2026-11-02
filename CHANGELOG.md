@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.14.0](https://github.com/InkyQuill/creative-writing-skills/compare/v0.13.1...v0.14.0) (2026-11-02)
+
+
+### Features
+
+* add Kimi Code plugin support ([25895c1](https://github.com/InkyQuill/creative-writing-skills/commit/25895c173e3ae4706ee8bf8504284c7ca2003791))
+* add Kimi Code plugin support ([202886d](https://github.com/InkyQuill/creative-writing-skills/commit/202886d982e4f3937e257fbb0df215336daf9b33))
+
 ## [0.13.1](https://github.com/InkyQuill/creative-writing-skills/compare/v0.13.0...v0.13.1) (2026-10-30)
 
 
