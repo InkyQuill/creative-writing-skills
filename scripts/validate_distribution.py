@@ -78,6 +78,29 @@ EXPECTED_WORKERS = {
 READ_ONLY_WORKERS = {
     "character-sim", "continuity-checker", "critic", "editor", "reader-sim",
 }
+# Tool names verified on both Claude Code and ZCode. ZCode grants an agent no
+# tools when the `tools` allowlist is missing, so every generated cw agent
+# must carry an explicit, exact grant.
+ALLOWED_AGENT_TOOLS = {
+    "Read", "Bash", "Edit", "Write", "WebFetch", "WebSearch", "TodoWrite",
+}
+EXPECTED_WORKER_TOOLS = {
+    "brainstormer": ["Read", "Bash", "Edit", "Write"],
+    "character-sim": ["Read", "Bash"],
+    "continuity-checker": ["Read", "Bash"],
+    "critic": ["Read", "Bash"],
+    "editor": ["Read", "Bash"],
+    "outliner": ["Read", "Bash", "Edit", "Write"],
+    "reader-sim": ["Read", "Bash"],
+    "style-creator": ["Read", "Bash", "Edit", "Write"],
+    "web-researcher": [
+        "Read", "Bash", "Edit", "Write", "WebFetch", "WebSearch",
+    ],
+    "writer": ["Read", "Bash", "Edit", "Write"],
+}
+MUSE_AGENT_TOOLS = [
+    "Read", "Bash", "Edit", "Write", "WebFetch", "WebSearch", "TodoWrite",
+]
 EXPECTED_WORKER_SKILLS = {
     "brainstormer": {"story-planning", "story-memory", "intent-modeling"},
     "character-sim": {"character-sim", "writing-principles", "story-memory"},
@@ -101,7 +124,7 @@ EXPECTED_WORKER_SKILLS = {
 ALLOWED_FRONTMATTER_KEYS = {
     "name", "description", "disable-model-invocation", "argument-hint",
 }
-WORKER_KEYS = {"name", "description", "prompt", "skills", "access", "claude"}
+WORKER_KEYS = {"name", "description", "prompt", "skills", "tools", "access", "claude"}
 SEMVER_RE = re.compile(r"^[0-9]+\.[0-9]+\.[0-9]+$")
 ZCODE_PLUGIN_NAME_RE = re.compile(r"^[a-z0-9][a-z0-9._-]{0,127}$")
 KIMI_SKILL_REFERENCE_RE = re.compile(
@@ -568,6 +591,23 @@ def _worker_references(text: str) -> set[str]:
     return references
 
 
+_AGENT_TOOLS_BLOCK_RE = re.compile(r"^tools:\n((?:  - [A-Za-z]+(?:-[A-Za-z]+)*\n)+)", re.MULTILINE)
+
+
+def _parse_agent_tools_block(text: str) -> list[str] | None:
+    """Return the exact `tools:` allowlist from agent frontmatter, or None."""
+    match = _AGENT_TOOLS_BLOCK_RE.search(text)
+    if match is None:
+        return None
+    return [line[4:].strip() for line in match.group(1).splitlines()]
+
+
+def _expected_agent_tools(name: str) -> list[str] | None:
+    if name == "muse":
+        return list(MUSE_AGENT_TOOLS)
+    return EXPECTED_WORKER_TOOLS.get(name)
+
+
 def _runtime_label(path: Path, root: Path) -> str:
     try:
         return path.relative_to(root).as_posix()
@@ -723,12 +763,12 @@ def _validate_config(repo_root: Path, problems: list[str]) -> dict[str, object] 
         return None
     expected_keys = {
         "canonical_skills", "workers",
-        "claude", "zcode", "kimi",
+        "claude", "zcode", "kimi", "standalone",
     }
     if set(config) != expected_keys:
         problems.append(
             "distribution config keys must be canonical_skills, workers, "
-            "claude, zcode, kimi"
+            "claude, zcode, kimi, standalone"
         )
     inventories = (
         ("canonical skill registry", "canonical_skills", EXPECTED_SKILLS),
@@ -823,6 +863,11 @@ def _validate_config(repo_root: Path, problems: list[str]) -> dict[str, object] 
         problems.append("distribution config Kimi fields do not match schema")
     elif kimi.get("root") != "kimi" or kimi.get("manifest") != "kimi.plugin.json":
         problems.append("distribution config Kimi paths are not canonical")
+    standalone = config.get("standalone")
+    if not isinstance(standalone, dict) or set(standalone) != {"root"}:
+        problems.append("distribution config standalone fields do not match schema")
+    elif standalone.get("root") != "standalone":
+        problems.append("distribution config standalone paths are not canonical")
     return config
 
 
@@ -1092,6 +1137,32 @@ def _validate_workers(
         if name in EXPECTED_WORKERS - READ_ONLY_WORKERS and access == "read-only":
             problems.append(f"worker {name}: production role must be workspace-write")
 
+        tools = worker.get("tools")
+        if not isinstance(tools, list) or any(
+            not isinstance(tool, str) for tool in tools
+        ):
+            problems.append(f"worker {name}: tools must be a list of strings")
+        else:
+            unsupported = sorted(set(tools) - ALLOWED_AGENT_TOOLS)
+            if unsupported:
+                problems.append(
+                    f"worker {name}: unsupported agent tools {', '.join(unsupported)}"
+                )
+            if len(tools) != len(set(tools)):
+                problems.append(f"worker {name}: duplicate agent tools")
+            if access == "read-only" and {"Edit", "Write"} & set(tools):
+                problems.append(
+                    f"worker {name}: read-only worker must not grant Edit or Write"
+                )
+            if access == "workspace-write" and not {"Edit", "Write"} <= set(tools):
+                problems.append(
+                    f"worker {name}: workspace-write worker must grant Edit and Write"
+                )
+            if name in EXPECTED_WORKER_TOOLS and tools != EXPECTED_WORKER_TOOLS[name]:
+                problems.append(
+                    f"worker {name}: tool grants do not match canonical registry"
+                )
+
         claude = worker.get("claude")
         if not isinstance(claude, dict) or set(claude) != {"model", "background"}:
             problems.append(f"worker {name}: claude metadata does not match schema")
@@ -1324,6 +1395,17 @@ def _validate_claude_distribution(
                 path.parent.name in disabled_skills,
                 problems,
             )
+        elif valid_agent_root and path.parent == agent_root and path.suffix == ".md":
+            expected_tools = _expected_agent_tools(path.stem)
+            if expected_tools is None:
+                problems.append(f"{label}: unexpected cw agent file")
+            else:
+                granted = _parse_agent_tools_block(text)
+                if granted != expected_tools:
+                    problems.append(
+                        f"{label}: tools allowlist {granted} must be {expected_tools}; "
+                        "ZCode grants no tools without an explicit allowlist"
+                    )
         visible = _outside_fences(_without_urls_outside_fences(text))
         filename_tokens = () if "project-bootstrap" in path.parts else (
             "AGENTS.md", "CLAUDE.md"
@@ -1627,6 +1709,10 @@ def _validate_kimi_distribution(
                     problems.append(f"{label}: read-only agent must disallow Edit and Write")
             elif "disallowedTools:" in text:
                 problems.append(f"{label}: workspace-write agent has tool restrictions")
+            if _parse_agent_tools_block(text) is not None:
+                problems.append(
+                    f"{label}: Kimi Code agents keep every tool without an allowlist"
+                )
         visible = _outside_fences(_without_urls_outside_fences(text))
         for token in ("spawn_agent", "collaboration."):
             if token in visible:
@@ -1643,6 +1729,147 @@ def _validate_kimi_distribution(
                     f"{label}: dangling Kimi Code skill reference "
                     f"/skill:{plugin}:{reference}"
                 )
+        for match in PLATFORM_VOCABULARY_RE.finditer(text):
+            problems.append(f"{label}: forbidden runtime vocabulary {match.group(0)}")
+
+
+def _validate_standalone_distribution(
+    repo_root: Path,
+    config: dict[str, object] | None,
+    worker_names: set[str],
+    problems: list[str],
+) -> None:
+    root_value: object = "standalone"
+    if config is not None and isinstance(config.get("standalone"), dict):
+        configured = config["standalone"].get("root")
+        if isinstance(configured, str):
+            root_value = configured
+    root_candidate = repo_root / Path(str(root_value))
+    if root_candidate.is_symlink():
+        problems.append("standalone Agent Skills root must not be a symlink")
+        return
+    standalone_root = _resolve_relative(repo_root, root_value, repo_root)
+    if standalone_root is None:
+        if root_candidate.exists():
+            problems.append("standalone Agent Skills root escapes repository root")
+        return
+    if not standalone_root.exists():
+        return
+
+    if not (standalone_root / "README.md").is_file():
+        problems.append("standalone Agent Skills README is missing")
+
+    skill_root = standalone_root / "skills"
+    valid_skill_root = True
+    if skill_root.is_symlink():
+        problems.append("standandalone skills root must not be a symlink")
+        valid_skill_root = False
+    elif skill_root.exists() and not _is_within(skill_root, standalone_root):
+        problems.append("standalone skills root escapes the standalone root")
+        valid_skill_root = False
+    skill_dirs = (
+        {
+            path.name: path
+            for path in skill_root.iterdir()
+            if path.is_dir() or path.is_symlink()
+        }
+        if valid_skill_root and skill_root.is_dir() else {}
+    )
+    _check_exact_inventory(
+        "standalone skill directories",
+        set(skill_dirs),
+        EXPECTED_SKILLS,
+        problems,
+    )
+
+    agent_root = standalone_root / "agents"
+    valid_agent_root = True
+    if agent_root.is_symlink():
+        problems.append("standalone agents root must not be a symlink")
+        valid_agent_root = False
+    elif agent_root.exists() and not _is_within(agent_root, standalone_root):
+        problems.append("standalone agents root escapes the standalone root")
+        valid_agent_root = False
+    agents = (
+        {path.stem for path in agent_root.glob("*.md") if path.is_file()}
+        if valid_agent_root and agent_root.is_dir() else set()
+    )
+    _check_exact_inventory(
+        "standalone agent files",
+        agents,
+        worker_names | {"muse"},
+        problems,
+    )
+
+    runtime_paths = set()
+    if valid_skill_root and skill_root.is_dir():
+        runtime_paths.update(skill_root.rglob("*"))
+    if valid_agent_root and agent_root.is_dir():
+        runtime_paths.update(agent_root.rglob("*"))
+    for path in sorted(runtime_paths):
+        label = _runtime_label(path, repo_root)
+        if path.is_symlink():
+            problems.append(f"{label}: runtime resource must not be a symlink")
+            continue
+        if path.is_dir():
+            if not _is_within(path, standalone_root):
+                problems.append(f"{label}: runtime resource escapes the standalone root")
+            continue
+        if not path.is_file() or path.suffix.lower() not in TEXT_RUNTIME_SUFFIXES:
+            continue
+        if not _is_within(path, standalone_root):
+            problems.append(f"{label}: runtime resource escapes the standalone root")
+            continue
+        try:
+            text = path.read_text(encoding="utf-8")
+        except (OSError, UnicodeError) as error:
+            problems.append(f"{label}: cannot read: {error}")
+            continue
+        if (
+            path.name == "SKILL.md"
+            and path.parent.parent == skill_root
+            and path.parent.name in skill_dirs
+        ):
+            _validate_claude_frontmatter(
+                text,
+                label,
+                path.parent.name,
+                path.parent.name in CLAUDE_DISABLE_MODEL_INVOCATION,
+                problems,
+            )
+        elif valid_agent_root and path.parent == agent_root and path.suffix == ".md":
+            if path.stem in READ_ONLY_WORKERS:
+                if "\nreadonly: true\n" not in text:
+                    problems.append(
+                        f"{label}: read-only agent must declare readonly: true"
+                    )
+            elif "\nreadonly:" in text:
+                problems.append(f"{label}: workspace-write agent must not be readonly")
+            if path.stem == "web-researcher":
+                if "\nis_background: true\n" not in text:
+                    problems.append(
+                        f"{label}: background researcher must declare is_background: true"
+                    )
+            elif "\nis_background:" in text:
+                problems.append(f"{label}: foreground agent must not be background")
+            if _parse_agent_tools_block(text) is not None:
+                problems.append(
+                    f"{label}: Cursor agents have no tools allowlist field"
+                )
+        visible = _outside_fences(_without_urls_outside_fences(text))
+        for token in ("spawn_agent", "collaboration."):
+            if token in visible:
+                problems.append(f"{label}: Codex-only vocabulary {token}")
+        for reference in sorted(extract_skill_references(visible, "$")):
+            problems.append(f"{label}: Codex-only skill reference ${reference}")
+        for reference in sorted(extract_skill_references(visible, "/")):
+            problems.append(
+                f"{label}: standalone skills use bare names, not /{reference}"
+            )
+        for match in KIMI_SKILL_REFERENCE_RE.finditer(visible):
+            problems.append(
+                f"{label}: Kimi-style skill reference is invalid here"
+            )
         for match in PLATFORM_VOCABULARY_RE.finditer(text):
             problems.append(f"{label}: forbidden runtime vocabulary {match.group(0)}")
 
@@ -1681,6 +1908,12 @@ def validate(repo_root: Path, *, canonical_only: bool = False) -> list[str]:
             repo_root,
             config,
             manifest,
+            effective_workers,
+            problems,
+        )
+        _validate_standalone_distribution(
+            repo_root,
+            config,
             effective_workers,
             problems,
         )

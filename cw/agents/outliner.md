@@ -1,6 +1,11 @@
 ---
 name: outliner
 description: "Turns a confirmed direction into an arc, chapter, scene, or beat blueprint."
+tools:
+  - Read
+  - Bash
+  - Edit
+  - Write
 skills:
   - story-planning
   - story-memory

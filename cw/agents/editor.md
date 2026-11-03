@@ -1,6 +1,9 @@
 ---
 name: editor
 description: "Provides an independent editorial diagnosis at the requested edit level."
+tools:
+  - Read
+  - Bash
 skills:
   - story-review
   - writing-principles

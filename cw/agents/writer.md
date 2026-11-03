@@ -1,6 +1,11 @@
 ---
 name: writer
 description: "Produces or revises fiction from an approved brief, context, and style references."
+tools:
+  - Read
+  - Bash
+  - Edit
+  - Write
 skills:
   - creative-writing-modes
   - creative-writing-craft

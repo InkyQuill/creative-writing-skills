@@ -1,0 +1,944 @@
+"""Command-line entrypoint for the story-project CLI foundation."""
+
+import argparse
+from dataclasses import asdict, replace
+import json
+import sys
+import uuid
+from pathlib import Path
+from typing import TextIO
+
+from . import __version__
+from .checks import CHECKERS, run_checks
+from .checks.drafts import check_drafts
+from .checks.structure import check_structure
+from .cli_doctor import diagnose_cli
+from .context import (
+    ContextPlanError,
+    ContextSnapshotError,
+    clean_context,
+    plan_context,
+    render_snapshot,
+)
+from .doctor import diagnose_project
+from .documents import parse_document, DocumentError, logical_hash
+from .drafts import (
+    DraftConflict,
+    DraftError,
+    plan_abandon_draft,
+    plan_accept_draft,
+    plan_create_draft,
+    plan_rebase_draft,
+    plan_set_draft_status,
+)
+from .edits import EditConflict, EditPlanError, load_operations, plan_edits
+from .findings import ExecutionError, Finding, Report
+from .indexes import plan_reindex
+from .layout import LAYOUT_FILE, ROLE_CANDIDATES, inventory_layout, load_layout, render_layout, resolve_role, validate_role_path
+from .migration import (
+    MigrationPlanError,
+    load_migration_plan,
+    migration_project,
+    plan_apply_migration,
+    plan_migration,
+    _read_regular_file_no_follow,
+)
+from .project import Project, ProjectDiscoveryError, ProjectPathError, discover_project, open_workspace
+from .prose_fixes import ProseFixError, plan_safe_typography_fix
+from .scaffold import InitError, apply_init, preview_init
+from .transactions import (
+    Change,
+    TransactionConflict,
+    TransactionEngine,
+    TransactionError,
+    TransactionPlan,
+    TransactionStore,
+)
+
+
+class _ArgumentError(ValueError):
+    """An argparse error that can be reported through the caller's streams."""
+
+
+class _PreviewRevisionStore:
+    """A validating in-memory revision view for mutation-free draft previews."""
+
+    def __init__(self, backing: TransactionStore):
+        self._backing = backing
+        self.project = backing.project
+        self._revisions: dict[str, bytes] = {}
+
+    def remember_revision(self, revision: str, data: bytes) -> str:
+        if logical_hash(data) != revision:
+            raise ValueError("revision data does not match the supplied logical hash")
+        existing = self._revisions.get(revision)
+        if existing is not None and existing != data:
+            raise ValueError("revision identity has conflicting exact bytes")
+        self._revisions[revision] = data
+        return revision
+
+    def load_revision(self, revision: str) -> bytes:
+        if revision in self._revisions:
+            return self._revisions[revision]
+        return self._backing.load_revision(revision)
+
+
+class _Parser(argparse.ArgumentParser):
+    def __init__(self, *, error_stream: TextIO, **kwargs: object) -> None:
+        super().__init__(**kwargs)
+        self.error_stream = error_stream
+
+    def error(self, message: str) -> None:
+        self.print_usage(self.error_stream)
+        self.error_stream.write(f"{self.prog}: error: {message}\n")
+        raise _ArgumentError(message)
+
+
+def _parser(*, error_stream: TextIO) -> argparse.ArgumentParser:
+    parser = _Parser(error_stream=error_stream, prog="cw")
+    parser.add_argument("--version", action="store_true", help="show the CLI version")
+    parser.add_argument("--format", choices=("text", "json"), default="text")
+    parser.add_argument("--strict", action="store_true", help="treat warnings as failures")
+    commands = parser.add_subparsers(dest="command", parser_class=_Parser)
+
+    from .translation.commands import add_commands
+    add_commands(commands, error_stream)
+
+    check = commands.add_parser("check", error_stream=error_stream)
+    check_commands = check.add_subparsers(dest="check_command", required=True, parser_class=_Parser)
+    for name in (*sorted(CHECKERS), "all"):
+        check_command = check_commands.add_parser(name, error_stream=error_stream)
+        check_command.add_argument("path", nargs="?", default=None)
+        check_command.add_argument("--root")
+        if name in {"prose", "all"}:
+            check_command.add_argument("--draft-typography", action="store_true")
+        _report_options(check_command)
+
+    context = commands.add_parser("context", error_stream=error_stream)
+    context.add_argument("context_kind", choices=("draft", "chapter", "kb"))
+    context.add_argument("path")
+    context.add_argument("--as", dest="context_role", default="trusted")
+    context.add_argument("--snapshot", action="store_true")
+    _format_option(context)
+
+    clean_context_command = commands.add_parser("clean-context", error_stream=error_stream)
+    _mutation_options(clean_context_command)
+
+    doctor = commands.add_parser("doctor", error_stream=error_stream)
+    _format_option(doctor)
+
+    cli_doctor = commands.add_parser("cli-doctor", error_stream=error_stream)
+    _format_option(cli_doctor)
+
+    init = commands.add_parser("init", error_stream=error_stream)
+    init.add_argument("path", nargs="?", default=".")
+    init.add_argument("--title", required=True)
+    init.add_argument("--language", required=True)
+    init.add_argument("--kind", choices=("authoring", "translation"), default="authoring")
+    init.add_argument("--work-kind", choices=("book", "series"), default="book")
+    init.add_argument("--template", choices=("compact", "full"), default="compact")
+    _mutation_options(init)
+
+    reindex = commands.add_parser("reindex", error_stream=error_stream)
+    _mutation_options(reindex)
+    reindex.add_argument("--index", action="append", dest="index_ids")
+
+    layout = commands.add_parser("layout", error_stream=error_stream)
+    layout.add_argument("--set", dest="role_selections", action="append", default=[], metavar="ROLE=FOLDER")
+    layout.add_argument("--capture", action="store_true")
+    layout.add_argument("--relocate", action="store_true")
+    _mutation_options(layout)
+    layout.add_argument("layout_action", nargs="?", choices=("tag", "destination", "inspect"))
+    layout.add_argument("layout_path", nargs="?")
+    layout.add_argument("destination_path", nargs="?")
+    layout.add_argument("--kind", choices=("directory", "file"))
+    layout.add_argument("--add", action="append", default=[])
+    layout.add_argument("--remove", action="append", default=[])
+
+    get_folder = commands.add_parser("get-folder", error_stream=error_stream)
+    get_folder.add_argument("role", choices=tuple(ROLE_CANDIDATES))
+    _format_option(get_folder)
+
+    fix_typography = commands.add_parser("fix-prose-typography", error_stream=error_stream)
+    fix_typography.add_argument("path")
+    _mutation_options(fix_typography)
+
+    draft = commands.add_parser("draft", error_stream=error_stream)
+    draft_commands = draft.add_subparsers(dest="draft_command", required=True, parser_class=_Parser)
+    draft_create = draft_commands.add_parser("create", error_stream=error_stream)
+    draft_create.add_argument("target")
+    draft_create.add_argument("--draft-path")
+    _mutation_options(draft_create)
+    draft_status = draft_commands.add_parser("set-status", error_stream=error_stream)
+    draft_status.add_argument("draft")
+    draft_status.add_argument("status")
+    _mutation_options(draft_status)
+    for name in ("rebase", "accept", "abandon"):
+        command = draft_commands.add_parser(name, error_stream=error_stream)
+        command.add_argument("draft")
+        if name in {"accept", "abandon"}:
+            command.add_argument("--archive-path")
+        _mutation_options(command)
+
+    migrate = commands.add_parser("migrate", error_stream=error_stream)
+    migrate_mode = migrate.add_mutually_exclusive_group(required=True)
+    migrate_mode.add_argument("--plan", action="store_true")
+    migrate_mode.add_argument(
+        "--preview", metavar="PLAN", help="validate a plan and show its full transaction diff without writing"
+    )
+    migrate_mode.add_argument(
+        "--apply", metavar="PLAN", help="commit a previously reviewed migration plan"
+    )
+    migrate.add_argument("--expect-plan-hash")
+    _format_option(migrate)
+
+    edit = commands.add_parser("edit", error_stream=error_stream)
+    edit_commands = edit.add_subparsers(dest="edit_command", required=True, parser_class=_Parser)
+    for kind in ("replace", "insert-before", "insert-after", "delete", "append"):
+        command = edit_commands.add_parser(kind, error_stream=error_stream)
+        command.add_argument("path")
+        if kind in {"replace", "delete"}:
+            command.add_argument("--old-file", required=True, help="UTF-8 anchor from the Markdown body only; excludes YAML frontmatter")
+        elif kind != "append":
+            command.add_argument("--anchor-file", required=True, help="UTF-8 anchor from the Markdown body only; excludes YAML frontmatter")
+        if kind != "delete":
+            command.add_argument("--new-file", required=True)
+        if kind != "append":
+            count = command.add_mutually_exclusive_group()
+            count.add_argument("--expect-count", type=int)
+            count.add_argument("--all", action="store_true")
+        _mutation_options(command)
+
+    batch = edit_commands.add_parser("apply", error_stream=error_stream)
+    batch.add_argument("operations")
+    _mutation_options(batch)
+
+    history = commands.add_parser("history", error_stream=error_stream)
+    _format_option(history)
+    history_commands = history.add_subparsers(dest="history_command", parser_class=_Parser)
+    history_show = history_commands.add_parser("show", error_stream=error_stream)
+    history_show.add_argument("transaction_id")
+    _format_option(history_show)
+
+    undo = commands.add_parser("undo", error_stream=error_stream)
+    undo.add_argument("transaction_id")
+    _mutation_options(undo)
+
+    recover = commands.add_parser("recover", error_stream=error_stream)
+    recover.add_argument("transaction_id")
+    _mutation_options(recover)
+    return parser
+
+
+def _report_options(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("--format", choices=("text", "json"), default=argparse.SUPPRESS)
+    parser.add_argument("--strict", action="store_true", default=argparse.SUPPRESS)
+
+
+def _format_option(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("--format", choices=("text", "json"), default=argparse.SUPPRESS)
+
+
+def _mutation_options(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("--apply", action="store_true")
+    _format_option(parser)
+
+
+def run(argv: list[str], *, cwd: Path, stdout: TextIO, stderr: TextIO) -> int:
+    """Run the CLI with explicit process context and output streams."""
+    parser = _parser(error_stream=stderr)
+    try:
+        args = parser.parse_args(argv)
+        if not args.version and args.command is None:
+            parser.error("the following arguments are required: command")
+    except _ArgumentError:
+        return 2
+    if args.version:
+        if args.format == "json":
+            json.dump({"name": "cw", "version": __version__}, stdout)
+        else:
+            stdout.write(f"cw {__version__}")
+        stdout.write("\n")
+        return 0
+
+    if args.command == "translation":
+        from .translation.commands import run_translation
+        return run_translation(args, cwd=cwd, stdout=stdout, stderr=stderr)
+
+    if args.command == "init":
+        return _run_init(args, cwd=cwd, stdout=stdout, stderr=stderr)
+
+    if args.command == "cli-doctor":
+        entrypoint = Path(__file__).absolute().parent.parent / "cw.py"
+        result = diagnose_cli(entrypoint, Path(sys.executable), repair_launcher=True)
+        if args.format == "json":
+            _write_command_data(result.as_dict(), output_format="json", stdout=stdout)
+        else:
+            stdout.write(result.as_text() + "\n")
+        return result.exit_status()
+
+    if args.command == "doctor":
+        try:
+            result = diagnose_project(open_workspace(cwd))
+        except (DocumentError, OSError, ProjectDiscoveryError, ProjectPathError, UnicodeError, ValueError) as error:
+            return _write_command_error(
+                error, conflict=False, output_format=args.format, stdout=stdout, stderr=stderr
+            )
+        if args.format == "json":
+            _write_command_data(result.as_dict(), output_format="json", stdout=stdout)
+        else:
+            stdout.write(result.as_text() + "\n")
+        return result.exit_status()
+
+    if args.command == "layout":
+        try:
+            project = open_workspace(cwd)
+            if args.layout_action:
+                return _run_tag_layout(project, args, stdout)
+            from .catalog import read_layout
+            if read_layout(project).version == 2 and (args.relocate or args.role_selections or args.capture):
+                raise ValueError("Use layout tag/destination for version 2; relocation requires an explicit file map")
+            if args.relocate:
+                from .relocation import plan_relocation
+                if args.capture:
+                    raise ValueError("--relocate cannot be combined with --capture")
+                selections = {}
+                for selection in args.role_selections:
+                    if "=" not in selection:
+                        raise ValueError("--set expects ROLE=FOLDER")
+                    role, relative = selection.split("=", 1)
+                    if role not in ROLE_CANDIDATES or role in selections:
+                        raise ValueError(f"unknown or duplicate layout role: {role}")
+                    selections[role] = relative
+                plan = plan_relocation(project, selections)
+                return _preview_or_apply(TransactionEngine(project), plan, apply=args.apply,
+                                         output_format=args.format, stdout=stdout)
+            if not args.role_selections and not args.capture:
+                _write_command_data(inventory_layout(project), output_format=args.format, stdout=stdout)
+                return 0
+            roles = dict(load_layout(project))
+            if args.capture:
+                for role, details in inventory_layout(project)["roles"].items():
+                    if role not in roles and len(details["candidates"]) == 1:
+                        roles[role] = details["candidates"][0]
+            for selection in args.role_selections:
+                if "=" not in selection:
+                    raise ValueError("--set expects ROLE=FOLDER")
+                role, relative = selection.split("=", 1)
+                if role not in ROLE_CANDIDATES:
+                    raise ValueError(f"unknown layout role: {role}")
+                roles[role] = validate_role_path(project, relative)
+            path = project.root / LAYOUT_FILE
+            before = path.read_bytes() if path.exists() else None
+            after = render_layout(roles)
+            if before == after:
+                _write_command_data({"status": "unchanged", "roles": roles}, output_format=args.format, stdout=stdout)
+                return 0
+            plan = TransactionPlan(command=("layout",), changes=(Change(LAYOUT_FILE, before, after),), metadata={"undoable": True})
+            return _preview_or_apply(TransactionEngine(project), plan, apply=args.apply, output_format=args.format, stdout=stdout)
+        except (DocumentError, OSError, ProjectDiscoveryError, ProjectPathError, TransactionError, ValueError) as error:
+            return _write_command_error(
+                error, conflict=False, output_format=args.format, stdout=stdout, stderr=stderr,
+            )
+
+    if args.command == "get-folder":
+        try:
+            relative = resolve_role(open_workspace(cwd), args.role)
+        except (DocumentError, OSError, ProjectDiscoveryError, ProjectPathError, UnicodeError, ValueError) as error:
+            return _write_command_error(error, conflict=False, output_format=args.format, stdout=stdout, stderr=stderr)
+        if args.format == "json":
+            _write_command_data({"role": args.role, "path": relative}, output_format="json", stdout=stdout)
+        else:
+            stdout.write(relative + "\n")
+        return 0
+
+    if args.command == "draft":
+        return _run_draft(args, cwd=cwd, stdout=stdout, stderr=stderr)
+
+    if args.command == "fix-prose-typography":
+        try:
+            project, relative = _single_edit_target(cwd, args.path)
+            plan = plan_safe_typography_fix(project, relative)
+            if not plan.changes:
+                _write_command_data(
+                    {"status": "no-op", "changes": []},
+                    output_format=args.format, stdout=stdout,
+                )
+                return 0
+            return _preview_or_apply(
+                TransactionEngine(project), plan, apply=args.apply,
+                output_format=args.format, stdout=stdout,
+            )
+        except (DocumentError, OSError, ProjectDiscoveryError, ProjectPathError, ProseFixError, TransactionError, ValueError) as error:
+            return _write_command_error(
+                error, conflict=isinstance(error, TransactionConflict),
+                output_format=args.format, stdout=stdout, stderr=stderr,
+            )
+
+    if args.command == "migrate":
+        return _run_migrate(args, cwd=cwd, stdout=stdout, stderr=stderr)
+
+    if args.command == "context":
+        return _run_context(args, cwd=cwd, stdout=stdout, stderr=stderr)
+
+    if args.command == "clean-context":
+        return _run_clean_context(args, cwd=cwd, stdout=stdout, stderr=stderr)
+
+    if args.command == "check":
+        names = sorted(CHECKERS) if args.check_command == "all" else [args.check_command]
+        try:
+            target = _from_cwd(cwd, args.path or ".").absolute()
+            project = open_workspace(target, root=_from_cwd(cwd, args.root) if args.root else None)
+            if args.path is not None and target != project.root:
+                project = replace(project, selection=project.relative_id(target))
+        except (DocumentError, OSError, ProjectDiscoveryError, ProjectPathError, UnicodeError, ValueError) as error:
+            if args.format != "json":
+                stderr.write(f"cw: error: {error}\n")
+                return 2
+            report = Report(
+                [],
+                checks=names,
+                execution_errors=[ExecutionError(check=name, message=str(error)) for name in names],
+            )
+        else:
+            report = run_checks(
+                project, names, draft_typography=getattr(args, "draft_typography", False)
+            )
+        return _write_report(report, output_format=args.format, strict=args.strict, stdout=stdout)
+
+    if args.command == "edit":
+        return _run_edit(args, cwd=cwd, stdout=stdout, stderr=stderr)
+
+    if args.command == "history":
+        return _run_history(args, cwd=cwd, stdout=stdout, stderr=stderr)
+
+    if args.command == "undo":
+        return _run_undo(args, cwd=cwd, stdout=stdout, stderr=stderr)
+
+    if args.command == "recover":
+        return _run_recover(args, cwd=cwd, stdout=stdout, stderr=stderr)
+
+    if args.command == "reindex":
+        return _run_reindex(args, cwd=cwd, stdout=stdout, stderr=stderr)
+
+    return _write_report(Report([]), output_format=args.format, strict=args.strict, stdout=stdout)
+
+
+def _write_report(report: Report, *, output_format: str, strict: bool, stdout: TextIO) -> int:
+    if output_format == "json":
+        json.dump(report.as_json(strict=strict), stdout)
+        stdout.write("\n")
+    else:
+        stdout.write(report.as_text())
+        if report.findings:
+            stdout.write("\n")
+        for error in report.execution_errors:
+            stdout.write(f"CW-CHECK-EXEC [error] {error.check}: {error.message}\n")
+    return report.exit_status(strict=strict)
+
+
+def _run_context(args: argparse.Namespace, *, cwd: Path, stdout: TextIO, stderr: TextIO) -> int:
+    try:
+        project = open_workspace(cwd)
+        planned = plan_context(project, args.context_kind, args.path, args.context_role)
+        result = planned.as_dict()
+        if args.snapshot:
+            snapshot = render_snapshot(project, planned)
+            result["snapshot"] = snapshot.as_dict()
+            if snapshot.boundary_warning:
+                result["warnings"] = [
+                    *planned.warnings,
+                    "restricted context contains ordinary prose; the knowledge boundary cannot be guaranteed",
+                ]
+        _write_command_data(result, output_format=args.format, stdout=stdout)
+        return 0
+    except (
+        ContextPlanError,
+        ContextSnapshotError,
+        DocumentError,
+        OSError,
+        ProjectDiscoveryError,
+        ProjectPathError,
+        UnicodeError,
+        ValueError,
+    ) as error:
+        return _write_command_error(
+            error,
+            conflict=False,
+            output_format=args.format,
+            stdout=stdout,
+            stderr=stderr,
+        )
+
+
+def _run_clean_context(args: argparse.Namespace, *, cwd: Path, stdout: TextIO, stderr: TextIO) -> int:
+    try:
+        project = open_workspace(cwd)
+        result = clean_context(project, apply=args.apply)
+        _write_command_data(result.as_dict(), output_format=args.format, stdout=stdout)
+        return 0
+    except (
+        ContextSnapshotError,
+        DocumentError,
+        OSError,
+        ProjectDiscoveryError,
+        ProjectPathError,
+        UnicodeError,
+        ValueError,
+    ) as error:
+        return _write_command_error(
+            error,
+            conflict=False,
+            output_format=args.format,
+            stdout=stdout,
+            stderr=stderr,
+        )
+
+
+def _from_cwd(cwd: Path, path: str) -> Path:
+    target = Path(path)
+    return target if target.is_absolute() else cwd / target
+
+
+def _run_edit(args: argparse.Namespace, *, cwd: Path, stdout: TextIO, stderr: TextIO) -> int:
+    try:
+        if args.edit_command == "apply":
+            project = open_workspace(cwd)
+            operations = load_operations(_from_cwd(cwd, args.operations))
+        else:
+            project, relative = _single_edit_target(cwd, args.path)
+            operation: dict[str, object] = {"op": args.edit_command, "path": relative}
+            if args.edit_command in {"replace", "delete"}:
+                operation["old"] = _read_content(cwd, args.old_file)
+            elif args.edit_command != "append":
+                operation["anchor"] = _read_content(cwd, args.anchor_file)
+            if args.edit_command != "delete":
+                operation["new"] = _read_content(cwd, args.new_file)
+            if args.edit_command != "append":
+                if args.expect_count is not None:
+                    operation["expect-count"] = args.expect_count
+                elif args.all:
+                    operation["all"] = True
+            operations = (operation,)
+
+        planned = plan_edits(project, operations)
+        plan = TransactionPlan(
+            command=("edit", args.edit_command),
+            changes=planned.changes,
+            metadata={**planned.metadata, "undoable": True},
+        )
+        return _preview_or_apply(
+            TransactionEngine(project), plan, apply=args.apply,
+            output_format=args.format, stdout=stdout,
+        )
+    except EditConflict as error:
+        return _write_command_error(error, conflict=True, output_format=args.format, stdout=stdout, stderr=stderr)
+    except TransactionConflict as error:
+        return _write_command_error(error, conflict=True, output_format=args.format, stdout=stdout, stderr=stderr)
+    except (DocumentError, EditPlanError, OSError, ProjectDiscoveryError, ProjectPathError, TransactionError, UnicodeError, ValueError) as error:
+        conflict = isinstance(error, TransactionError) and "stale precondition" in str(error)
+        return _write_command_error(error, conflict=conflict, output_format=args.format, stdout=stdout, stderr=stderr)
+
+
+def _run_history(args: argparse.Namespace, *, cwd: Path, stdout: TextIO, stderr: TextIO) -> int:
+    try:
+        engine = TransactionEngine(open_workspace(cwd))
+        if args.history_command == "show":
+            result: dict[str, object] = {"transaction": engine.store.manifest(args.transaction_id)}
+        else:
+            result = {"transactions": list(engine.store.history())}
+        _write_command_data(result, output_format=args.format, stdout=stdout)
+        return 0
+    except (DocumentError, OSError, ProjectDiscoveryError, TransactionError, UnicodeError, ValueError) as error:
+        return _write_command_error(error, conflict=False, output_format=args.format, stdout=stdout, stderr=stderr)
+
+
+def _run_undo(args: argparse.Namespace, *, cwd: Path, stdout: TextIO, stderr: TextIO) -> int:
+    try:
+        engine = TransactionEngine(open_workspace(cwd))
+        plan = engine.inverse(args.transaction_id)
+        return _preview_or_apply(
+            engine, plan, apply=args.apply, output_format=args.format, stdout=stdout
+        )
+    except TransactionConflict as error:
+        return _write_command_error(error, conflict=True, output_format=args.format, stdout=stdout, stderr=stderr)
+    except (DocumentError, OSError, ProjectDiscoveryError, TransactionError, UnicodeError, ValueError) as error:
+        return _write_command_error(error, conflict=False, output_format=args.format, stdout=stdout, stderr=stderr)
+
+
+def _run_recover(args: argparse.Namespace, *, cwd: Path, stdout: TextIO, stderr: TextIO) -> int:
+    try:
+        engine = TransactionEngine(open_workspace(cwd))
+        if args.apply:
+            record = engine.recover(args.transaction_id)
+            status = record.state
+        else:
+            record = engine.preflight_recovery(args.transaction_id)
+            status = "preview"
+        _write_command_data(
+            {
+                "action": "restore-before-snapshots",
+                "completed": list(record.completed),
+                "state": record.state,
+                "status": status,
+                "transaction_id": record.id,
+            },
+            output_format=args.format,
+            stdout=stdout,
+        )
+        return 0
+    except TransactionConflict as error:
+        return _write_command_error(error, conflict=True, output_format=args.format, stdout=stdout, stderr=stderr)
+    except (DocumentError, KeyError, OSError, ProjectDiscoveryError, TransactionError, TypeError, UnicodeError, ValueError) as error:
+        return _write_command_error(
+            error,
+            conflict=False,
+            output_format=args.format,
+            stdout=stdout,
+            stderr=stderr,
+        )
+
+
+def _run_init(args: argparse.Namespace, *, cwd: Path, stdout: TextIO, stderr: TextIO) -> int:
+    target = _from_cwd(cwd, args.path)
+    try:
+        plan = preview_init(target, args.title, args.language, kind=args.kind, work_kind=args.work_kind, template=args.template)
+        if not args.apply:
+            json.dump(_init_preview(plan), stdout)
+            stdout.write("\n")
+            return 0
+
+        applied = apply_init(target, args.title, args.language, kind=args.kind, work_kind=args.work_kind, template=args.template)
+        record = applied.record
+        _write_command_data(
+            {
+                "status": record.state,
+                "transaction_id": record.id,
+                "command": list(plan.command),
+                "changes": [
+                    {
+                        "action": "create" if change.before is None else "replace",
+                        "path": change.path,
+                    }
+                    for change in plan.changes
+                ],
+                "metadata": dict(plan.metadata),
+                "diagnostics": list(applied.diagnostics),
+            },
+            output_format=args.format,
+            stdout=stdout,
+        )
+        return 0
+    except (DocumentError, InitError, OSError, ProjectPathError, TransactionError, UnicodeError, ValueError) as error:
+        conflict = isinstance(error, TransactionConflict)
+        return _write_command_error(
+            error, conflict=conflict, output_format=args.format, stdout=stdout, stderr=stderr
+        )
+
+
+def _run_reindex(args: argparse.Namespace, *, cwd: Path, stdout: TextIO, stderr: TextIO) -> int:
+    try:
+        project = open_workspace(cwd)
+        plan = plan_reindex(project, index_ids=args.index_ids)
+        return _preview_or_apply(
+            TransactionEngine(project),
+            plan,
+            apply=args.apply,
+            output_format=args.format,
+            stdout=stdout,
+        )
+    except TransactionConflict as error:
+        return _write_command_error(
+            error, conflict=True, output_format=args.format, stdout=stdout, stderr=stderr
+        )
+    except (DocumentError, OSError, ProjectDiscoveryError, ProjectPathError, TransactionError, UnicodeError, ValueError) as error:
+        return _write_command_error(
+            error, conflict=False, output_format=args.format, stdout=stdout, stderr=stderr
+        )
+
+
+def _run_draft(args: argparse.Namespace, *, cwd: Path, stdout: TextIO, stderr: TextIO) -> int:
+    try:
+        project = open_workspace(cwd)
+        engine = TransactionEngine(project)
+        planning_store = engine.store if args.apply else _PreviewRevisionStore(engine.store)
+        if args.draft_command == "create":
+            plan = plan_create_draft(project, args.target, args.draft_path, planning_store)
+            transaction_id = None
+        elif args.draft_command == "set-status":
+            plan = plan_set_draft_status(project, args.draft, args.status)
+            transaction_id = None
+        elif args.draft_command == "rebase":
+            plan = plan_rebase_draft(project, args.draft, planning_store)
+            transaction_id = None
+        else:
+            transaction_id = uuid.uuid4().hex
+            if args.draft_command == "accept":
+                plan = plan_accept_draft(project, args.draft, engine.store, transaction_id, args.archive_path)
+            else:
+                plan = plan_abandon_draft(project, args.draft, transaction_id, args.archive_path)
+        return _preview_or_apply(
+            engine,
+            plan,
+            apply=args.apply,
+            output_format=args.format,
+            stdout=stdout,
+            transaction_id=transaction_id,
+        )
+    except DraftConflict as error:
+        facts = {
+            "status": "conflict",
+            "exit_status": 1,
+            "message": str(error),
+            "conflicts": [asdict(conflict) for conflict in error.conflicts],
+        }
+        if args.format == "json":
+            _write_command_data(facts, output_format=args.format, stdout=stdout)
+        else:
+            stderr.write(json.dumps(facts, ensure_ascii=False, indent=2, sort_keys=True) + "\n")
+        return 1
+    except (DraftError, TransactionConflict) as error:
+        return _write_command_error(
+            error, conflict=True, output_format=args.format, stdout=stdout, stderr=stderr
+        )
+    except (DocumentError, OSError, ProjectDiscoveryError, ProjectPathError, TransactionError, UnicodeError, ValueError) as error:
+        return _write_command_error(
+            error, conflict=False, output_format=args.format, stdout=stdout, stderr=stderr
+        )
+
+
+def _run_migrate(args: argparse.Namespace, *, cwd: Path, stdout: TextIO, stderr: TextIO) -> int:
+    root = Path(cwd).absolute()
+    try:
+        manifest_path = root / "project.md"
+        if (manifest_path.exists() or manifest_path.is_symlink()) and parse_document(
+            _read_regular_file_no_follow(manifest_path, "project manifest", root=root)
+        ).metadata.get("schema-version") == 2:
+            raise ValueError("v2 projects must not use legacy v1 migration")
+        if args.plan:
+            if args.expect_plan_hash is not None:
+                raise MigrationPlanError("--expect-plan-hash is valid only with --preview or --apply")
+            planned = plan_migration(root)
+            _write_command_data(planned.to_payload(), output_format=args.format, stdout=stdout)
+            return 0
+        if args.expect_plan_hash is None:
+            raise MigrationPlanError("--expect-plan-hash is required with --preview or --apply")
+        plan_path = args.preview if args.preview is not None else args.apply
+        loaded = load_migration_plan(_from_cwd(cwd, plan_path))
+        plan = plan_apply_migration(root, loaded, args.expect_plan_hash)
+        project = migration_project(root)
+        engine = TransactionEngine(project)
+        preview = engine.preview(plan)
+        if args.preview is not None:
+            _write_command_data(
+                {
+                    "status": "preview",
+                    "transaction_id": None,
+                    "plan_hash": loaded.plan_hash,
+                    **preview,
+                },
+                output_format=args.format,
+                stdout=stdout,
+            )
+            return 0
+        record = engine.apply(plan)
+        findings: list[Finding] = []
+        execution_errors: list[ExecutionError] = []
+        try:
+            committed_project = discover_project(root)
+        except (DocumentError, OSError, ProjectDiscoveryError, ProjectPathError, UnicodeError, ValueError) as error:
+            execution_errors.extend(
+                ExecutionError(check=name, message=str(error))
+                for name in ("structure", "drafts")
+            )
+        else:
+            try:
+                findings.extend(check_structure(committed_project))
+            except (DocumentError, OSError, ValueError) as error:
+                execution_errors.append(
+                    ExecutionError(check="structure", message=str(error))
+                )
+            try:
+                findings.extend(
+                    check_drafts(
+                        committed_project,
+                        TransactionEngine(committed_project).store,
+                    )
+                )
+            except (DocumentError, OSError, TransactionError, ValueError) as error:
+                execution_errors.append(
+                    ExecutionError(check="drafts", message=str(error))
+                )
+        post_report = Report(
+            findings,
+            checks=["structure", "drafts"],
+            execution_errors=execution_errors,
+        )
+        _write_command_data(
+            {
+                "status": record.state,
+                "transaction_id": record.id,
+                "plan_hash": loaded.plan_hash,
+                "checks": post_report.checks,
+                "findings": post_report.as_json()["findings"],
+                "execution_errors": post_report.as_json()["execution_errors"],
+                **preview,
+            },
+            output_format=args.format,
+            stdout=stdout,
+        )
+        return 0
+    except (MigrationPlanError, TransactionConflict) as error:
+        return _write_command_error(
+            error, conflict=True, output_format=args.format, stdout=stdout, stderr=stderr
+        )
+    except (DocumentError, OSError, ProjectPathError, TransactionError, UnicodeError, ValueError) as error:
+        return _write_command_error(
+            error, conflict=False, output_format=args.format, stdout=stdout, stderr=stderr
+        )
+
+
+def _single_edit_target(cwd: Path, value: str) -> tuple[Project, str]:
+    target = _from_cwd(cwd, value).absolute()
+    project = open_workspace(cwd)
+    if Path(value).is_absolute() and (not target.is_file() or target.is_symlink()):
+        raise EditPlanError("absolute edit target must be an existing regular file inside the project")
+    try:
+        relative = project.relative_id(target)
+        resolved = project.resolve(relative, for_write=True)
+    except ProjectPathError as error:
+        raise EditConflict(str(error)) from error
+    if resolved != target or not target.is_file() or target.is_symlink():
+        raise EditConflict("edit target must be an existing regular file inside the project")
+    return project, relative
+
+
+def _read_content(cwd: Path, value: str) -> str:
+    path = _from_cwd(cwd, value)
+    try:
+        return path.read_text(encoding="utf-8")
+    except (OSError, UnicodeError) as error:
+        raise EditPlanError(f"cannot read content file {path}: {error}") from error
+
+
+def _preview_or_apply(
+    engine: TransactionEngine,
+    plan: TransactionPlan,
+    *,
+    apply: bool,
+    output_format: str,
+    stdout: TextIO,
+    transaction_id: str | None = None,
+) -> int:
+    preview = engine.preview(plan)
+    result: dict[str, object] = {
+        "status": "preview",
+        "transaction_id": transaction_id,
+        **preview,
+    }
+    if apply:
+        record = engine.apply(plan, transaction_id=transaction_id)
+        result["status"] = record.state
+        result["transaction_id"] = record.id
+    _write_command_data(result, output_format=output_format, stdout=stdout)
+    return 0
+
+
+def _write_command_error(
+    error: BaseException,
+    *,
+    conflict: bool,
+    output_format: str,
+    stdout: TextIO,
+    stderr: TextIO,
+) -> int:
+    status = 1 if conflict else 2
+    facts = {
+        "status": "conflict" if conflict else "error",
+        "exit_status": status,
+        "message": str(error),
+    }
+    if output_format == "json":
+        _write_command_data(facts, output_format=output_format, stdout=stdout)
+    else:
+        stderr.write(
+            f"status: {facts['status']}\n"
+            f"exit-status: {facts['exit_status']}\n"
+            f"message: {facts['message']}\n"
+        )
+    return status
+
+
+def _write_command_data(data: object, *, output_format: str, stdout: TextIO) -> None:
+    if output_format == "json":
+        json.dump(data, stdout, ensure_ascii=False, sort_keys=True)
+    else:
+        json.dump(data, stdout, ensure_ascii=False, indent=2, sort_keys=True)
+    stdout.write("\n")
+
+
+def _init_preview(plan: TransactionPlan) -> list[dict[str, str]]:
+    file_operations = [{"op": "create", "path": change.path} for change in plan.changes]
+    directory_operations = [
+        {"op": "create-directory", "path": path}
+        for path in plan.metadata["protected-directories"]
+    ]
+    return sorted((*file_operations, *directory_operations), key=lambda operation: operation["path"])
+
+
+def main(argv: list[str] | None = None) -> int:
+    return run(sys.argv[1:] if argv is None else argv, cwd=Path.cwd(), stdout=sys.stdout, stderr=sys.stderr)
+
+
+def _run_tag_layout(project: Project, args: argparse.Namespace, stdout: TextIO) -> int:
+    from .catalog import (LayoutConfig, TagBinding, effective_tags, read_layout,
+                          render_config, validate_binding_path, _tags)
+    config = read_layout(project)
+    bindings = list(config.bindings)
+    destinations = dict(config.destinations)
+    if config.version == 1 and args.layout_action != "inspect":
+        # Capture existing legacy role choices before switching off inference.
+        from .layout import role_directories
+        grouped = {}
+        for binding in bindings:
+            grouped.setdefault(binding.path, set()).update(binding.tags)
+        if project.manifest is not None:
+            for role in ROLE_CANDIDATES:
+                for folder in role_directories(project, role):
+                    if (project.root / folder).is_dir():
+                        grouped.setdefault(folder, set()).add(role)
+            from .schema import KB_CONTENT_DIRECTORIES
+            for folder in KB_CONTENT_DIRECTORIES | {"kb/continuity", "kb/samples", "kb/styles"}:
+                if (project.root / folder).is_dir():
+                    tag = folder.rsplit('/', 1)[-1]
+                    grouped.setdefault(folder, set()).update({'kb', tag})
+            if (project.root / 'kb/vocab.md').is_file():
+                bindings.append(TagBinding('kb/vocab.md', 'file', frozenset({'vocabulary'})))
+        bindings = [TagBinding(path, 'directory', frozenset(tags)) for path, tags in sorted(grouped.items())] + [b for b in bindings if b.kind == 'file']
+    if args.layout_action == "inspect":
+        data = json.loads(render_config(config))
+        if args.layout_path:
+            project.resolve(args.layout_path)
+            data["effective_tags"] = sorted(effective_tags(config, args.layout_path))
+        _write_command_data(data, output_format=args.format, stdout=stdout)
+        return 0
+    if args.layout_action == "destination":
+        _tags([args.layout_path])
+        destinations[args.layout_path] = validate_binding_path(project, args.destination_path, "directory")
+    else:
+        path = validate_binding_path(project, args.layout_path, args.kind)
+        add, remove = _tags(args.add), _tags(args.remove)
+        if add & remove:
+            raise ValueError("a tag cannot be added and removed together")
+        existing = next((b for b in bindings if b.path == path and b.kind == args.kind), None)
+        tags = ((existing.tags if existing else frozenset()) - remove) | add
+        excluded = ((existing.remove if existing else frozenset()) - add) | remove
+        bindings = [b for b in bindings if b is not existing]
+        bindings.append(TagBinding(path, args.kind, tags, excluded))
+    path = project.root / LAYOUT_FILE
+    before = path.read_bytes() if path.exists() else None
+    after = render_config(LayoutConfig(2, tuple(bindings), destinations))
+    plan = TransactionPlan(command=("layout", args.layout_action),
+        changes=(Change(LAYOUT_FILE, before, after),), metadata={"undoable": True})
+    return _preview_or_apply(TransactionEngine(project), plan, apply=args.apply,
+                             output_format=args.format, stdout=stdout)

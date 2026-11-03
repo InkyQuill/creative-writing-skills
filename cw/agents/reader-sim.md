@@ -1,6 +1,9 @@
 ---
 name: reader-sim
 description: "Reports the felt reading experience from a specified persona and knowledge boundary."
+tools:
+  - Read
+  - Bash
 skills:
   - reader-sim
   - writing-principles

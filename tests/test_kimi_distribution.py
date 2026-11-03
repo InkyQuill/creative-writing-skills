@@ -50,6 +50,7 @@ class KimiTransformTests(unittest.TestCase):
             "name": "critic",
             "description": "Critique prose.",
             "skills": ["story-review", "writing-principles"],
+            "tools": ["Read", "Bash"],
             "access": "read-only",
             "claude": {"model": "inherit", "background": False},
         }
@@ -62,6 +63,7 @@ class KimiTransformTests(unittest.TestCase):
 
         self.assertIn("disallowedTools:\n  - Edit\n  - Write", rendered)
         self.assertNotIn("disallowed-tools:", rendered)
+        self.assertNotIn("\ntools:", rendered)
         self.assertNotIn("background:", rendered)
         self.assertNotIn("skills:\n  - story-review", rendered)
         self.assertIn("- `/skill:creative-writing-skills:story-review`", rendered)

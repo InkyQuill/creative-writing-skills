@@ -1,7 +1,8 @@
 # Plugin Architecture
 
-Creative Writing Skills is a Codex-first plugin with one canonical runtime and
-generated Claude, ZCode, and Kimi Code compatibility distributions.
+Creative Writing Skills is a Codex-first plugin with one canonical runtime,
+generated Claude, ZCode, and Kimi Code compatibility distributions, and a
+generated standalone Agent Skills distribution for Pi and Cursor.
 
 ## Runtime Flow
 
@@ -22,8 +23,17 @@ flowchart LR
 
 The canonical worker registry and prompts live under
 `plugins/creative-writing-skills/skills/creative-writing-muse/resources/workers/`.
-Each registry entry declares its prompt, craft skills, write-access boundary,
-and Claude compatibility settings.
+Each registry entry declares its prompt, craft skills, tool grants,
+write-access boundary, and Claude compatibility settings.
+
+Tool grants are explicit because runtimes resolve them differently: ZCode
+gives an agent no tools unless the agent file carries a `tools` allowlist,
+Claude Code treats that allowlist as the exact grant, Kimi Code agents keep
+every tool and rely on a `disallowedTools` denylist for read-only roles, and
+Cursor enforces read-only roles through its `readonly` flag. Allowlists name
+only tools verified on both Claude Code and ZCode, so searching runs through
+Bash. The muse falls back to inline execution on runtimes without
+subagents (Codex and Pi), so worker prompts are shared unchanged.
 
 The muse selects the smallest composition that fits the task:
 

@@ -1,6 +1,11 @@
 ---
 name: style-creator
 description: "Derives a reusable project style reference from supplied prose samples and constraints."
+tools:
+  - Read
+  - Bash
+  - Edit
+  - Write
 skills:
   - creative-writing-craft
   - writing-principles

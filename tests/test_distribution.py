@@ -22,6 +22,8 @@ from scripts.distribution import (
 )
 from scripts.validate_distribution import main as validate_main
 from scripts.validate_distribution import (
+    EXPECTED_WORKER_TOOLS,
+    MUSE_AGENT_TOOLS,
     _is_within,
     compute_structured_artifact_audit,
     validate,
@@ -166,13 +168,14 @@ class DistributionScaffoldTests(unittest.TestCase):
         self.assertEqual(len({item["prompt"] for item in workers}), len(workers))
         canonical = set(load_json(REPO_ROOT / "config" / "distribution.json")["canonical_skills"])
         for item in workers:
-            self.assertEqual(set(item), {"name", "description", "prompt", "skills", "access", "claude"})
+            self.assertEqual(set(item), {"name", "description", "prompt", "skills", "tools", "access", "claude"})
             self.assertIn(item["access"], {"read-only", "workspace-write"})
             self.assertTrue((registry_path.parent / item["prompt"]).is_file())
             self.assertLessEqual(set(item["skills"]), canonical)
             expected_access, expected_skills = EXPECTED_WORKER_CONFIG[item["name"]]
             self.assertEqual(item["access"], expected_access)
             self.assertEqual(set(item["skills"]), expected_skills)
+            self.assertEqual(item["tools"], EXPECTED_WORKER_TOOLS[item["name"]])
             self.assertEqual(item["claude"], {
                 "model": "inherit",
                 "background": item["name"] == "web-researcher",
@@ -879,6 +882,9 @@ class ValidatorTests(unittest.TestCase):
                 "root": "kimi",
                 "manifest": "kimi.plugin.json",
             },
+            "standalone": {
+                "root": "standalone",
+            },
         }
         self._write_json(self.root / "config" / "distribution.json", config)
         self._write_json(
@@ -906,6 +912,7 @@ class ValidatorTests(unittest.TestCase):
                 "description": f"{name} worker.",
                 "prompt": prompt.name,
                 "skills": sorted(EXPECTED_WORKER_CONFIG[name][1]),
+                "tools": EXPECTED_WORKER_TOOLS[name],
                 "access": EXPECTED_WORKER_CONFIG[name][0],
                 "claude": {
                     "model": "inherit",
@@ -949,7 +956,11 @@ class ValidatorTests(unittest.TestCase):
         for name in agents:
             agent = self.root / "cw" / "agents" / f"{name}.md"
             agent.parent.mkdir(parents=True, exist_ok=True)
-            agent.write_text(f"---\nname: {name}\ndescription: Demo.\n---\n{name}\n")
+            tools = MUSE_AGENT_TOOLS if name == "muse" else EXPECTED_WORKER_TOOLS[name]
+            tools_block = "tools:\n" + "".join(f"  - {tool}\n" for tool in tools)
+            agent.write_text(
+                f"---\nname: {name}\ndescription: Demo.\n{tools_block}---\n{name}\n"
+            )
         claude_marketplace = {
             "name": "cw",
             "owner": {"name": "InkyQuill"},
@@ -2057,6 +2068,40 @@ class ValidatorTests(unittest.TestCase):
         critic["access"] = "workspace-write"
         self._write_json(path, registry)
         self.assertIn("worker critic: review role must be read-only", validate(self.root))
+
+    def test_validator_rejects_read_only_worker_granting_write_tools(self):
+        path = self.skills / "creative-writing-muse" / "resources" / "workers" / "registry.json"
+        registry = json.loads(path.read_text())
+        critic = next(item for item in registry["workers"] if item["name"] == "critic")
+        critic["tools"] = ["Read", "Bash", "Write"]
+        self._write_json(path, registry)
+        self.assertIn(
+            "worker critic: read-only worker must not grant Edit or Write",
+            validate(self.root),
+        )
+
+    def test_validator_rejects_unsupported_agent_tool(self):
+        path = self.skills / "creative-writing-muse" / "resources" / "workers" / "registry.json"
+        registry = json.loads(path.read_text())
+        critic = next(item for item in registry["workers"] if item["name"] == "critic")
+        critic["tools"] = ["Read", "Bash", "Grep"]
+        self._write_json(path, registry)
+        self.assertIn(
+            "worker critic: unsupported agent tools Grep",
+            validate(self.root),
+        )
+
+    def test_validator_rejects_cw_agent_without_tools_allowlist(self):
+        agent = self.root / "cw" / "agents" / "critic.md"
+        agent.write_text("---\nname: critic\ndescription: Demo.\n---\ncritic\n")
+        problems = validate(self.root)
+        self.assertTrue(
+            any(
+                problem.startswith("cw/agents/critic.md: tools allowlist")
+                for problem in problems
+            ),
+            problems,
+        )
 
     def test_validator_rejects_meridian_vocabulary_outside_fences(self):
         skill = self.skills / "story-memory" / "SKILL.md"

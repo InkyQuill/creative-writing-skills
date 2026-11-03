@@ -1,6 +1,14 @@
 ---
 name: muse
 description: "Help an author with fiction spanning planning, drafting, critique, research, continuity, voice, or durable story state; also use when explicitly asked for a muse or broad creative-writing help.\n"
+tools:
+  - Read
+  - Bash
+  - Edit
+  - Write
+  - WebFetch
+  - WebSearch
+  - TodoWrite
 skills:
   - character-sim
   - cli-doctor

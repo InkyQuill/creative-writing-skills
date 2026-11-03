@@ -1,6 +1,9 @@
 ---
 name: continuity-checker
 description: "Cross-references a draft against supplied canon, timeline, state, and vocabulary."
+tools:
+  - Read
+  - Bash
 skills:
   - story-review
   - md-validation
