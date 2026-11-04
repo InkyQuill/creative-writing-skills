@@ -58,6 +58,7 @@ _CONFIG_KEYS = {
     "claude",
     "zcode",
     "kimi",
+    "standalone",
 }
 _CLAUDE_PATH_CONFIG = {
     "root": "cw",
@@ -84,8 +85,53 @@ _KIMI_PATH_CONFIG = {
     "manifest": "kimi.plugin.json",
 }
 _KIMI_CONFIG_KEYS = {"root", "manifest"}
+_STANDALONE_PATH_CONFIG = {
+    "root": "standalone",
+}
+_STANDALONE_CONFIG_KEYS = {"root"}
 _ZCODE_PLUGIN_NAME_RE = re.compile(r"[a-z0-9][a-z0-9._-]{0,127}\Z")
-_RUNTIME_TARGETS = frozenset({"claude", "kimi"})
+_RUNTIME_TARGETS = frozenset({"claude", "kimi", "standalone"})
+# Tool names shared by every generated agent runtime. ZCode grants no tools
+# when the agent frontmatter omits `tools`, and its tolerance for unknown
+# names is undocumented, so this vocabulary stays limited to tool names
+# verified on both Claude Code and ZCode. Search runs through Bash; Glob and
+# Grep are intentionally absent from generated output.
+_AGENT_TOOL_NAMES = frozenset(
+    {"Read", "Bash", "Edit", "Write", "WebFetch", "WebSearch", "TodoWrite"}
+)
+_MUSE_AGENT_TOOLS = (
+    "Read",
+    "Bash",
+    "Edit",
+    "Write",
+    "WebFetch",
+    "WebSearch",
+    "TodoWrite",
+)
+_STANDALONE_README = """# Creative Writing Skills — Agent Skills Distribution
+
+This folder is generated output. Do not edit it by hand; regenerate it with
+`python3 scripts/sync_claude_distribution.py --apply` from the repository.
+
+These skills run on agent platforms that load Agent Skills directories
+directly instead of a plugin marketplace, currently Pi and Cursor.
+
+## Install for Pi
+
+Copy or symlink each directory under `skills/` into `~/.agents/skills/` for
+all projects, or into `.agents/skills/` inside a writing project. Pi loads
+each `SKILL.md` automatically and can force-load one with `/skill:<name>`.
+
+## Install for Cursor
+
+Copy the `skills/` entries into `~/.cursor/skills/` (or `.cursor/skills/`
+inside a project, or the same `.agents/skills/` locations), and copy
+`agents/*.md` into `~/.cursor/agents/` (or `.cursor/agents/`) to add the muse
+and specialist subagents.
+
+The muse orchestrates inline when subagents are unavailable, so the skills
+tree alone also works on platforms without a subagent tool.
+"""
 _EXCLUDED_RUNTIME_PARTS = frozenset({"__pycache__"})
 _EXCLUDED_RUNTIME_SUFFIXES = frozenset({".pyc"})
 
@@ -152,6 +198,7 @@ class DistributionContext:
     zcode_marketplace_path: Path
     kimi_root: Path
     kimi_manifest_path: Path
+    standalone_root: Path
     zcode_icon: str
     skill_names: tuple[str, ...]
     known_skills: frozenset[str]
@@ -353,6 +400,14 @@ def _load_context(repo_root: Path) -> DistributionContext:
         raise ValueError("distribution Kimi fields do not match schema")
     if any(kimi.get(key) != value for key, value in _KIMI_PATH_CONFIG.items()):
         raise ValueError("distribution Kimi paths are not canonical")
+    standalone = config.get("standalone")
+    if not isinstance(standalone, dict) or set(standalone) != _STANDALONE_CONFIG_KEYS:
+        raise ValueError("distribution standalone fields do not match schema")
+    if any(
+        standalone.get(key) != value
+        for key, value in _STANDALONE_PATH_CONFIG.items()
+    ):
+        raise ValueError("distribution standalone paths are not canonical")
     disable_model_invocation = claude.get("disable_model_invocation")
     if not isinstance(disable_model_invocation, list) or any(
         not isinstance(skill, str) or _SKILL_NAME_RE.fullmatch(skill) is None
@@ -442,6 +497,12 @@ def _load_context(repo_root: Path) -> DistributionContext:
         "Kimi Code root manifest",
         allow_leaf_symlink=True,
     )
+    standalone_root = _require_contained_path(
+        repo_root / "standalone",
+        repo_root,
+        "standalone Agent Skills root",
+        allow_leaf_symlink=True,
+    )
     context = DistributionContext(
         repo_root=repo_root,
         config=config,
@@ -454,6 +515,7 @@ def _load_context(repo_root: Path) -> DistributionContext:
         zcode_marketplace_path=zcode_marketplace_path,
         kimi_root=kimi_root,
         kimi_manifest_path=kimi_manifest_path,
+        standalone_root=standalone_root,
         zcode_icon=zcode_icon,
         skill_names=tuple(skill_values),
         known_skills=frozenset(skill_values),
@@ -535,6 +597,18 @@ def _transform_markdown(
                 return match.group(0)
             if runtime == "kimi":
                 return f"/skill:{PLUGIN_NAME}:{skill}"
+            if runtime == "standalone":
+                # Canonical sources often pre-wrap references as `$skill`;
+                # reuse those backticks instead of nesting a second pair.
+                before = match.string[match.start() - 1] if match.start() else ""
+                after = (
+                    match.string[match.end()]
+                    if match.end() < len(match.string)
+                    else ""
+                )
+                if before == "`" and after == "`":
+                    return skill
+                return f"`{skill}`"
             return f"/{skill}"
 
         return _DOLLAR_REFERENCE_RE.sub(replace_skill, segment)
@@ -573,6 +647,10 @@ def _transform_markdown(
                     f"{label}: unknown Kimi Code skill reference "
                     f"/skill:{plugin}:{reference}"
                 )
+    elif runtime == "standalone":
+        # The Agent Skills spec has no cross-skill invocation syntax; bare
+        # backticked names are plain prose and need no reference validation.
+        pass
     else:
         for reference in sorted(extract_skill_references(rendered, "/")):
             if reference not in known_skills:
@@ -658,6 +736,24 @@ def render_agent(
         raise ValueError(f"worker {name}: claude metadata must be an object")
     if access not in ("read-only", "workspace-write"):
         raise ValueError(f"worker {name}: access must be read-only or workspace-write")
+    tools = worker.get("tools")
+    if (
+        not isinstance(tools, list)
+        or not tools
+        or any(not isinstance(tool, str) or not tool for tool in tools)
+    ):
+        raise ValueError(f"worker {name}: tools must be a nonempty list of strings")
+    if len(tools) != len(set(tools)):
+        raise ValueError(f"worker {name}: tools must not contain duplicates")
+    unknown_tools = sorted(set(tools) - _AGENT_TOOL_NAMES)
+    if unknown_tools:
+        raise ValueError(
+            f"worker {name}: unsupported agent tools {', '.join(unknown_tools)}"
+        )
+    if access == "read-only" and ({"Edit", "Write"} & set(tools)):
+        raise ValueError(f"worker {name}: read-only worker must not grant Edit or Write")
+    if access == "workspace-write" and not {"Edit", "Write"} <= set(tools):
+        raise ValueError(f"worker {name}: workspace-write worker must grant Edit and Write")
 
     lines = [
         "---",
@@ -665,16 +761,27 @@ def render_agent(
         f"description: {_yaml_scalar(description)}",
     ]
     if runtime == "claude":
+        # ZCode grants no tools when this allowlist is missing, and Claude
+        # Code treats it as an exact grant instead of inheriting everything.
+        lines.append("tools:")
+        lines.extend(f"  - {tool}" for tool in tools)
         lines.extend(("skills:", *(f"  - {skill}" for skill in skills)))
         if claude.get("background") is True:
             lines.append("background: true")
-    if access == "read-only":
+    elif runtime == "standalone":
+        if access == "read-only":
+            lines.append("readonly: true")
+        if claude.get("background") is True:
+            lines.append("is_background: true")
+    if access == "read-only" and runtime in ("claude", "kimi"):
         # A read-only worker must never alter files, matching the muse
         # orchestration contract ("a read-only role never alters files").
+        # Kimi Code agents keep every tool without an explicit allowlist, so
+        # the denylist stays the operative restriction there.
         restriction = "disallowed-tools" if runtime == "claude" else "disallowedTools"
-        tools = ("Edit", "Write", "NotebookEdit") if runtime == "claude" else ("Edit", "Write")
+        denied = ("Edit", "Write", "NotebookEdit") if runtime == "claude" else ("Edit", "Write")
         lines.append(f"{restriction}:")
-        lines.extend(f"  - {tool}" for tool in tools)
+        lines.extend(f"  - {tool}" for tool in denied)
     lines.extend(("---", ""))
     body = _transform_markdown(prompt, f"agent {name}", known_skills, runtime=runtime)
     if runtime == "kimi" and skills:
@@ -683,6 +790,13 @@ def render_agent(
         )
         body = (
             "## Assigned Plugin Skills\n\n"
+            "Load the skills relevant to the assigned task:\n\n"
+            f"{assigned_skills}\n\n"
+        ) + body
+    elif runtime == "standalone" and skills:
+        assigned_skills = "\n".join(f"- `{skill}`" for skill in skills)
+        body = (
+            "## Assigned Skills\n\n"
             "Load the skills relevant to the assigned task:\n\n"
             f"{assigned_skills}\n\n"
         ) + body
@@ -765,6 +879,7 @@ def _render_muse_agent(
             "name": "muse",
             "description": metadata["description"],
             "skills": skills,
+            "tools": list(_MUSE_AGENT_TOOLS),
             "access": "workspace-write",
             "claude": {"model": "inherit", "background": False},
         },
@@ -890,6 +1005,9 @@ def _render_distribution(
             _render_kimi_manifest(canonical_manifest),
         )
         return
+    if runtime == "standalone":
+        (output_root / "README.md").write_text(_STANDALONE_README, encoding="utf-8")
+        return
     manifest_fields = (
         "name",
         "version",
@@ -912,6 +1030,11 @@ def render_distribution(output_root: Path) -> None:
 def render_kimi_distribution(output_root: Path) -> None:
     context = _load_context(REPO_ROOT)
     _render_distribution(output_root, REPO_ROOT, context, runtime="kimi")
+
+
+def render_standalone_distribution(output_root: Path) -> None:
+    context = _load_context(REPO_ROOT)
+    _render_distribution(output_root, REPO_ROOT, context, runtime="standalone")
 
 
 def _render_marketplace(repo_root: Path) -> dict[str, object]:
@@ -1174,6 +1297,7 @@ def _sync(apply: bool, repo_root: Path) -> int:
     zcode_marketplace_path = context.zcode_marketplace_path
     kimi_root = context.kimi_root
     kimi_manifest_path = context.kimi_manifest_path
+    standalone_root = context.standalone_root
     transaction_root = Path(
         tempfile.mkdtemp(prefix=".claude-distribution-", dir=repo_root)
     )
@@ -1181,6 +1305,7 @@ def _sync(apply: bool, repo_root: Path) -> int:
     try:
         candidate_cw = transaction_root / "candidate-cw"
         candidate_kimi = transaction_root / "candidate-kimi"
+        candidate_standalone = transaction_root / "candidate-standalone"
         candidate_marketplace = transaction_root / "candidate-claude-marketplace.json"
         candidate_zcode_marketplace = (
             transaction_root / "candidate-zcode-marketplace.json"
@@ -1188,6 +1313,9 @@ def _sync(apply: bool, repo_root: Path) -> int:
         candidate_kimi_manifest = transaction_root / "candidate-kimi-plugin.json"
         _render_distribution(candidate_cw, repo_root, context)
         _render_distribution(candidate_kimi, repo_root, context, runtime="kimi")
+        _render_distribution(
+            candidate_standalone, repo_root, context, runtime="standalone"
+        )
         _write_json(candidate_marketplace, _render_marketplace(repo_root))
         _write_json(
             candidate_zcode_marketplace,
@@ -1201,6 +1329,9 @@ def _sync(apply: bool, repo_root: Path) -> int:
         if not apply:
             problems = _distribution_drift(candidate_cw, cw_root, "cw")
             problems.extend(_distribution_drift(candidate_kimi, kimi_root, "kimi"))
+            problems.extend(
+                _distribution_drift(candidate_standalone, standalone_root, "standalone")
+            )
             problems.extend(
                 _single_path_drift(
                     candidate_marketplace,
@@ -1227,13 +1358,14 @@ def _sync(apply: bool, repo_root: Path) -> int:
                 for problem in problems:
                     print(problem)
                 return 1
-            print("Claude, ZCode, and Kimi Code distributions are in sync")
+            print("Claude, ZCode, Kimi Code, and standalone distributions are in sync")
             return 0
 
         _commit_candidate(
             (
                 ("cw", candidate_cw, cw_root),
                 ("kimi", candidate_kimi, kimi_root),
+                ("standalone", candidate_standalone, standalone_root),
                 ("claude-marketplace", candidate_marketplace, marketplace_path),
                 (
                     "zcode-marketplace",
@@ -1254,6 +1386,7 @@ def _sync(apply: bool, repo_root: Path) -> int:
         print("synced cw/.claude-plugin/plugin.json")
         print("synced cw/.zcode-plugin/plugin.json")
         print("synced kimi/.kimi-plugin/plugin.json")
+        print("synced standalone/ Agent Skills distribution")
         print("synced .claude-plugin/marketplace.json")
         print("synced marketplace.json")
         print("synced kimi.plugin.json")

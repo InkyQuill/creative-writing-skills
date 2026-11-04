@@ -1,6 +1,9 @@
 ---
 name: critic
 description: "Performs a deep, passage-grounded critique of one high-value focus area."
+tools:
+  - Read
+  - Bash
 skills:
   - story-review
   - writing-principles

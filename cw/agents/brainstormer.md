@@ -1,6 +1,11 @@
 ---
 name: brainstormer
 description: "Generates distinct creative options for a scoped story question without forcing convergence."
+tools:
+  - Read
+  - Bash
+  - Edit
+  - Write
 skills:
   - story-planning
   - story-memory

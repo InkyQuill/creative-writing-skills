@@ -3,7 +3,8 @@
 [![CI](https://github.com/InkyQuill/creative-writing-skills/actions/workflows/ci.yml/badge.svg)](https://github.com/InkyQuill/creative-writing-skills/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
 
-A creative-writing plugin for Codex, Claude Code, ZCode, and Kimi Code. A muse
+A creative-writing plugin for Codex, Claude Code, ZCode, Kimi Code, Pi, and
+Cursor. A muse
 coordinates planning, drafting, reviewing, and maintenance through focused
 specialist passes while shared skills preserve craft, voice, continuity, and
 durable story context.
@@ -93,6 +94,25 @@ python3 scripts/create_skill_zips.py
 ```
 
 The archives are written to `zips/` from the generated `cw/skills/` tree.
+
+## Pi and Cursor Compatibility
+
+Pi and Cursor load Agent Skills directories directly instead of a plugin
+marketplace, so the repository ships a generated `standalone/` distribution
+for them.
+
+In Pi, copy or symlink `standalone/skills/*` into `~/.agents/skills/` for all
+projects, or into `.agents/skills/` inside a writing project. Pi discovers
+each `SKILL.md` automatically and can force-load one with `/skill:<name>`.
+
+In Cursor, copy `standalone/skills/*` into `~/.cursor/skills/` (or
+`.cursor/skills/`, or the same `.agents/skills/` locations), and copy
+`standalone/agents/*.md` into `~/.cursor/agents/` (or `.cursor/agents/`) to
+add the muse and specialist subagents. Read-only specialists run with
+Cursor's `readonly` restriction.
+
+Neither runtime requires the agents folder: the muse orchestrates inline
+when subagents are unavailable, matching the Codex behavior.
 
 ## Core Skills
 

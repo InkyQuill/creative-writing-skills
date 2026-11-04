@@ -10,12 +10,14 @@ runtime is `plugins/creative-writing-skills/` and the canonical manifest is
 
 `cw/` is committed generated output for Claude Code, Cowork, Claude.ai, and
 ZCode. `kimi/` and the root `kimi.plugin.json` are the generated Kimi Code
-runtime and direct-install manifest. They are never independent source trees
+runtime and direct-install manifest. `standalone/` is the generated Agent
+Skills distribution for runtimes without plugin marketplaces, currently Pi
+and Cursor. They are never independent source trees
 and must not be hand-edited. Generated skills do not need separate content or
 code review: review their canonical sources instead. Keep the generator
 synchronization checks; they verify that the generated distributions match
 those reviewed sources. Make every runtime change in the canonical plugin
-first, then regenerate `cw/` and `kimi/`.
+first, then regenerate `cw/`, `kimi/`, and `standalone/`.
 
 The repository marketplace is `.agents/plugins/marketplace.json`. The exact
 36-skill inventory is declared in
@@ -49,14 +51,26 @@ python3 scripts/sync_claude_distribution.py --check
 The generator derives `cw/skills/`, `cw/agents/`,
 `cw/.claude-plugin/plugin.json`, `cw/.zcode-plugin/plugin.json`,
 `kimi/skills/`, `kimi/agents/`, `kimi/.kimi-plugin/plugin.json`, the Kimi Code
-root `kimi.plugin.json`, `.claude-plugin/marketplace.json`, and the ZCode root
-`marketplace.json`. It performs the supported Codex-to-Claude and
-Codex-to-Kimi vocabulary transformations and fails on constructs it cannot
-translate. ZCode reads the Claude-compatible `cw/` tree through its own
+root `kimi.plugin.json`, `standalone/skills/`, `standalone/agents/`,
+`standalone/README.md`, `.claude-plugin/marketplace.json`, and the ZCode root
+`marketplace.json`. It performs the supported Codex-to-Claude, Codex-to-Kimi,
+and Codex-to-Standalone vocabulary transformations and fails on constructs it
+cannot translate. ZCode reads the Claude-compatible `cw/` tree through its own
 manifest and repository-root marketplace. Kimi Code reads `kimi/` through the
-root manifest for direct repository installation. Never patch generated drift
-by editing `cw/`, `kimi/`, `marketplace.json`, `kimi.plugin.json`, or the
-generated manifests.
+root manifest for direct repository installation. Pi and Cursor read the
+`standalone/` skills after the user copies them into `.agents/skills/`,
+`.cursor/skills/`, or `~/.agents/skills/`, and Cursor additionally takes
+`standalone/agents/` as `.cursor/agents/`. Never patch generated drift
+by editing `cw/`, `kimi/`, `standalone/`, `marketplace.json`,
+`kimi.plugin.json`, or the generated manifests.
+
+Generated agents declare tool grants per worker in the worker registry.
+ZCode grants an agent no tools unless its frontmatter carries an explicit
+`tools` allowlist, so `cw/agents/` always emits one, limited to tool names
+verified on both Claude Code and ZCode (searching runs through Bash, not
+Glob/Grep). Kimi Code agents keep every tool without an allowlist and use a
+`disallowedTools` denylist for read-only roles. `standalone/agents/` uses
+Cursor's `readonly` and `is_background` metadata instead of tool lists.
 
 ## Validation
 

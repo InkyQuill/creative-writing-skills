@@ -5,6 +5,7 @@
       "description": "Generates distinct creative options for a scoped story question without forcing convergence.",
       "prompt": "brainstormer.md",
       "skills": ["story-planning", "story-memory", "intent-modeling"],
+      "tools": ["Read", "Bash", "Edit", "Write"],
       "access": "workspace-write",
       "claude": {"model": "inherit", "background": false}
     },
@@ -13,6 +14,7 @@
       "description": "Simulates a specified character to test voice, motivation, and relationships.",
       "prompt": "character-sim.md",
       "skills": ["character-sim", "writing-principles", "story-memory"],
+      "tools": ["Read", "Bash"],
       "access": "read-only",
       "claude": {"model": "inherit", "background": false}
     },
@@ -21,6 +23,7 @@
       "description": "Cross-references a draft against supplied canon, timeline, state, and vocabulary.",
       "prompt": "continuity-checker.md",
       "skills": ["story-review", "md-validation", "shared-dao", "story-memory"],
+      "tools": ["Read", "Bash"],
       "access": "read-only",
       "claude": {"model": "inherit", "background": false}
     },
@@ -29,6 +32,7 @@
       "description": "Performs a deep, passage-grounded critique of one high-value focus area.",
       "prompt": "critic.md",
       "skills": ["story-review", "writing-principles", "story-memory"],
+      "tools": ["Read", "Bash"],
       "access": "read-only",
       "claude": {"model": "inherit", "background": false}
     },
@@ -37,6 +41,7 @@
       "description": "Provides an independent editorial diagnosis at the requested edit level.",
       "prompt": "editor.md",
       "skills": ["story-review", "writing-principles", "creative-writing-craft", "story-memory"],
+      "tools": ["Read", "Bash"],
       "access": "read-only",
       "claude": {"model": "inherit", "background": false}
     },
@@ -45,6 +50,7 @@
       "description": "Turns a confirmed direction into an arc, chapter, scene, or beat blueprint.",
       "prompt": "outliner.md",
       "skills": ["story-planning", "story-memory", "md-validation"],
+      "tools": ["Read", "Bash", "Edit", "Write"],
       "access": "workspace-write",
       "claude": {"model": "inherit", "background": false}
     },
@@ -53,6 +59,7 @@
       "description": "Reports the felt reading experience from a specified persona and knowledge boundary.",
       "prompt": "reader-sim.md",
       "skills": ["reader-sim", "writing-principles"],
+      "tools": ["Read", "Bash"],
       "access": "read-only",
       "claude": {"model": "inherit", "background": false}
     },
@@ -61,6 +68,7 @@
       "description": "Derives a reusable project style reference from supplied prose samples and constraints.",
       "prompt": "style-creator.md",
       "skills": ["creative-writing-craft", "writing-principles", "story-memory"],
+      "tools": ["Read", "Bash", "Edit", "Write"],
       "access": "workspace-write",
       "claude": {"model": "inherit", "background": false}
     },
@@ -69,6 +77,7 @@
       "description": "Researches factual and cultural detail for fiction using attributable sources.",
       "prompt": "web-researcher.md",
       "skills": ["creative-research"],
+      "tools": ["Read", "Bash", "Edit", "Write", "WebFetch", "WebSearch"],
       "access": "workspace-write",
       "claude": {"model": "inherit", "background": true}
     },
@@ -77,6 +86,7 @@
       "description": "Produces or revises fiction from an approved brief, context, and style references.",
       "prompt": "writer.md",
       "skills": ["creative-writing-modes", "creative-writing-craft", "targeted-editing", "writing-principles", "story-memory"],
+      "tools": ["Read", "Bash", "Edit", "Write"],
       "access": "workspace-write",
       "claude": {"model": "inherit", "background": false}
     }

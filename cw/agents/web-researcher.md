@@ -1,6 +1,13 @@
 ---
 name: web-researcher
 description: "Researches factual and cultural detail for fiction using attributable sources."
+tools:
+  - Read
+  - Bash
+  - Edit
+  - Write
+  - WebFetch
+  - WebSearch
 skills:
   - creative-research
 background: true

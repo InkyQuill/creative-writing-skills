@@ -55,5 +55,8 @@
   "kimi": {
     "root": "kimi",
     "manifest": "kimi.plugin.json"
+  },
+  "standalone": {
+    "root": "standalone"
   }
 }

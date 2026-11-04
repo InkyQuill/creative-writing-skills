@@ -1,0 +1,74 @@
+# Voice Review
+
+Evaluate dialogue quality, POV consistency, subtext, and voice drift.
+Resolve the manuscript-language, prose-profile, and applicable project
+style/sample resources first. Judge dialogue surface form through that selected
+prose stack; the principles below concern character pressure and knowledge.
+
+## Dialogue
+
+Apply `creative-writing-craft`'s `resources/dialogue-rules.md` and consult the persistent Character Voice Roster. Judge purpose across the exchange, not by a per-line quota. Preserve earned brevity, formality, verbosity, silence, and direct honesty.
+
+### Subtext
+
+Characters rarely say exactly what they mean. They deflect, understate, change the subject, answer a different question. The gap between what's said and what's meant is where characterization lives.
+
+Flag explicit explanation when it replaces a believable response with a prepared statement for the reader. Do not flag emotional honesty merely for being direct. A confession, a blunt accusation, "Fine," or silence can each fit a different character and moment; diagnose against established voice and intention.
+
+### "As You Know, Bob"
+
+Exposition disguised as dialogue: characters telling each other things they both already know, for the reader's benefit. "As you know, the reactor was built fifteen years ago by the consortium to power the eastern grid..." If both characters know it, neither would say it.
+
+### Character Simulation Distinction
+
+Can you identify the speaker without tags? Each character should have distinct:
+- Vocabulary range (formal/casual, technical/plain, elevated/blunt)
+- Sentence structure (short and clipped, or flowing and complex)
+- Verbal habits (what they talk about, what they avoid, how they deflect)
+- Emotional register (stoic, effusive, guarded, blunt)
+
+Common failure: all characters sound like the same competent, slightly formal narrator. A street kid and a professor should be immediately distinguishable in dialogue.
+
+### Dialogue Attribution and Beats
+
+Use the language resource and project voice to judge attribution. Check whether
+the reader can identify the speaker, whether an attribution calls unhelpful
+attention to itself, and whether an action beat reveals pressure rather than
+merely replacing a tag. No one tag strategy is universal.
+
+## POV Consistency
+
+POV violations are the most common craft error in AI-generated prose. The POV character can only report what they perceive, think, and feel.
+
+### Head-Hopping
+
+Reporting the internal states of non-POV characters as fact: "She felt angry" when we're in a different character's POV. The fix: show the anger through observable behavior. "Her jaw tightened" or "She turned away without answering."
+
+### Knowledge Violations
+
+The narrator knowing things the POV character couldn't know: what happened in a room they weren't in, what someone looks like from behind when the POV character is facing them, what a character is planning when they haven't revealed it.
+
+### Tonal Drift
+
+The POV character's narration should reflect their way of processing the world: their education, preoccupations, blind spots, and emotional state. If the narration reads the same regardless of which character holds the POV, voice is flattening.
+
+Check whether the prose sounds like THIS character telling THIS story, or like a competent narrator who happens to be using "I."
+
+## Voice Drift
+
+Compare the prose against the project's established voice (style files, earlier chapters). Watch for:
+
+- Register shifts (casual narration suddenly becoming formal, or vice versa)
+- Vocabulary changes (the narrator using words the character wouldn't know)
+- Sentence rhythm changes (short punchy prose giving way to flowing literary sentences mid-chapter)
+- Emotional processing changes (a character who internalizes suddenly becoming externally expressive)
+
+Voice drift often happens gradually: any single paragraph reads fine, but comparing the opening to the ending reveals the shift. Read the first and last pages of a chapter against each other.
+
+## Subtext in Narration
+
+The narrator's observations reveal character even outside dialogue. What the POV character notices, what they ignore, how they describe things: all carry subtext.
+
+A character who describes a room by its exits is different from one who notices the books on the shelf. A character who describes another person by their posture is different from one who notices their clothes.
+
+Flag narration that's too neutral: describing things without the filter of the POV character's personality and preoccupations.

@@ -14,7 +14,7 @@ from scripts.create_skill_zips import (
     create_skill_zip,
     validate_skill_set,
 )
-from scripts.distribution import split_frontmatter
+from scripts.distribution import REPO_ROOT, load_json, split_frontmatter
 from scripts.sync_claude_distribution import (
     UnsupportedTransformError,
     _commit_candidate,
@@ -23,6 +23,7 @@ from scripts.sync_claude_distribution import (
     main,
     render_agent,
     render_distribution,
+    render_standalone_distribution,
     transform_skill,
 )
 
@@ -282,6 +283,7 @@ class ClaudeTransformTests(unittest.TestCase):
             "name": "critic",
             "description": "Critique prose.",
             "skills": ["story-review"],
+            "tools": ["Read", "Bash"],
             "access": "read-only",
             "claude": {"model": "inherit", "background": False},
         }
@@ -289,6 +291,7 @@ class ClaudeTransformTests(unittest.TestCase):
         rendered = render_agent(worker, "Return findings to muse.\n")
 
         self.assertIn("name: critic", rendered)
+        self.assertIn("tools:\n  - Read\n  - Bash\n", rendered)
         self.assertIn("skills:\n  - story-review", rendered)
         self.assertIn("Return findings to muse.", rendered)
         self.assertNotIn("model: inherit", rendered)
@@ -298,6 +301,7 @@ class ClaudeTransformTests(unittest.TestCase):
             "name": "critic",
             "description": "Critique prose.",
             "skills": ["story-review"],
+            "tools": ["Read", "Bash"],
             "access": "read-only",
             "claude": {"model": "inherit", "background": False},
         }
@@ -313,6 +317,7 @@ class ClaudeTransformTests(unittest.TestCase):
             "name": "writer",
             "description": "Draft prose.",
             "skills": ["story-review"],
+            "tools": ["Read", "Bash", "Edit", "Write"],
             "access": "workspace-write",
             "claude": {"model": "inherit", "background": False},
         }
@@ -320,18 +325,145 @@ class ClaudeTransformTests(unittest.TestCase):
         rendered = render_agent(worker, "Draft the scene.\n")
 
         self.assertNotIn("disallowed-tools", rendered)
+        self.assertIn("tools:\n  - Read\n  - Bash\n  - Edit\n  - Write\n", rendered)
 
     def test_worker_rejects_invalid_access(self):
         worker = {
             "name": "critic",
             "description": "Critique prose.",
             "skills": ["story-review"],
+            "tools": ["Read", "Bash"],
             "access": "read-write",
             "claude": {"model": "inherit", "background": False},
         }
 
         with self.assertRaisesRegex(ValueError, "access must be read-only or workspace-write"):
             render_agent(worker, "Return findings to muse.\n")
+
+    def test_agent_tools_allowlist_is_validated(self):
+        base = {
+            "name": "critic",
+            "description": "Critique prose.",
+            "skills": ["story-review"],
+            "access": "read-only",
+            "claude": {"model": "inherit", "background": False},
+        }
+        with self.assertRaisesRegex(ValueError, "tools must be a nonempty list"):
+            render_agent(base, "Return findings to muse.\n")
+        unsupported = {**base, "tools": ["Read", "Grep"]}
+        with self.assertRaisesRegex(ValueError, "unsupported agent tools Grep"):
+            render_agent(unsupported, "Return findings to muse.\n")
+        mutating = {**base, "tools": ["Read", "Bash", "Edit"]}
+        with self.assertRaisesRegex(
+            ValueError, "read-only worker must not grant Edit or Write"
+        ):
+            render_agent(mutating, "Return findings to muse.\n")
+        writer = {
+            "name": "writer",
+            "description": "Draft prose.",
+            "skills": ["story-review"],
+            "tools": ["Read", "Bash", "Edit"],
+            "access": "workspace-write",
+            "claude": {"model": "inherit", "background": False},
+        }
+        with self.assertRaisesRegex(
+            ValueError, "workspace-write worker must grant Edit and Write"
+        ):
+            render_agent(writer, "Draft the scene.\n")
+
+    def test_standalone_agent_uses_cursor_metadata_and_bare_skill_names(self):
+        worker = {
+            "name": "critic",
+            "description": "Critique prose.",
+            "skills": ["story-review", "writing-principles"],
+            "tools": ["Read", "Bash"],
+            "access": "read-only",
+            "claude": {"model": "inherit", "background": False},
+        }
+
+        rendered = render_agent(
+            worker,
+            "Use $story-review and return findings.\n",
+            runtime="standalone",
+        )
+
+        self.assertIn("\nreadonly: true\n", rendered)
+        self.assertNotIn("\ntools:", rendered)
+        self.assertNotIn("skills:\n  - story-review", rendered)
+        self.assertNotIn("disallowed", rendered)
+        self.assertIn("## Assigned Skills", rendered)
+        self.assertIn("- `story-review`", rendered)
+        self.assertIn("- `writing-principles`", rendered)
+        self.assertIn("Use `story-review` and return findings.", rendered)
+        self.assertNotIn("$story-review", rendered)
+
+    def test_standalone_transform_reuses_existing_backticks(self):
+        source = (
+            "---\n"
+            "name: demo\n"
+            "description: Demo.\n"
+            "---\n"
+            "Use `$story-memory` and apply $story-planning.\n"
+        )
+
+        rendered = transform_skill(source, "demo", runtime="standalone")
+
+        self.assertIn("Use `story-memory` and", rendered)
+        self.assertIn("apply `story-planning`.", rendered)
+        self.assertNotIn("$story-memory", rendered)
+        self.assertNotIn("$story-planning", rendered)
+        self.assertNotIn("``", rendered)
+
+    def test_render_materializes_complete_standalone_distribution(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            output_root = Path(temporary) / "standalone"
+
+            render_standalone_distribution(output_root)
+
+            config = load_json(REPO_ROOT / "config" / "distribution.json")
+            registry = load_json(
+                REPO_ROOT
+                / "plugins/creative-writing-skills/skills/creative-writing-muse/"
+                "resources/workers/registry.json"
+            )
+            expected_agents = {
+                worker["name"] for worker in registry["workers"]
+            } | {"muse"}
+            self.assertEqual(
+                set(config["canonical_skills"]),
+                {path.name for path in (output_root / "skills").iterdir()},
+            )
+            self.assertEqual(
+                expected_agents,
+                {path.stem for path in (output_root / "agents").glob("*.md")},
+            )
+            self.assertFalse(
+                (output_root / ".claude-plugin").exists(),
+                "the standalone build carries no plugin manifest",
+            )
+            self.assertTrue((output_root / "README.md").is_file())
+
+            reader = (output_root / "agents" / "reader-sim.md").read_text()
+            self.assertIn("\nreadonly: true\n", reader)
+            self.assertNotIn("\ntools:", reader)
+            muse = (output_root / "agents" / "muse.md").read_text()
+            self.assertNotIn("readonly:", muse)
+            self.assertNotIn("\ntools:", muse)
+            researcher = (output_root / "agents" / "web-researcher.md").read_text()
+            self.assertIn("\nis_background: true\n", researcher)
+
+            muse_skill = (
+                output_root / "skills" / "creative-writing-muse" / "SKILL.md"
+            ).read_text()
+            self.assertIn("`project-bootstrap`", muse_skill)
+            self.assertNotIn("$project-bootstrap", muse_skill)
+            for skill in config["canonical_skills"]:
+                metadata, _ = split_frontmatter(
+                    (output_root / "skills" / skill / "SKILL.md").read_text()
+                )
+                self.assertEqual(skill, metadata["name"])
+                if metadata.get("disable-model-invocation") is True:
+                    self.assertIn(skill, {"reflect", "structured-artifact"})
 
     def test_unknown_codex_only_construct_fails(self):
         source = (
@@ -516,6 +648,11 @@ class ClaudeDistributionRenderTests(unittest.TestCase):
             self.assertIn(
                 "disallowed-tools:\n  - Edit\n  - Write\n  - NotebookEdit", critic
             )
+            # ZCode grants an agent no tools when the allowlist is missing;
+            # Claude Code treats the same list as the exact grant.
+            self.assertIn("tools:\n  - Read\n  - Bash\n", critic)
+            self.assertIn("  - TodoWrite\n", muse)
+            self.assertIn("  - WebFetch\n  - WebSearch\n", researcher)
             # muse is workspace-write and must not carry the same restriction.
             self.assertNotIn("disallowed-tools:", muse)
             self.assertNotIn("background:", critic)

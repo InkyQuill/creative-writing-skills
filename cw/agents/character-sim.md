@@ -1,6 +1,9 @@
 ---
 name: character-sim
 description: "Simulates a specified character to test voice, motivation, and relationships."
+tools:
+  - Read
+  - Bash
 skills:
   - character-sim
   - writing-principles
