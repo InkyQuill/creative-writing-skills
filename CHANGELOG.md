@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.14.1](https://github.com/InkyQuill/creative-writing-skills/compare/v0.14.0...v0.14.1) (2026-11-04)
+
+
+### Bug Fixes
+
+* **agents:** emit explicit tool allowlists and add standalone distribution ([6054477](https://github.com/InkyQuill/creative-writing-skills/commit/6054477b533847e1f6124301fd4a9871368d6d2c))
+* **agents:** emit explicit tool allowlists and add standalone distribution ([f3626a5](https://github.com/InkyQuill/creative-writing-skills/commit/f3626a559af9e34c0ddd6f35966464f97c1fc708))
+
 ## [0.14.0](https://github.com/InkyQuill/creative-writing-skills/compare/v0.13.1...v0.14.0) (2026-11-02)
 
 
